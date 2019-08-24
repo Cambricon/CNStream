@@ -1,0 +1,12 @@
+0 Ford F-450 Super Duty Crew Cab 2012
+1 Ford Mustang Convertible 2007
+2 Ford Freestar Minivan 2007
+3 Ford Expedition EL SUV 2009
+4 Ford Edge SUV 2012
+5 Ford Ranger SuperCab 2011
+6 Ford GT Coupe 2006
+7 Ford F-150 Regular Cab 2012
+8 Ford F-150 Regular Cab 2007
+9 Ford Focus Sedan 2007
+10 Ford E-Series Wagon Van 2012
+11 Ford Fiesta Sedan 2012

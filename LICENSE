@@ -1,3 +1,66 @@
+Copyright (c) 2018 Cambricon Corporation. All rights reserved.
+.
+Developed by:
+.
+    Cambricon Software Team
+.
+    http://www.cambricon.com
+.
+The Information in this guide and all other information contained in Cambricon
+Documentation Referenced in this guide is provided "AS IS." Cambricon Makes no
+Warranties, Expressed, Implied, Statutory, or otherwise with respect to the
+information and expressly disclaims all implied warranties of noninfringement
+merchantability, title, noninfringement of intellectual property or fitness for
+a particular purpose. Notwithstanding any damages that customer might incur for
+any reason whatsoever, Cambricon's aggregate and cumulative liability towards
+customer for the product described in this guide shall be limited in accordance
+with the Cambricon terms and conditions of sale for the product.
+.
+IN no event shall Cambricon be liable for any damages whatsoever (Including,
+without limitation, damages for loss of profits, business interruption, loss of
+information) arising out of the use of or inability to use this guide, even if
+Cambricon has been advised of the possibility of such damages. Cambricon does
+not warrant the accuracy or completeness of the information, text, graphics,
+links or other items contained within this guide. Cambricon may make changes to
+this guide, or to the products described therein, at any time without notice,
+but makes no commitment to update this guide.
+.
+Performance tests and ratings are measured using specific chips or computer
+systems or components. The results reflect the approximate performance of
+Cambricon products as measured by those tests. Any difference in system hardware
+or software design or configuration may affect actual performance. Cambricon
+makes no representation or warranty that the product described in this guide
+will be suitable for any specified use without further testing or modification.
+Testing of all parameters of each product is not necessarily performed by
+Cambricon. It is customer's sole responsibility to ensure the product is
+suitable and fit for the application planned by customer and to do the necessary
+testing for the application in order to avoid a default of the application or
+the product.
+.
+Weaknesses in customer's product designs may affect the quality and reliability
+of the Cambricon product and may result in additional or different conditions
+and or requirements beyond those contained in this guide. Cambricon does not
+accept any liability related to any default, damage, costs or problem which may
+be based on or attributable to: (i) the use of the Cambricon product in any
+manner that is contrary to this guide, or (ii) customer product designs.
+.
+This guide is copyrighted and is protected by worldwide copyright laws and
+treaty provisions. They may not be copied, reproduced, modified, published,
+uploaded, posted, transmitted, or distributed in any way, without Cambricon's
+prior written permission. Except as expressly provided herein, Cambricon and its
+suppliers do not grant any express or implied right to you under any patents,
+copyrights, trademarks, trade secret or any other intellectual property or
+proprietary right. Other than the right for customer to use the information in
+this guide with the product, no other license, either expressed or implied, is
+hereby granted by Cambricon under this guide.
+.
+Trademarks
+Cambricon and the Cambricon logo are trademarks and/or registered trademarks of
+Cambricon Corporation in the Unites States and other countries. Other company
+and product names may be trademarks of the respective companies with which they
+are associated.
+.
+License
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -199,3 +262,14 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+.
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

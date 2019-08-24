@@ -1,0 +1,13 @@
+0 BMW ActiveHybrid 5 Sedan 2012
+1 BMW 1 Series Convertible 2012
+2 BMW 1 Series Coupe 2012
+3 BMW 3 Series Sedan 2012
+4 BMW 3 Series Wagon 2012
+5 BMW 6 Series Convertible 2007
+6 BMW X5 SUV 2007
+7 BMW X6 SUV 2012
+8 BMW M3 Coupe 2012
+9 BMW M5 Sedan 2010
+10 BMW M6 Convertible 2010
+11 BMW X3 SUV 2012
+12 BMW Z4 Convertible 2012
