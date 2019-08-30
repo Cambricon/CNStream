@@ -45,6 +45,8 @@ struct ModuleAssociatedInfo {
   std::vector<int> output_connectors;
 };
 
+StreamMsgObserver::~StreamMsgObserver() {}
+
 class PipelinePrivate {
  private:
   explicit PipelinePrivate(Pipeline* q_ptr) : q_ptr_(q_ptr) {
@@ -60,6 +62,7 @@ class PipelinePrivate {
   std::vector<std::shared_ptr<Connector>> connectors_;
   std::unordered_map<std::string, std::shared_ptr<Connector>> links_;
   std::vector<std::thread> threads_;
+  std::thread event_thread_;
   std::map<int64_t, ModuleAssociatedInfo> modules_;
   std::mutex stop_mtx_;
   uint64_t eos_mask_ = 0;
@@ -125,15 +128,10 @@ Pipeline::Pipeline(const std::string& name) : Module(name) {
   event_bus_ = new EventBus();
   GetEventBus()->AddBusWatch(std::bind(&Pipeline::DefaultBusWatch, this, std::placeholders::_1, std::placeholders::_2),
                              this);
-
-  event_thread_ = std::thread(&Pipeline::EventLoop, this);
 }
 
 Pipeline::~Pipeline() {
   running_ = false;
-  if (event_thread_.joinable()) {
-    event_thread_.join();
-  }
   delete event_bus_;
   delete d_ptr_;
 }
@@ -309,6 +307,8 @@ bool Pipeline::Start() {
   // start data transmit
   running_ = true;
   event_bus_->running_ = true;
+  d_ptr_->event_thread_ = std::thread(&Pipeline::EventLoop, this);
+
   for (std::shared_ptr<Connector> connector : d_ptr_->connectors_) {
     connector->Start();
   }
@@ -342,6 +342,9 @@ bool Pipeline::Stop() {
     if (it.joinable()) it.join();
   }
   d_ptr_->threads_.clear();
+  if (d_ptr_->event_thread_.joinable()) {
+    d_ptr_->event_thread_.join();
+  }
   // close modules
   for (auto& it : d_ptr_->modules_) {
     it.second.instance->Close();
@@ -355,10 +358,6 @@ bool Pipeline::Stop() {
 EventBus* Pipeline::GetEventBus() const { return event_bus_; }
 
 void Pipeline::EventLoop() {
-  while (!event_bus_->IsRunning()) {
-    std::this_thread::yield();
-  }
-
   const std::list<std::pair<BusWatcher, Module*>>& kWatchers = event_bus_->GetBusWatchers();
   EventHandleFlag flag = EVENT_HANDLE_NULL;
 

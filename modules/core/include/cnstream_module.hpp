@@ -87,8 +87,7 @@ class Module {
   uint64_t GetModulesMask() const { return mask_; }
 
   /**/
-  bool hasTranmit() const { return hasTransmit_.load() == 0 ? false : true; }
-
+  bool hasTranmit() const { return hasTransmit_.load(); }
  protected:
   const size_t INVALID_MODULE_ID = -1;
   Pipeline *container_ = nullptr;
