@@ -67,7 +67,7 @@ TEST(CoreEventBus, TestPostEvent) {
   pipe.Start();
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
   EXPECT_TRUE(bus->PostEvent(event));
-  // EXPECT_TRUE(pipe.WaitForStop());
+  pipe.Stop();
 }
 
 TEST(CoreEventBus, TestPollEvent) {

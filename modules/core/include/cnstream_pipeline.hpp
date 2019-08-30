@@ -69,6 +69,7 @@ class StreamMsgObserver {
     see Pipeline::SetStreamMsgObserver
    */
   virtual void Update(const StreamMsg& msg) = 0;
+  virtual ~StreamMsgObserver();
 };  // class StreamMsgObserver
 
 class PipelinePrivate;
@@ -190,7 +191,6 @@ class Pipeline : public Module {
   PipelinePrivate* d_ptr_;
   volatile bool running_ = false;
   EventBus* event_bus_;
-  std::thread event_thread_;
   DECLARE_PRIVATE(d_ptr_, Pipeline);
 };  // class Pipeline
 
