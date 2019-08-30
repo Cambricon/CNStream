@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -57,7 +58,7 @@ enum StreamMsgType {
 
 struct StreamMsg {
   StreamMsgType type;          // message type
-  uint32_t chn_idx;            // video channel inde
+  int32_t chn_idx;             // video channel inde
   std::string stream_id = "";  // stream id, set by user in CNDataFrame::stream_id
 };                             // struct StreamMsg
 
@@ -79,8 +80,13 @@ struct LinkStatus {
 
 struct CNModuleConfig {
   std::string name;
+  ModuleParamSet parameters; /*key-value pairs*/
+  int parallelism;           /*thread number*/
+  int maxInputQueueSize;
+  /*
+   * the below params are for auto-build-pipeline
+   */
   std::string className;         /*Module Class Name*/
-  ModuleParamSet parameters;     /*key-value pairs*/
   std::vector<std::string> next; /*downstream module names*/
 };
 
@@ -97,6 +103,20 @@ class Pipeline : public Module {
    * @brief provide data for this pipeline. used in source module such as decoder
    ************************************************************************/
   bool ProvideData(const Module* module, std::shared_ptr<CNFrameInfo> data);
+
+  EventBus* GetEventBus() const;
+  bool Start();
+  bool Stop();
+  inline bool IsRunning() { return running_; }
+
+ public:
+  int AddModuleConfig(const CNModuleConfig& config);
+  /* ------auto-graph methods------ */
+  int BuildPipeine(const std::vector<CNModuleConfig> configs);
+  Module* GetModule(const std::string& moduleName);
+  std::vector<std::string> GetLinkIds();
+  ModuleParamSet GetModuleParamSet(const std::string& moduleName);
+  CNModuleConfig GetModuleConfig(const std::string& module_name);
 
   /************************************************************************
    * @brief modules should be added to pipeline.
@@ -127,6 +147,7 @@ class Pipeline : public Module {
   std::string LinkModules(std::shared_ptr<Module> up_node, std::shared_ptr<Module> down_node,
                           size_t queue_capacity = 20);
 
+ public:
   /**********************************************************************************
    * @brief query link status by unique link id
    * @param
@@ -135,26 +156,11 @@ class Pipeline : public Module {
    * @return whether query succeeded
    **********************************************************************************/
   bool QueryLinkStatus(LinkStatus* status, const std::string& link_id);
-
-  EventBus* GetEventBus() const;
-  bool Start();
-  bool Stop();
-  inline bool IsRunning() { return running_; }
-
   /*
     @brief print all modules performance information
     @attention do this after pipeline stops
    */
   void PrintPerformanceInformation() const;
-
-  /* ------config/auto-graph methods------ */
- public:
-  int AddModuleConfig(const CNModuleConfig& config);
-  ModuleParamSet GetModuleParamSet(const std::string& moduleName);
-
- private:
-  std::unordered_map<std::string, CNModuleConfig> modules_config_;
-  std::unordered_map<std::string, std::vector<std::string>> connections_config_;
 
   /* -----stream message methods------ */
  public:

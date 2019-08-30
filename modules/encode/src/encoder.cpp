@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -19,6 +20,8 @@
 
 #include "encoder.hpp"
 #include "cnstream_eventbus.hpp"
+
+namespace cnstream {
 
 Encoder::Encoder(const std::string &name) : Module(name) {}
 
@@ -43,11 +46,11 @@ EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {
 
 Encoder::~Encoder() { Close(); }
 
-bool Encoder::Open(cnstream::ModuleParamSet paramSet) {
+bool Encoder::Open(ModuleParamSet paramSet) {
   if (paramSet.find("dump_dir") == paramSet.end()) {
     return false;
   }
-  output_dir_ = paramSet.find("dump_dir")->second;
+  output_dir_ = paramSet["dump_dir"];
   return true;
 }
 
@@ -110,3 +113,5 @@ int Encoder::Process(CNFrameInfoPtr data) {
 
   return 0;
 }
+
+}  // namespace cnstream

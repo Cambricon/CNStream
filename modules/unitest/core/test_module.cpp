@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -65,7 +66,7 @@ TEST(CoreModule, TestMask) {
   uint32_t seed = (uint32_t)time(0);
   const uint32_t mask_len = 32;
   TestModuleBase module;
-  unsigned long mask = 0;
+  uint64_t mask = 0;
 
   ModuleParamSet params;
   ASSERT_TRUE(module.Open(params));
@@ -73,9 +74,9 @@ TEST(CoreModule, TestMask) {
   for (uint32_t i = 0; i < mask_len; ++i) {
     module.SetParentId(rand_r(&seed) % mask_len);
   }
-  std::vector<uint32_t> p_ids = module.GetParentIds();
+  std::vector<size_t> p_ids = module.GetParentIds();
   for (auto &id : p_ids) {
-    mask |= (unsigned long)1 << id;
+    mask |= (uint64_t)1 << id;
   }
   EXPECT_EQ(module.GetModulesMask(), mask);
   module.Close();

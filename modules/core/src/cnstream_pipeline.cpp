@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -18,7 +19,6 @@
  *************************************************************************/
 
 #include <algorithm>
-#include <cassert>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -62,12 +62,17 @@ class PipelinePrivate {
   std::vector<std::thread> threads_;
   std::map<int64_t, ModuleAssociatedInfo> modules_;
   std::mutex stop_mtx_;
-  unsigned long eos_mask_ = 0;
+  uint64_t eos_mask_ = 0;
+
+ private:
+  std::unordered_map<std::string, CNModuleConfig> modules_config_;
+  std::unordered_map<std::string, std::vector<std::string>> connections_config_;
+  std::map<std::string, std::shared_ptr<Module>> modules_map_;
   DECLARE_PUBLIC(q_ptr_, Pipeline);
   void SetEOSMask() {
     for (const std::pair<int64_t, ModuleAssociatedInfo> module_info : modules_) {
       auto instance = module_info.second.instance;
-      eos_mask_ |= (unsigned long)1 << instance->GetId();
+      eos_mask_ |= (uint64_t)1 << instance->GetId();
     }
   }
   void ClearEOSMask() { eos_mask_ = 0; }
@@ -116,7 +121,6 @@ class PipelinePrivate {
 
 Pipeline::Pipeline(const std::string& name) : Module(name) {
   d_ptr_ = new PipelinePrivate(this);
-  Module::ResetIdBase();
 
   event_bus_ = new EventBus();
   GetEventBus()->AddBusWatch(std::bind(&Pipeline::DefaultBusWatch, this, std::placeholders::_1, std::placeholders::_2),
@@ -194,11 +198,14 @@ bool Pipeline::AddModule(std::shared_ptr<Module> module) {
   }
 
   LOG(INFO) << "Add Module " << module->GetName() << " to pipeline";
+  if (module->GetId() == Module::INVALID_MODULE_ID) {
+    LOG(ERROR) << "Failed to get module Id";
+    return false;
+  }
 
   ModuleAssociatedInfo associated_info;
   associated_info.instance = module;
   associated_info.parallelism = 1;
-  module->GetId();
   module->SetContainer(this);
   d_ptr_->modules_.insert(std::make_pair(hashcode, associated_info));
 
@@ -248,7 +255,7 @@ std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_p
 
   LOG(INFO) << "Link Module " << up_node->GetName() << "-->" << down_node->GetName();
 
-  std::string link_id = std::to_string(up_node_hashcode) + "-->" + std::to_string(down_node_hashcode);
+  std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
   // create connector
   std::shared_ptr<Connector> con = std::make_shared<Connector>(down_node_info.parallelism, queue_capacity);
   d_ptr_->connectors_.push_back(con);
@@ -359,7 +366,10 @@ void Pipeline::EventLoop() {
   while (event_bus_->IsRunning()) {
     Event event = event_bus_->PollEvent();
     if (event.type == EVENT_INVALID) {
-      DLOG(INFO) << "event type is invalid";
+      LOG(INFO) << "[EventLoop] event type is invalid";
+      break;
+    } else if (event.type == EVENT_STOP) {
+      LOG(INFO) << "[EventLoop] Get stop event";
       break;
     }
     std::unique_lock<std::mutex> lk(event_bus_->watcher_mut_);
@@ -373,7 +383,7 @@ void Pipeline::EventLoop() {
       break;
     }
   }
-  DLOG(INFO) << "[" << GetName() << "]: Event bus exit.";
+  LOG(INFO) << "[" << GetName() << "]: Event bus exit.";
 }
 
 void Pipeline::PrintPerformanceInformation() const {
@@ -392,7 +402,7 @@ void Pipeline::PrintPerformanceInformation() const {
 }
 
 void Pipeline::TransmitData(int64_t node_hashcode, std::shared_ptr<CNFrameInfo> data) {
-  assert(d_ptr_->modules_.find(node_hashcode) != d_ptr_->modules_.end());
+  LOG_IF(FATAL, d_ptr_->modules_.find(node_hashcode) == d_ptr_->modules_.end());
 
   const ModuleAssociatedInfo& module_info = d_ptr_->modules_[node_hashcode];
 
@@ -410,7 +420,7 @@ void Pipeline::TransmitData(int64_t node_hashcode, std::shared_ptr<CNFrameInfo> 
     e.message = module_info.instance->GetName() + " received eos from channel " + std::to_string(chn_idx);
     e.thread_id = std::this_thread::get_id();
     event_bus_->PostEvent(e);
-    const unsigned long eos_mask = data->frame.AddEOSMask(module_info.instance.get());
+    const uint64_t eos_mask = data->frame.AddEOSMask(module_info.instance.get());
     if (eos_mask == d_ptr_->eos_mask_) {
       StreamMsg msg;
       msg.type = StreamMsgType::EOS_MSG;
@@ -438,11 +448,11 @@ void Pipeline::TransmitData(int64_t node_hashcode, std::shared_ptr<CNFrameInfo> 
 }
 
 void Pipeline::TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx) {
-  assert(d_ptr_->modules_.find(node_hashcode) != d_ptr_->modules_.end());
+  LOG_IF(FATAL, d_ptr_->modules_.find(node_hashcode) == d_ptr_->modules_.end());
 
   ModuleAssociatedInfo& module_info = d_ptr_->modules_[node_hashcode];
 
-  assert(conveyor_idx < module_info.timers_.size());
+  LOG_IF(FATAL, conveyor_idx >= module_info.timers_.size());
   CNTimer& timer = module_info.timers_[conveyor_idx];
 
   std::vector<std::shared_ptr<Connector>> input_connectors;
@@ -461,7 +471,7 @@ void Pipeline::TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx) {
       data = connector->PopDataBufferFromConveyor(conveyor_idx);
       if (nullptr == data.get()) {
         /*
-          nullptr waill be received when connector stops.
+          nullptr will be received when connector stops.
           maybe only part of the connectors stopped.
          */
         continue;
@@ -473,18 +483,21 @@ void Pipeline::TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx) {
         data->frame.ClearModuleMask(module_info.instance.get());
         int flags = data->frame.flags;
 
-        auto start_time = std::chrono::high_resolution_clock::now();
+        if (!module_info.instance->hasTranmit() && (CN_FRAME_FLAG_EOS & flags)) {
+          /*normal module, transmit EOS by the framework*/
+          TransmitData(node_hashcode, data);
+          continue;
+        }
 
-        if (!(CN_FRAME_FLAG_EOS & flags)) {
+        {
+          auto start_time = std::chrono::high_resolution_clock::now();
           int ret = module_info.instance->Process(data);
           auto end_time = std::chrono::high_resolution_clock::now();
           std::chrono::duration<double, std::milli> diff = end_time - start_time;
           timer.Dot(diff.count(), 1);
 
-          /*
-            process failed
-           */
-          if (0 != ret) {
+          /*process failed*/
+          if (ret < 0) {
             Event e;
             e.type = EventType::EVENT_ERROR;
             e.module = module_info.instance.get();
@@ -497,10 +510,15 @@ void Pipeline::TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx) {
             msg.stream_id = data->frame.stream_id;
             d_ptr_->UpdateByStreamMsg(msg);
             return;
+          } else if (ret > 0) {
+            // data has been transmitted by the module itself
+            if (!module_info.instance->hasTranmit()) {
+              LOG(ERROR) << "Module::Process() should not return 1\n";
+              return;
+            }
+            continue;
           }
-        } else {
         }
-
         TransmitData(node_hashcode, data);
       }  // if
       else {
@@ -513,21 +531,70 @@ void Pipeline::TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx) {
 
 /* ------config/auto-graph methods------ */
 int Pipeline::AddModuleConfig(const CNModuleConfig& config) {
-  modules_config_[config.name] = config;
-  connections_config_[config.name] = config.next;
+  if (d_ptr_ == nullptr) {
+    return -1;
+  }
+  d_ptr_->modules_config_[config.name] = config;
+  d_ptr_->connections_config_[config.name] = config.next;
   return 0;
 }
 
 ModuleParamSet Pipeline::GetModuleParamSet(const std::string& moduleName) {
   ModuleParamSet paramSet;
-  auto iter = modules_config_.find(moduleName);
-  if (iter != modules_config_.end()) {
+  auto iter = d_ptr_->modules_config_.find(moduleName);
+  if (iter != d_ptr_->modules_config_.end()) {
     for (auto& v : iter->second.parameters) {
       // filter some keys ...
       paramSet[v.first] = v.second;
     }
   }
   return paramSet;
+}
+
+CNModuleConfig Pipeline::GetModuleConfig(const std::string& module_name) {
+  CNModuleConfig config = {};
+  auto iter = d_ptr_->modules_config_.find(module_name);
+  if (iter != d_ptr_->modules_config_.end()) {
+    config = iter->second;
+  }
+  return config;
+}
+
+int Pipeline::BuildPipeine(const std::vector<CNModuleConfig> configs) {
+  /*TODO,check configs*/
+  ModuleCreatorWorker creator;
+  std::map<std::string, int> queues_size;
+  for (auto& v : configs) {
+    this->AddModuleConfig(v);
+    Module* module = creator.Create(v.className, v.name);
+    std::shared_ptr<Module> instance(module);
+    d_ptr_->modules_map_[v.name] = instance;
+    queues_size[v.name] = v.maxInputQueueSize;
+    this->AddModule(instance);
+    this->SetModuleParallelism(instance, v.parallelism);
+  }
+  for (auto& v : d_ptr_->connections_config_) {
+    for (auto& name : v.second) {
+      this->LinkModules(d_ptr_->modules_map_[v.first], d_ptr_->modules_map_[name], queues_size[name]);
+    }
+  }
+  return 0;
+}
+
+Module* Pipeline::GetModule(const std::string& moduleName) {
+  auto iter = d_ptr_->modules_map_.find(moduleName);
+  if (iter != d_ptr_->modules_map_.end()) {
+    return d_ptr_->modules_map_[moduleName].get();
+  }
+  return nullptr;
+}
+
+std::vector<std::string> Pipeline::GetLinkIds() {
+  std::vector<std::string> linkIds;
+  for (auto& v : d_ptr_->links_) {
+    linkIds.push_back(v.first);
+  }
+  return linkIds;
 }
 
 /* stream message methods */

@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -50,7 +51,7 @@ TEST(CoreConnector, GetConveyor) {
 TEST(CoreConnector, PushPopDataBuffer) {
   size_t conveyor_count = 1;
   Connector connector(conveyor_count);
-  CNFrameInfoPtr data = std::make_shared<CNFrameInfo>();
+  CNFrameInfoPtr data = CNFrameInfo::Create("stream_id_0");
   connector.PushDataBufferToConveyor(0, data);
   CNFrameInfoPtr out_data = connector.PopDataBufferFromConveyor(0);
   EXPECT_EQ(data.get(), out_data.get());

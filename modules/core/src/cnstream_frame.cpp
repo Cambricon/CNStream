@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -21,7 +22,6 @@
 
 #include <cnrt.h>
 #include <glog/logging.h>
-#include <cassert>
 #include <map>
 #include <mutex>
 #include <string>
@@ -54,7 +54,7 @@ size_t CNDataFrame::GetPlaneBytes(int plane_idx) const {
       else if (1 == plane_idx)
         return height * strides[1] / 2;
       else
-        assert(false);
+        LOG(FATAL) << "plane index wrong.";
     default:
       return 0;
   }
@@ -74,11 +74,9 @@ void CNDataFrame::CopyFrameFromMLU(int dev_id, int ddr_channel, CNDataFormat fmt
   if (DevContext::MLU == ctx.dev_type) {
     // memory already on MLU
     LOG(FATAL) << "Unsupport";
-    assert(false);
   } else if (DevContext::CPU == ctx.dev_type) {
     // memory on CPU. free it?
     LOG(FATAL) << "Unsupport";
-    assert(false);
   }
 
   void* ptr = nullptr;
@@ -116,7 +114,7 @@ void CNDataFrame::CopyFrameFromMLU(int dev_id, int ddr_channel, CNDataFormat fmt
         else if (1 == i)
           plane_size = height * strides[1] / 2;
         else
-          assert(false);
+          LOG(FATAL) << "wrong plane size.";
         break;
       default:
         LOG(ERROR) << "[CopyFrameFromMLU]: Unknown pixel format: " << static_cast<int>(fmt);
@@ -276,6 +274,59 @@ void CNInferObject::AddFeature(const CNInferFeature& feature) {
 std::vector<CNInferFeature> CNInferObject::GetFeatures() {
   std::lock_guard<std::mutex> lk(feature_mutex_);
   return features_;
+}
+
+std::mutex CNFrameInfo::mutex_;
+std::map<std::string, int> CNFrameInfo::stream_count_map_;
+int CNFrameInfo::parallelism_ = 0;
+
+void SetParallelism(int parallelism) { CNFrameInfo::parallelism_ = parallelism; }
+
+std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id) {
+  CNFrameInfo* frameInfo = new CNFrameInfo();
+  if (!frameInfo) {
+    return nullptr;
+  }
+  frameInfo->frame.stream_id = stream_id;
+  std::shared_ptr<CNFrameInfo> ptr(frameInfo);
+
+  if (parallelism_ > 0) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    auto iter = stream_count_map_.find(stream_id);
+    if (iter == stream_count_map_.end()) {
+      int count = 1;
+      stream_count_map_[stream_id] = count;
+      // LOG(INFO) << "CNFrameInfo::Create() insert stream_id: " << stream_id;
+    } else {
+      int count = stream_count_map_[stream_id];
+      if (count >= parallelism_) {
+        return nullptr;
+      }
+      stream_count_map_[stream_id] = count + 1;
+      // LOG(INFO) << "CNFrameInfo::Create() add count stream_id " << stream_id << ":" << count;
+    }
+  }
+  return ptr;
+}
+
+CNFrameInfo::~CNFrameInfo() {
+  if (parallelism_ > 0) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    auto iter = stream_count_map_.find(frame.stream_id);
+    if (iter != stream_count_map_.end()) {
+      int count = iter->second;
+      --count;
+      if (count <= 0) {
+        stream_count_map_.erase(iter);
+        // LOG(INFO) << "CNFrameInfo::~CNFrameInfo() erase stream_id " << frame.stream_id;
+      } else {
+        iter->second = count;
+        // LOG(INFO) << "CNFrameInfo::~CNFrameInfo() update stream_id " << frame.stream_id << " : " << count;
+      }
+    } else {
+      LOG(ERROR) << "Invaid stream_id, please check\n";
+    }
+  }
 }
 
 }  // namespace cnstream

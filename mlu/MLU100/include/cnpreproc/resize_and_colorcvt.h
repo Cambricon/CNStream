@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -16,6 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef _CNPREPROCESS_RESIZE_AND_CONVERT_H_
 #define _CNPREPROCESS_RESIZE_AND_CONVERT_H_
 
@@ -67,15 +69,30 @@ class MluRCOp {
     src_h_ = h;
     src_stride_ = stride;
   }
+  inline void get_src_resolution(uint32_t* w, uint32_t* h, uint32_t* stride) {
+    *w = src_w_;
+    *h = src_h_;
+    *stride = src_stride_;
+  }
   inline void set_crop_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     crop_x_ = x;
     crop_y_ = y;
     crop_w_ = w;
     crop_h_ = h;
   }
+  inline void get_crop_rect(uint32_t* x, uint32_t* y, uint32_t* w, uint32_t* h) {
+    *x = crop_x_;
+    *y = crop_y_;
+    *w = crop_w_;
+    *h = crop_h_;
+  }
   inline void set_dst_resolution(uint32_t w, uint32_t h) {
     dst_w_ = w;
     dst_h_ = h;
+  }
+  inline void get_dst_resolution(uint32_t* w, uint32_t* h) {
+    *w = dst_w_;
+    *h = dst_h_;
   }
   inline void set_ftype(cnrtFunctionType_t ftype) {
     ftype_ = ftype;

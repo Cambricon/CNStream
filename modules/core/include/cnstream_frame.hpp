@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -178,13 +179,27 @@ typedef struct {
 } CNInferObject;
 
 struct CNFrameInfo {
-  CNFrameInfo() {}
-  ~CNFrameInfo() {}
-  uint32_t channel_idx;
+  static std::shared_ptr<CNFrameInfo> Create(const std::string& stream_id);
+  uint32_t channel_idx; /*used by the framework*/
   CNDataFrame frame;
   std::vector<std::shared_ptr<CNInferObject>> objs;
+  ~CNFrameInfo();
+
+ private:
+  CNFrameInfo() {}
   DISABLE_COPY_AND_ASSIGN(CNFrameInfo);
+  static std::mutex mutex_;
+  static std::map<std::string, int> stream_count_map_;
+
+ public:
+  static int parallelism_;
 };
+
+/* limit the resource for each stream,
+ *    there will be no more than "parallelism" frames simultanously.
+ *  Disabled as default.
+ */
+void SetParallelism(int parallelism);
 
 }  // namespace cnstream
 
