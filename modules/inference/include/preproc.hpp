@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -24,6 +25,7 @@
 #include <utility>
 #include <vector>
 
+#include "cnbase/cnshape.h"
 #include "cnbase/reflex_object.h"
 
 #include "cnstream_frame.hpp"
@@ -40,15 +42,19 @@ class Preproc {
   /******************************************************************************
    * @brief Execute preproc on neural network inputs
    * @param
-   *   nn_inputs: neural network inputs
    *   package: smart pointer of struct stored network input image
+   *   nn_inputs: neural network input data and shapes
+   * @return return true if succeed, false otherwise
    ******************************************************************************/
-  virtual void Execute(void** nn_inputs, CNFrameInfoPtr package) = 0;
+  virtual bool Execute(CNFrameInfoPtr package, std::vector<std::pair<float*, libstream::CnShape>> nn_inputs) = 0;
 };  // class Preproc
 
 class PreprocCpu : public Preproc, virtual public libstream::ReflexObjectEx<Preproc> {
  public:
-  void Execute(void** nn_inputs, CNFrameInfoPtr package) override;
+  /******************************************************************************
+   * @attention nn_inputs is a pointer to pre-allocated cpu memory
+   ******************************************************************************/
+  bool Execute(CNFrameInfoPtr package, std::vector<std::pair<float*, libstream::CnShape>> nn_inputs) override;
 
   DECLARE_REFLEX_OBJECT_EX(PreprocCpu, Preproc);
 };  // class PreprocCpu

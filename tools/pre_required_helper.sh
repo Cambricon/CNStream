@@ -31,6 +31,12 @@ installYumLibs() {
 		gflags.x86_64\
 		glog.x86_64\
 		cmake3.x86_64
+    ${SUDO_CMD} yum install -y epel-release rpm
+    ${SUDO_CMD} yum update -y
+    ${SUDO_CMD} rpm --import http://li.nux.ro/download/nux/RPM-GPG-KEY-nux.ro
+    ${SUDO_CMD} rpm -Uvh http://li.nux.ro/download/nux/dextop/el7/x86_64/nux-dextop-release-0-5.el7.nux.noarch.rpm 
+    ${SUDO_CMD} yum install ffmpeg ffmpeg-devel -y     
+    echo "Should find ffmpeg libraries in /usr/lib64 and header files in /usr/include/ffmepg"
 }	
 
 installLibs() {
@@ -46,7 +52,7 @@ installLibs() {
 check_sudo
 installLibs
 
-./build_ffmpeg.sh --build
+#./build_ffmpeg.sh --build
 
 echo "Complete!"
 

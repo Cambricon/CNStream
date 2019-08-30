@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -33,7 +34,7 @@
 /*
   1. check frame count after processing
   2. check frame.flags do not have EOS mask during processing
-  3. check process return -1 and 1
+  3. check process return -1
   4. check process after Open and process before Close
   5. Pipeline in different situations
   6. check case multiple video streams have different frame count
@@ -81,10 +82,10 @@ class MsgObserver : cnstream::StreamMsgObserver {
 };
 
 static const int __MIN_CHN_CNT__ = 1;
-static const int __MAX_CHN_CNT__ = 180;
+static const int __MAX_CHN_CNT__ = 124;
 
 static const int __MIN_FRAME_CNT__ = 200;
-static const int __MAX_FRAME_CNT__ = 2000;
+static const int __MAX_FRAME_CNT__ = 1200;
 
 static const std::vector<std::vector<std::list<int>>> g_neighbor_lists = {
     /*
@@ -128,7 +129,7 @@ static const std::vector<std::vector<std::list<int>>> g_neighbor_lists = {
 
 class TestProcessor : public cnstream::Module {
  public:
-  explicit TestProcessor(int chns) : Module("TestProcessor") { cnts_.resize(chns); }
+  explicit TestProcessor(const std::string& name, int chns) : Module(name) { cnts_.resize(chns); }
   bool Open(cnstream::ModuleParamSet param_set) override {
     opened_ = true;
     return true;
@@ -152,12 +153,11 @@ class TestProcessor : public cnstream::Module {
 class TestProcessorFailure : public TestProcessor {
  public:
   explicit TestProcessorFailure(int chns, int failure_ret_num)
-      : TestProcessor(chns), e_(time(NULL)), failure_ret_num_(failure_ret_num) {
+      : TestProcessor("TestProcessorFailure", chns), e_(time(NULL)), failure_ret_num_(failure_ret_num) {
     std::uniform_int_distribution<> failure_frame_randomer(0, __MIN_FRAME_CNT__);
     std::uniform_int_distribution<> failure_chn_randomer(1, chns - 1);
     failure_chn_ = failure_chn_randomer(e_);
     failure_frame_ = failure_frame_randomer(e_);
-    SetName("TestProcessorFailure");
   }
   int Process(std::shared_ptr<cnstream::CNFrameInfo> data) override {
     uint32_t chn_idx = data->channel_idx;
@@ -179,7 +179,7 @@ class TestProcessorFailure : public TestProcessor {
 
 class TestProvider : public TestProcessor {
  public:
-  explicit TestProvider(int chns, cnstream::Pipeline* pipeline) : TestProcessor(chns), pipeline_(pipeline) {
+  explicit TestProvider(int chns, cnstream::Pipeline* pipeline) : TestProcessor("TestProvider", chns), pipeline_(pipeline) {
     EXPECT_TRUE(nullptr != pipeline);
     EXPECT_GT(chns, 0);
     std::default_random_engine e(time(NULL));
@@ -188,7 +188,6 @@ class TestProvider : public TestProcessor {
     for (int i = 0; i < chns; ++i) {
       frame_cnts_.push_back(randomer(e));
     }
-    SetName("TestProvider");
   }
 
   void StartSendData() {
@@ -213,7 +212,7 @@ class TestProvider : public TestProcessor {
     int64_t frame_idx = 0;
     uint64_t frame_cnt = frame_cnts_[chn_idx];
     while (frame_cnt--) {
-      auto data = std::make_shared<cnstream::CNFrameInfo>();
+      auto data = cnstream::CNFrameInfo::Create(std::to_string(chn_idx));
       data->channel_idx = chn_idx;
       data->frame.frame_id = frame_idx++;
 
@@ -221,7 +220,7 @@ class TestProvider : public TestProcessor {
         return;
       }
       if (frame_cnt == 0) {
-        data = std::make_shared<cnstream::CNFrameInfo>();
+        data = cnstream::CNFrameInfo::Create(std::to_string(chn_idx));
         data->channel_idx = chn_idx;
         data->frame.flags |= cnstream::CN_FRAME_FLAG_EOS;
         pipeline_->ProvideData(this, data);
@@ -251,8 +250,7 @@ CreatePipelineByNeighborList(const std::vector<std::list<int>>& neighbor_list, F
   modules.push_back(std::make_shared<TestProvider>(chns, pipeline.get()));
   for (int i = 1; i < processors_cnt; ++i) {
     if (fdesc.failure_module_idx != i) {
-      auto module = std::make_shared<TestProcessor>(chns);
-      module->SetName("TestProcessor" + std::to_string(i));
+      auto module = std::make_shared<TestProcessor>("TestProcessor" + std::to_string(i), chns);
       modules.push_back(module);
     } else {
       modules.push_back(std::make_shared<TestProcessorFailure>(chns, fdesc.process_ret));
@@ -340,7 +338,6 @@ void TestProcessFailure(const std::vector<std::list<int>>& neighbor_list, int pr
 void TestFunc(const std::vector<std::list<int>>& neighbor_list) {
   TestProcess(neighbor_list);
   TestProcessFailure(neighbor_list, -1);
-  TestProcessFailure(neighbor_list, 1);
 }
 
 TEST(CorePipeline, CorePipeline) {

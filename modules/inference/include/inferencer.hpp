@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -43,20 +44,6 @@ class InferencerPrivate;
 using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 
 /*********************************************************************************
- * @brief Inferencer thread context
- *********************************************************************************/
-struct InferContext {
-  libstream::MluMemoryOp mem_op;
-  libstream::CnInfer infer;
-  libstream::MluContext env;
-  libstream::MluRCOp rc_op;
-  void** mlu_output = nullptr;
-  void** cpu_output = nullptr;
-  // resize and color convert operator output
-  void** mlu_input = nullptr;
-};  // struct InferContext
-
-/*********************************************************************************
  * @brief Inferencer is a module for running offline model inference.
  *
  * The input could come from Decoder or other plugins, in MLU memory,
@@ -67,13 +54,13 @@ struct InferContext {
  * for MLU memory, and on CPU for CPU memory if CPU preproc set.
  * Afterwards, run infer with offline model loading from model path.
  *********************************************************************************/
-class Inferencer : public Module {
+class Inferencer : public Module, public ModuleCreator<Inferencer> {
  public:
   /******************************************************************************
    * @brief Create Inferencer module
    ****************************************************************************/
   explicit Inferencer(const std::string& name);
-  ~Inferencer();
+  virtual ~Inferencer();
 
   /*
    * @brief Called by pipeline when pipeline start.
@@ -85,6 +72,7 @@ class Inferencer : public Module {
    *   postproc_name:
    *   cpu_preproc_name:
    *   device_id:
+   *   batch_size:  maximum 32, default 1
    */
   bool Open(ModuleParamSet paramSet) override;
   /*
@@ -94,11 +82,14 @@ class Inferencer : public Module {
   /******************************************************************************
    * @brief do inference for each frame
    ****************************************************************************/
-  int Process(CNFrameInfoPtr data) override;
+  int Process(CNFrameInfoPtr data) final;
 
- private:
-  void RunMluRCOp(CNDataFrame* input_data, void* resize_output_data, libstream::MluRCOp* resize_op);
-  InferContext* GetInferContext(CNFrameInfoPtr data);
+  /*****************************************************************************
+   * @brief inferencing by batch
+   *****************************************************************************/
+  int ProcessBatch();
+
+ protected:
   InferencerPrivate* d_ptr_ = nullptr;
   DECLARE_PRIVATE(d_ptr_, Inferencer);
 };  // class Inferencer

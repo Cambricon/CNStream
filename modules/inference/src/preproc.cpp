@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -19,6 +20,10 @@
 
 #include "preproc.hpp"
 
+#include <opencv2/opencv.hpp>
+
+#include "cnbase/cnshape.h"
+
 namespace cnstream {
 
 Preproc* Preproc::Create(const std::string& proc_name) {
@@ -27,6 +32,74 @@ Preproc* Preproc::Create(const std::string& proc_name) {
 
 IMPLEMENT_REFLEX_OBJECT_EX(PreprocCpu, Preproc)
 
-void PreprocCpu::Execute(void** nn_inputs, CNFrameInfoPtr package) { LOG(FATAL) << "NOT IMPLEMENT"; }
+bool PreprocCpu::Execute(CNFrameInfoPtr package, std::vector<std::pair<float*, libstream::CnShape>> nn_inputs) {
+  // check params
+  if (package->frame.ctx.dev_type != DevContext::DevType::CPU) {
+    LOG(ERROR) << "[PreprocCpu] frame memory is not on CPU";
+    return false;
+  }
+  if (nn_inputs.size() != 1 || nn_inputs[0].second.c() != 3) {
+    LOG(ERROR) << "[PreprocCpu] model input shape not supported";
+    return false;
+  }
+
+  DLOG(INFO) << "[PreprocCpu] do preproc...";
+
+  int width = package->frame.width;
+  int height = package->frame.height;
+  int dst_w = nn_inputs[0].second.w();
+  int dst_h = nn_inputs[0].second.h();
+
+  uint8_t* img_data = new uint8_t[package->frame.GetBytes()];
+  uint8_t* t = img_data;
+
+  for (int i = 0; i < package->frame.GetPlanes(); ++i) {
+    memcpy(t, package->frame.data[i]->GetCpuData(), package->frame.GetPlaneBytes(i));
+    t += package->frame.GetPlaneBytes(i);
+  }
+
+  // convert color space
+  cv::Mat img;
+  switch (package->frame.fmt) {
+    case cnstream::CNDataFormat::CN_PIXEL_FORMAT_BGR24:
+      img = cv::Mat(height, width, CV_8UC3, img_data);
+      break;
+    case cnstream::CNDataFormat::CN_PIXEL_FORMAT_RGB24:
+      img = cv::Mat(height, width, CV_8UC3, img_data);
+      cv::cvtColor(img, img, cv::COLOR_RGB2BGR);
+      break;
+    case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12: {
+      img = cv::Mat(height * 3 / 2, width, CV_8UC1, img_data);
+      cv::Mat bgr(height, width, CV_8UC3);
+      cv::cvtColor(img, bgr, cv::COLOR_YUV2BGR_NV12);
+      img = bgr;
+    } break;
+    case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21: {
+      img = cv::Mat(height * 3 / 2, width, CV_8UC1, img_data);
+      cv::Mat bgr(height, width, CV_8UC3);
+      cv::cvtColor(img, bgr, cv::COLOR_YUV2BGR_NV21);
+      img = bgr;
+    } break;
+    default:
+      LOG(WARNING) << "[Encoder] Unsupport pixel format.";
+      delete[] img_data;
+      return -1;
+  }
+
+  // resize if needed
+  if (height != dst_h || width != dst_w) {
+    cv::Mat dst(dst_h, dst_w, CV_8UC3);
+    cv::resize(img, dst, cv::Size(dst_w, dst_h));
+    img.release();
+    img = dst;
+  }
+
+  // since model input data type is float, convert image to float
+  cv::Mat dst(dst_h, dst_w, CV_32FC3, nn_inputs[0].first);
+  img.convertTo(dst, CV_32F);
+
+  delete[] img_data;
+  return true;
+}
 
 }  // namespace cnstream

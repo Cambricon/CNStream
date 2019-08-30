@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -30,7 +31,7 @@
 
 namespace cnstream {
 
-const EventType g_type = EVENT_STOP;
+const EventType g_type = EVENT_ERROR;
 const char *g_message = "test post event";
 std::thread::id g_thread_id;
 
@@ -76,7 +77,7 @@ TEST(CoreEventBus, TestPollEvent) {
   event.type = EVENT_WARNING;
   event.message = "test poll";
   event.module = &pipe;
-  EXPECT_EQ(bus->PollEvent().type, EVENT_INVALID);
+  EXPECT_EQ(bus->PollEvent().type, EVENT_STOP);
   bus->ClearAllWatchers();
   pipe.Start();
   std::this_thread::sleep_for(std::chrono::milliseconds(10));

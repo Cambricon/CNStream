@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -29,6 +30,8 @@
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
 
+namespace cnstream {
+
 using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
 
 struct EncoderContext {
@@ -36,7 +39,7 @@ struct EncoderContext {
   cv::Size size;
 };
 
-class Encoder : public cnstream::Module {
+class Encoder : public Module, public ModuleCreator<Encoder> {
  public:
   explicit Encoder(const std::string& name);
   ~Encoder();
@@ -46,7 +49,7 @@ class Encoder : public cnstream::Module {
    * @paramSet
    *   dump_dir: ouput_dir path
    */
-  bool Open(cnstream::ModuleParamSet paramSet) override;
+  bool Open(ModuleParamSet paramSet) override;
 
   /*
    * @brief Called by pipeline when pipeline stop.
@@ -63,5 +66,7 @@ class Encoder : public cnstream::Module {
   std::string output_dir_;
   std::unordered_map<int, EncoderContext*> encode_ctxs_;
 };  // class Encoder
+
+}  // namespace cnstream
 
 #endif  // ENCODER_HPP_

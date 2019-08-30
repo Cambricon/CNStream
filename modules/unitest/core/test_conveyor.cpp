@@ -1,10 +1,11 @@
 /*************************************************************************
  * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
@@ -74,7 +75,7 @@ TEST(CoreConveyor, MultiThreadPushPop) {
   Connector* con = new Connector(1, 20);
   Conveyor conveyor(con, 20);
 
-  CNFrameInfoPtr data = std::make_shared<CNFrameInfo>();
+  CNFrameInfoPtr data = cnstream::CNFrameInfo::Create(std::to_string(0));
 
   int id = 0;
   seed_conveyor = (uint32_t)time(0);
@@ -119,7 +120,7 @@ TEST(CoreConveyor, GetBufferSize) {
 
   uint32_t store_num = rand_r(&seed_conveyor) % conveyor_capacity;
   for (uint32_t i = 0; i < store_num; ++i) {
-    auto data = std::make_shared<CNFrameInfo>();
+    auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
     conveyor->PushDataBuffer(data);
   }
   EXPECT_EQ(conveyor->GetBufferSize(), store_num);
@@ -130,7 +131,7 @@ TEST(CoreConveyor, PushPopDataBuffer) {
   uint32_t conveyor_num = 2;
   Connector* connect = new Connector(conveyor_num);
   Conveyor* conveyor = connect->GetConveyor(conveyor_num - 1);
-  std::shared_ptr<CNFrameInfo> sdata = std::make_shared<CNFrameInfo>();
+  std::shared_ptr<CNFrameInfo> sdata = cnstream::CNFrameInfo::Create(std::to_string(0));
   conveyor->PushDataBuffer(sdata);
   auto rdata = conveyor->PopDataBuffer();
   EXPECT_EQ(sdata.get(), rdata.get());
