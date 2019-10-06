@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 2.8.7)
+if(POLICY CMP0046)
+  cmake_policy(SET CMP0046 NEW)
+endif()
+if(POLICY CMP0054)
+  cmake_policy(SET CMP0054 NEW)
+endif()
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/3rdparty/lib)
+
+add_subdirectory(googletest)

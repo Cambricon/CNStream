@@ -1,0 +1,20 @@
+if(cnstream_build_tests)
+  include_directories(${PROJECT_SOURCE_DIR}/modules/unitest/include/)
+  include_directories(${PROJECT_SOURCE_DIR}/modules/core/src)
+
+  file(GLOB_RECURSE test_srcs ${PROJECT_SOURCE_DIR}/modules/unitest/*.cpp)
+  add_executable(cnstream_test ${test_srcs})
+
+  if(cnstream_build_integrated_lib)
+    target_link_libraries(cnstream_test gtest cnstream glog gflags ${OpenCV_LIBS})
+  else()
+    foreach(module ${module_list})
+      include_directories(${PROJECT_SOURCE_DIR}/modules/${module}/include)
+    endforeach()
+    set(depended_modules cns-display cns-encoder cns-inference cns-osd cns-source cns-track)
+    set(3rd_libs opencv_core opencv_highgui)
+    target_link_libraries(cnstream_test gtest cnstream ${depended_modules} ${3rd_libs} glog gflags)
+  endif()
+
+  add_test(cnstream_test ${EXECUTABLE_OUTPUT_PATH}/cnstream_test)
+endif()
