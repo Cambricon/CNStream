@@ -34,6 +34,7 @@ extern "C" {
 #endif
 
 #include <atomic>
+#include <memory>
 #include <string>
 #include <thread>
 #include "cndecode/cndecode.h"
@@ -91,7 +92,7 @@ class FFmpegMluDecoder : public FFmpegDecoder {
   std::atomic<int> eos_got_{0};
   void FrameCallback(const libstream::CnFrame &frame);
   void EOSCallback();
-  int ProcessFrame(const libstream::CnFrame &frame, bool &reused);
+  int ProcessFrame(const libstream::CnFrame &frame, bool *reused);
   CNTimer fps_calculators[4];
   void PrintPerformanceInfomation() const {
     printf("stream_id: %s:\n", stream_id_.c_str());

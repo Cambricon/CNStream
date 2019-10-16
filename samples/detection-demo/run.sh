@@ -20,7 +20,7 @@ source env.sh
 mkdir -p output
 ./../bin/detection  \
     --data_path ./files.list_video \
-    --src_frame_rate 27   \
+    --src_frame_rate 30   \
     --wait_time 0 \
     --rtsp=false \
     --input_image=false \

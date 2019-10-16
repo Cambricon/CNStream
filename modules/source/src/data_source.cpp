@@ -21,6 +21,9 @@
 #include <algorithm>
 #include <atomic>
 #include <functional>
+#include <map>
+#include <memory>
+#include <string>
 #include "data_handler_ffmpeg.hpp"
 #include "data_handler_raw.hpp"
 #include "glog/logging.h"
@@ -40,7 +43,6 @@ static int GetDeviceId(ModuleParamSet paramSet) {
   ss << paramSet["device_id"];
   ss >> device_id;
   /*check device_id valid or not,FIXME*/
-  //...
   return device_id;
 }
 
@@ -52,7 +54,7 @@ bool DataSource::Open(ModuleParamSet paramSet) {
     } else if (source_type == "raw") {
       param_.source_type_ = SOURCE_RAW;
     } else {
-      LOG(ERROR) << "source_type " << paramSet["source_type"] << "not supported";
+      LOG(ERROR) << "source_type " << paramSet["source_type"] << " not supported";
       return false;
     }
   }
@@ -64,7 +66,7 @@ bool DataSource::Open(ModuleParamSet paramSet) {
     } else if (dec_type == "mlu") {
       param_.output_type_ = OUTPUT_MLU;
     } else {
-      LOG(ERROR) << "output_type " << paramSet["output_type"] << "not supported";
+      LOG(ERROR) << "output_type " << paramSet["output_type"] << " not supported";
       return false;
     }
     if (param_.output_type_ == OUTPUT_MLU) {
@@ -94,7 +96,7 @@ bool DataSource::Open(ModuleParamSet paramSet) {
     } else if (dec_type == "mlu") {
       param_.decoder_type_ = DECODER_MLU;
     } else {
-      LOG(ERROR) << "decoder_type " << paramSet["decoder_type"] << "not supported";
+      LOG(ERROR) << "decoder_type " << paramSet["decoder_type"] << " not supported";
       return false;
     }
     if (dec_type == "mlu") {
@@ -103,6 +105,19 @@ bool DataSource::Open(ModuleParamSet paramSet) {
         LOG(ERROR) << "decoder_type MLU : device_id must be set";
         return false;
       }
+    }
+  }
+
+  if (paramSet.find("output_width") != paramSet.end()) {
+    std::string str_w = paramSet["output_width"];
+    std::string str_h = paramSet["output_height"];
+    size_t w = std::stoi(str_w);
+    size_t h = std::stoi(str_h);
+    if (w != 0) {
+      param_.output_w = w;
+    }
+    if (h != 0) {
+      param_.output_h = h;
     }
   }
 
@@ -145,6 +160,21 @@ bool DataSource::Open(ModuleParamSet paramSet) {
       param_.interlaced_ = (interlaced == 0) ? false : true;
     }
   }
+
+  if (paramSet.find("input_buf_number") != paramSet.end()) {
+    std::string ibn_str = paramSet["input_buf_number"];
+    std::stringstream ss;
+    ss << paramSet["input_buf_number"];
+    ss >> param_.input_buf_number_;
+  }
+
+  if (paramSet.find("output_buf_number") != paramSet.end()) {
+    std::string obn_str = paramSet["output_buf_number"];
+    std::stringstream ss;
+    ss << paramSet["output_buf_number"];
+    ss >> param_.output_buf_number_;
+  }
+
   return true;
 }
 

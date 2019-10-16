@@ -1,0 +1,16 @@
+image: cnstream:0.1
+stages:
+  - build
+
+job_build:
+  stage: build
+  script: 
+    - mkdir build
+    - cd build
+    - cmake ..
+    - make -j16
+    - cd ..
+    - rm -rf build/
+  only:
+    - master
+

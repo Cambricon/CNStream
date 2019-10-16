@@ -18,17 +18,103 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef MODULES_OSD_INCLUDE_OSD_H_
-#define MODULES_OSD_INCLUDE_OSD_H_
+#ifndef MODULES_OSD_H_
+#define MODULES_OSD_H_
+/**
+ *  @file osd.hpp
+ *
+ *  This file contains a declaration of class Osd
+ */
 
 #include <memory>
 #include <string>
 #include <vector>
 
+#ifdef HAVE_FREETYPE
+#include <ctype.h>
+#include <ft2build.h>
+#include <locale.h>
+#include <wchar.h>
+#include <cmath>
+#include FT_FREETYPE_H
+#endif
+
 #include "cnstream_core.hpp"
 #include "cnstream_module.hpp"
 
 namespace cnstream {
+
+/**
+ * @brief Show chinese label in the image
+ */
+class CnFont {
+#ifdef HAVE_FREETYPE
+
+ public:
+  /**
+   * @brief Initialize the display font
+   * @param
+   *   font_path: the font of path
+   */
+  explicit CnFont(const char* font_path);
+  /**
+   * @brief Release font resource
+   */
+  ~CnFont();
+  /**
+   * @brief Configure font Settings
+   */
+  void restoreFont();
+  /**
+   * @brief Displays the string on the image
+   * @param
+   *   img: source image
+   *   text: the show of message
+   *   pos: the show of position
+   *   color: the color of font
+   * @return Size of the string
+   */
+  int putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color);
+
+ private:
+  /**
+   * @brief Converts character to wide character
+   * @param
+   *   src: The original string
+   *   dst: The Destination wide string
+   *   locale: Coded form
+   * @return
+   *   -1: Conversion failure
+   *    0: Conversion success
+   */
+  int ToWchar(char*& src, wchar_t*& dest, const char* locale = "C.UTF-8");
+  /**
+   * @brief Print single wide character in the image
+   * @param
+   *   img: source image
+   *   wc: single wide character
+   *   pos: the show of position
+   *   color: the color of font
+   */
+  void putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color);
+  CnFont& operator=(const CnFont&);
+
+  FT_Library m_library;
+  FT_Face m_face;
+
+  // Default font output parameters
+  int m_fontType;
+  cv::Scalar m_fontSize;
+  bool m_fontUnderline;
+  float m_fontDiaphaneity;
+#else
+
+ public:
+  explicit CnFont(const char* font_path){};
+  ~CnFont(){};
+  int putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) { return 0; };
+#endif
+};
 
 /**
  * @brief Draw objects on image,output is bgr24 images
@@ -48,9 +134,9 @@ class Osd : public Module, public ModuleCreator<Osd> {
    * @brief Called by pipeline when pipeline start.
    *
    * @param paramSet :
-   @verbatim
-   label_path: label path
-   @endverbatim
+   * @verbatim
+   *   label_path: label path
+   * @endverbatim
    *
    * @return if module open succeed
    */
@@ -79,8 +165,9 @@ class Osd : public Module, public ModuleCreator<Osd> {
 
  private:
   std::vector<std::string> labels_;
+  bool chinese_label_flag_ = false;
 };  // class osd
 
 }  // namespace cnstream
 
-#endif  // MODULES_OSD_INCLUDE_OSD_H_
+#endif  // MODULES_OSD_H_

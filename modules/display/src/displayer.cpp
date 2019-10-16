@@ -21,6 +21,7 @@
 #include "displayer.hpp"
 
 #include <glog/logging.h>
+#include <string>
 
 #include "cnstream_eventbus.hpp"
 #include "display_stream.hpp"
@@ -43,8 +44,9 @@ bool Displayer::Open(ModuleParamSet paramSet) {
   int rows = std::stoi(paramSet["rows"]);
   int cols = std::stoi(paramSet["cols"]);
   float display_rate = std::stof(paramSet["refresh-rate"]);
+  bool show = paramSet["show"] == "false" ? false : true;
 
-  if (!stream_->Open(window_w, window_h, cols, rows, display_rate)) {
+  if (!stream_->Open(window_w, window_h, cols, rows, display_rate, show)) {
     LOG(ERROR) << "[Displayer] Invalid parameter";
     return false;
   }

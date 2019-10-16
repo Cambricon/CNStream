@@ -18,14 +18,21 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef DISPLAYER_HPP_
-#define DISPLAYER_HPP_
-
-#include <opencv2/opencv.hpp>
+#ifndef MODULES_DISPLAYER_HPP_
+#define MODULES_DISPLAYER_HPP_
+/**
+ *  \file displayer.hpp
+ *
+ *  This file contains a declaration of class Displayer
+ */
 
 #include <memory>
 #include <string>
-
+#ifdef HAVE_OPENCV
+#include <opencv2/opencv.hpp>
+#else
+#error OpenCV required
+#endif
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
 
@@ -63,13 +70,13 @@ class Displayer : public Module, public ModuleCreator<Displayer> {
    * @brief Called by pipeline when pipeline start.
    *
    * @param paramSet :
-   @verbatim
-      window-width: display window width
-      window-height: display window height
-      cols: display image columns
-      rows: display image rows
-      refresh-rate: display refresh rate
-   @endverbatim
+   * @verbatim
+   *   window-width: display window width
+   *   window-height: display window height
+   *   cols: display image columns
+   *   rows: display image rows
+   *   refresh-rate: display refresh rate
+   * @endverbatim
    *
    * @return if module open succeed
    */
@@ -102,4 +109,4 @@ class Displayer : public Module, public ModuleCreator<Displayer> {
 
 }  // namespace cnstream
 
-#endif  // DISPLAYER_HPP_
+#endif  // MODULES_DISPLAYER_HPP_

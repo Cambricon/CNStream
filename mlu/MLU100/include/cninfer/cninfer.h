@@ -17,13 +17,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef CNINFER_H_  // NOLINT
 #define CNINFER_H_  // NOLINT
 
 #include <memory>
 #include "cnbase/streamlibs_error.h"
-#include "cnrt.h"  // NOLINT
 #include "cninfer/model_loader.h"
+#include "cnrt.h"  // NOLINT
 
 namespace libstream {
 
@@ -43,9 +44,7 @@ class CnInfer {
   void run(void** input, void** output) const;
   std::shared_ptr<ModelLoader> loader() const;
   int batch_size() const;
-  inline cnrtStream_t rt_stream() const {
-    return stream_;
-  }
+  inline cnrtStream_t rt_stream() const { return stream_; }
 
  private:
   std::shared_ptr<ModelLoader> ploader_ = nullptr;
@@ -53,6 +52,10 @@ class CnInfer {
   cnrtStream_t stream_ = nullptr;
   void** param_ = nullptr;
   int batch_size_ = 0;
+#ifdef __SIMPLE_COMPILE__
+  cnrtQueue_t queue_;
+  cnrtRuntimeContext_t runtime_context_;
+#endif
 
   CnInfer(const CnInfer&) = delete;
   CnInfer& operator=(const CnInfer&) = delete;

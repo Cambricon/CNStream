@@ -17,14 +17,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef LIBSTREAM_INCLUDE_CNDECODE_INIT_TOOLS_HPP_
 #define LIBSTREAM_INCLUDE_CNDECODE_INIT_TOOLS_HPP_
 
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
 #include <cncodec.h>
 #include <cnrt.h>
 #include <iostream>
@@ -51,11 +47,13 @@ class CncodecInitTool {
     mutex_.lock();
     if (!initialized_) {
       CNResult error_code;
-     // CN_MPI_SetFatalCallback(::CncodecFatalHandler, 0);
-     // CN_MPI_SetLogCallback(::CncodecLogHandler);
+      // CN_MPI_SetFatalCallback(::CncodecFatalHandler, 0);
+      // CN_MPI_SetLogCallback(::CncodecLogHandler);
       if ((error_code = CN_MPI_Init() != CN_SUCCESS)) {
-        throw CncodecInitToolError("Cncodec Initialize Tool Error : "
-        "can't initialize, Error Code : " + std::to_string(error_code));
+        throw CncodecInitToolError(
+            "Cncodec Initialize Tool Error : "
+            "can't initialize, Error Code : " +
+            std::to_string(error_code));
       }
       std::cout << "Cncodec init success." << std::endl;
       initialized_ = true;
@@ -69,9 +67,11 @@ class CncodecInitTool {
     CNResult error_code;
     CN_VDEC_CAPABILITY_S capability;
     if ((error_code = CN_MPI_VDEC_GetCapability(&capability)) != CN_SUCCESS) {
-      throw CncodecInitToolError("Decoder initialize failed, "
-      "can't get codec device capability, "
-      "Error Code : " + std::to_string(error_code));
+      throw CncodecInitToolError(
+          "Decoder initialize failed, "
+          "can't get codec device capability, "
+          "Error Code : " +
+          std::to_string(error_code));
     }
     const auto dev_num = capability.u32VdecDeviceNum;
     CN_U32 dev_id = 0;
@@ -88,24 +88,23 @@ class CncodecInitTool {
       }
     }
     if (!find_device) {
-      throw CncodecInitToolError("Device not found, device id: "
-          + std::to_string(mlu_dev_id));
+      throw CncodecInitToolError("Device not found, device id: " + std::to_string(mlu_dev_id));
     }
     if (0 == max_free_chns) {
-      throw CncodecInitToolError("There is no enough resources to support"
+      throw CncodecInitToolError(
+          "There is no enough resources to support"
           " such number of channels");
     }
     return dev_id;
   }
 
  private:
-  CncodecInitTool() : initialized_(false) { }
+  CncodecInitTool() : initialized_(false) {}
   ~CncodecInitTool() {
     if (initialized_) {
       CNResult error_code;
       if ((error_code = CN_MPI_Exit() != CN_SUCCESS)) {
-        std::cout << "[Warnning] CN MPI Exit failed. Error Code : "
-                  << error_code << std::endl;
+        std::cout << "[Warnning] CN MPI Exit failed. Error Code : " << error_code << std::endl;
       }
     }
   }
@@ -116,4 +115,3 @@ class CncodecInitTool {
 }  // namespace libstream
 
 #endif  // LIBSTREAM_INCLUDE_CNDECODE_INIT_TOOLS_HPP_
-

@@ -21,10 +21,11 @@
 #include "display_stream.hpp"
 
 #include <glog/logging.h>
+#include <string>
 
 namespace cnstream {
 
-bool DisplayStream::Open(int window_w, int window_h, int cols, int rows, float display_rate) {
+bool DisplayStream::Open(int window_w, int window_h, int cols, int rows, float display_rate, bool show) {
   if (window_w < 1 || window_h < 1 || cols < 1 || rows < 1 || display_rate < 1) {
     return false;
   }
@@ -35,6 +36,7 @@ bool DisplayStream::Open(int window_w, int window_h, int cols, int rows, float d
   unit_w_ = window_w_ / cols;
   unit_h_ = window_h_ / rows;
   refresh_rate_ = display_rate;
+  show_ = show;
 
   canvas_ = cv::Mat(window_h_, window_w_, CV_8UC3, cv::Scalar(0, 0, 0));
   running_ = true;
@@ -44,7 +46,7 @@ bool DisplayStream::Open(int window_w, int window_h, int cols, int rows, float d
 
 void DisplayStream::Close() {
   running_ = false;
-  if (refresh_thread_->joinable()) {
+  if (refresh_thread_ && refresh_thread_->joinable()) {
     refresh_thread_->join();
   }
   delete refresh_thread_;
@@ -75,8 +77,12 @@ void DisplayStream::RefreshLoop() {
     if (rt > 0) {
       std::this_thread::sleep_for(std::chrono::milliseconds(rt));
     }
-    imshow("CNStream", canvas_);
-    cv::waitKey(1);
+    if (show_) {
+      imshow("CNStream", canvas_);
+      cv::waitKey(1);
+    } else {
+      return;
+    }
   }
 }
 

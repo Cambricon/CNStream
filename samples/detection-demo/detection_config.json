@@ -41,6 +41,7 @@
     "max_input_queue_size" : 20,
     "next_modules" : ["encoder"],
     "custom_params" : {
+      "chinese_label_flag" : "false", 
       "label_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/label_voc.txt"
     }
   },
@@ -49,8 +50,15 @@
     "class_name" : "cnstream::Encoder",
     "parallelism" : 4,
     "max_input_queue_size" : 20,
+    "next_modules" : ["fps_stats"],
     "custom_params" : {
       "dump_dir" : "output"
     }
+  },
+
+  "fps_stats" : {
+    "class_name" : "cnstream::FpsStats",
+    "parallelism" : 2,
+    "max_input_queue_size" : 20
   }
 }

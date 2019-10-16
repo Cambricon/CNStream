@@ -21,6 +21,7 @@
 #include <cnrt.h>
 #include <glog/logging.h>
 #include <future>
+#include <memory>
 #include <sstream>
 #include <thread>
 #include <utility>
@@ -117,7 +118,7 @@ void RawMluDecoder::Destroy() {
       this->Process(nullptr, true);
     }
     while (!eos_got_.load()) {
-      usleep(1000 * 10);
+      std::this_thread::yield();
     }
     eos_got_.store(2);  // avoid double-wait eos
   }
@@ -145,8 +146,8 @@ bool RawMluDecoder::Process(RawPacket *pkt, bool eos) {
   return false;
 }
 
-int RawMluDecoder::ProcessFrame(const libstream::CnFrame &frame, bool &reused) {
-  reused = false;
+int RawMluDecoder::ProcessFrame(const libstream::CnFrame &frame, bool *reused) {
+  *reused = false;
   auto data = CNFrameInfo::Create(stream_id_);
   if (data == nullptr) {
     // LOG(WARNING) << "CNFrameInfo::Create Failed,DISCARD image";
@@ -166,12 +167,12 @@ int RawMluDecoder::ProcessFrame(const libstream::CnFrame &frame, bool &reused) {
   data->frame.fmt = CnPixelFormat2CnDataFormat(frame.pformat);
   for (int i = 0; i < data->frame.GetPlanes(); i++) {
     data->frame.stride[i] = frame.strides[i];
-    data->frame.ptr[i] = (void *)frame.data.ptrs[i];
+    data->frame.ptr[i] = reinterpret_cast<void *>(frame.data.ptrs[i]);
   }
   if (handler_.ReuseCNDecBuf()) {
     data->frame.deAllocator_ = std::make_shared<CNDeallocator>(instance_, frame.buf_id);
     if (data->frame.deAllocator_) {
-      reused = true;
+      *reused = true;
     }
   }
   data->frame.CopyToSyncMem();
@@ -182,11 +183,11 @@ int RawMluDecoder::ProcessFrame(const libstream::CnFrame &frame, bool &reused) {
 void RawMluDecoder::FrameCallback(const libstream::CnFrame &frame) {
   bool reused = false;
   if (frame_count_++ % interval_ == 0) {
-    ProcessFrame(frame, reused);
+    ProcessFrame(frame, &reused);
   }
   if (!reused) {
     instance_->ReleaseBuffer(frame.buf_id);
-  };
+  }
 }
 
 void RawMluDecoder::EOSCallback() {

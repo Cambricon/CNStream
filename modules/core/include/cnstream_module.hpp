@@ -22,16 +22,22 @@
 #define CNSTREAM_MODULE_HPP_
 
 /**
- * \file cnstream_module.hpp
+ * @file cnstream_module.hpp
  *
- * This file contains a declaration of class Module and class ModuleFactory.
+ * This file contains a declaration of the Module class and the ModuleFactoryclass.
  */
+#include <cxxabi.h>
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <string>
+#include <typeinfo>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
+#include "cnstream_common.hpp"
 #include "cnstream_eventbus.hpp"
 #include "cnstream_frame.hpp"
 
@@ -43,17 +49,18 @@ using ModuleParamSet = std::unordered_map<std::string, std::string>;
  * @brief Module virtual base class.
  *
  * Module is the parent class of all modules. A module could have configurable
- * number of upstream links as well as downstream.
- * Some modules have been constructed along with framework
- * e.g. decoder, inferencer, etc.
- * Also, users can design their own module.
+ * number of upstream links and downstream links.
+ * Some modules are already constructed with a framework,
+ * such as decoder, inferencer, and so on.
+ * You can also design your own modules.
  */
 class Module {
  public:
   /**
    * Constructor.
    *
-   * @param name Module name. Modules in pipeline should have different name.
+   * @param name The name of a module. Modules defined in a pipeline should
+   *             have different names.
    */
   explicit Module(const std::string &name) : name_(name) { this->GetId(); }
   virtual ~Module() { this->ReturnId(); }
@@ -61,74 +68,79 @@ class Module {
   /**
    * @deprecated
    *
-   * Set module name.
+   * Sets a module name.
    *
-   * @param name Module name. Modules in pipeline should have different name.
+   * @param name The name of a module. Modules defined in a pipeline should
+   *             have different names.
    *
-   * @return void.
+   * @return Void.
    */
   void SetName(const std::string &name) { name_ = name; }
 
   /**
-   * Open resources for module.
+   * Opens resources for a module.
    *
    * @param param_set Parameters for this module.
    *
-   * @return Return true for success, otherwise, false will be returned.
+   * @return Returns true if this API run successfully. Otherwise, returns false.
    *
-   * @note Do not call this function by yourself. This function will be called
-   *       by pipeline when pipeline starts. Pipeline guarantees that the Process function
-   *       of this module will be called after the Open function.
+   * @note You do not need to call this function by yourself. This function will be called
+   *       by pipeline when pipeline starts. The pipeline will call the Process function
+   *       of this module automatically after the Open function is done.
    */
   virtual bool Open(ModuleParamSet param_set) = 0;
 
   /**
-   * Close resources for module.
+   * Closes resources for a module.
    *
-   * @return void.
+   * @return Void.
    *
-   * @note Do not call this function by yourself. This function will be called
-   *       by pipeline when pipeline stops. Pipeline guarantees that the Close function
-   *       of this module will be called after the Open and Process function.
+   * @note You do not need to call this function by yourself. This function will be called
+   *       by pipeline when pipeline stops. The pipeline calls the Close function
+   *       of this module automatically after the Open and Process functions are done.
    */
   virtual void Close() = 0;
 
   /**
-   * Processing data.
+   * Processes data.
    *
-   * @param data The data to be processed by this module.
+   * @param data The data that the module will process.
    *
    * @return
    * @retval 0 : OK, but framework needs to transmit data.
-   * @retval 1: OK, data has been handled by this module. (hasTransmit_ must be set). Module has to
-   *            call Pipeline::ProvideData to tell pipeline to transmit data to next modules.
-   * @retval >1: OK, data has been handled by this module, and pipeline will transmit data to next modules.
-   * @retval <0: Pipeline will post an event with type is EVENT_ERROR with return number.
+   * @retval 1: OK, the data has been handled by this module. The hasTransmit_ must be set).
+   *            Module has to call Pipeline::ProvideData to tell pipeline to transmit data
+   *            to next modules.
+   * @retval >1: OK, data has been handled by this module, and pipeline will transmit data
+   *             to next modules.
+   * @retval <0: Pipeline will post an event with the EVENT_ERROR event type with return
+   *             number.
    */
   virtual int Process(std::shared_ptr<CNFrameInfo> data) = 0;
 
   /**
-   * Get name of this module.
+   * Gets the name of this module.
    *
-   * @return Return name of this module.
+   * @return Returns the name of this module.
    */
   inline std::string GetName() const { return name_; }
 
   /**
-   * Set container to this module, identify this module is added to which pipeline.
+   * Sets a container to this module and identifies which pipeline the module is added to.
    *
-   * @note This function will be called by pipeline when this module added into pipeline,
-   *       do not call it by yourself.
+   * @note This function will be called automatically by the pipeline after this module
+   *       is added into the pipeline. You do not need to call it by yourself.
    */
   inline void SetContainer(Pipeline *container) { container_ = container; }
 
   /**
-   * Post event to pipeline.
+   * Posts an event to the pipeline.
    *
-   * @param type Event type.
+   * @param type The type of an event.
    * @param msg Message string.
    *
-   * @return Return true for success. When this module is not added to pipeline, false will be returned.
+   * @return Returns true if this function run successfully. Returns false if this
+   *         module is not added to pipeline.
    */
   bool PostEvent(EventType type, const std::string &msg) const;
 
@@ -147,7 +159,7 @@ class Module {
   uint64_t GetModulesMask() const { return mask_; }
 
   /**
-   * @return Return whether this module has permission to transmit data by itself.
+   * @return Returns whether this module has permission to transmit data by itself.
    *
    * @see Process
    */
@@ -155,15 +167,15 @@ class Module {
 
  protected:
   const size_t INVALID_MODULE_ID = -1;
-  Pipeline *container_ = nullptr;    ///> Container.
-  std::string name_;                 ///> Module name.
-  std::atomic<int> hasTransmit_{0};  ///> Has permission to transmit data.
+  Pipeline *container_ = nullptr;    ///< The container.
+  std::string name_;                 ///< The name of the module.
+  std::atomic<int> hasTransmit_{0};  ///< If it has permission to transmit data.
 
  private:
   void ReturnId();
   size_t id_ = -1;
-  /*support no more than 64 modules*/
-  static std::mutex module_id_mutex_;
+  /* supports no more than 64 modules */
+  static CNSpinLock module_id_spinlock_;
   static uint64_t module_id_mask_;
 
   std::vector<size_t> parent_ids_;
@@ -176,14 +188,16 @@ class ModuleEx : public Module {
 };
 
 /**
- * ModuleCreator:
- *   refer to the ActorFactory&DynamicCreator in https://github.com/Bwar/Nebula (under Apache2.0 license)
+ * @brief ModuleCreator/ModuleFactory/ModuleCreatorWorker:
+ *   Implements reflection mechanism to create a module instance dynamically with "ModuleClassName" and
+ *   the "moduleName" parameter.
+ *   Refer to the ActorFactory&DynamicCreator in https://github.com/Bwar/Nebula (under Apache2.0 license)
  */
-#include <cxxabi.h>
-#include <functional>
-#include <memory>
-#include <typeinfo>
 
+/**
+ * @brief ModuleFactory
+ * Provides functions to create instances with "ModuleClassName" and the "moduleName" parameter.
+ */
 class ModuleFactory {
  public:
   static ModuleFactory *Instance() {
@@ -193,6 +207,15 @@ class ModuleFactory {
     return (factory_);
   }
   virtual ~ModuleFactory(){};
+
+  /**
+   * Registers "ModuleClassName" and CreateFunction.
+   *
+   * @param strTypeName, ModuleClassName (TypeName).
+   * @param pFunc, CreateFunction which has a parameter "moduleName".
+   *
+   * @return Returns true for success.
+   */
   bool Regist(const std::string &strTypeName, std::function<Module *(const std::string &)> pFunc) {
     if (nullptr == pFunc) {
       return (false);
@@ -200,6 +223,15 @@ class ModuleFactory {
     bool ret = map_.insert(std::make_pair(strTypeName, pFunc)).second;
     return ret;
   }
+
+  /**
+   * Creates a module instance with  "ModuleClassName" and "moduleName".
+   *
+   * @param strTypeName, ModuleClassName (TypeName).
+   * @param name, The moduleName that is the parameter of CreateFunction.
+   *
+   * @return The module instance if run successfully. Returns nullptr if failed.
+   */
   Module *Create(const std::string &strTypeName, const std::string &name) {
     auto iter = map_.find(strTypeName);
     if (iter == map_.end()) {
@@ -215,6 +247,11 @@ class ModuleFactory {
   std::unordered_map<std::string, std::function<Module *(const std::string &)> > map_;
 };
 
+/**
+ * @brief ModuleCreator
+ *   A concrete ModuleClass needs inherit ModuleCreator to enable reflection mechanism.
+ *   ModuleCreator provides CreateFunction and registers ModuleClassName & CreateFunction to ModuleFactory.
+ */
 template <typename T>
 class ModuleCreator {
  public:
@@ -245,6 +282,9 @@ class ModuleCreator {
 template <typename T>
 typename ModuleCreator<T>::Register ModuleCreator<T>::register_;
 
+/**
+ * @brief ModuleCreatorWorker, dynamic-creator helper.
+ */
 class ModuleCreatorWorker {
  public:
   Module *Create(const std::string &strTypeName, const std::string &name) {

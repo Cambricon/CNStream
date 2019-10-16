@@ -70,6 +70,10 @@ class DataHandler {
   }
   bool GetDemuxEos() const { return demux_eos_.load() ? true : false; }
   bool ReuseCNDecBuf() const { return param_.reuse_cndec_buf; }
+  size_t Output_w() { return param_.output_w; }
+  size_t Output_h() { return param_.output_h; }
+  uint32_t InputBufNumber() { return param_.input_buf_number_; }
+  uint32_t OutputBufNumber() {return param_.output_buf_number_; }
 
  protected:
   DataSource *module_ = nullptr;

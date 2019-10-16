@@ -23,6 +23,8 @@ installAptLibs() {
     ${SUDO_CMD} apt-get -y --force-yes install libopencv-dev\
 		libgflags-dev\
 		libgoogle-glog-dev\
+		libfreetype6\
+		ttf-wqy-zenhei\
 		cmake
 }
 
@@ -30,7 +32,9 @@ installYumLibs() {
     ${SUDO_CMD} yum -y install opencv-devel.i686\
 		gflags.x86_64\
 		glog.x86_64\
-		cmake3.x86_64
+		cmake3.x86_64\
+		freetype-devel\
+		wqy-zenhei-fonts
     ${SUDO_CMD} yum install -y epel-release rpm
     ${SUDO_CMD} yum update -y
     ${SUDO_CMD} rpm --import http://li.nux.ro/download/nux/RPM-GPG-KEY-nux.ro
@@ -51,6 +55,10 @@ installLibs() {
 
 check_sudo
 installLibs
+
+
+font_path=`fc-list :lang=zh | grep "wqy-zenhei.ttc"`
+${SUDO_CMD} ln -sf ${font_path%%:*} /usr/include/wqy-zenhei.ttc
 
 #./build_ffmpeg.sh --build
 

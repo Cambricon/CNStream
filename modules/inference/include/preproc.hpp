@@ -18,9 +18,16 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef PREPROC_H_
-#define PREPROC_H_
+#ifndef MODULES_INFERENCE_INCLUDE_PREPROC_HPP_
+#define MODULES_INFERENCE_INCLUDE_PREPROC_HPP_
 
+/**
+ *  \file preproc.hpp
+ *
+ *  This file contains a declaration of class Preproc
+ */
+
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -67,28 +74,6 @@ class Preproc {
                       const CNFrameInfoPtr& package) = 0;
 };  // class Preproc
 
-/**
- * @brief standard pre process
- */
-class PreprocCpu : public Preproc, virtual public libstream::ReflexObjectEx<Preproc> {
- public:
-  /**
-   * @brief Execute preproc on origin data
-   *
-   * @param net_inputs: neural network inputs
-   * @param model: model information(you can get input shape and output shape from model)
-   * @param package: smart pointer of struct to store origin data
-   *
-   * @return return 0 if succeed
-   *
-   * @attention net_inputs is a pointer to pre-allocated cpu memory
-   */
-  int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<libstream::ModelLoader>& model,
-              const CNFrameInfoPtr& package) override;
-
-  DECLARE_REFLEX_OBJECT_EX(PreprocCpu, Preproc);
-};  // class PreprocCpu
-
 }  // namespace cnstream
 
-#endif  // ifndef PREPROC_H_
+#endif  // ifndef MODULES_INFERENCE_INCLUDE_PREPROC_HPP_

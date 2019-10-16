@@ -17,6 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef LIBSTREAM_INCLUDE_CNINFER_MODEL_LOADER_H_
 #define LIBSTREAM_INCLUDE_CNINFER_MODEL_LOADER_H_
 
@@ -31,17 +32,20 @@ namespace libstream {
 
 STREAMLIBS_REGISTER_EXCEPTION(ModelLoader);
 
+enum class DataType { UINT8, FLOAT32, INT16, INT32 };
+
+enum class DimOrder { NCHW, NHWC, HWCN, TNC, NTC };
+
 class ModelLoader {
  public:
-  ModelLoader(const std::string& model_path,
-              const std::string& function_name);
-  ModelLoader(const char* model_path,
-              const char* function_name);
+  ModelLoader(const std::string& model_path, const std::string& function_name);
+  ModelLoader(const char* model_path, const char* function_name);
   ModelLoader(void* mem_ptr, const char* function_name);
   ~ModelLoader();
   bool WithRGB0Output(int* output_index = nullptr) const;
   bool WithYUVInput() const;
   void InitLayout();
+  void SetLayout(DataType type, DimOrder order, int io_type, int data_index);
   bool AdjustStackMemory();
   inline uint32_t output_num() const;
   inline uint32_t input_num() const;
@@ -50,10 +54,16 @@ class ModelLoader {
   inline const std::vector<CnShape>& input_shapes() const;
   inline const std::vector<CnShape>& output_shapes() const;
   inline cnrtFunction_t function() const;
+#ifdef __SIMPLE_COMPILE__
+  inline int model_parallelism() const;
+#endif
 
  private:
   int o_num_;
   int i_num_;
+#ifdef __SIMPLE_COMPILE__
+  int model_parallelism_;
+#endif
   cnrtDataDescArray_t i_desc_array_, o_desc_array_;
   cnrtModel_t model_;
   cnrtFunction_t function_;
@@ -64,33 +74,21 @@ class ModelLoader {
   ModelLoader& operator=(const ModelLoader&) = delete;
 };  // class ModelLoader
 
-inline uint32_t ModelLoader::output_num() const {
-  return o_num_;
-}
+inline uint32_t ModelLoader::output_num() const { return o_num_; }
 
-inline uint32_t ModelLoader::input_num() const {
-  return i_num_;
-}
+inline uint32_t ModelLoader::input_num() const { return i_num_; }
 
-inline cnrtDataDescArray_t ModelLoader::input_desc_array() const {
-  return i_desc_array_;
-}
+inline cnrtDataDescArray_t ModelLoader::input_desc_array() const { return i_desc_array_; }
 
-inline cnrtDataDescArray_t ModelLoader::output_desc_array() const {
-  return o_desc_array_;
-}
+inline cnrtDataDescArray_t ModelLoader::output_desc_array() const { return o_desc_array_; }
 
-inline const std::vector<CnShape>& ModelLoader::input_shapes() const {
-  return vec_i_shape_;
-}
+inline const std::vector<CnShape>& ModelLoader::input_shapes() const { return vec_i_shape_; }
 
-inline const std::vector<CnShape>& ModelLoader::output_shapes() const {
-  return vec_o_shape_;
-}
+inline const std::vector<CnShape>& ModelLoader::output_shapes() const { return vec_o_shape_; }
 
-inline cnrtFunction_t ModelLoader::function() const {
-  return function_;
-}
-
+inline cnrtFunction_t ModelLoader::function() const { return function_; }
+#ifdef __SIMPLE_COMPILE__
+inline int ModelLoader::model_parallelism() const { return model_parallelism_; }
+#endif
 }  // namespace libstream
 #endif  // LIBSTREAM_INCLUDE_CNINFER_MODEL_LOADER_H_

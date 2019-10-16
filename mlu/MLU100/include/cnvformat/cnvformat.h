@@ -17,29 +17,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef LIBSTREAM_INCLUDE_CNVFORMAT_H_
 #define LIBSTREAM_INCLUDE_CNVFORMAT_H_
 
 #define CN_MAXIMUM_PLANE 6
 
-
 namespace libstream {
 
-enum CnPixelFormat {
-  NON_FORMAT,
-  YUV420SP_NV21,
-  YUV420SP_NV12,
-  BGR24,
-  RGB24
-};
+enum CnPixelFormat { NON_FORMAT, YUV420SP_NV21, YUV420SP_NV12, BGR24, RGB24 };
 
-enum CnCodecType {
-  MPEG4,
-  H264,
-  H265,
-  JPEG,
-  MJPEG
-};
+enum CnCodecType { MPEG4, H264, H265, JPEG, MJPEG };
 
 typedef struct {
   /**************************************
@@ -67,7 +55,7 @@ typedef struct {
      ***************************************/
     uint32_t ptr_len;
   } data;
-}CnFrame;
+} CnFrame;
 
 typedef struct {
   /**************************************
@@ -80,7 +68,7 @@ typedef struct {
   uint64_t length;
   uint64_t pts;
   CnCodecType codec_type;
-}CnPacket;
+} CnPacket;
 
 }  // namespace libstream
 

@@ -22,14 +22,14 @@
 #include <glog/logging.h>
 #include <future>
 #include <iostream>
+#include <list>
 #include <mutex>
+#include <string>
+#include <vector>
 
 #include "cnstream_core.hpp"
 #include "data_source.hpp"
-#include "encoder.hpp"
-#include "inferencer.hpp"
-#include "osd.hpp"
-#include "track.hpp"
+#include "fps_stats.hpp"
 #include "util.hpp"
 
 DEFINE_string(data_path, "", "video file list.");
@@ -39,6 +39,8 @@ DEFINE_bool(rtsp, false, "use rtsp");
 DEFINE_bool(input_image, false, "input image");
 DEFINE_bool(loop, false, "display repeat");
 DEFINE_string(config_fname, "", "pipeline config filename");
+
+cnstream::FpsStats* gfps_stats = nullptr;
 
 class PipelineWatcher {
  public:
@@ -72,7 +74,11 @@ class PipelineWatcher {
       std::this_thread::sleep_for(std::chrono::milliseconds(duration_));
       std::cout << "\n\n\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
                    "%%%%\n";
-      pipeline_->PrintPerformanceInformation();
+      if (gfps_stats) {
+        gfps_stats->ShowStatistics();
+      } else {
+        std::cout << "FpsStats has not been added to pipeline, fps will not be print." << std::endl;
+      }
     }
   }
   bool running_ = false;
@@ -89,6 +95,7 @@ class MsgObserver : cnstream::StreamMsgObserver {
     if (stop_) return;
     if (smsg.type == cnstream::StreamMsgType::EOS_MSG) {
       eos_chn_.push_back(smsg.chn_idx);
+      LOG(INFO) << "[Observer] received EOS from channel:" << smsg.chn_idx;
       if (static_cast<int>(eos_chn_.size()) == chn_cnt_) {
         LOG(INFO) << "[Observer] received all EOS";
         stop_ = true;
@@ -180,6 +187,7 @@ int main(int argc, char** argv) {
   }
 
   /* watcher, for rolling print */
+  gfps_stats = dynamic_cast<cnstream::FpsStats*>(pipeline.GetModule("fps_stats"));
   PipelineWatcher watcher(&pipeline);
   watcher.Start();
 
@@ -219,6 +227,7 @@ int main(int argc, char** argv) {
   watcher.Stop();
   std::cout << "\n\n\n\n\n\n";
 
-  pipeline.PrintPerformanceInformation();
+  if (gfps_stats)
+    gfps_stats->ShowStatistics();
   return EXIT_SUCCESS;
 }

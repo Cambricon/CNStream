@@ -17,6 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef _POSTPROC_H_
 #define _POSTPROC_H_
 
@@ -25,8 +26,8 @@
 #include <vector>
 #include "cnbase/cnshape.h"
 #include "cnbase/cntypes.h"
-#include "cnbase/streamlibs_error.h"
 #include "cnbase/reflex_object.h"
+#include "cnbase/streamlibs_error.h"
 
 namespace libstream {
 
@@ -35,7 +36,7 @@ STREAMLIBS_REGISTER_EXCEPTION(CnPostproc);
 class CnPostproc {
  public:
   virtual ~CnPostproc() {}
-  static CnPostproc* Create(const std::string &proc_name);
+  static CnPostproc* Create(const std::string& proc_name);
 
   void set_batch_index(const int batch_index);
   void set_threshold(const float threshold);
@@ -45,15 +46,13 @@ class CnPostproc {
    *   net_outputs[in]: net_outputs[index].first is the neuron
    *   network's output. net_outputs[index].second is length.
    *********************************************************/
-  std::vector<CnDetectObject> Execute(
-      const std::vector<std::pair<float*, uint64_t>>& net_outputs);
+  std::vector<CnDetectObject> Execute(const std::vector<std::pair<float*, uint64_t>>& net_outputs);
 
  protected:
   /*********************************************************
    * @brief called by Execute
    *********************************************************/
-  virtual std::vector<CnDetectObject> Postproc(
-      const std::vector<std::pair<float*, uint64_t>>& net_outputs) = 0;
+  virtual std::vector<CnDetectObject> Postproc(const std::vector<std::pair<float*, uint64_t>>& net_outputs) = 0;
 
   /***************************************
    * @brief called by Execute.
@@ -66,61 +65,39 @@ class CnPostproc {
   float threshold_ = 0;
 };  // class CnPostproc
 
-class ClassificationPostproc : public CnPostproc,
-  virtual public ReflexObjectEx<CnPostproc> {
+class ClassificationPostproc : public CnPostproc, virtual public ReflexObjectEx<CnPostproc> {
   DECLARE_REFLEX_OBJECT_EX(ClassificationPostproc, CnPostproc)
  protected:
-  std::vector<CnDetectObject> Postproc(
-      const std::vector<std::pair<float*, uint64_t>>& net_outputs);
+  std::vector<CnDetectObject> Postproc(const std::vector<std::pair<float*, uint64_t>>& net_outputs);
 };  // class ClassificationPostproc
 
-class SsdPostproc : public CnPostproc,
-  virtual public ReflexObjectEx<CnPostproc> {
+class SsdPostproc : public CnPostproc, virtual public ReflexObjectEx<CnPostproc> {
   DECLARE_REFLEX_OBJECT_EX(SsdPostproc, CnPostproc)
  protected:
-  std::vector<CnDetectObject> Postproc(
-      const std::vector<std::pair<float*, uint64_t>>& net_outputs);
+  std::vector<CnDetectObject> Postproc(const std::vector<std::pair<float*, uint64_t>>& net_outputs);
 };  // class SsdPostproc
 
-class FasterrcnnPostproc : public CnPostproc,
-  virtual public ReflexObjectEx<CnPostproc> {
+class FasterrcnnPostproc : public CnPostproc, virtual public ReflexObjectEx<CnPostproc> {
   DECLARE_REFLEX_OBJECT_EX(FasterrcnnPostproc, CnPostproc)
  protected:
-  std::vector<CnDetectObject> Postproc(
-      const std::vector<std::pair<float*, uint64_t>>& net_outputs);
+  std::vector<CnDetectObject> Postproc(const std::vector<std::pair<float*, uint64_t>>& net_outputs);
 };  // class FasterrcnnPostproc
 
-class Yolov3Postproc : public CnPostproc,
-  virtual public ReflexObjectEx<CnPostproc> {
+class Yolov3Postproc : public CnPostproc, virtual public ReflexObjectEx<CnPostproc> {
   DECLARE_REFLEX_OBJECT_EX(Yolov3Postproc, CnPostproc)
  public:
-  inline void set_padl_ratio(float ratio) {
-    padl_ratio_ = ratio;
-  }
-  inline void set_padb_ratio(float ratio) {
-    padb_ratio_ = ratio;
-  }
-  inline void set_padr_ratio(float ratio) {
-    padr_ratio_ = ratio;
-  }
-  inline void set_padt_ratio(float ratio) {
-    padt_ratio_ = ratio;
-  }
-  inline float padl_ratio() const {
-    return padl_ratio_;
-  }
-  inline float padb_ratio() const {
-    return padb_ratio_;
-  }
-  inline float padr_ratio() const {
-    return padr_ratio_;
-  }
-  inline float padt_ratio() const {
-    return padt_ratio_;
-  }
+  inline void set_padl_ratio(float ratio) { padl_ratio_ = ratio; }
+  inline void set_padb_ratio(float ratio) { padb_ratio_ = ratio; }
+  inline void set_padr_ratio(float ratio) { padr_ratio_ = ratio; }
+  inline void set_padt_ratio(float ratio) { padt_ratio_ = ratio; }
+  inline float padl_ratio() const { return padl_ratio_; }
+  inline float padb_ratio() const { return padb_ratio_; }
+  inline float padr_ratio() const { return padr_ratio_; }
+  inline float padt_ratio() const { return padt_ratio_; }
+
  protected:
-  std::vector<CnDetectObject> Postproc(
-      const std::vector<std::pair<float*, uint64_t>>& net_outputs);
+  std::vector<CnDetectObject> Postproc(const std::vector<std::pair<float*, uint64_t>>& net_outputs);
+
  private:
   /*******************************************************************
    * padl_ratio_: left pad / width in preprocessing.

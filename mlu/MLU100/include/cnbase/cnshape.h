@@ -17,10 +17,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef CNSHAPE_HPP_
 #define CNSHAPE_HPP_
 
-#include <unistd.h>
 #include <iostream>  // NOLINT
 
 namespace libstream {
@@ -30,62 +30,29 @@ namespace libstream {
  *****************************************************/
 class CnShape {
  public:
-  explicit CnShape(uint32_t n = 1, uint32_t h = 1,
-      uint32_t w = 1, uint32_t c = 1, uint32_t stride = 1);
+  explicit CnShape(uint32_t n = 1, uint32_t h = 1, uint32_t w = 1, uint32_t c = 1, uint32_t stride = 1);
 
-  inline void set_n(uint32_t n) {
-    n_ = n;
-  }
-  inline void set_h(uint32_t h) {
-    h_ = h;
-  }
-  inline void set_w(uint32_t w) {
-    w_ = w;
-  }
-  inline void set_c(uint32_t c) {
-    c_ = c;
-  }
-  inline uint32_t n() const {
-    return n_;
-  }
-  inline uint32_t h() const {
-    return h_;
-  }
-  inline uint32_t w() const {
-    return w_;
-  }
-  inline uint32_t c() const {
-    return c_;
-  }
-  inline uint32_t stride() const {
-    return w() > stride_ ? w() : stride_;
-  }
-  inline void set_stride(uint32_t s) {
-    stride_ = s;
-  }
-  inline uint64_t step() const {
-    return stride() * c();
-  }
+  inline void set_n(uint32_t n) { n_ = n; }
+  inline void set_h(uint32_t h) { h_ = h; }
+  inline void set_w(uint32_t w) { w_ = w; }
+  inline void set_c(uint32_t c) { c_ = c; }
+  inline uint32_t n() const { return n_; }
+  inline uint32_t h() const { return h_; }
+  inline uint32_t w() const { return w_; }
+  inline uint32_t c() const { return c_; }
+  inline uint32_t stride() const { return w() > stride_ ? w() : stride_; }
+  inline void set_stride(uint32_t s) { stride_ = s; }
+  inline uint64_t step() const { return stride() * c(); }
 
-  inline uint64_t DataCount() const {
-    return n() * h() * step();
-  }
-  inline uint64_t nhwc() const {
-    return n() * h() * w() * c();
-  }
-  inline uint64_t hwc() const {
-    return h() * w() * c();
-  }
-  inline uint64_t hw() const {
-    return h() * w();
-  }
-  inline uint64_t wc() const {
-    return w() * c();
-  }
+  inline uint64_t DataCount() const { return n() * h() * step(); }
+  inline uint64_t nhwc() const { return n() * h() * w() * c(); }
+  inline uint64_t hwc() const { return h() * w() * c(); }
+  inline uint64_t hw() const { return h() * w(); }
+  inline uint64_t wc() const { return w() * c(); }
 
   friend std::ostream &operator<<(std::ostream &os, const CnShape &shape);
-  bool operator==(const CnShape& other);
-  bool operator!=(const CnShape& other);
+  bool operator==(const CnShape &other);
+  bool operator!=(const CnShape &other);
 
  private:
   //  -----------------MEMBERS-----------------  //
@@ -99,4 +66,3 @@ class CnShape {
 }  // namespace libstream
 
 #endif  // CNSHAPE_HPP_
-

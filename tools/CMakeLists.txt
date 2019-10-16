@@ -7,11 +7,11 @@ if(POLICY CMP0054)
 endif()
 
 # ---[ Google-gflags
-include("${PROJECT_SOURCE_DIR}/cmake/FindGFlags.cmake")
+#include("${PROJECT_SOURCE_DIR}/cmake/FindGFlags.cmake")
 include_directories(${GFLAGS_INCLUDE_DIRS})
 
 # ---[ Google-glog
-include("${PROJECT_SOURCE_DIR}/cmake/FindGlog.cmake")
+#include("${PROJECT_SOURCE_DIR}/cmake/FindGlog.cmake")
 include_directories(${GLOG_INCLUDE_DIRS})
 
 include_directories(${PROJECT_SOURCE_DIR}/include)

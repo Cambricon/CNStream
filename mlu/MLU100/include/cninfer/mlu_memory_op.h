@@ -17,6 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef LIBSTREAM_INCLUDE_CNINFER_MLU_MEMORY_OP_H_
 #define LIBSTREAM_INCLUDE_CNINFER_MLU_MEMORY_OP_H_
 
@@ -41,9 +42,9 @@ class MluMemoryOp {
    * @return
    *   cpu data described by input_desc_array
    **********************************************************/
-  void** alloc_mem_on_cpu_for_input(uint32_t batch_size) const;
-  void** alloc_mem_on_cpu_for_output(uint32_t batch_size) const;
-  void* alloc_mem_on_mlu(size_t nBytes, uint32_t batch_size) const;
+  void **alloc_mem_on_cpu_for_input(uint32_t batch_size) const;
+  void **alloc_mem_on_cpu_for_output(uint32_t batch_size) const;
+  void *alloc_mem_on_mlu(size_t nBytes, uint32_t batch_size) const;
   /***********************************************************
    * @brief
    * @param
@@ -52,8 +53,8 @@ class MluMemoryOp {
    *   mlu data described by input_desc_array for success
    *   throw an MluMemoryOp for failed
    **********************************************************/
-  void** alloc_mem_on_mlu_for_input(uint32_t batch_size) const;
-  void** alloc_mem_on_mlu_for_output(uint32_t batch_size) const;
+  void **alloc_mem_on_mlu_for_input(uint32_t batch_size) const;
+  void **alloc_mem_on_mlu_for_output(uint32_t batch_size) const;
 
   /**********************************************************
    * @brief
@@ -73,14 +74,10 @@ class MluMemoryOp {
    *   batch_size[in]:
    *   nBytes[in]: input
    **********************************************************/
-  void memcpy_input_h2d(void **cpu_ptr, void **mlu_ptr,
-                        uint32_t batch_size) const;
-  void memcpy_output_d2h(void **mlu_ptr, void **cpu_ptr,
-                         uint32_t batch_size) const;
-  void memcpy_h2d(void *cpu_ptr, void *mlu_ptr,
-                  size_t nBytes, uint32_t batch_size) const;
-  void memcpy_d2h(void *mlu_ptr, void *cpu_ptr,
-                  size_t nBytes, uint32_t batch_size) const;
+  void memcpy_input_h2d(void **cpu_ptr, void **mlu_ptr, uint32_t batch_size) const;
+  void memcpy_output_d2h(void **mlu_ptr, void **cpu_ptr, uint32_t batch_size) const;
+  void memcpy_h2d(void *cpu_ptr, void *mlu_ptr, size_t nBytes, uint32_t batch_size) const;
+  void memcpy_d2h(void *mlu_ptr, void *cpu_ptr, size_t nBytes, uint32_t batch_size) const;
 
  private:
   std::shared_ptr<ModelLoader> ploader_;

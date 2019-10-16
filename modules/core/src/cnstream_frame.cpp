@@ -23,6 +23,7 @@
 #include <cnrt.h>
 #include <glog/logging.h>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -144,7 +145,7 @@ void CNDataFrame::CopyToSyncMem() {
                            ctx.ddr_channel);
       this->data[i].reset(new CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
       this->data[i]->SetMluData(dst);
-      dst = (void*)((uint8_t*)dst + plane_size);
+      dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
     }
   } else if (this->ctx.dev_type == DevContext::CPU) {
     if (cpu_data != nullptr) {
@@ -162,7 +163,7 @@ void CNDataFrame::CopyToSyncMem() {
       memcpy(dst, ptr[i], plane_size);
       this->data[i].reset(new CNSyncedMemory(plane_size));
       this->data[i]->SetCpuData(dst);
-      dst = (void*)((uint8_t*)dst + plane_size);
+      dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
     }
   } else {
     LOG(FATAL) << "Device type not supported";
@@ -170,17 +171,17 @@ void CNDataFrame::CopyToSyncMem() {
 }
 
 void CNDataFrame::SetModuleMask(Module* module, Module* current) {
-  std::unique_lock<std::mutex> lock(modules_mutex);
+  CNSpinLockGuard guard(mask_lock_);
   auto iter = module_mask_map_.find(module->GetId());
   if (iter != module_mask_map_.end()) {
-    iter->second |= (unsigned long)1 << current->GetId();
+    iter->second |= (uint64_t)1 << current->GetId();
   } else {
-    module_mask_map_[module->GetId()] = (unsigned long)1 << current->GetId();
+    module_mask_map_[module->GetId()] = (uint64_t)1 << current->GetId();
   }
 }
 
-unsigned long CNDataFrame::GetModulesMask(Module* module) {
-  std::unique_lock<std::mutex> lock(modules_mutex);
+uint64_t CNDataFrame::GetModulesMask(Module* module) {
+  CNSpinLockGuard guard(mask_lock_);
   auto iter = module_mask_map_.find(module->GetId());
   if (iter != module_mask_map_.end()) {
     return iter->second;
@@ -189,16 +190,16 @@ unsigned long CNDataFrame::GetModulesMask(Module* module) {
 }
 
 void CNDataFrame::ClearModuleMask(Module* module) {
-  std::unique_lock<std::mutex> lock(modules_mutex);
+  CNSpinLockGuard guard(mask_lock_);
   auto iter = module_mask_map_.find(module->GetId());
   if (iter != module_mask_map_.end()) {
     iter->second = 0;
   }
 }
 
-unsigned long CNDataFrame::AddEOSMask(Module* module) {
-  std::lock_guard<std::mutex> lock(eos_mutex);
-  eos_mask |= (unsigned long)1 << module->GetId();
+uint64_t CNDataFrame::AddEOSMask(Module* module) {
+  CNSpinLockGuard guard(eos_lock_);
+  eos_mask |= (uint64_t)1 << module->GetId();
   return eos_mask;
 }
 
@@ -246,11 +247,12 @@ std::vector<CNInferFeature> CNInferObject::GetFeatures() {
   return features_;
 }
 
-std::mutex CNFrameInfo::mutex_;
+CNSpinLock CNFrameInfo::spinlock_;
 std::map<std::string, int> CNFrameInfo::stream_count_map_;
 int CNFrameInfo::parallelism_ = 0;
 
 void SetParallelism(int parallelism) { CNFrameInfo::parallelism_ = parallelism; }
+int GetParallelism() { return CNFrameInfo::parallelism_; }
 
 std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, bool eos) {
   CNFrameInfo* frameInfo = new CNFrameInfo();
@@ -265,7 +267,7 @@ std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, b
   }
 
   if (parallelism_ > 0) {
-    std::unique_lock<std::mutex> lock(mutex_);
+    CNSpinLockGuard guard(spinlock_);
     auto iter = stream_count_map_.find(stream_id);
     if (iter == stream_count_map_.end()) {
       int count = 1;
@@ -291,7 +293,7 @@ CNFrameInfo::~CNFrameInfo() {
     return;
   }
   if (parallelism_ > 0) {
-    std::unique_lock<std::mutex> lock(mutex_);
+    CNSpinLockGuard guard(spinlock_);
     auto iter = stream_count_map_.find(frame.stream_id);
     if (iter != stream_count_map_.end()) {
       int count = iter->second;

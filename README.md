@@ -23,7 +23,7 @@ This section introduces how to quickly build instructions on CNStream and how to
 
 Before building instructions, you need to install the following software:
 
-- OpenCV2.4.9
+- OpenCV2.4.9+
 - GFlags2.1.2
 - GLog0.3.4
 - Cmake2.8.7+
@@ -33,7 +33,7 @@ Before building instructions, you need to install the following software:
 If you are using Ubuntu or Debian, run the following commands:
 
 ```bash
-  OpenCV2.4.9   >>>>>>>>>   sudo apt-get install libopencv-dev
+  OpenCV2.4.9+  >>>>>>>>>   sudo apt-get install libopencv-dev
   GFlags2.1.2   >>>>>>>>>   sudo apt-get install libgflags-dev
   GLog0.3.4     >>>>>>>>>   sudo apt-get install libgoogle-glog-dev
   Cmake2.8.7+   >>>>>>>>>   sudo apt-get install cmake
@@ -44,7 +44,7 @@ If you are using Ubuntu or Debian, run the following commands:
 If you are using Centos, run the following commands:
 
 ```bash
-  OpenCV2.4.9   >>>>>>>>>   sudo yum install opencv-devel.i686
+  OpenCV2.4.9+  >>>>>>>>>   sudo yum install opencv-devel.i686
   GFlags2.1.2   >>>>>>>>>   sudo yum install gflags.x86_64
   GLog0.3.4     >>>>>>>>>   sudo yum install glog.x86_64
   Cmake2.8.7+   >>>>>>>>>   sudo yum install cmake3.x86_64
@@ -99,27 +99,6 @@ After finished prerequiste, you can build instructions with the following steps:
       make
       ```
 
-## Error Handling ##
-
-  If a compilation error occurred, perform the follow steps to resolve it:
-
-  1. Go into the include directory of the neuware package and delete the files for cnstream.
-
-      ```bash
-      cd /usr/local/neuware/include
-      rm -rf cnbase cndecode cnencode cnosd cntiler cninfer cnpostproc cnpreproc cnvformat cntrack cnstream.hpp  cnstream_base.hpp  cnstream_error.hpp  cnstream_types.hpp  ddr_copyout.hpp  decoder.hpp  decoder_p2p.hpp  duplicator.hpp  connector.hpp  fps_calculator.hpp inferencer.hpp  inferencer_p2p.hpp module.hpp p2p_decoder_inferencer.hpp pipeline.hpp resize_and_convert.hpp sync.hpp tensor.hpp version.hpp
-      ```
-
-  2. Go into the lib64 directory of the neuware package and delete the files for cnstream.
-
-      ```bash
-      cd /usr/local/neuware/lib64
-      rm libcnbase.so libcndecode.so libcnencode.so libcninfer.so libcnosd.so libcnpostproc.so libcnpreproc.so libcnstream.so libcntiler.so libcntrack.so libcnstream-toolkit.so
-      ```
-  3. Follow the steps above to build the instructions again.
-
-If you still have questions, go to <http://forum.cambricon.com> to get more help.
-
 ## Samples ##
 
 ### **Demo Overview** ###
@@ -129,6 +108,7 @@ The samples/detection-demo is a cnstream-based target detection demo, which incl
 - source: With MLU to decode video streams, such as local video files, rtmp, and rtsp.
 - inferencer: With MLU for Neural Network Inferencing.
 - osd: Draws Inferencing results on images.
+- tracker: Track multi objects.
 - encoder: Encodes images with inferencing results(detection result).
 
 
@@ -203,4 +183,4 @@ Modify the `files.list_video` file, which is under the cnstream/samples/detectio
           ```
 
 
-      2. Modify the `postproc_name` parameter in `cnstream/samples/detection_demo/run.sh` to the post-processing class name (MyPostproc).
+      2. Modify the `postproc_name` parameter in `cnstream/samples/detection_demo/detection_config.json` to the post-processing class name (MyPostproc).

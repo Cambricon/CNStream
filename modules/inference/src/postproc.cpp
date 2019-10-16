@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -44,62 +45,5 @@ Postproc* Postproc::Create(const std::string& proc_name) {
 }
 
 void Postproc::set_threshold(const float threshold) { threshold_ = threshold; }
-
-IMPLEMENT_REFLEX_OBJECT_EX(PostprocSsd, Postproc)
-
-int PostprocSsd::Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<libstream::ModelLoader>& model,
-                         const CNFrameInfoPtr& package) {
-  if (net_outputs.size() != 1) {
-    cerr << "[Warnning] Ssd neuron network only has one output,"
-            " but get " +
-                to_string(net_outputs.size()) + "\n";
-    return -1;
-  }
-
-  auto data = net_outputs[0];
-  auto len = model->output_shapes()[0].DataCount();
-  auto box_num = len / 6;
-
-  if (len % 6 != 0) {
-    cerr << "[Warnning] The output of the ssd is a multiple of 6, but "
-            " the number is " +
-                to_string(len) + "\n";
-    return -1;
-  }
-
-  auto pxmin = data;
-  auto pymin = pxmin + box_num;
-  auto pxmax = pymin + box_num;
-  auto pymax = pxmax + box_num;
-  auto pscore = pymax + box_num;
-  auto plabel = pscore + box_num;
-
-  int label;
-  float score, x, y, w, h;
-  for (decltype(box_num) bi = 0; bi < box_num; ++bi) {
-    label = *(plabel + bi);
-    if (0 == label) continue;
-    label--;
-    score = *(pscore + bi);
-    if (threshold_ > 0 && score < threshold_) continue;
-    x = CLIP(*(pxmin + bi));
-    y = CLIP(*(pymin + bi));
-    w = CLIP(*(pxmax + bi)) - CLIP(*(pxmin + bi));
-    h = CLIP(*(pymax + bi)) - CLIP(*(pymin + bi));
-
-    if (w <= 0) continue;
-    if (h <= 0) continue;
-
-    std::shared_ptr<CNInferObject> obj = std::make_shared<CNInferObject>();
-    obj->id = std::to_string(label);
-    obj->score = score;
-    obj->bbox.x = x;
-    obj->bbox.y = y;
-    obj->bbox.w = w;
-    obj->bbox.h = h;
-    package->objs.push_back(obj);
-  }
-  return 0;
-}
 
 }  // namespace cnstream

@@ -17,6 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef LIBSTREAM_INCLUDE_CNDECODE_H_
 #define LIBSTREAM_INCLUDE_CNDECODE_H_
 #include <chrono>
@@ -98,6 +99,11 @@ class CnDecode {
      * to judge whether the format is supported.
      *****************************/
     CnPixelFormat pixel_format;
+    /*****************************
+     * the input buffer count.
+     * support only mlu270
+     *****************************/
+    uint32_t input_buffer_num = 2;
     /*****************************
      * the output buffer count.
      *****************************/

@@ -32,40 +32,40 @@
 
 namespace cnstream {
 
-/***********************************************************
- * Calculate the average time in ms for each frame.
- * Calculate fps, as well.
- ***********************************************************/
+/**
+ * @brief Calculate average time in ms for each frame.
+ * Calculate fps as well.
+ */
 class CNTimer {
  public:
   void Dot(uint32_t cnt_step);
-  /**************************************************************
-   * Record one step time info
+  /**
+   * @brief Record one step time info
    *
    * @param time The cost time in ms of a cnt_step.
    * @param cnt_step Process step. As once processing batch frames,
    *        in most case, cnt_step is equal to batch size.
-   **************************************************************/
+   */
   void Dot(double time, uint32_t cnt_step);
-  /**************************************************************
-   * Calculate and print fps
+  /**
+   * @brief Calculate and print fps
    *
    * @param head Print head string before fps information.
-   **************************************************************/
+   */
   void PrintFps(const std::string& head) const;
-  /**************************************************************
-   * Clear all record.
-   **************************************************************/
+  /**
+   * @brief Clear all record.
+   */
   void Clear();
-  /**************************************************************
-   * Mix other record into this timer.
-   **************************************************************/
+  /**
+   * @brief Mix other record into this timer.
+   */
   void MixUp(const CNTimer& other);
-  /**************************************************************
-   * Get average cost time one step.
+  /**
+   * @brief Get average cost time one step.
    *
    * @return Return average cost time.
-   **************************************************************/
+   */
   double GetAvg() const;
 
  private:

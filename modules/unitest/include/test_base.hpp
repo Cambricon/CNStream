@@ -25,8 +25,6 @@
 
 #define PATH_MAX_LENGTH 1024
 
-extern int errno;
-
 std::string GetExePath();
 void CheckExePath(const std::string& path);
 

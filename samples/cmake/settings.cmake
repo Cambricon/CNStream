@@ -2,18 +2,14 @@ set(Example_DIR "${PROJECT_SOURCE_DIR}/samples")
 
 #include(FindPkgConfig)
 
-if(NOT DEFINED ENV{NEUWARE_HOME})
-  set(ENV{NEUWARE_HOME} /usr/local/neuware)
-endif()
-include_directories("$ENV{NEUWARE_HOME}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/decode/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/inference/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/osd/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/source/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/encode/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/track/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/fps_stats/include")
 
-link_directories("$ENV{NEUWARE_HOME}/lib64")
 link_directories("${Example_DIR}/../lib")
 link_directories("${Example_DIR}/../mlu/${MLU_PLATFORM}/libs/${CMAKE_SYSTEM_PROCESSOR}/")
 

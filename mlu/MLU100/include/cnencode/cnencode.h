@@ -17,6 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef LIBSTREAM_INCLUDE_CNENCODE_H_
 #define LIBSTREAM_INCLUDE_CNENCODE_H_
 
@@ -56,10 +57,10 @@ struct CnRateControl {
   uint32_t min_qp;
 };
 
-enum CnVideoProfile{
-    BASELINE = 0,
-    MAIN,
-    HIGH,
+enum CnVideoProfile {
+  BASELINE = 0,
+  MAIN,
+  HIGH,
 };
 
 struct CnCropConfig {
@@ -94,7 +95,7 @@ typedef struct {
    * pts for this frame
    ***********************************************/
   uint64_t pts;
-}CnEncodePerfInfo;
+} CnEncodePerfInfo;
 
 using CnEncodePacketCallback = std::function<void(const CnPacket&)>;
 using CnEncodeEosCallback = std::function<void()>;
@@ -208,11 +209,8 @@ class CnEncode {
   const CnEncode& operator=(const CnEncode&) = delete;
 };  // class CnEncode
 
-inline CnEncode::Attr CnEncode::attr() const {
-  return attr_;
-}
+inline CnEncode::Attr CnEncode::attr() const { return attr_; }
 
 }  // namespace libstream
 
 #endif  // LIBSTREAM_INCLUDE_CNENCODE_H_
-

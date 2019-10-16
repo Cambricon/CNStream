@@ -17,6 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef LIBSTREAM_INCLUDE_BASE_CNTYPES_H_
 #define LIBSTREAM_INCLUDE_BASE_CNTYPES_H_
 
@@ -38,4 +39,3 @@ typedef struct {
 } CnGeometry;
 
 #endif  // LIBSTREAM_INCLUDE_BASE_CNTYPES_H_
-

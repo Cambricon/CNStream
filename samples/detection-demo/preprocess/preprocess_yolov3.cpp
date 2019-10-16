@@ -19,6 +19,8 @@
  *************************************************************************/
 
 #include <opencv2/opencv.hpp>
+#include <algorithm>
+#include <vector>
 
 #include "preproc.hpp"
 

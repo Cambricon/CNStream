@@ -18,9 +18,15 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef POSTPROC_H_
-#define POSTPROC_H_
+#ifndef MODULES_INFERENCE_INCLUDE_POSTPROC_HPP_
+#define MODULES_INFERENCE_INCLUDE_POSTPROC_HPP_
 
+/**
+ *  \file postproc.hpp
+ *
+ *  This file contains a declaration of class Postproc
+ */
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -77,26 +83,6 @@ class Postproc {
   float threshold_ = 0;
 };  // class Postproc
 
-/**
- * @brief Ssd of post process
- */
-class PostprocSsd : public Postproc, virtual public libstream::ReflexObjectEx<Postproc> {
- public:
-  /**
-   * @brief Execute postproc on neural ssd network outputs
-   *
-   * @param net_outputs: neural network outputs
-   * @param model: model information(you can get input shape and output shape from model)
-   * @param package: smart pointer of struct to store processed result
-   *
-   * @return return 0 if succeed
-   */
-  int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<libstream::ModelLoader>& model,
-              const CNFrameInfoPtr& package) override;
-
-  DECLARE_REFLEX_OBJECT_EX(PostprocSsd, Postproc)
-};  // class PostprocSsd
-
 }  // namespace cnstream
 
-#endif  // ifndef POSTPROC_H_
+#endif  // ifndef MODULES_INFERENCE_INCLUDE_POSTPROC_HPP_

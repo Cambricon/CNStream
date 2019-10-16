@@ -25,6 +25,8 @@
 
 #include "glog/logging.h"
 
+extern int errno;
+
 std::string GetExePath() {
   char path[PATH_MAX_LENGTH];
   int cnt = readlink("/proc/self/exe", path, PATH_MAX_LENGTH);

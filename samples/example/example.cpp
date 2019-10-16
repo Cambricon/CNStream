@@ -21,10 +21,12 @@
 #include <glog/logging.h>
 #include <atomic>
 #include <iostream>
+#include <string>
+#include <vector>
 #include "blockingconcurrentqueue.h"
 #include "cnstream_core.hpp"
 
-/* This example demostrates how to use cnstream::Module and cnstream::Pipeline framework,
+/* This example demonstrates how to use cnstream::Module and cnstream::Pipeline framework,
  *              |------ModuleB------>|
  *  ModuleA---->|                    |----> ModuleD
  *              |------ModuleC------>|

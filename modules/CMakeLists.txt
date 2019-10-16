@@ -6,7 +6,7 @@ add_definitions(-DCNSTREAM_VERSION=${CNSTREAM_TARGET_VERSION})
 
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/googletest/include/)
 
-set(module_list core inference encode source osd track display)
+set(module_list core inference encode source osd track display fps_stats)
 
 if(cnstream_build_integrated_lib)
   if(HAVE_FFMPEG)
@@ -29,6 +29,7 @@ else()
   add_subdirectory(encode)
   add_subdirectory(track)
   add_subdirectory(display)
+  add_subdirectory(fps_stats)
 endif()
 
 if(cnstream_build_tests)

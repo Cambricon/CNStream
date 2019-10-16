@@ -17,6 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef LIBSTREAM_INCLUDE_CNINFER_MLU_CONTEXT_H_
 #define LIBSTREAM_INCLUDE_CNINFER_MLU_CONTEXT_H_
 
@@ -42,7 +43,7 @@ class MluContext {
  private:
   int dev_id_ = 0;
   int channel_id_ = -1;  // -1 means batch_size=1
-};  // class MluContext
+};                       // class MluContext
 
 }  // namespace libstream
 

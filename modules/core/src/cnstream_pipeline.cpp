@@ -26,12 +26,14 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <list>
 #include <map>
 #include <memory>
 #include <set>
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "cnstream_module.hpp"
@@ -45,7 +47,7 @@ namespace cnstream {
 
 void CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   rapidjson::Document doc;
-  if (doc.Parse(jstr.c_str()).HasParseError()) {
+  if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
     throw "Parse module configuration failed. Error code [" + std::to_string(doc.GetParseError()) + "]" + " Offset [" +
         std::to_string(doc.GetErrorOffset()) + "]. JSON:" + jstr;
   }
@@ -183,8 +185,8 @@ class PipelinePrivate {
   void StreamMsgHandleFunc() {
     while (!exit_msg_loop_) {
       StreamMsg msg;
-      while (!exit_msg_loop_ && !msgq_.WaitAndTryPop(msg, std::chrono::microseconds(200)))
-        ;
+      while (!exit_msg_loop_ && !msgq_.WaitAndTryPop(msg, std::chrono::microseconds(200))) {
+      }
       if (exit_msg_loop_) return;
       switch (msg.type) {
         case StreamMsgType::EOS_MSG:
@@ -576,7 +578,7 @@ void Pipeline::TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx) {
           int ret = module_info.instance->Process(data);
           auto end_time = std::chrono::high_resolution_clock::now();
           std::chrono::duration<double, std::milli> diff = end_time - start_time;
-          timer.Dot(diff.count(), 1);
+          if (!(flags & CN_FRAME_FLAG_EOS)) timer.Dot(diff.count(), 1);
 
           /*process failed*/
           if (ret < 0) {
@@ -602,8 +604,7 @@ void Pipeline::TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx) {
           }
         }
         TransmitData(node_hashcode, data);
-      }  // if
-      else {
+      } else {
         // LOG(INFO) << std::hex << data->frame.GetModulesMask(module_info.instance.get()) << " : " <<
         // module_info.instance->GetModulesMask();
       }
@@ -678,7 +679,7 @@ int Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
   /* traversing modules */
   std::vector<CNModuleConfig> mconfs;
   rapidjson::Document doc;
-  if (doc.Parse(jstr.c_str()).HasParseError()) {
+  if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
     throw "Parse pipeline configuration failed. Error code [" + std::to_string(doc.GetParseError()) + "]" +
         " Offset [" + std::to_string(doc.GetErrorOffset()) + "]. ";
   }

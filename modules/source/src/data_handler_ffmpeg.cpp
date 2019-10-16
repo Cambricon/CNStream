@@ -104,7 +104,7 @@ bool DataHandlerFFmpeg::PrepareResources() {
     LOG(ERROR) << "Didn't find a video stream.";
     return false;
   }
-  // p_codec_ctx_ = vstream->codec;
+// p_codec_ctx_ = vstream->codec;
 #if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
   AVCodecID codec_id = vstream->codecpar->codec_id;
 #else

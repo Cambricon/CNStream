@@ -137,7 +137,7 @@ class TestProcessor : public cnstream::Module {
   void Close() override { opened_ = false; }
   int Process(std::shared_ptr<cnstream::CNFrameInfo> data) override {
     EXPECT_EQ(true, opened_);
-    EXPECT_NE(1, cnstream::CNFrameFlag::CN_FRAME_FLAG_EOS & data->frame.flags);
+    EXPECT_NE((uint32_t)1, cnstream::CNFrameFlag::CN_FRAME_FLAG_EOS & data->frame.flags);
     uint32_t chn_idx = data->channel_idx;
     cnts_[chn_idx]++;
     return 0;

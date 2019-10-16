@@ -6,7 +6,7 @@ if(cnstream_build_tests)
   add_executable(cnstream_test ${test_srcs})
 
   if(cnstream_build_integrated_lib)
-    target_link_libraries(cnstream_test gtest cnstream glog gflags ${OpenCV_LIBS})
+    target_link_libraries(cnstream_test gtest cnstream glog gflags ${OpenCV_LIBS} ${FFMPEG_LIBRARIES})
   else()
     foreach(module ${module_list})
       include_directories(${PROJECT_SOURCE_DIR}/modules/${module}/include)

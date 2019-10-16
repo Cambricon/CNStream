@@ -57,7 +57,7 @@ class Conveyor {
   void PushDataBuffer(CNFrameInfoPtr data);
   CNFrameInfoPtr PopDataBuffer();
   std::vector<CNFrameInfoPtr> PopAllDataBuffer();
-  uint32_t GetBufferSize() const;
+  uint32_t GetBufferSize();
 
  private:
 #ifdef TEST

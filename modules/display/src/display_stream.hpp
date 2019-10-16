@@ -27,13 +27,14 @@
 #error OpenCV required
 #endif
 #include <chrono>
+#include <string>
 #include <thread>
 
 namespace cnstream {
 
 class DisplayStream {
  public:
-  bool Open(int window_w, int window_h, int cols, int rows, float display_rate);
+  bool Open(int window_w, int window_h, int cols, int rows, float display_rate, bool show);
   void Close();
   bool Update(cv::Mat image, int channel_id);
 
@@ -49,6 +50,7 @@ class DisplayStream {
   int unit_h_;
   float refresh_rate_;
   bool running_ = false;
+  bool show_ = true;
 };
 
 }  // namespace cnstream

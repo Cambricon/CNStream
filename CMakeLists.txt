@@ -27,6 +27,7 @@ option(cnstream_build_test_coverage  "Test code coverage" OFF)
 option(RELEASE "build type" ON)
 option(WITH_FFMPEG "with ffmpeg" ON)
 option(WITH_OPENCV "with opencv" ON)
+option(WITH_CHINESE "with chinese" OFF)
 
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
@@ -70,13 +71,6 @@ if(USE_libstdcpp)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libstdc++")
   message("-- Warning: forcing libstdc++ (controlled by USE_libstdcpp option in cmake)")
 endif()
-
-# ---[ dependencies
-if(NOT DEFINED ENV{NEUWARE_HOME})
-  set(ENV{NEUWARE_HOME} /usr/local/neuware)
-endif()
-include_directories("$ENV{NEUWARE_HOME}/include")
-link_directories("$ENV{NEUWARE_HOME}/lib64")
 
 # ---[ Google-gflags
 include("${PROJECT_SOURCE_DIR}/cmake/FindGFlags.cmake")
@@ -123,8 +117,42 @@ else()
   set (HAVE_FFMPEG false)
 endif()
 
-include_directories(${PROJECT_SOURCE_DIR}/mlu/${MLU_PLATFORM}/include)
-link_directories(${PROJECT_SOURCE_DIR}/mlu/${MLU_PLATFORM}/libs/${CMAKE_SYSTEM_PROCESSOR})
+##Chinses label
+if(WITH_CHINESE)
+  find_package(Freetype REQUIRED)
+  if (FREETYPE_FOUND)
+    include_directories(${FREETYPE_INCLUDE_DIR_ft2build})
+    message(STATUS "freetype include: ${FREETYPE_INCLUDE_DIR_ft2build}")
+    message(STATUS "freetype libraries: ${FREETYPE_LIBRARIES}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_FREETYPE")
+  else (FREETYPE_FOUND)
+    message(FATAL_ERROR "Can't find Freetype libs!")
+  endif (FREETYPE_FOUND)
+endif()
+
+# ---[ dependencies
+# neuware include/libs
+if(NOT DEFINED ENV{NEUWARE_HOME})
+  set(ENV{NEUWARE_HOME} /usr/local/neuware)
+endif()
+if(EXISTS ${PROJECT_SOURCE_DIR}/mlu/${MLU_PLATFORM})
+  message(STATUS "Local MLU libs found")
+  #cp neuware/.h or .so for cnstream
+  if(MLU_PLATFORM STREQUAL MLU100)
+    execute_process(COMMAND sh ${PROJECT_SOURCE_DIR}/tools/copy_neuware_mlu100.sh $ENV{NEUWARE_HOME} ${PROJECT_SOURCE_DIR}/mlu/${MLU_PLATFORM}/include  ${PROJECT_SOURCE_DIR}/mlu/${MLU_PLATFORM}/libs/${CMAKE_SYSTEM_PROCESSOR})
+    message(STATUS "MLU100 neuware files copy Done")
+  elseif(MLU_PLATFORM STREQUAL MLU270)
+    execute_process(COMMAND sh ${PROJECT_SOURCE_DIR}/tools/copy_neuware_mlu270.sh $ENV{NEUWARE_HOME} ${PROJECT_SOURCE_DIR}/mlu/${MLU_PLATFORM}/include  ${PROJECT_SOURCE_DIR}/mlu/${MLU_PLATFORM}/libs/${CMAKE_SYSTEM_PROCESSOR})
+    message(STATUS "MLU270 neuware files copy Done")
+  else()
+    message(FATAL_ERROR "MLU_PLATFORM not supported!")
+  endif()
+  include_directories(${PROJECT_SOURCE_DIR}/mlu/${MLU_PLATFORM}/include)
+  link_directories(${PROJECT_SOURCE_DIR}/mlu/${MLU_PLATFORM}/libs/${CMAKE_SYSTEM_PROCESSOR})
+else()
+  include_directories("$ENV{NEUWARE_HOME}/include")
+  link_directories("$ENV{NEUWARE_HOME}/lib64")
+endif()
 
 # ---[ Includes
 include_directories(${PROJECT_SOURCE_DIR}/modules/core/include)

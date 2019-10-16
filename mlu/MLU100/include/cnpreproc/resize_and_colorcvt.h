@@ -22,7 +22,9 @@
 #define _CNPREPROCESS_RESIZE_AND_CONVERT_H_
 
 #include <cnrt.h>
+#include <deque>
 #include <string>
+#include <utility>
 #include "cnbase/streamlibs_error.h"
 
 struct KernelParam;
@@ -94,6 +96,9 @@ class MluRCOp {
     *w = dst_w_;
     *h = dst_h_;
   }
+  /*************************
+   * @deprecated
+   *************************/
   inline void set_ftype(cnrtFunctionType_t ftype) {
     ftype_ = ftype;
   }
@@ -110,17 +115,32 @@ class MluRCOp {
     return kparam_;
   }
   /****************************************
-   * @brief init op
+   * @deprecated
+   * @brief init op, deprecated, use Init(int batchsize) to instead
    ****************************************/
   bool Init();
   /****************************************
-   * @brief excute
+   * @brief init op
+   ****************************************/
+  bool Init(int batchsize);
+  /****************************************
+   * @deprecated
+   * @brief excute, use BatchingUp and SyncOneOutput to instead
    ****************************************/
   float InvokeOp(void* dst, void* src_y, void* src_uv);
   void Destroy();
   inline std::string GetLastError() const {
     return estr_;
   }
+
+  /****************************************
+   * @brief batching up one yuv
+   ****************************************/
+  void BatchingUp(void* src_y, void* src_uv);
+  /****************************************
+   * @brief get an output
+   ****************************************/
+  bool SyncOneOutput(void* dst);
 
  private:
   ColorMode cmode_ = YUV2RGBA_NV21;
@@ -130,6 +150,10 @@ class MluRCOp {
   cnrtFunctionType_t ftype_;
   cnrtStream_t rt_stream_ = nullptr;
   KernelParam* kparam_ = nullptr;
+  int bsize_ = 1;
+  std::deque<std::pair<void*, void*>> yuv_ptrs_cache_;
+  void *y_ptrs_cpu_ = nullptr, *uv_ptrs_cpu_ = nullptr;
+  void *y_ptrs_mlu_ = nullptr, *uv_ptrs_mlu_ = nullptr;
   std::string estr_;
 };  // class MluResizeAndConvertOp
 

@@ -17,19 +17,20 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+#include <string>
 
-#include "cnstream_module.hpp"
 #include "cnstream_eventbus.hpp"
+#include "cnstream_module.hpp"
 #include "cnstream_pipeline.hpp"
 
 namespace cnstream {
 
-std::mutex Module::module_id_mutex_;
+CNSpinLock Module::module_id_spinlock_;
 uint64_t Module::module_id_mask_ = 0;
 
 /*maxModuleIdNum is sizeof(module_id_mask_) * 8  (bytes->bits)*/
 size_t Module::GetId() {
-  std::unique_lock<std::mutex> lock(module_id_mutex_);
+  CNSpinLockGuard guard(module_id_spinlock_);
   if (id_ != INVALID_MODULE_ID) {
     return id_;
   }
@@ -45,7 +46,7 @@ size_t Module::GetId() {
 }
 
 void Module::ReturnId() {
-  std::unique_lock<std::mutex> lock(module_id_mutex_);
+  CNSpinLockGuard guard(module_id_spinlock_);
   if (id_ < 0 || id_ >= sizeof(module_id_mask_) * 8) {
     return;
   }

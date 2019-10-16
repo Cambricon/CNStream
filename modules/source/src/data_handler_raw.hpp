@@ -21,6 +21,7 @@
 #ifndef MODULES_SOURCE_HANDLER_RAW_HPP_
 #define MODULES_SOURCE_HANDLER_RAW_HPP_
 
+#include <memory>
 #include <string>
 #include <thread>
 #include "data_handler.hpp"

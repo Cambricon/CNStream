@@ -18,13 +18,19 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef MODULES_TRACK_INCLUDE_TRACK_H_
-#define MODULES_TRACK_INCLUDE_TRACK_H_
+#ifndef MODULES_TRACK_HPP_
+#define MODULES_TRACK_HPP_
+/**
+ *  \file track.hpp
+ *
+ *  This file contains a declaration of struct Tracker
+ */
 
 #include <memory>
 #include <string>
 #include <unordered_map>
 
+#include "cninfer/model_loader.h"
 #include "cnstream_core.hpp"
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
@@ -40,6 +46,7 @@ using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
  */
 struct TrackerContext {
   libstream::CnTrack *processer_ = nullptr;
+  uint32_t frame_index_;
 };
 
 /**
@@ -69,11 +76,12 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
    *  @brief Called by pipeline when pipeline start
    *
    *  @param paramSet :
-   @verbatim
-   model_path: Offline model path
-   func_name:  Function name defined in the offline model, could be found in the cambricon_twins description file
+   * @verbatim
+   * track_name: Class name for track, "FeatureMatch" provided
+   * model_path: Offline model path
+   * func_name:  Function name defined in the offline model, could be found in the cambricon_twins description file
                It is "subnet0" for the most case
-   @endverbatim
+   * @endverbatim
    *  @return if module open succeed
    */
   bool Open(cnstream::ModuleParamSet paramSet) override;
@@ -101,9 +109,12 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
  private:
   TrackerContext *GetTrackerContext(CNFrameInfoPtr data);
   std::unordered_map<int, TrackerContext *> tracker_ctxs_;
+  std::string model_path_ = "";
+  std::string func_name_ = "";
+  std::string track_name_ = "";
   std::shared_ptr<libstream::ModelLoader> ploader_;
 };  // class Tracker
 
 }  // namespace cnstream
 
-#endif  // MODULES_TRACK_INCLUDE_TRACK_H_
+#endif  // MODULES_TRACK_HPP_

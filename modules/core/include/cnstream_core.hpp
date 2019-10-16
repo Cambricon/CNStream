@@ -17,9 +17,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+#ifndef CNSTREAM_CORE_HPP_
+#define CNSTREAM_CORE_HPP_
 
 #include "cnstream_common.hpp"
 #include "cnstream_error.hpp"
 #include "cnstream_frame.hpp"
 #include "cnstream_pipeline.hpp"
 #include "cnstream_version.hpp"
+
+#endif  // CNSTREAM_CORE_HPP_

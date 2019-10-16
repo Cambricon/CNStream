@@ -17,26 +17,24 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #ifndef LIBSTREAM_INCLUDE_BASE_STREAMLIBS_ERROR_H_
 #define LIBSTREAM_INCLUDE_BASE_STREAMLIBS_ERROR_H_
 
 #include <stdexcept>
 #include <string>
 
-#define STREAMLIBS_REGISTER_EXCEPTION(CNAME)         \
-class CNAME##Error : public libstream::StreamlibsError {        \
- public:                                         \
-  explicit CNAME##Error(std::string msg) :       \
-    StreamlibsError(msg) {}                          \
-};
-
+#define STREAMLIBS_REGISTER_EXCEPTION(CNAME)                         \
+  class CNAME##Error : public libstream::StreamlibsError {           \
+   public:                                                           \
+    explicit CNAME##Error(std::string msg) : StreamlibsError(msg) {} \
+  };
 
 namespace libstream {
 
 class StreamlibsError : public std::runtime_error {
  public:
-  explicit StreamlibsError(std::string msg) :
-      std::runtime_error(msg) {}
+  explicit StreamlibsError(std::string msg) : std::runtime_error(msg) {}
 };  // class StreamlibError
 
 }  // namespace libstream

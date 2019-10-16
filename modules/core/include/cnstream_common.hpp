@@ -21,6 +21,12 @@
 #ifndef CNSTREAM_COMMON_HPP_
 #define CNSTREAM_COMMON_HPP_
 
+#include <limits.h>
+#include <unistd.h>
+
+#include <atomic>
+#include <string>
+
 #include "glog/logging.h"
 
 #define DISABLE_COPY_AND_ASSIGN(TypeName) \
@@ -55,5 +61,42 @@
     CNS_CNRT_CHECK(cnrtSetCurrentChannel(ddr_chn));                            \
     CNS_CNRT_CHECK(__EXPRESSION__);                                            \
   } while (0)
+
+namespace cnstream {
+
+class CNSpinLock {
+ public:
+  void lock() {
+    while (lock_.test_and_set(std::memory_order_acquire)) {
+    }  // spin
+  }
+  void unlock() { lock_.clear(std::memory_order_release); }
+
+ private:
+  std::atomic_flag lock_ = ATOMIC_FLAG_INIT;
+};
+
+class CNSpinLockGuard {
+ public:
+  explicit CNSpinLockGuard(CNSpinLock &lock) : lock_(lock) { lock_.lock(); }
+  ~CNSpinLockGuard() { lock_.unlock(); }
+
+ private:
+  CNSpinLock &lock_;
+};
+
+inline std::string GetFullPath(const std::string &path) {
+  if (path.empty() || path.front() == '/') {
+    return path;
+  } else {
+    const int MAX_PATH = 1024;
+    char result[MAX_PATH];
+    ssize_t count = readlink("/proc/self/exe", result, MAX_PATH);
+    std::string exe_path = std::string(result, (count > 0) ? count : 0);
+    const auto pos = exe_path.find_last_of('/');
+    return exe_path.substr(0, pos + 1) + path;
+  }
+}
+}  // namespace cnstream
 
 #endif  // CNSTREAM_COMMON_HPP_

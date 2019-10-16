@@ -18,8 +18,13 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef ENCODER_HPP_
-#define ENCODER_HPP_
+#ifndef MODULES_ENCODER_HPP_
+#define MODULES_ENCODER_HPP_
+/**
+ *  \file encoder.hpp
+ *
+ *  This file contains a declaration of class Encoder
+ */
 
 #include <memory>
 #include <string>
@@ -72,7 +77,7 @@ class Encoder : public Module, public ModuleCreator<Encoder> {
   *
   * @param paramSet :
   @verbatim
-  dump_dir: ouput_dir
+     dump_dir: ouput_dir
   @endverbatim
   *
   * @return if module open succeed
@@ -107,4 +112,4 @@ class Encoder : public Module, public ModuleCreator<Encoder> {
 
 }  // namespace cnstream
 
-#endif  // ENCODER_HPP_
+#endif  // MODULES_ENCODER_HPP_

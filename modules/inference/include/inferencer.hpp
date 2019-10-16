@@ -21,6 +21,12 @@
 #ifndef MODULES_INFERENCE_INCLUDE_INFERENCER_HPP_
 #define MODULES_INFERENCE_INCLUDE_INFERENCER_HPP_
 
+/**
+ *  \file inferencer.hpp
+ *
+ *  This file contains a declaration of struct Inferencer and its subtructure.
+ */
+
 #include <memory>
 #include <string>
 #include <thread>
@@ -74,10 +80,11 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
       func_name: Function name is defined in offline model.
                  It could be found in cambricon_twins file.
                  For most case, it is "subnet0".
-      postproc_name:
-      cpu_preproc_name:
-      device_id:
-      batch_size:  maximum 32, default 1
+      postproc_name: Class name for postprocess. See cnstream::Postproc.
+      cpu_preproc_name: Class name for preprocess on CPU. See cnstream::Preproc.
+      device_id: MLU device oridinal.
+      batch_size:  maximum 32, default 1. Only active on MLU100.
+      batching_timeout: batching timeout. default 3000.0[ms]. type[float]. unit[ms].
    @endverbaim
    *
    * @return return ture if inferencer open succeed
@@ -100,16 +107,6 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
    * @retval -1: the process fail
    */
   int Process(CNFrameInfoPtr data) final;
-
-  /**
-   * @brief inferencing by batch
-   *
-   * @param None
-   *
-   * @retval 1: the process success
-   * @retval -1: the process fail
-   */
-  int ProcessBatch();
 
  protected:
   DECLARE_PRIVATE(d_ptr_, Inferencer);

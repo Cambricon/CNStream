@@ -23,7 +23,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <future>
+#include <memory>
 #include <sstream>
+#include <string>
 #include <thread>
 #include <utility>
 #include "cninfer/mlu_context.h"

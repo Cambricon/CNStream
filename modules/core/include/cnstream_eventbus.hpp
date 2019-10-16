@@ -22,9 +22,9 @@
 #define CNSTREAM_EVENT_BUS_HPP_
 
 /**
- *  \file cnstream_eventbus.hpp
+ *  @file cnstream_eventbus.hpp
  *
- *  This file contains a declaration of class EventBus.
+ *  This file contains a declaration of the EventBus class.
  */
 
 #include <functional>
@@ -32,6 +32,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <utility>
 
 #include "cnstream_common.hpp"
 
@@ -41,90 +42,91 @@ class Pipeline;
 class Module;
 class EventBusPrivate;
 
-/************************************************************************
- * @brief Flag to specify event type.
- ************************************************************************/
+/**
+ * @brief Flag to specify how bus watcher handle a single event.
+ */
 enum EventType {
-  EVENT_INVALID,  ///> Invalid event type.
-  EVENT_ERROR,    ///> Error event.
-  EVENT_WARNING,  ///> Warning event.
-  EVENT_EOS,      ///> EOS event.
-  EVENT_STOP,     ///> Stop event, raised by application layer usually.
-  EVENT_TYPE_END  ///> Remaining for user custom event
+  EVENT_INVALID,  ///< An invalid event type.
+  EVENT_ERROR,    ///< An error event.
+  EVENT_WARNING,  ///< A warning event.
+  EVENT_EOS,      ///< An EOS event.
+  EVENT_STOP,     ///< Stops an event that is called by application layer usually.
+  EVENT_TYPE_END  ///< Reserved for your custom events.
 };
 
-/************************************************************************
+/**
  * @brief Flag to specify the way in which bus watcher handled one event.
- ************************************************************************/
+ */
 enum EventHandleFlag {
-  EVENT_HANDLE_NULL,          ///> Event not handled.
-  EVENT_HANDLE_INTERCEPTION,  ///> Watcher informed and intercept event.
-  EVENT_HANDLE_SYNCED,        ///> Watcher informed and inform other watchers.
-  EVENT_HANDLE_STOP           ///> Stop poll event.
+  EVENT_HANDLE_NULL,          ///< Event is not handled.
+  EVENT_HANDLE_INTERCEPTION,  ///< Watcher is informed and intercept the event.
+  EVENT_HANDLE_SYNCED,        ///< Watcher is informed and informed other watchers.
+  EVENT_HANDLE_STOP           ///< Stops a poll event.
 };
 
-/************************************************************************
- * @brief Structure to store event information.
- ************************************************************************/
+/**
+ * @brief The structure holding the event information.
+ */
 struct Event {
-  EventType type;             ///> Event type.
-  std::string message;        ///> Additional event message.
-  const Module *module;       ///> Module that post this event.
-  std::thread::id thread_id;  ///> Thread id from which event is posted.
-};                            // struct Event
+  EventType type;             ///< The event type.
+  std::string message;        ///< Additional event messages.
+  const Module *module;       ///< The module that posts this event.
+  std::thread::id thread_id;  ///< The thread id from which the event is posted.
+};
 
-/************************************************************************
- * Bus watcher function
+/**
+ * @brief The bus watcher function
  *
- * @param event Event polled from eventbus.
- * @param module Module that is watching.
+ * @param event The event polled from the event bus.
+ * @param module The module that is watching.
  *
- * @return Flag indicated how the event was handled.
- ************************************************************************/
+ * @return Flag specifies how the event is handled.
+ */
 using BusWatcher = std::function<EventHandleFlag(const Event &, Module *)>;
 
 /**
- * Event bus, transmit event from modules to pipeline.
+ * @brief The event bus that transmits events from modules to a pipeline.
  */
 class EventBus {
  public:
   friend class Pipeline;
-  /************************************************************************
-   * Post event to bus.
+  /**
+   * @brief Posts an event to bus.
    *
-   * @param event Event to be posted.
+   * @param event The event to be posted.
    *
-   * @return Return true for success.
-   ************************************************************************/
+   * @return Returns true if this function run successfully.
+   */
   bool PostEvent(Event event);
 
-  /************************************************************************
-   * Add watcher to event bus.
+  /**
+   * @brief Adds the watcher to the event bus.
    *
-   * @param func Bus watcher to added.
-   * @param watch_module Module which add this bus watcher.
+   * @param func The bus watcher to be added.
+   * @param watch_module The module that adds this bus watcher.
    *
-   * @return Number of bus watchers that has been added to this event bus.
-   ************************************************************************/
+   * @return The number of bus watchers that has been added to this event bus.
+   */
   uint32_t AddBusWatch(BusWatcher func, Module *watch_module);
 
  private:
 #ifdef TEST
+
  public:
 #endif
   EventBus();
   ~EventBus();
 
-  /************************************************************************
-   * Poll a event from bus [block].
+  /**
+   * @brief Polls an event from a bus [block].
    *
-   * @note Block until get a event or bus stopped.
-   ************************************************************************/
+   * @note Block until an event or a bus is stopped.
+   */
   Event PollEvent();
   const std::list<std::pair<BusWatcher, Module *>> &GetBusWatchers() const;
-  /************************************************************************
-   * Remove all bus watchers.
-   ************************************************************************/
+  /**
+   * @brief Removes all bus watchers.
+   */
   void ClearAllWatchers();
   inline bool IsRunning() const { return running_; }
   bool running_ = false;

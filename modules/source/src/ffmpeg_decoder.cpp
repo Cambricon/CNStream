@@ -21,6 +21,7 @@
 #include <cnrt.h>
 #include <glog/logging.h>
 #include <future>
+#include <memory>
 #include <sstream>
 #include <thread>
 #include <utility>
@@ -83,13 +84,11 @@ bool FFmpegMluDecoder::Create(AVStream *st) {
     }
   }
   instance_attr.pixel_format = libstream::YUV420SP_NV21;
-  instance_attr.output_geometry.w = codec_width;
-  instance_attr.output_geometry.h = codec_height;
+  instance_attr.output_geometry.w = handler_.Output_w() > 0 ? handler_.Output_w() : codec_width;
+  instance_attr.output_geometry.h = handler_.Output_h() > 0 ? handler_.Output_h() : codec_height;
   instance_attr.drop_rate = 0;
-  instance_attr.frame_buffer_num = 3;
-  if (handler_.ReuseCNDecBuf()) {
-    instance_attr.frame_buffer_num += 6;  // FIXME
-  }
+  instance_attr.input_buffer_num = handler_.InputBufNumber();
+  instance_attr.frame_buffer_num = handler_.OutputBufNumber();
   instance_attr.dev_id = dev_ctx_.dev_id;
   instance_attr.video_mode = libstream::FRAME_MODE;
   instance_attr.silent = false;
@@ -125,7 +124,7 @@ void FFmpegMluDecoder::Destroy() {
       this->Process(nullptr, true);
     }
     while (!eos_got_.load()) {
-      usleep(1000 * 10);
+      std::this_thread::yield();
     }
     eos_got_.store(2);  // avoid double-wait eos
   }
@@ -153,8 +152,8 @@ bool FFmpegMluDecoder::Process(AVPacket *pkt, bool eos) {
   return false;
 }
 
-int FFmpegMluDecoder::ProcessFrame(const libstream::CnFrame &frame, bool &reused) {
-  reused = false;
+int FFmpegMluDecoder::ProcessFrame(const libstream::CnFrame &frame, bool *reused) {
+  *reused = false;
   auto data = CNFrameInfo::Create(stream_id_);
   if (data == nullptr) {
     // LOG(WARNING) << "CNFrameInfo::Create Failed,DISCARD image";
@@ -174,12 +173,12 @@ int FFmpegMluDecoder::ProcessFrame(const libstream::CnFrame &frame, bool &reused
   data->frame.fmt = CnPixelFormat2CnDataFormat(frame.pformat);
   for (int i = 0; i < data->frame.GetPlanes(); i++) {
     data->frame.stride[i] = frame.strides[i];
-    data->frame.ptr[i] = (void *)frame.data.ptrs[i];
+    data->frame.ptr[i] = reinterpret_cast<void *>(frame.data.ptrs[i]);
   }
   if (handler_.ReuseCNDecBuf()) {
     data->frame.deAllocator_ = std::make_shared<CNDeallocator>(instance_, frame.buf_id);
     if (data->frame.deAllocator_) {
-      reused = true;
+      *reused = true;
     }
   }
   data->frame.CopyToSyncMem();
@@ -188,9 +187,17 @@ int FFmpegMluDecoder::ProcessFrame(const libstream::CnFrame &frame, bool &reused
 }
 
 void FFmpegMluDecoder::FrameCallback(const libstream::CnFrame &frame) {
+  if (frame.width == 0 || frame.height == 0) {
+    LOG(WARNING) << "Skip frame! stream id:"
+                  << stream_idx_ << " width x height:"
+                  << frame.width << " x " << frame.height
+                  << " timestamp:" << frame.pts << std::endl;
+    instance_->ReleaseBuffer(frame.buf_id);
+    return;
+  }
   bool reused = false;
   if (frame_count_++ % interval_ == 0) {
-    ProcessFrame(frame, reused);
+    ProcessFrame(frame, &reused);
   }
   if (!reused) {
     instance_->ReleaseBuffer(frame.buf_id);
@@ -242,11 +249,11 @@ bool FFmpegCpuDecoder::Create(AVStream *st) {
 void FFmpegCpuDecoder::Destroy() {
   if (instance_ != nullptr) {
     if (!handler_.GetDemuxEos()) {
-      while (this->Process(nullptr, true))
-        ;
+      while (this->Process(nullptr, true)) {
+      }
     }
     while (!eos_got_.load()) {
-      usleep(1000 * 10);
+      std::this_thread::yield();
     }
     eos_got_.store(0);
     avcodec_free_context(&instance_);
@@ -329,7 +336,7 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     memcpy(nv21_data_, frame->data[0], frame->linesize[0] * frame->height);
     uint8_t *u = frame->data[1];
     uint8_t *v = frame->data[2];
-    uint8_t *vu = (uint8_t *)nv21_data_ + frame->linesize[0] * frame->height;
+    uint8_t *vu = reinterpret_cast<uint8_t *>(nv21_data_) + frame->linesize[0] * frame->height;
     for (int i = 0; i < frame->linesize[1] * frame->height / 2; i++) {
       *vu++ = *v++;
       *vu++ = *u++;
@@ -358,7 +365,7 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     memcpy(data->frame.cpu_data, frame->data[0], frame->linesize[0] * frame->height);
     uint8_t *u = frame->data[1];
     uint8_t *v = frame->data[2];
-    uint8_t *vu = (uint8_t *)data->frame.cpu_data + frame->linesize[0] * frame->height;
+    uint8_t *vu = reinterpret_cast<uint8_t *>(data->frame.cpu_data) + frame->linesize[0] * frame->height;
     for (int i = 0; i < frame->linesize[1] * frame->height / 2; i++) {
       *vu++ = *v++;
       *vu++ = *u++;
