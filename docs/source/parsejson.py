@@ -1,0 +1,347 @@
+#!/usr/bin/python
+# -*- coding: UTF-8
+
+import os
+import sys
+import json
+import re
+import codecs
+import shutil
+from conf import latex_documents
+
+
+def __openconfjsonfile__():
+        with codecs.open("conf.json","r+",encoding = 'utf-8') as load_f:
+            load_dict = json.load(load_f)
+            return load_dict
+
+
+def GetOtherIncludePackage():
+#    packagearr = __load_dict__['package']
+#    for package in packagearr:
+#        print(package)
+    return __load_dict__['package']
+
+def GetReplacePackage():
+    return __load_dict__['replacepackage']
+
+def GetCustomOptions():
+    return __load_dict__['customoptions']
+
+def GetIsTocContents():
+    return __load_dict__['isfiguretabletoc']
+
+def GetSensitiveword():
+    #得到敏感词数组，便于搜索文档中是否有敏感词存在
+    return __load_dict__['sensitivewords']
+
+def GetTablesContent():
+    return __load_dict__['tables']
+
+def GetTablerowtype():
+#    packagearr = __load_dict__['tables']['rowtype']
+#    print(packagearr)
+    return __load_dict__['tables']['rowtype']
+
+def GetTableheadtype():
+#    packagearr = __load_dict__['tables']['headtype']
+#    print(packagearr)
+    return __load_dict__['tables']['headtype']
+
+def GetTableHeadFontColor():
+    return __load_dict__['tables']['headfontcolor']
+
+def GetTableStylesArr():
+#    packagearr = __load_dict__['tables']['styles']
+#    for package in packagearr:
+#        print(package)
+    return __load_dict__['tables']['styles']
+
+def GetImageStyleArr():
+#    packagearr = __load_dict__['image']['styles']
+#    for package in packagearr:
+#        print(package)
+    return __load_dict__['image']['styles']
+
+
+class clsTableattr:
+
+    def __init__(self, tables):
+        self.rowtype = tables['rowtype']
+        self.headtype = tables['headtype']
+        self.headfontcolor = tables['headfontcolor']
+        self.tablestyles = tables['styles']
+
+class clsModifyTex:
+
+    def __init__(self, content):
+        self.content = content
+        self.tablesattrobj = clsTableattr(GetTablesContent())
+
+    #加入其它包
+    def AddPackageToTex(self):
+        #得到需要包的数组
+        packarr = GetOtherIncludePackage()
+        if len(packarr)==0:
+            return  False;
+
+        #如果数组有内容，就需要将包添加到latex文件的导言区
+        #搜索\usepackage{sphinx}，将包加在它的前面，用正则表达式搜索它的位置
+        #采用正则表达式替换的方式，替换搜索到的字符串，因此需要先构建字符串
+        #python认为\u后面为unicode字符，因此需要多加一个转义字符\，python才认为是整个的字符串
+        #searchstr = r'\\usepackage\[dontkeepoldnames\]{sphinx}'
+        searchstr = r'\\usepackage(\[\S*\]*)?{sphinx}'
+        matchstr = re.search(searchstr,self.content)
+        
+        replacestr=""
+        for package in packarr:
+             replacestr  += package+'\n'
+        replacestr += matchstr.group(0)
+
+        self.content = re.sub(searchstr, replacestr, self.content, 1, re.M | re.I|re.U)
+        return True
+
+    #加入其它包
+    def AddCustormOptionsToTex(self):
+        #得到需要包的数组
+        packarr = GetCustomOptions()
+        if len(packarr)==0:
+            return  False;
+
+        #如果数组有内容，就需要将包添加到latex文件的导言区
+        #搜索\usepackage{sphinx}，将包加在它的前面，用正则表达式搜索它的位置
+        #采用正则表达式替换的方式，替换搜索到的字符串，因此需要先构建字符串
+        #python认为\u后面为unicode字符，因此需要多加一个转义字符\，python才认为是整个的字符串
+        searchstr = r'\\usepackage{xeCJK}'
+        matchstr = re.search(searchstr,self.content)
+
+        replacestr=""
+        for package in packarr:
+             replacestr  += package+'\n'
+        replacestr += matchstr.group(0)
+
+        self.content = re.sub(searchstr, replacestr, self.content, 1, re.M | re.I|re.U)
+        return True
+     
+    #增加figure和table toc到tex
+    def AddOtherTocToTex(self):
+        #得到需要包的数组
+        packarr = GetIsTocContents()
+        if len(packarr)==0:
+            return  False;
+
+        replacestr = ""
+        if packarr['isfigurestoc']:
+           figlst = packarr['figurestoc']
+           for figstr in figlst:
+               replacestr += figstr + '\n'
+
+        if packarr['istablestoc']:
+           figlst = packarr['tablestoc']
+           for figstr in figlst:
+               replacestr += figstr + '\n'
+        if replacestr == "":
+           return
+
+        #如果数组有内容，就需要将包添加到latex文件的导言区
+        #搜索\usepackage{sphinx}，将包加在它的前面，用正则表达式搜索它的位置
+        #采用正则表达式替换的方式，替换搜索到的字符串，因此需要先构建字符串
+        #python认为\u后面为unicode字符，因此需要多加一个转义字符\，python才认为是整个的字符串
+        searchstr = r'\\sphinxtableofcontents'
+        matchstr = re.search(searchstr,self.content)
+
+        replacestr = matchstr.group(0) + '\n' + replacestr
+
+        self.content = re.sub(searchstr, replacestr, self.content, 1, re.M | re.I|re.U)
+        return True
+
+
+    #得到需要替换的包，用正则表达式替换
+    def ModifyReplacePackage(self):
+        #得到字典值
+        redict = GetReplacePackage()
+        if len(redict) ==0:
+           return;
+        
+        #返回字典中所有键值的列表
+        keylst = list(redict)
+        for key in keylst:
+            if key == 'comment' :
+                continue;
+            keyvalue = redict[key]   #得到键对应的值
+            
+            #对键值进行替换
+            self.content = re.sub(key, keyvalue, self.content, 0, re.M | re.I|re.U)
+        return;
+
+    def ModifyTablesAttributes(self):
+        #修改表格属性
+        newcontent = self.content
+        searchstr = r'(\\begin{savenotes}\\sphinxattablestart|\\begin{savenotes}\\sphinxatlongtablestart)([\s\S]*?)(\\sphinxattableend\\end{savenotes}|\\sphinxatlongtableend\\end{savenotes})'
+        m = re.finditer(searchstr, self.content, re.M|re.I|re.U)
+        for match in m:
+            oldtablestr = match.group()
+            tablestr = match.groups()
+            caption_dict = self.__CreateTableCaptionDict(self.tablesattrobj.tablestyles)
+            if len(caption_dict ) > 0 :
+                newtableattr = self.__ModifySingleTableattr(tablestr[1],caption_dict ) #tablestr也是3个内容的数组，因为正则表达式被分为了3组，只取中间分组的内容。
+                #重新组成新的字符串
+                newcontent = newcontent.replace(str(tablestr[1]), str(newtableattr))
+
+        self.content = newcontent
+
+
+    def __CreateTableCaptionDict(self, tablestylesarr):
+        #根据caption生成表格字典，key=caption，value=属性数组
+        cap_dict = {}
+
+        for tablestyle_dict in tablestylesarr:
+            caption = tablestyle_dict['caption']
+            cap_dict[caption] = tablestyle_dict  #以caption为key重新生成字典，便于查找
+        return cap_dict
+
+    def __ModifySingleTableattr(self, singletablecontent, caption_dict):
+        #修改单个表格属性
+        #从单个表格里用正则表达式找caption
+        #定义正则表达式,查找caption内容
+        new_singletablecontent = singletablecontent
+        searchstr = r'\\sphinxcaption{(?P<caption>[\s\S]*?)}'
+        matchcaption = re.search(searchstr, singletablecontent, re.M | re.I|re.U)
+        if matchcaption != None:
+        	tablecaption = matchcaption.group('caption') #得到caption的值
+	else:
+                tablecaption = ''
+        if tablecaption in caption_dict:
+            #修改表格属性
+            tablestyle_dict = caption_dict[tablecaption]
+            if tablestyle_dict['isLongTable']:
+                #修改表格为长表格
+                new_singletablecontent = self.__StartModifyTableAttr(singletablecontent, True)
+        else:
+            #修改表格的通用属性
+            new_singletablecontent = self.__StartModifyTableAttr(singletablecontent, False)
+        if new_singletablecontent == '':
+           new_singletablecontent = singletablecontent
+        return new_singletablecontent
+
+    def __StartModifyTableAttr(self, singletablecontent, islongtable):
+        #修改表格属性
+        searchstr = r'(\\begin{tabular}|\\begin{tabulary})(\[[a-z]\]|{\\linewidth}\[[a-z]\])({[\s\S].*})'
+        #为了添加表格的通用属性，先对字符串做分割
+        #python会把正则表达式中的分组自动分割，因此上面的正则表达式会自动分割为三个字符串
+        #加上头尾字符串总共分为5个字符串数组。要修改第1维字符串为\\being{longtable},第2维字符串直接删除，第3维字符串不变
+        splittable = re.split(searchstr, singletablecontent,0, re.M | re.I|re.U )
+        if splittable == None or len(splittable) < 5:
+           	 #再修改长表格属性
+        	searchstr = r'\\begin{longtable}({[\s\S].*})'
+       		 #为了添加表格的通用属性，先对字符串做分割
+        	#python会把正则表达式中的分组自动分割，因此上面的正则表达式会自动分割为三个字符串
+        	#加上头尾字符串总共分为5个字符串数组。要修改第1维字符串为\\being{longtable},第2维字符串直接删除，第3维字符串不变
+        	splittable = re.split(searchstr, singletablecontent,0, re.M | re.I|re.U )
+                if len(splittable) < 3:
+            	        #至少是3维的数组，否则不是预想的内容，不做处理
+            		return singletablecontent
+		newtable4 = self.__ModifyTableHead(splittable[2], self.tablesattrobj.headtype)
+        	singletablecontent = r'\begin{longtable}'+splittable[1]+newtable4  #begin{longtable}必须再加上，因为Python并不认为它是正则表达式，因此不再分组里面第0个分组为空。
+
+        	return singletablecontent
+
+        #拆分后splittable应该为5个字符串的数组，拆分后便于添加通用属性
+        if self.tablesattrobj.rowtype != '':
+		splittable[0] += self.tablesattrobj.rowtype + '\n'
+
+        #修改表头字体颜色为白色加粗
+        newtable4 = self.__ModifyTableHead(splittable[4], self.tablesattrobj.headtype)
+        if islongtable: #如果为长表格要做长表格的替换
+            splittable1 = re.sub(r'\\begin{tabular}|\\begin{tabulary}',r'\\begin{longtable}', splittable[1], re.I|re.U)
+            splittable4 = re.sub(r'\\end{tabular}|\\end{tabulary}', r'\\end{longtable}', newtable4,re.I|re.U )
+            singletablecontent = splittable[0]+splittable1+splittable[3]+splittable4
+        else:
+            singletablecontent = splittable[0]+splittable[1]+splittable[2]+splittable[3]+newtable4
+
+        return singletablecontent
+
+
+    def __ModifyTableHead(self, content, headtype):
+        #先找出第一行
+        searchstr = r'\\hline(?P<content>[\s\S]*?)\\hline'
+        m = re.search(searchstr, content, re.M|re.I|re.U )
+        headcontent = m.group(1) #匹配到的第一个即为表头内容
+        posarr = m.span(1)  #保存起始位置和结束位置，便于组成新的内容
+
+	if 'multicolumn' in headcontent:
+		return content        
+
+        if r'\sphinxstyletheadfamily' in headcontent:
+            pattern = re.compile(r'(?<=\\sphinxstyletheadfamily)(?P<value>[\s\S]*?)(?=(\\unskip|&)|\\\\)', re.M | re.I|re.U)
+            aftercontent = headcontent
+            #pattern = re.compile(r'(?<=\\sphinxstylethead{\\sphinxstyletheadfamily)([\s\S]*?)(?=\\unskip}\\relax &)', re.M | re.I|re.U)
+        else:
+            aftercontent = headcontent.replace(r'\\','&',1)
+            pattern = re.compile(r'(?P<value>[\s\S]*?)(?=&)', re.M | re.I|re.U)
+            #pattern = re.compile(r'[\s\S]*?&|\\unskip', re.M | re.I|re.U)
+
+        mobjarr = pattern.finditer(aftercontent)
+        headlist = []
+        preposlist = []
+        for mobj in mobjarr:
+           amarr = mobj.group()
+           curposlist = mobj.span()
+
+           #用表头内容数组替换
+           fontcolor = self.tablesattrobj.headfontcolor
+           #先去掉首尾空格，避免首尾有空格无法去掉回车换行符
+	   amarr = amarr.strip()
+	   amarr = amarr.strip('\r')
+	   amarr = amarr.strip('\n')
+	   amarr = amarr.strip()  #再去掉首尾空格，避免多余的空格出现
+	   if amarr == '':
+              continue
+           fontcolor = fontcolor.replace('{}','{'+ amarr+'}',1)
+           if len(preposlist) > 0:
+           	headlist.append(headcontent[preposlist[1]:curposlist[0]])
+           else:
+           	headlist.append(headcontent[0:curposlist[0]])
+           headlist.append(fontcolor)
+           preposlist = curposlist
+           print(len(preposlist))
+        #if len(preposlist)>1:
+        headlist.append(headcontent[preposlist[1]:len(headcontent)])  #把最后一个字符串加上
+        headcontent = ''
+        for prelist in headlist:
+              headcontent = headcontent + prelist + '\n'
+        newcontent = content[0:posarr[0]]+headtype+headcontent+content[posarr[1]:len(content)]
+        return newcontent
+
+
+__load_dict__ = __openconfjsonfile__()
+if __name__ == '__main__':
+	if len(sys.argv) > 1:
+		doclen = len(latex_documents)
+		for i in range(0,doclen):
+			#得到latex路径
+                        latexpath = './' + sys.argv[1] + '/latex/'
+                        #copy 背景图到latex路径，背景图必须与该文件在同一个目录下
+                        shutil.copy('./chapterbkpaper.pdf',latexpath)
+                        #得到相对路径
+			texfilepath = latexpath + latex_documents[i][1]
+			#相对路径转绝对路径
+			texfile = os.path.abspath(texfilepath)
+			fo = codecs.open(texfile, "r+",encoding = 'utf-8')
+			texcontent = fo.read()
+			fo.close
+
+			#得到修改tex文件的对象
+			ModTexobj = clsModifyTex(texcontent)
+			ModTexobj.AddPackageToTex()
+                        ModTexobj.AddOtherTocToTex()                
+                        ModTexobj.AddCustormOptionsToTex()
+                        ModTexobj.ModifyReplacePackage()
+			ModTexobj.ModifyTablesAttributes()
+
+			fw = codecs.open(texfile, "w+",encoding = 'utf-8')
+			fw.write(ModTexobj.content)
+			fw.close
+
+
+
