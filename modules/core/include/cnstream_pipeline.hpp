@@ -27,6 +27,7 @@
  * This file contains a declaration of the Pipeline class.
  */
 
+#include <atomic>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -37,6 +38,7 @@
 
 #include "cnstream_eventbus.hpp"
 #include "cnstream_module.hpp"
+#include "cnstream_source.hpp"
 
 namespace cnstream {
 
@@ -131,6 +133,7 @@ struct CNModuleConfig {
   int maxInputQueueSize;          ///< The maximum size of the input data queues.
   std::string className;          ///< The class name of the module.
   std::vector<std::string> next;  ///< The name of the downstream modules.
+  bool showPerfInfo;              ///< whether to show performance information or not.
 
   /**
    * Parses members from JSON string except CNModuleConfig::name.
@@ -410,15 +413,18 @@ class Pipeline : public Module {
   /* ------Internal methods------ */
 
  private:
-  void TransmitData(int64_t node_hashcode, std::shared_ptr<CNFrameInfo> data);
+#ifdef TEST
+ public:  // NOLINT
+#endif
+  void TransmitData(const std::string node_name, std::shared_ptr<CNFrameInfo> data);
 
-  void TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx);
+  void TaskLoop(std::string node_name, uint32_t conveyor_idx);
 
   void EventLoop();
 
   EventHandleFlag DefaultBusWatch(const Event& event, Module* module);
 
-  volatile bool running_ = false;
+  std::atomic<bool> running_{false};
   EventBus* event_bus_;
   DECLARE_PRIVATE(d_ptr_, Pipeline);
 };  // class Pipeline

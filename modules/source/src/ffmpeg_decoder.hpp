@@ -37,10 +37,10 @@ extern "C" {
 #include <memory>
 #include <string>
 #include <thread>
-#include "cndecode/cndecode.h"
+#include "easycodec/easy_decode.h"
 #include "cnstream_frame.hpp"
 #include "cnstream_timer.hpp"
-#include "cnvformat/cnvformat.h"
+#include "easycodec/vformat.h"
 #include "data_handler.hpp"
 
 namespace cnstream {
@@ -61,7 +61,6 @@ class FFmpegDecoder {
     frame_id_ = 0;
     interval_ = interval;
   }
-  uint64_t GetDiscardNum() { return discard_frame_num_; }
 
  protected:
   std::string stream_id_;
@@ -72,27 +71,30 @@ class FFmpegDecoder {
   size_t interval_ = 1;
   size_t frame_count_ = 0;
   uint64_t frame_id_ = 0;
-  uint64_t discard_frame_num_ = 0;
 };
 
 class FFmpegMluDecoder : public FFmpegDecoder {
  public:
   explicit FFmpegMluDecoder(DataHandler &handler) : FFmpegDecoder(handler) {}
-  ~FFmpegMluDecoder() {
-    Destroy();
-    PrintPerformanceInfomation();
-  }
+  ~FFmpegMluDecoder() { PrintPerformanceInfomation(); }
   bool Create(AVStream *st) override;
   void Destroy() override;
   bool Process(AVPacket *pkt, bool eos) override;
 
  private:
-  std::shared_ptr<libstream::CnDecode> instance_ = nullptr;
-  libstream::CnPacket cn_packet_;
+  std::shared_ptr<edk::EasyDecode> instance_ = nullptr;
+  edk::CnPacket cn_packet_;
   std::atomic<int> eos_got_{0};
-  void FrameCallback(const libstream::CnFrame &frame);
+  std::atomic<int> cndec_buf_ref_count_{0};
+  void FrameCallback(const edk::CnFrame &frame);
   void EOSCallback();
-  int ProcessFrame(const libstream::CnFrame &frame, bool *reused);
+#ifdef TEST
+ public:  // NOLINT
+#endif
+  int ProcessFrame(const edk::CnFrame &frame, bool *reused);
+#ifdef TEST
+ private:  // NOLINT
+#endif
   CNTimer fps_calculators[4];
   void PrintPerformanceInfomation() const {
     printf("stream_id: %s:\n", stream_id_.c_str());
@@ -101,7 +103,7 @@ class FFmpegMluDecoder : public FFmpegDecoder {
     fps_calculators[2].PrintFps("send data to codec: ");
     fps_calculators[3].PrintFps("output :");
   }
-  void PerfCallback(const libstream::CnDecodePerfInfo &info) {
+  void PerfCallback(const edk::DecodePerfInfo &info) {
     fps_calculators[0].Dot(1.0f * info.transfer_us / 1000, 1);
     fps_calculators[1].Dot(1.0f * info.decode_us / 1000, 1);
     fps_calculators[2].Dot(1.0f * info.total_us / 1000, 1);
@@ -111,15 +113,18 @@ class FFmpegMluDecoder : public FFmpegDecoder {
  private:
   class CNDeallocator : public cnstream::IDataDeallocator {
    public:
-    explicit CNDeallocator(std::shared_ptr<libstream::CnDecode> decoder, uint32_t buf_id)
-        : decoder_(decoder), buf_id_(buf_id) {}
+    explicit CNDeallocator(FFmpegMluDecoder *decoder, uint32_t buf_id) : decoder_(decoder), buf_id_(buf_id) {
+      ++decoder_->cndec_buf_ref_count_;
+    }
     ~CNDeallocator() {
-      // LOG(INFO) << "Buffer released :" << buf_id_;
-      decoder_->ReleaseBuffer(buf_id_);
+      if (decoder_->instance_) {
+        decoder_->instance_->ReleaseBuffer(buf_id_);
+        --decoder_->cndec_buf_ref_count_;
+      }
     }
 
    private:
-    std::shared_ptr<libstream::CnDecode> decoder_;
+    FFmpegMluDecoder *decoder_;
     uint32_t buf_id_;
   };
 };
@@ -127,17 +132,15 @@ class FFmpegMluDecoder : public FFmpegDecoder {
 class FFmpegCpuDecoder : public FFmpegDecoder {
  public:
   explicit FFmpegCpuDecoder(DataHandler &handler) : FFmpegDecoder(handler) {}
-  ~FFmpegCpuDecoder() {
-    Destroy();
-    if (nullptr != nv21_data_) {
-      delete[] nv21_data_, nv21_data_ = nullptr;
-    }
-  }
+  ~FFmpegCpuDecoder() {}
   bool Create(AVStream *st) override;
   void Destroy() override;
   bool Process(AVPacket *pkt, bool eos) override;
 
  private:
+#ifdef TEST
+ public:  // NOLINT
+#endif
   bool ProcessFrame(AVFrame *frame);
 
  private:

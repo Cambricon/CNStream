@@ -44,7 +44,6 @@ class DataHandlerFFmpeg : public DataHandler {
   explicit DataHandlerFFmpeg(DataSource* module, const std::string& stream_id, const std::string& filename,
                              int framerate, bool loop)
       : DataHandler(module, stream_id, framerate, loop), filename_(filename) {}
-  ~DataHandlerFFmpeg() { Close(); }
 
  public:
   bool CheckTimeOut(uint64_t ul_current_time);
@@ -61,10 +60,16 @@ class DataHandlerFFmpeg : public DataHandler {
   uint64_t last_receive_frame_time_ = 0;
   uint8_t max_receive_time_out_ = 3;
   bool find_pts_ = true;  // set it to true by default!
+  // this is for hw decoder,easydarwin server carries sps/pps with extradata,not I frame
+  bool need_insert_sps_pps_ = false;
+  bool insert_spspps_whenidr_ = false;  // [in]: true, insert SPSPPS before IDR,false not,only before first I frame
 
  private:
-  bool PrepareResources() override;
-  void ClearResources() override;
+#ifdef TEST
+ public:  // NOLINT
+#endif
+  bool PrepareResources(bool demux_only = false) override;
+  void ClearResources(bool demux_only = false) override;
   bool Process() override;
   bool Extract();
   size_t process_state_ = 0;

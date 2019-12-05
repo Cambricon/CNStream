@@ -39,7 +39,7 @@ TEST(CoreConnector, SetGetParams) {
   EXPECT_EQ(conveyor_capacity, connector.GetConveyorCapacity());
 }
 
-TEST(CoreConnector, GetConveyor) {
+TEST(CoreConnectorDeathTest, GetConveyor) {
   size_t conveyor_count = 10;
   Connector connector(conveyor_count);
   int idx = rand_r(&seed) % conveyor_count;

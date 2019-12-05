@@ -30,9 +30,9 @@
 
 namespace cnstream {
 
-DataSource::DataSource(const std::string &name) : Module(name) {}
+DataSource::DataSource(const std::string &name) : SourceModule(name) {}
 
-DataSource::~DataSource() { Close(); }
+DataSource::~DataSource() {}
 
 static int GetDeviceId(ModuleParamSet paramSet) {
   if (paramSet.find("device_id") == paramSet.end()) {
@@ -180,91 +180,25 @@ bool DataSource::Open(ModuleParamSet paramSet) {
 
 void DataSource::Close() { RemoveSources(); }
 
-int DataSource::Process(std::shared_ptr<CNFrameInfo> data) {
-  (void)data;
-  LOG(ERROR) << "As a source module, Process() should not be invoked\n";
-  return 0;
-}
-
-/*SendData() will be called by DataHandler*/
-bool DataSource::SendData(std::shared_ptr<CNFrameInfo> data) {
-  if (container_) {
-    return container_->ProvideData(this, data);
+std::shared_ptr<SourceHandler> DataSource::CreateSource(const std::string &stream_id, const std::string &filename,
+                                                        int framerate, bool loop) {
+  if (stream_id.empty() || filename.empty()) {
+    LOG(ERROR) << "invalid stream_id or filename";
+    return nullptr;
   }
-  return false;
-}
-
-int DataSource::AddVideoSource(const std::string &stream_id, const std::string &filename, int framerate, bool loop) {
-  std::unique_lock<std::mutex> lock(mutex_);
-  if (source_map_.find(stream_id) != source_map_.end()) {
-    LOG(ERROR) << "Duplicate stream_id\n";
-    return -1;
-  }
-
-  std::shared_ptr<DataHandler> source;
+  SourceHandler *ptr = nullptr;
   if (param_.source_type_ == SOURCE_RAW) {
-    source = std::make_shared<DataHandlerRaw>(this, stream_id, filename, framerate, loop);
+    ptr = dynamic_cast<SourceHandler *>(new DataHandlerRaw(this, stream_id, filename, framerate, loop));
   } else if (param_.source_type_ == SOURCE_FFMPEG) {
-    source = std::make_shared<DataHandlerFFmpeg>(this, stream_id, filename, framerate, loop);
+    ptr = dynamic_cast<SourceHandler *>(new DataHandlerFFmpeg(this, stream_id, filename, framerate, loop));
   } else {
     LOG(ERROR) << "source, not supported yet";
   }
-  if (source.get() != nullptr) {
-    if (source->Open() != true) {
-      LOG(ERROR) << "source Open failed";
-      return -1;
-    }
-    source_map_[stream_id] = source;
-    return 0;
+  if (ptr != nullptr) {
+    std::shared_ptr<SourceHandler> source(ptr);
+    return source;
   }
-  return -1;
-}
-
-int DataSource::AddImageSource(const std::string &stream_id, const std::string &filename, bool loop) {
-  std::unique_lock<std::mutex> lock(mutex_);
-  if (source_map_.find(stream_id) != source_map_.end()) {
-    LOG(ERROR) << "Duplicate stream_id\n";
-    return -1;
-  }
-
-  if (param_.source_type_ == SOURCE_RAW) {
-    LOG(ERROR) << "source raw, not implemented yet";
-    return -1;
-  }
-
-  if (param_.source_type_ == SOURCE_FFMPEG) {
-    auto source = std::make_shared<DataHandlerFFmpeg>(this, stream_id, filename, -1, loop);
-    if (source.get() != nullptr) {
-      source_map_[stream_id] = source;
-      source->Open();
-    }
-    return 0;
-  }
-
-  LOG(ERROR) << "unsupported source type";
-  return -1;
-}
-
-int DataSource::RemoveSource(const std::string &stream_id) {
-  std::unique_lock<std::mutex> lock(mutex_);
-  auto iter = source_map_.find(stream_id);
-  if (iter == source_map_.end()) {
-    LOG(WARNING) << "source does not exist\n";
-    return 0;
-  }
-  iter->second->Close();
-  source_map_.erase(iter);
-  return 0;
-}
-
-int DataSource::RemoveSources() {
-  std::unique_lock<std::mutex> lock(mutex_);
-  std::map<std::string, std::shared_ptr<DataHandler>>::iterator iter;
-  for (iter = source_map_.begin(); iter != source_map_.end();) {
-    iter->second->Close();
-    source_map_.erase(iter++);
-  }
-  return 0;
+  return nullptr;
 }
 
 }  // namespace cnstream

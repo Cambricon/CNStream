@@ -27,6 +27,9 @@
 #include <atomic>
 #include <string>
 
+#include <pthread.h>
+#include <sys/prctl.h>
+
 #include "glog/logging.h"
 
 #define DISABLE_COPY_AND_ASSIGN(TypeName) \
@@ -85,8 +88,10 @@ class CNSpinLockGuard {
   CNSpinLock &lock_;
 };
 
+/*helper functions
+ */
 inline std::string GetFullPath(const std::string &path) {
-  if (path.empty() || path.front() == '/') {
+  if (path.empty() || path.front() == '/') {  // absolute path
     return path;
   } else {
     const int MAX_PATH = 1024;
@@ -97,6 +102,36 @@ inline std::string GetFullPath(const std::string &path) {
     return exe_path.substr(0, pos + 1) + path;
   }
 }
+
+static const pthread_t invalid_pthread_tid = static_cast<pthread_t>(-1);
+
+inline void SetThreadName(const std::string &name, pthread_t thread = invalid_pthread_tid) {
+  /*name length should be less than 16 bytes */
+  if (name.empty() || name.size() >= 16) {
+    return;
+  }
+  if (thread == invalid_pthread_tid) {
+    prctl(PR_SET_NAME, name.c_str());
+    return;
+  }
+  pthread_setname_np(thread, name.c_str());
+}
+
+/*pipeline capacities*/
+const size_t INVALID_MODULE_ID = (size_t)(-1);
+uint32_t GetMaxModuleNumber();
+
+const uint32_t INVALID_STREAM_IDX = (uint32_t)(-1);
+uint32_t GetMaxStreamNumber();
+
+/**
+ * Limit the resource for each stream,
+ * there will be no more than "parallelism" frames simultaneously.
+ * Disabled by default.
+ */
+void SetParallelism(int parallelism);
+int GetParallelism();
+
 }  // namespace cnstream
 
 #endif  // CNSTREAM_COMMON_HPP_

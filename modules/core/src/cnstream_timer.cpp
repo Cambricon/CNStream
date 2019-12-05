@@ -33,6 +33,7 @@ void CNTimer::Dot(uint32_t cnt_step) {
     return;
   }
 
+  std::unique_lock<std::mutex> lock(mutex_);
   if (first_dot_) {
     // first dot
     last_t_ = std::chrono::high_resolution_clock::now();
@@ -56,24 +57,28 @@ void CNTimer::Dot(double time, uint32_t cnt_step) {
     LOG(WARNING) << "fps calculator time is negtive. Skip!";
     return;
   }
+  std::unique_lock<std::mutex> lock(mutex_);
   avg_ = avg_ * cnt_ + time;
   cnt_ += cnt_step;
   avg_ /= cnt_;
 }
 
 void CNTimer::PrintFps(const std::string& head) const {
+  std::unique_lock<std::mutex> lock(mutex_);
   double fps = avg_ != 0 ? 1e3 / avg_ : 0.0f;
   std::cout << head << "avg : " << avg_ << "ms"
             << " fps : " << fps << " frame count : " << cnt_ << std::endl;
 }
 
 void CNTimer::Clear() {
+  std::unique_lock<std::mutex> lock(mutex_);
   avg_ = 0;
   cnt_ = 0;
   first_dot_ = true;
 }
 
 void CNTimer::MixUp(const CNTimer& other) {
+  std::unique_lock<std::mutex> lock(mutex_);
   uint64_t n = cnt_ + other.cnt_;
   if (n > 0) {
     // calculate cnt_ / n first to prevent data overflow
@@ -82,6 +87,9 @@ void CNTimer::MixUp(const CNTimer& other) {
   cnt_ = n;
 }
 
-double CNTimer::GetAvg() const { return avg_; }
+double CNTimer::GetAvg() const {
+  std::unique_lock<std::mutex> lock(mutex_);
+  return avg_;
+}
 
 }  // namespace cnstream

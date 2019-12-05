@@ -16,7 +16,22 @@ check_sudo(){
 	fi
 }
 
+download() {
+	echo ""
+	echo "download $1"
+	echo "======================="
 
+	if [ -f "$CWD/$1.done" ]; then
+		echo "$1 already exist. Remove $CWD/$1.done lockfile to re-download it."
+		return 1
+	fi
+
+	return 0
+}
+
+download_done () {
+	touch "$CWD/$1.done"
+}
 
 installAptLibs() {
     ${SUDO_CMD} apt-get update
@@ -60,7 +75,10 @@ installLibs
 font_path=`fc-list :lang=zh | grep "wqy-zenhei.ttc"`
 ${SUDO_CMD} ln -sf ${font_path%%:*} /usr/include/wqy-zenhei.ttc
 
-#./build_ffmpeg.sh --build
+if download "live555"; then
+  ./download_live.sh  
+  download_done "live555";
+fi
 
 echo "Complete!"
 

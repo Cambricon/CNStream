@@ -103,7 +103,7 @@ After finished prerequiste, you can build instructions with the following steps:
 
 ### **Demo Overview** ###
 
-The samples/detection-demo is a cnstream-based target detection demo, which includes the following Plug-in modules：
+The samples/demo is a cnstream-based target detection demo, which includes the following Plug-in modules：
 
 - source: With MLU to decode video streams, such as local video files, rtmp, and rtsp.
 - inferencer: With MLU for Neural Network Inferencing.
@@ -113,8 +113,8 @@ The samples/detection-demo is a cnstream-based target detection demo, which incl
 
 
 In this demo, resnet34_ssd.cambricon that is an offline model used for inference.
-Output AVI file is in cnstream/samples/detection-demo/output directory. The output directory can be specified by the [dump_dir] parameter.
-in addition,See the comments in cnstream/samples/detection-demo/run.sh for details.)
+Output AVI file is in cnstream/samples/demo/output directory. The output directory can be specified by the [dump_dir] parameter.
+in addition,See the comments in cnstream/samples/demo/run.sh for details.)
 
 ### **Run samples** ###
 
@@ -124,7 +124,7 @@ To run the CNStream sample:
 2. Run the demo using the list below:
 
    ```bash
-   cd ${CNSTREAM_DIR}/samples/detection-demo
+   cd ${CNSTREAM_DIR}/samples/demo
 
    ./run.sh
    ```
@@ -141,7 +141,7 @@ Modify the value of the `model_path` in `run.sh` and replace it with your own SS
 
 ### **How to change the input video file?** ##
 
-Modify the `files.list_video` file, which is under the cnstream/samples/detection-demo directory, to replace the video path. It is recommended to use an absolute path or use a relative path relative to the executor path.
+Modify the `files.list_video` file, which is under the cnstream/samples/demo directory, to replace the video path. It is recommended to use an absolute path or use a relative path relative to the executor path.
 
 ### **How to adapt other networks than SSD?** ###
 
@@ -163,7 +163,7 @@ Modify the `files.list_video` file, which is under the cnstream/samples/detectio
 
           ```code
           #include <cnstream.hpp>
-          class MyPostproc : public Postproc, virtual public libstream::ReflexObjectEx<Postproc> {
+          class MyPostproc : public Postproc, virtual public edk::ReflexObjectEx<Postproc> {
            public:
             void Execute(std::vector<std::pair<float*, uint64_t>> net_outputs, CNFrameInfoPtr data) override {
               /*
@@ -182,5 +182,12 @@ Modify the `files.list_video` file, which is under the cnstream/samples/detectio
 
           ```
 
+. Modify the `postproc_name` parameter in `cnstream/samples/demo/detection_config.json` to the post-processing class name (MyPostproc).
 
-      2. Modify the `postproc_name` parameter in `cnstream/samples/detection_demo/detection_config.json` to the post-processing class name (MyPostproc).
+## Documentation ##
+[CNStream User Docs](http://forum.cambricon.com/index.php?m=content&c=index&a=lists&catid=85)
+
+Check out the Examples page for tutorials on how to use CNStream. Concepts page for basic definitions
+
+## Community forum ##
+[Discuss](http://forum.cambricon.com/list-47-1.html) - General community discussion around CNStream

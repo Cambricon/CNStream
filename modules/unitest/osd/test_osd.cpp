@@ -42,9 +42,9 @@ TEST(Osd, Construct) {
 TEST(Osd, OpenClose) {
   std::shared_ptr<Module> osd = std::make_shared<Osd>(gname);
   ModuleParamSet param;
-  EXPECT_FALSE(osd->Open(param));
+  EXPECT_TRUE(osd->Open(param));
   param["label_path"] = "test-osd";
-  EXPECT_FALSE(osd->Open(param)) << "if can not read labels, function should return false";
+  EXPECT_TRUE(osd->Open(param)) << "if can not read labels, function should not return false";
   std::string label_path = GetExePath() + glabel_path;
   param["label_path"] = label_path;
   EXPECT_TRUE(osd->Open(param));
@@ -64,6 +64,7 @@ TEST(Osd, Process) {
   int height = 1080;
   cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
+  data->channel_idx = 0;
   CNDataFrame &frame = data->frame;
   frame.frame_id = 1;
   frame.timestamp = 1000;

@@ -28,7 +28,7 @@
 #include <string>
 #include <thread>
 #include <utility>
-#include "cninfer/mlu_context.h"
+
 namespace cnstream {
 
 #ifdef __GNUC__
@@ -36,7 +36,7 @@ namespace cnstream {
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
-bool DataHandlerRaw::PrepareResources() {
+bool DataHandlerRaw::PrepareResources(bool demux_only) {
   fd_ = open(filename_.c_str(), O_RDONLY);
   if (fd_ < 0) {
     LOG(ERROR) << "Failed to open file: " << filename_;
@@ -55,12 +55,7 @@ bool DataHandlerRaw::PrepareResources() {
     return false;
   }
 
-  if (dev_ctx_.dev_id != DevContext::INVALID) {
-    libstream::MluContext mlu_ctx;
-    mlu_ctx.set_dev_id(dev_ctx_.dev_id);
-    mlu_ctx.set_channel_id(dev_ctx_.ddr_channel);
-    mlu_ctx.ConfigureForThisThread();
-  }
+  if (demux_only) return true;
 
   if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
     decoder_ = std::make_shared<RawMluDecoder>(*this);
@@ -97,6 +92,8 @@ bool DataHandlerRaw::PrepareResources() {
       } else {
         chunk_size_ = ctx.width * ctx.height * 3 / 4;
       }
+#elif CNS_MLU270
+      chunk_size_ = param_.chunk_size_;
 #endif
       return true;
     }
@@ -105,8 +102,8 @@ bool DataHandlerRaw::PrepareResources() {
   return false;
 }
 
-void DataHandlerRaw::ClearResources() {
-  if (decoder_.get()) {
+void DataHandlerRaw::ClearResources(bool demux_only) {
+  if (!demux_only && decoder_.get()) {
     EnableFlowEos(true);
     decoder_->Destroy();
   }
@@ -149,8 +146,8 @@ bool DataHandlerRaw::Process() {
       LOG(INFO) << "Clear resources and restart";
       EnableFlowEos(false);
       decoder_->Process(nullptr, true);
-      ClearResources();
-      PrepareResources();
+      ClearResources(true);
+      PrepareResources(true);
       demux_eos_.store(0);
       LOG(INFO) << "Loop...";
       return true;

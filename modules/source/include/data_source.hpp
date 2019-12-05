@@ -32,8 +32,8 @@
 #include <utility>
 
 #include "cnstream_frame.hpp"
-#include "cnstream_module.hpp"
 #include "cnstream_pipeline.hpp"
+#include "cnstream_source.hpp"
 
 namespace cnstream {
 
@@ -65,19 +65,14 @@ struct DataSourceParam {
   bool interlaced_ = false;                 ///< valid when SOURCE_RAW used, for H264,H265 only
   size_t output_w = 0;                      ///< valid when MLU100
   size_t output_h = 0;                      ///< valid when MLU100
-  uint32_t input_buf_number_ = 2;           ///< valid when MLU270 and decoder_type = DECODER_MLU
+  uint32_t input_buf_number_ = 2;           ///< valid when decoder_type = DECODER_MLU
   uint32_t output_buf_number_ = 3;          ///< valid when decoder_type = DECODER_MLU
 };
 
 /**
- * @class Data handler to process data.
- */
-class DataHandler;
-
-/**
  * @brief Class for handling input data
  */
-class DataSource : public Module, public ModuleCreator<DataSource> {
+class DataSource : public SourceModule, public ModuleCreator<DataSource> {
  public:
   /**
    * @brief Construct DataSource object with a given moduleName
@@ -115,12 +110,6 @@ class DataSource : public Module, public ModuleCreator<DataSource> {
    * @brief Called by pipeline when pipeline stop.
    */
   void Close() override;
-  /**
-   * @brief do demux-decode for each frame
-   * @param
-   *   data[in]: data to be processed.
-   */
-  int Process(std::shared_ptr<CNFrameInfo> data) override;
 
  public:
   /**
@@ -131,58 +120,22 @@ class DataSource : public Module, public ModuleCreator<DataSource> {
    *   framerate[in]: source data input frequency
    *   loop[in]: whether to reload source when EOF is reached or not
    * @return
-   *    0: success,
-   *   -1: error occurs
+   *    source handler instance
    */
-  int AddVideoSource(const std::string &stream_id, const std::string &filename, int framerate, bool loop = false);
-  /**
-   * @brief Add one stream to DataSource module, should be called after pipeline starts.
-   * @param
-   *   stream_id[in]: unique stream identifier.
-   *   filename[in]: jpg file path.
-   *   loop[in]: whether to reload source when EOF is reached or not
-   * @return
-   *    0: success,
-   *   -1: error occurs
-   */
-  int AddImageSource(const std::string &stream_id, const std::string &filename, bool loop = false);
-  /**
-   * @brief Remove one stream from DataSource module,should be called before pipeline stops.
-   * @param
-   *   stream_id[in]: unique stream identifier.
-   * @return
-   *    0: success (always success by now)
-   */
-  int RemoveSource(const std::string &stream_id);
+  std::shared_ptr<cnstream::SourceHandler> CreateSource(const std::string &stream_id, const std::string &filename,
+                                                        int framerate, bool loop = false);
 
  public:
-  /**
-   * @brief Transmit data to next stage(s) of the pipeline
-   * @param
-   *   data[in]: data to be transmitted.
-   * @return
-   *   true if data is transmitted successfully,othersize false
-   */
-  bool SendData(std::shared_ptr<CNFrameInfo> data);
-
   /**
    * @brief Get module parameters, should be called after Open() invoked.
    */
   DataSourceParam GetSourceParam() const { return param_; }
 
- private:
-  /**
-   * @hidebrief Remove all streams from DataSource module
-   * @param
-   * @return
-   *    0: success (always success by now)
-   */
-  int RemoveSources();
-
+#ifdef TEST
+  bool SendData(std::shared_ptr<CNFrameInfo> data) { return SourceModule::SendData(data); }
+#endif
  private:
   DataSourceParam param_;
-  std::mutex mutex_;
-  std::map<std::string /*stream_id*/, std::shared_ptr<DataHandler>> source_map_;
 };  // class DataSource
 
 }  // namespace cnstream

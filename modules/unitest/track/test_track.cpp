@@ -33,7 +33,12 @@ namespace cnstream {
 
 static constexpr const char *gname = "track";
 static constexpr const char *gfunc_name = "subnet0";
+#ifdef CNS_MLU100
 static constexpr const char *g_dsmodel_path = "../../samples/data/models/MLU100/Track/track.cambricon";
+#elif CNS_MLU270
+static constexpr const char *g_dsmodel_path =
+    "../../samples/data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
+#endif
 static constexpr const char *ds_track = "FeatureMatch";
 static constexpr const char *kcf_track = "KCF";
 // static constexpr const char *g_kcfmodel_path = "../../samples/data/models/MLU100/";
@@ -85,6 +90,7 @@ std::shared_ptr<CNFrameInfo> GenTestData(int iter, int obj_num) {
   cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
 
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
+  data->channel_idx = 0;
   CNDataFrame &frame = data->frame;
   frame.frame_id = 1;
   frame.timestamp = 1000;

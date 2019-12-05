@@ -21,15 +21,19 @@
 #include <algorithm>
 #include <atomic>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <string>
 #include "glog/logging.h"
 
 namespace cnstream {
 
-FpsStats::FpsStats(const std::string &name) : Module(name) {}
+FpsStats::FpsStats(const std::string &name) : Module(name) { stream_fps_ = new StreamFps[GetMaxStreamNumber()]; }
 
-FpsStats::~FpsStats() { Close(); }
+FpsStats::~FpsStats() {
+  Close();
+  delete[] stream_fps_;
+}
 
 bool FpsStats::Open(ModuleParamSet paramSet) { return true; }
 
@@ -37,7 +41,7 @@ void FpsStats::Close() {}
 
 int FpsStats::Process(std::shared_ptr<CNFrameInfo> data) {
   uint32_t stream_idx = data->channel_idx;
-  if (stream_idx < MAX_STREAM_NUM) {
+  if (stream_idx < GetMaxStreamNumber()) {
     std::unique_lock<std::mutex> lock(stream_fps_[stream_idx].mutex_);
     stream_fps_[stream_idx].update(data);
   } else {
@@ -50,7 +54,7 @@ int FpsStats::Process(std::shared_ptr<CNFrameInfo> data) {
 void FpsStats::ShowStatistics() {
   std::cout << "------------------------FpsStats::ShowStatistics------------------------" << std::endl;
   auto total_fps = 0.0f;
-  for (int i = 0; i < MAX_STREAM_NUM; i++) {
+  for (uint32_t i = 0; i < GetMaxStreamNumber(); i++) {
     std::unique_lock<std::mutex> lock(stream_fps_[i].mutex_);
     if (stream_fps_[i].stream_id_.empty()) {
       continue;

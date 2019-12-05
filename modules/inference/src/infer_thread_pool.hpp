@@ -30,8 +30,10 @@
 
 namespace cnstream {
 
+class InferThreadPoolTest;
 class InferThreadPool {
  public:
+  friend class InferThreadPoolTest;
   InferThreadPool() {}
 
   ~InferThreadPool() {}
@@ -52,7 +54,7 @@ class InferThreadPool {
   std::mutex mtx_;
   std::condition_variable q_push_cond_;
   std::condition_variable q_pop_cond_;
-  volatile bool running_ = true;
+  volatile bool running_ = false;
 };  // class InferThreadPool
 
 }  // namespace cnstream

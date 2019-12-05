@@ -1,16 +1,224 @@
-image: cnstream:0.1
 stages:
+  - lintgit_check
   - build
+  - test
+  - demo_test
 
-job_build:
+job_lintgit_check:
+  stage: lintgit_check
+  script:
+    - ./tools/lintgit master $PWD
+  only:
+    - merge_requests
+  tags:
+    - MLU100
+
+job_build_100:
   stage: build
   script: 
     - mkdir build
     - cd build
-    - cmake ..
+    - cmake -Dcnstream_build_integrated_lib=OFF ..
     - make -j16
     - cd ..
     - rm -rf build/
   only:
-    - master
+    - merge_requests
+  tags:
+    - MLU100
 
+job_build_270:
+  stage: build
+  script:
+    - mkdir build
+    - cd build
+    - cmake -DMLU=MLU270 -Dcnstream_build_integrated_lib=OFF ..
+    - make -j16
+    - cd ..
+    - rm -rf build/
+  only:
+    - merge_requests
+  tags:
+    - MLU270
+
+job_test_100:
+  stage: test
+  script:
+    - mkdir build
+    - pushd build
+    - cmake -Dcnstream_build_tests=ON -Dcnstream_build_test_coverage=ON ..
+    - make -j16
+    - pushd bin
+    - export LD_LIBRARY_PATH=../../mlu/MLU100/libs/x86_64/:../3rdparty/lib:../../lib:../../3rdparty/ffmpeg/lib
+    - ./cnstream_test
+    - popd
+    - popd
+  retry:
+    max: 2 
+    when:
+      - runner_system_failure
+  only:
+    - merge_requests
+  tags:
+    - MLU100
+
+#job_test_270:
+#  stage: test
+#  script:
+#    - mkdir build
+#    - pushd build
+#    - cmake -DMLU=MLU270 -Dcnstream_build_tests=ON -Dcnstream_build_test_coverage=ON ..
+#    - make -j16
+#    - pushd bin
+#    - ./cnstream_test
+#    - popd
+#    - popd
+#    max: 2
+#    when:
+#      - runner_system_failure
+#  only:
+#    - merge_requests
+#  tags:
+#    - MLU270
+
+job_detect_demo_100:
+  stage: demo_test
+  script:
+    - mkdir build
+    - pushd build/
+    - cmake ..
+    - make -j16
+    - popd
+    - pushd samples/demo/
+    - ./run.sh
+    - popd
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+  only:
+    - merge_requests
+  tags:
+    - MLU100
+
+job_demo_270:
+  stage: demo_test
+  script:
+    - mkdir build
+    - pushd build/
+    - cmake -DMLU=MLU270 ..
+    - make -j16
+    - popd
+    - pushd samples/demo/
+    - ./run_resnet50_mlu270.sh
+    - popd
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+  only:
+    - merge_requests
+  tags:
+    - MLU270
+
+job_daily_test_1:
+  stage: build
+  script:
+    - mkdir build
+    - pushd build/
+    - cmake ..
+    - make -j16
+    - popd
+    - pushd samples/demo/
+    - sed -i 's/for ((i = 0; i < 2; ++i))/for ((i = 0; i < 1; ++i))/g' env.sh
+    - ./run.sh
+    - popd
+  only:
+    - schedules
+  tags:
+    - MLU100
+
+job_daily_test_2:
+  stage: build
+  script:
+    - mkdir build
+    - pushd build/
+    - cmake ..
+    - make -j16
+    - popd
+    - pushd samples/demo/
+    - sed -i 's/for ((i = 0; i < 2; ++i))/for ((i = 0; i < 2; ++i))/g' env.sh
+    - ./run.sh
+    - popd
+  only:
+    - schedules
+  tags:
+    - MLU100
+
+job_daily_test_4:
+  stage: build
+  script:
+    - mkdir build
+    - pushd build/
+    - cmake ..
+    - make -j16
+    - popd
+    - pushd samples/demo/
+    - sed -i 's/for ((i = 0; i < 2; ++i))/for ((i = 0; i < 4; ++i))/g' env.sh
+    - ./run.sh
+    - popd
+  only:
+    - schedules
+  tags:
+    - MLU100
+
+job_daily_test_8:
+  stage: build
+  script:
+    - mkdir build
+    - pushd build/
+    - cmake ..
+    - make -j16
+    - popd
+    - pushd samples/demo/
+    - sed -i 's/for ((i = 0; i < 2; ++i))/for ((i = 0; i < 8; ++i))/g' env.sh
+    - ./run.sh
+    - popd
+  only:
+    - schedules
+  tags:
+    - MLU100
+
+job_daily_test_16:
+  stage: build
+  script:
+    - mkdir build
+    - pushd build/
+    - cmake ..
+    - make -j16
+    - popd
+    - pushd samples/demo/
+    - sed -i 's/for ((i = 0; i < 2; ++i))/for ((i = 0; i < 16; ++i))/g' env.sh
+    - ./run.sh
+    - popd
+  only:
+    - schedules
+  tags:
+    - MLU100
+
+job_daily_test_32:
+  stage: build
+  script:
+    - mkdir build
+    - pushd build/
+    - cmake ..
+    - make -j16
+    - popd
+    - pushd samples/demo/
+    - sed -i 's/for ((i = 0; i < 2; ++i))/for ((i = 0; i < 32; ++i))/g' env.sh
+    - ./run.sh
+    - popd
+  only:
+    - schedules
+  tags:
+    - MLU100

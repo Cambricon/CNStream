@@ -27,6 +27,8 @@
 namespace cnstream {
 
 void InferThreadPool::Init(size_t thread_num) {
+  std::unique_lock<std::mutex> lk(mtx_);
+  running_ = true;
   max_tnum_ = 2 * thread_num;
   for (size_t ti = 0; ti < thread_num; ++ti) {
     threads_.push_back(std::thread(&InferThreadPool::TaskLoop, this));
@@ -42,6 +44,12 @@ void InferThreadPool::Destroy() {
 
   for (auto& it : threads_) {
     if (it.joinable()) it.join();
+  }
+
+  lk.lock();
+  threads_.clear();
+  while (!task_q_.empty()) {
+    task_q_.pop();
   }
 }
 
@@ -79,11 +87,7 @@ void InferThreadPool::TaskLoop() {
       return;
     }
 
-    try {
-      task->WaitForFrontTasksComplete();
-    } catch (std::future_error &e) {
-      LOG(INFO) << e.what();
-    }
+    task->WaitForFrontTasksComplete();
 
     int ret = 0;
     ret = task->Execute();

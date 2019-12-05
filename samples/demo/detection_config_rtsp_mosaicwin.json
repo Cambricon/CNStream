@@ -1,0 +1,69 @@
+{
+  "source" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "next_modules" : ["detector"],
+    "custom_params" : {
+      "source_type" : "ffmpeg",
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "device_id" : 0
+    }
+  },
+
+  "detector" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 2,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["tracker"],
+    "custom_params" : {
+      "model_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocSsd",
+      "device_id" : 0
+    }
+  },
+
+  "tracker" : {
+    "class_name" : "cnstream::Tracker",
+    "parallelism" : 2,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["osd"],
+    "custom_params" : {
+      "model_path" : "../data/models/MLU100/Track/track.cambricon",
+      "func_name" : "subnet0"
+    }
+  },
+
+  "osd" : {
+    "class_name" : "cnstream::Osd",
+    "parallelism" : 2,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["rtsp_sink"],
+    "custom_params" : {
+      "chinese_label_flag" : "false", 
+      "label_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/label_voc.txt"
+    }
+  },
+
+  "rtsp_sink" : {
+    "class_name" : "RtspSink",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["fps_stats"],
+    "custom_params" : {
+      "http-port" : 8080,
+      "udp-port" : 9554,
+      "frame-rate":30,
+      "rows" : 2,
+      "cols" : 1,
+      "encoder-type":"mlu"
+    }
+  },
+
+  "fps_stats" : {
+    "class_name" : "cnstream::FpsStats",
+    "parallelism" : 2,
+    "max_input_queue_size" : 20
+  }
+}

@@ -26,13 +26,14 @@
  *
  *  This file contains a declaration of class Postproc
  */
+
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "cnbase/reflex_object.h"
-#include "cninfer/model_loader.h"
+#include "reflex_object.h"
+#include "easyinfer/model_loader.h"
 
 #include "cnstream_frame.hpp"
 
@@ -44,7 +45,7 @@ using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 /**
  * @brief Base class of post process
  */
-class Postproc {
+class Postproc : virtual public ReflexObjectEx<Postproc> {
  public:
   /**
    * @brief do nothong
@@ -76,7 +77,7 @@ class Postproc {
    *
    * @return return 0 if succeed
    */
-  virtual int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<libstream::ModelLoader>& model,
+  virtual int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
                       const CNFrameInfoPtr& package) = 0;
 
  protected:

@@ -36,15 +36,15 @@ namespace cnstream {
 #define FFMPEG_VERSION_3_1 AV_VERSION_INT(57, 40, 100)
 
 static std::mutex decoder_mutex;
-static CNDataFormat CnPixelFormat2CnDataFormat(libstream::CnPixelFormat pformat) {
+static CNDataFormat PixelFmt2CnDataFormat(edk::PixelFmt pformat) {
   switch (pformat) {
-    case libstream::YUV420SP_NV12:
+    case edk::PixelFmt::YUV420SP_NV12:
       return CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
-    case libstream::YUV420SP_NV21:
+    case edk::PixelFmt::YUV420SP_NV21:
       return CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
-    case libstream::RGB24:
+    case edk::PixelFmt::RGB24:
       return CNDataFormat::CN_PIXEL_FORMAT_RGB24;
-    case libstream::BGR24:
+    case edk::PixelFmt::BGR24:
       return CNDataFormat::CN_PIXEL_FORMAT_BGR24;
     default:
       return CNDataFormat::CN_INVALID;
@@ -63,34 +63,37 @@ bool FFmpegMluDecoder::Create(AVStream *st) {
   int codec_height = st->codec->height;
 #endif
   // create decoder
-  libstream::CnDecode::Attr instance_attr;
+  edk::EasyDecode::Attr instance_attr;
   memset(&instance_attr, 0, sizeof(instance_attr));
   // common attrs
   instance_attr.maximum_geometry.w = codec_width;
   instance_attr.maximum_geometry.h = codec_height;
   switch (codec_id) {
     case AV_CODEC_ID_H264:
-      instance_attr.codec_type = libstream::H264;
+      instance_attr.codec_type = edk::CodecType::H264;
       break;
     case AV_CODEC_ID_HEVC:
-      instance_attr.codec_type = libstream::H265;
+      instance_attr.codec_type = edk::CodecType::H265;
       break;
     case AV_CODEC_ID_MJPEG:
-      instance_attr.codec_type = libstream::JPEG;
+      instance_attr.codec_type = edk::CodecType::JPEG;
       break;
     default: {
       LOG(ERROR) << "codec type not supported yet, codec_id = " << codec_id;
       return false;
     }
   }
-  instance_attr.pixel_format = libstream::YUV420SP_NV21;
+  instance_attr.pixel_format = edk::PixelFmt::YUV420SP_NV21;
   instance_attr.output_geometry.w = handler_.Output_w() > 0 ? handler_.Output_w() : codec_width;
   instance_attr.output_geometry.h = handler_.Output_h() > 0 ? handler_.Output_h() : codec_height;
   instance_attr.drop_rate = 0;
   instance_attr.input_buffer_num = handler_.InputBufNumber();
   instance_attr.frame_buffer_num = handler_.OutputBufNumber();
+  if (handler_.ReuseCNDecBuf()) {
+    instance_attr.frame_buffer_num += cnstream::GetParallelism();  // FIXME
+  }
   instance_attr.dev_id = dev_ctx_.dev_id;
-  instance_attr.video_mode = libstream::FRAME_MODE;
+  instance_attr.video_mode = edk::VideoMode::FRAME_MODE;
   instance_attr.silent = false;
 
   // callbacks
@@ -103,13 +106,13 @@ bool FFmpegMluDecoder::Create(AVStream *st) {
     std::unique_lock<std::mutex> lock(decoder_mutex);
     instance_.reset();
     eos_got_.store(0);
-    instance_.reset(libstream::CnDecode::Create(instance_attr));
+    instance_.reset(edk::EasyDecode::Create(instance_attr));
     if (nullptr == instance_.get()) {
-      LOG(ERROR) << "[Decoder] failed to create";
+      LOG(ERROR) << "[Decoder] stream_id " << stream_id_ << " failed to create";
       return false;
     }
-  } catch (libstream::StreamlibsError &e) {
-    LOG(ERROR) << "[Decoder] " << e.what();
+  } catch (edk::Exception &e) {
+    LOG(ERROR) << "[Decoder] stream_id " << stream_id_ << " error message: " << e.what();
     return false;
   }
   return true;
@@ -123,6 +126,11 @@ void FFmpegMluDecoder::Destroy() {
     if (!handler_.GetDemuxEos()) {
       this->Process(nullptr, true);
     }
+    /*make sure all cndec buffers released before destorying cndecoder
+     */
+    while (cndec_buf_ref_count_.load()) {
+      std::this_thread::yield();
+    }
     while (!eos_got_.load()) {
       std::this_thread::yield();
     }
@@ -133,7 +141,7 @@ void FFmpegMluDecoder::Destroy() {
 bool FFmpegMluDecoder::Process(AVPacket *pkt, bool eos) {
   LOG_IF(INFO, eos) << "[FFmpegMluDecoder] stream_id " << stream_id_ << " send eos.";
   try {
-    libstream::CnPacket packet;
+    edk::CnPacket packet;
     if (pkt && !eos) {
       packet.data = pkt->data;
       packet.length = pkt->size;
@@ -143,25 +151,26 @@ bool FFmpegMluDecoder::Process(AVPacket *pkt, bool eos) {
     }
     if (instance_->SendData(packet, eos)) {
       return true;
+    } else {
     }
-  } catch (libstream::StreamlibsError &e) {
-    LOG(ERROR) << "[Decoder] " << e.what();
+  } catch (edk::Exception &e) {
+    LOG(ERROR) << "[Decoder] stream_id " << stream_id_ << " error message: " << e.what();
     return false;
   }
 
   return false;
 }
 
-int FFmpegMluDecoder::ProcessFrame(const libstream::CnFrame &frame, bool *reused) {
+int FFmpegMluDecoder::ProcessFrame(const edk::CnFrame &frame, bool *reused) {
   *reused = false;
-  auto data = CNFrameInfo::Create(stream_id_);
-  if (data == nullptr) {
-    // LOG(WARNING) << "CNFrameInfo::Create Failed,DISCARD image";
-    ++discard_frame_num_;
-    if (discard_frame_num_ % 20 == 0) {
-      LOG(WARNING) << "CNFrameInfo::Create Failed,DISCARD image: " << discard_frame_num_;
-    }
-    return -1;
+
+  // FIXME, remove infinite-loop
+  std::shared_ptr<CNFrameInfo> data;
+  while (1) {
+    data = CNFrameInfo::Create(stream_id_);
+    if (data.get() != nullptr) break;
+    if (stream_id_.empty()) return -1;
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
   data->channel_idx = stream_idx_;
   data->frame.frame_id = frame_id_++;
@@ -170,13 +179,20 @@ int FFmpegMluDecoder::ProcessFrame(const libstream::CnFrame &frame, bool *reused
   data->frame.ctx = dev_ctx_;
   data->frame.width = frame.width;
   data->frame.height = frame.height;
-  data->frame.fmt = CnPixelFormat2CnDataFormat(frame.pformat);
+  data->frame.fmt = PixelFmt2CnDataFormat(frame.pformat);
   for (int i = 0; i < data->frame.GetPlanes(); i++) {
+    // for debug,
+#if 1
+    if (frame.strides[i] == 0) {
+      LOG(ERROR) << "frame.strides[" << i << "] is zero";
+      return -1;
+    }
+#endif
     data->frame.stride[i] = frame.strides[i];
-    data->frame.ptr[i] = reinterpret_cast<void *>(frame.data.ptrs[i]);
+    data->frame.ptr[i] = reinterpret_cast<void *>(frame.ptrs[i]);
   }
   if (handler_.ReuseCNDecBuf()) {
-    data->frame.deAllocator_ = std::make_shared<CNDeallocator>(instance_, frame.buf_id);
+    data->frame.deAllocator_ = std::make_shared<CNDeallocator>(this, frame.buf_id);
     if (data->frame.deAllocator_) {
       *reused = true;
     }
@@ -186,12 +202,10 @@ int FFmpegMluDecoder::ProcessFrame(const libstream::CnFrame &frame, bool *reused
   return 0;
 }
 
-void FFmpegMluDecoder::FrameCallback(const libstream::CnFrame &frame) {
+void FFmpegMluDecoder::FrameCallback(const edk::CnFrame &frame) {
   if (frame.width == 0 || frame.height == 0) {
-    LOG(WARNING) << "Skip frame! stream id:"
-                  << stream_idx_ << " width x height:"
-                  << frame.width << " x " << frame.height
-                  << " timestamp:" << frame.pts << std::endl;
+    LOG(WARNING) << "Skip frame! stream id:" << stream_id_ << " width x height:" << frame.width << " x " << frame.height
+                 << " timestamp:" << frame.pts << std::endl;
     instance_->ReleaseBuffer(frame.buf_id);
     return;
   }
@@ -223,16 +237,19 @@ bool FFmpegCpuDecoder::Create(AVStream *st) {
     LOG(ERROR) << "avcodec_find_decoder failed";
     return false;
   }
+#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(58, 0, 0)
   instance_ = avcodec_alloc_context3(dec);
   if (!instance_) {
     LOG(ERROR) << "Failed to do avcodec_alloc_context3";
     return false;
   }
-#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(58, 0, 0)
   if (avcodec_parameters_to_context(instance_, st->codecpar) < 0) {
     LOG(ERROR) << "Failed to copy codec parameters to decoder context";
     return false;
   }
+  av_codec_set_pkt_timebase(instance_, st->time_base);
+#else
+  instance_ = st->codec;
 #endif
   if (avcodec_open2(instance_, dec, NULL) < 0) {
     LOG(ERROR) << "Failed to open codec";
@@ -256,12 +273,17 @@ void FFmpegCpuDecoder::Destroy() {
       std::this_thread::yield();
     }
     eos_got_.store(0);
+#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(58, 0, 0)
     avcodec_free_context(&instance_);
+#endif
     instance_ = nullptr;
   }
   if (av_frame_) {
     av_frame_free(&av_frame_);
     av_frame_ = nullptr;
+  }
+  if (nullptr != nv21_data_) {
+    delete[] nv21_data_, nv21_data_ = nullptr;
   }
 }
 
@@ -297,18 +319,22 @@ bool FFmpegCpuDecoder::Process(AVPacket *pkt, bool eos) {
 }
 
 bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
-  if (frame_count_ % interval_ != 0) {
+  if (frame_count_++ % interval_ != 0) {
     return true;  // discard frames
   }
-  auto data = CNFrameInfo::Create(stream_id_);
-  if (data == nullptr) {
-    ++discard_frame_num_;
-    // LOG(WARNING) << "CNFrameInfo::Create Failed,DISCARD image";
-    if (discard_frame_num_ % 20 == 0) {
-      LOG(WARNING) << "CNFrameInfo::Create Failed,DISCARD image: " << discard_frame_num_;
+
+  // FIXME, remove infinite-loop
+  std::shared_ptr<CNFrameInfo> data;
+  while (1) {
+    data = CNFrameInfo::Create(stream_id_);
+    if (data != nullptr) {
+      break;
     }
-    return false;
+    if (stream_id_.empty()) return false;
+    std::this_thread::sleep_for(std::chrono::microseconds(5));
   }
+  data->channel_idx = stream_idx_;
+
   if (instance_->pix_fmt != AV_PIX_FMT_YUV420P) {
     LOG(ERROR) << "FFmpegCpuDecoder only supports AV_PIX_FMT_YUV420P at this moment";
     return false;
@@ -382,11 +408,10 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     return false;
   }
 
-  data->channel_idx = stream_idx_;
   data->frame.frame_id = frame_id_++;
   data->frame.timestamp = frame->pts;
   handler_.SendData(data);
-  return 0;
+  return true;
 }
 
 }  // namespace cnstream

@@ -18,11 +18,9 @@
  * THE SOFTWARE.
  *************************************************************************/
 #include "data_handler_ffmpeg.hpp"
-#include <future>
 #include <sstream>
 #include <thread>
 #include <utility>
-#include "cninfer/mlu_context.h"
 namespace cnstream {
 
 #ifdef __GNUC__
@@ -62,19 +60,23 @@ struct local_ffmpeg_init {
   }
 } init_ffmpeg;
 
-bool DataHandlerFFmpeg::PrepareResources() {
+bool DataHandlerFFmpeg::PrepareResources(bool demux_only) {
   const char* p_rtmp_start_str = "rtmp://";
+  const char* p_rtsp_start_str = "rtsp://";
   // format context
   p_format_ctx_ = avformat_alloc_context();
 
-  if (0 == strncasecmp(filename_.c_str(), p_rtmp_start_str, strlen(p_rtmp_start_str))) {
+  if (0 == strncasecmp(filename_.c_str(), p_rtmp_start_str, strlen(p_rtmp_start_str))||
+    0 == strncasecmp(filename_.c_str(), p_rtsp_start_str, strlen(p_rtsp_start_str))) {
     AVIOInterruptCB intrpt_callback = {InterruptCallBack, this};
     p_format_ctx_->interrupt_callback = intrpt_callback;
     last_receive_frame_time_ = GetTickCount();
   }
   // options
   av_dict_set(&options_, "buffer_size", "1024000", 0);
-  av_dict_set(&options_, "stimeout", "200000", 0);
+  av_dict_set(&options_, "max_delay", "500000", 0);
+  av_dict_set(&options_, "stimeout", "20000000", 0);
+  av_dict_set(&options_, "rtsp_transport", "tcp", 0);
   // open input
   int ret_code = avformat_open_input(&p_format_ctx_, filename_.c_str(), NULL, &options_);
   if (0 != ret_code) {
@@ -104,7 +106,7 @@ bool DataHandlerFFmpeg::PrepareResources() {
     LOG(ERROR) << "Didn't find a video stream.";
     return false;
   }
-// p_codec_ctx_ = vstream->codec;
+  // p_codec_ctx_ = vstream->codec;
 #if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
   AVCodecID codec_id = vstream->codecpar->codec_id;
 #else
@@ -113,7 +115,7 @@ bool DataHandlerFFmpeg::PrepareResources() {
   // bitstream filter
   bitstream_filter_ctx_ = nullptr;
   if (strstr(p_format_ctx_->iformat->name, "mp4") || strstr(p_format_ctx_->iformat->name, "flv") ||
-      strstr(p_format_ctx_->iformat->name, "matroska") || strstr(p_format_ctx_->iformat->name, "rtsp")) {
+      strstr(p_format_ctx_->iformat->name, "matroska")) {
     if (AV_CODEC_ID_H264 == codec_id) {
       bitstream_filter_ctx_ = av_bitstream_filter_init("h264_mp4toannexb");
     } else if (AV_CODEC_ID_HEVC == codec_id) {
@@ -126,12 +128,7 @@ bool DataHandlerFFmpeg::PrepareResources() {
   packet_.data = NULL;
   packet_.size = 0;
 
-  if (dev_ctx_.dev_id != DevContext::INVALID) {
-    libstream::MluContext mlu_ctx;
-    mlu_ctx.set_dev_id(dev_ctx_.dev_id);
-    mlu_ctx.set_channel_id(dev_ctx_.ddr_channel);
-    mlu_ctx.ConfigureForThisThread();
-  }
+  if (demux_only) return true;
 
   if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
     decoder_ = std::make_shared<FFmpegMluDecoder>(*this);
@@ -152,8 +149,8 @@ bool DataHandlerFFmpeg::PrepareResources() {
   return false;
 }
 
-void DataHandlerFFmpeg::ClearResources() {
-  if (decoder_.get()) {
+void DataHandlerFFmpeg::ClearResources(bool demux_only) {
+  if (!demux_only && decoder_.get()) {
     EnableFlowEos(true);
     decoder_->Destroy();
   }
@@ -186,10 +183,26 @@ bool DataHandlerFFmpeg::Extract() {
     }
 
     AVStream* vstream = p_format_ctx_->streams[video_index_];
-
     if (first_frame_) {
       if (packet_.flags & AV_PKT_FLAG_KEY) {
         first_frame_ = false;
+        if (strstr(p_format_ctx_->iformat->name, "rtsp") && (param_.decoder_type_ == DecoderType::DECODER_MLU)) {
+#if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
+          AVCodecID codec_id = vstream->codecpar->codec_id;
+#else
+          AVCodecID codec_id = vstream->codec->codec_id;
+#endif
+          if (AV_CODEC_ID_H264 == codec_id) {
+            if (0x07 != (packet_.data[4] & 0x1f)) {
+              need_insert_sps_pps_ = true;
+            }
+          } else if (AV_CODEC_ID_HEVC == codec_id) {
+            int type = (packet_.data[3] & 0x7e) >>1;
+            if (32 != type) {
+              need_insert_sps_pps_ = true;
+            }
+          }
+        }
       } else {
         av_packet_unref(&packet_);
         continue;
@@ -200,7 +213,6 @@ bool DataHandlerFFmpeg::Extract() {
       av_bitstream_filter_filter(bitstream_filter_ctx_, vstream->codec, NULL, &packet_.data, &packet_.size,
                                  packet_.data, packet_.size, 0);
     }
-
     // find pts information
     if (AV_NOPTS_VALUE == packet_.pts && find_pts_) {
       find_pts_ = false;
@@ -223,8 +235,12 @@ bool DataHandlerFFmpeg::Process() {
       LOG(INFO) << "Clear resources and restart";
       EnableFlowEos(false);
       decoder_->Process(nullptr, true);
-      ClearResources();
-      PrepareResources();
+      ClearResources(true);
+      if (!PrepareResources(true)) {
+        if (nullptr != module_)
+          module_->PostEvent(EVENT_ERROR, "Prepare codec resources failed, maybe codec resources not enough.");
+        return false;
+      }
       demux_eos_.store(0);
       LOG(INFO) << "Loop...";
       return true;
@@ -234,11 +250,35 @@ bool DataHandlerFFmpeg::Process() {
       return false;
     }
   }  // if (!ret)
+  if (need_insert_sps_pps_ && !insert_spspps_whenidr_) {  // this is hack flow,aim to add sps/pps.
+    AVStream* vstream = p_format_ctx_->streams[video_index_];
+#if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
+    uint8_t* extradata = vstream->codecpar->extradata;
+    int extradata_size = vstream->codecpar->extradata_size;
+#else
+    uint8_t* extradata = vstream->codec->extradata;
+    int extradata_size = vstream->codec->extradata_size;
+#endif
+    AVPacket pkt = { 0 };
+    pkt.data = extradata;
+    pkt.size = extradata_size;
+    pkt.pts = 0;
+    if (!decoder_->Process(&pkt, false)) {
+      return false;
+    }
+    insert_spspps_whenidr_ = true;
+  }
   if (!decoder_->Process(&packet_, false)) {
+    if (bitstream_filter_ctx_) {
+      av_freep(&packet_.data);
+    }
     av_packet_unref(&packet_);
     return false;
   }
 
+  if (bitstream_filter_ctx_) {
+    av_freep(&packet_.data);
+  }
   av_packet_unref(&packet_);
   return true;
 }

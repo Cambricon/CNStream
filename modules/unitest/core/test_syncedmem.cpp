@@ -28,8 +28,9 @@
 #include <iostream>
 #include <memory>
 #include <random>
-#include "cnstream_frame.hpp"
+#include <vector>
 
+#include "cnstream_frame.hpp"
 #include "cnstream_syncmem.hpp"
 
 static struct {
@@ -54,90 +55,90 @@ TEST(CoreSyncedMem, SyncedMem) {
 
   size_t size = memory_random_number_generator(random_engine);
   auto memory = std::make_shared<cnstream::CNSyncedMemory>(size);
-  ASSERT_EQ(memory->GetSize(), size);
+  EXPECT_EQ(memory->GetSize(), size);
 
   std::vector<std::function<void()>> funcs;
   funcs.push_back([&] {
     cnstream::CNSyncedMemory::SyncedHead old_head = memory->GetHead();
     memory->GetCpuData();
     if (cnstream::CNSyncedMemory::HEAD_AT_MLU == old_head || cnstream::CNSyncedMemory::SYNCED == old_head)
-      ASSERT_EQ(cnstream::CNSyncedMemory::SYNCED, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::SYNCED, memory->GetHead());
     else if (memory->GetSize() == 0)
-      ASSERT_EQ(cnstream::CNSyncedMemory::UNINITIALIZED, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::UNINITIALIZED, memory->GetHead());
     else
-      ASSERT_EQ(cnstream::CNSyncedMemory::HEAD_AT_CPU, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::HEAD_AT_CPU, memory->GetHead());
   });
   funcs.push_back([&] {
     cnstream::CNSyncedMemory::SyncedHead old_head = memory->GetHead();
     memory->GetMluData();
     if (cnstream::CNSyncedMemory::HEAD_AT_CPU == old_head || cnstream::CNSyncedMemory::SYNCED == old_head)
-      ASSERT_EQ(cnstream::CNSyncedMemory::SYNCED, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::SYNCED, memory->GetHead());
     else if (memory->GetSize() == 0)
-      ASSERT_EQ(cnstream::CNSyncedMemory::UNINITIALIZED, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::UNINITIALIZED, memory->GetHead());
     else
-      ASSERT_EQ(cnstream::CNSyncedMemory::HEAD_AT_MLU, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::HEAD_AT_MLU, memory->GetHead());
   });
   funcs.push_back([&] {
     cnstream::CNSyncedMemory::SyncedHead old_head = memory->GetHead();
     memory->GetMutableCpuData();
     if (cnstream::CNSyncedMemory::HEAD_AT_MLU == old_head || cnstream::CNSyncedMemory::SYNCED == old_head)
-      ASSERT_EQ(cnstream::CNSyncedMemory::SYNCED, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::SYNCED, memory->GetHead());
     else if (memory->GetSize() == 0)
-      ASSERT_EQ(cnstream::CNSyncedMemory::UNINITIALIZED, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::UNINITIALIZED, memory->GetHead());
     else
-      ASSERT_EQ(cnstream::CNSyncedMemory::HEAD_AT_CPU, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::HEAD_AT_CPU, memory->GetHead());
   });
   funcs.push_back([&] {
     cnstream::CNSyncedMemory::SyncedHead old_head = memory->GetHead();
     memory->GetMutableMluData();
     if (cnstream::CNSyncedMemory::HEAD_AT_CPU == old_head || cnstream::CNSyncedMemory::SYNCED == old_head)
-      ASSERT_EQ(cnstream::CNSyncedMemory::SYNCED, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::SYNCED, memory->GetHead());
     else if (memory->GetSize() == 0)
-      ASSERT_EQ(cnstream::CNSyncedMemory::UNINITIALIZED, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::UNINITIALIZED, memory->GetHead());
     else
-      ASSERT_EQ(cnstream::CNSyncedMemory::HEAD_AT_MLU, memory->GetHead());
+      EXPECT_EQ(cnstream::CNSyncedMemory::HEAD_AT_MLU, memory->GetHead());
   });
   funcs.push_back([&] {
     if (g_last_data.used_cpu) {
       free(g_last_data.cpu_ptr);
-      g_last_data.cpu_ptr = NULL;
+      g_last_data.cpu_ptr = nullptr;
       g_last_data.used_cpu = false;
     }
     if (g_last_data.used_mlu) {
-      assert(CNRT_RET_SUCCESS == cnrtFree(g_last_data.mlu_ptr));
-      g_last_data.mlu_ptr = NULL;
+      ASSERT_EQ(CNRT_RET_SUCCESS, cnrtFree(g_last_data.mlu_ptr));
+      g_last_data.mlu_ptr = nullptr;
       g_last_data.used_mlu = false;
     }
     size_t size = memory_random_number_generator(random_engine);
     memory = std::make_shared<cnstream::CNSyncedMemory>(size);
-    ASSERT_EQ(memory->GetSize(), size);
-    ASSERT_EQ(cnstream::CNSyncedMemory::UNINITIALIZED, memory->GetHead());
+    EXPECT_EQ(memory->GetSize(), size);
+    EXPECT_EQ(cnstream::CNSyncedMemory::UNINITIALIZED, memory->GetHead());
   });
   funcs.push_back([&] {
     if (memory->GetSize() == 0) return;
     if (g_last_data.used_cpu) {
       free(g_last_data.cpu_ptr);
-      g_last_data.cpu_ptr = NULL;
+      g_last_data.cpu_ptr = nullptr;
     }
     g_last_data.cpu_ptr = malloc(memory->GetSize());
     g_last_data.used_cpu = true;
     memory->SetCpuData(g_last_data.cpu_ptr);
-    ASSERT_EQ(memory->GetHead(), cnstream::CNSyncedMemory::HEAD_AT_CPU);
-    ASSERT_EQ(memory->own_cpu_data_, false);
+    EXPECT_EQ(memory->GetHead(), cnstream::CNSyncedMemory::HEAD_AT_CPU);
+    EXPECT_EQ(memory->own_cpu_data_, false);
   });
   funcs.push_back([&] {
     if (memory->GetSize() == 0) return;
     if (g_last_data.used_mlu) {
-      assert(CNRT_RET_SUCCESS == cnrtFree(g_last_data.mlu_ptr));
-      g_last_data.mlu_ptr = NULL;
+      ASSERT_EQ(CNRT_RET_SUCCESS, cnrtFree(g_last_data.mlu_ptr));
+      g_last_data.mlu_ptr = nullptr;
     }
     memory->SetMluDevContext(0, ddr_random_number_generator(random_engine));
     CALL_CNRT_BY_CONTEXT(cnrtMalloc(&g_last_data.mlu_ptr, memory->GetSize()), memory->GetMluDevId(),
                          memory->GetMluDdrChnId());
     g_last_data.used_mlu = true;
     memory->SetMluData(g_last_data.mlu_ptr);
-    ASSERT_EQ(memory->GetHead(), cnstream::CNSyncedMemory::HEAD_AT_MLU);
-    ASSERT_EQ(memory->own_mlu_data_, false);
+    EXPECT_EQ(memory->GetHead(), cnstream::CNSyncedMemory::HEAD_AT_MLU);
+    EXPECT_EQ(memory->own_mlu_data_, false);
   });
 
   auto __start_test_time = std::chrono::high_resolution_clock::now();
@@ -156,6 +157,16 @@ TEST(CoreSyncedMem, SyncedMem) {
     }
     std::chrono::duration<double, std::milli> __total_diff_time = __now_time - __start_test_time;
     __total_test_time = __total_diff_time.count();
+  }
+  if (g_last_data.used_cpu) {
+    free(g_last_data.cpu_ptr);
+    g_last_data.cpu_ptr = nullptr;
+    g_last_data.used_cpu = false;
+  }
+  if (g_last_data.used_mlu) {
+    ASSERT_EQ(CNRT_RET_SUCCESS, cnrtFree(g_last_data.mlu_ptr));
+    g_last_data.mlu_ptr = nullptr;
+    g_last_data.used_mlu = false;
   }
 
   std::cout << "[Total Test count] [" << total_test_function_number << "]" << std::endl;

@@ -23,13 +23,18 @@
 
 #include <cstdlib>
 #include <ctime>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "cnstream_module.hpp"
+#include "cnstream_pipeline.hpp"
 
 namespace cnstream {
+
+const EventType T_type = EVENT_WARNING;
+const char *T_messgge = "test_post_event";
 
 class TestModuleBase : public Module {
  public:
@@ -50,20 +55,6 @@ class TestModuleBaseEx : public ModuleEx {
   void Close() {}
   int Process(std::shared_ptr<CNFrameInfo> data) { return 0; }
 };
-
-TEST(CoreModule, SetGetName) {
-  TestModuleBase module;
-
-  uint32_t seed = (uint32_t)time(0);
-  srand(time(nullptr));
-  int test_num = rand_r(&seed) % 11 + 10;
-
-  while (test_num--) {
-    std::string name = "testname" + std::to_string(rand_r(&seed));
-    module.SetName(name);
-    EXPECT_EQ(name, module.GetName()) << "Module name not equal";
-  }
-}
 
 TEST(CoreModule, OpenCloseProcess) {
   TestModuleBase module;
@@ -98,6 +89,18 @@ TEST(CoreModule, TransmitAttr) {
   EXPECT_FALSE(module.hasTranmit());
   TestModuleBaseEx module_ex;
   EXPECT_TRUE(module_ex.hasTranmit());
+}
+
+TEST(CoreModule, postevent) {
+  Pipeline pipe("pipe");
+  std::shared_ptr<TestModuleBase> ptr(new (TestModuleBase));
+  TestModuleBase module;
+  ModuleParamSet parames;
+  ASSERT_TRUE(ptr->Open(parames));
+  ASSERT_TRUE(pipe.AddModule(ptr));
+  pipe.Start();
+  EXPECT_TRUE(ptr->PostEvent(T_type, T_messgge));
+  pipe.Stop();
 }
 
 }  // namespace cnstream

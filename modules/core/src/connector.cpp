@@ -20,8 +20,8 @@
 
 #include "connector.hpp"
 
+#include <atomic>
 #include <vector>
-
 #include "conveyor.hpp"
 
 namespace cnstream {
@@ -35,7 +35,7 @@ class ConnectorPrivate {
   DECLARE_PUBLIC(q_ptr_, Connector);
   std::vector<Conveyor*> vec_conveyor_;
   size_t conveyor_capacity_ = 20;
-  bool stop_ = false;
+  std::atomic<bool> stop_{false};
   DISABLE_COPY_AND_ASSIGN(ConnectorPrivate);
 };  // class ConnectorPrivate
 
@@ -63,13 +63,13 @@ void Connector::PushDataBufferToConveyor(int conveyor_idx, CNFrameInfoPtr data) 
   GetConveyor(conveyor_idx)->PushDataBuffer(data);
 }
 
-bool Connector::IsStopped() const { return d_ptr_->stop_; }
+bool Connector::IsStopped() { return d_ptr_->stop_.load(); }
 
-void Connector::Start() { d_ptr_->stop_ = false; }
+void Connector::Start() { d_ptr_->stop_.store(false); }
 
-void Connector::Stop() { d_ptr_->stop_ = true; }
+void Connector::Stop() { d_ptr_->stop_.store(true); }
 
-ConnectorPrivate::ConnectorPrivate(Connector* q) : q_ptr_(q), stop_(false) {}
+ConnectorPrivate::ConnectorPrivate(Connector* q) : q_ptr_(q) {}
 
 ConnectorPrivate::~ConnectorPrivate() {
   for (Conveyor* it : vec_conveyor_) {

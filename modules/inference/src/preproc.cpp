@@ -19,12 +19,13 @@
  *************************************************************************/
 
 #include "preproc.hpp"
-#include <memory>
+
+#include <string>
 
 namespace cnstream {
 
 Preproc* Preproc::Create(const std::string& proc_name) {
-  return libstream::ReflexObjectEx<Preproc>::CreateObject(proc_name);
+  return ReflexObjectEx<Preproc>::CreateObject(proc_name);
 }
 
 }  // namespace cnstream

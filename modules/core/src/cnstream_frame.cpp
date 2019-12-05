@@ -27,6 +27,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <utility>
 #include "cnstream_module.hpp"
 
 #define ROUND_UP(addr, boundary) (((u32_t)(addr) + (boundary)-1) & ~((boundary)-1))
@@ -212,6 +213,15 @@ bool CNInferObject::AddAttribute(const std::string& key, const CNInferAttr& valu
   return true;
 }
 
+bool CNInferObject::AddAttribute(const std::pair<std::string, CNInferAttr>& attribute) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
+
+  if (attributes_.find(attribute.first) != attributes_.end()) return false;
+
+  attributes_.insert(attribute);
+  return true;
+}
+
 CNInferAttr CNInferObject::GetAttribute(const std::string& key) {
   std::lock_guard<std::mutex> lk(attribute_mutex_);
 
@@ -227,6 +237,16 @@ bool CNInferObject::AddExtraAttribute(const std::string& key, const std::string&
 
   extra_attributes_.insert(std::make_pair(key, value));
   return true;
+}
+
+bool CNInferObject::AddExtraAttribute(const std::vector<std::pair<std::string, std::string>>& attributes) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
+  bool ret = true;
+
+  for (auto& attribute : attributes) {
+    ret &= AddExtraAttribute(attribute.first, attribute.second);
+  }
+  return ret;
 }
 
 std::string CNInferObject::GetExtraAttribute(const std::string& key) {
@@ -255,12 +275,19 @@ void SetParallelism(int parallelism) { CNFrameInfo::parallelism_ = parallelism; 
 int GetParallelism() { return CNFrameInfo::parallelism_; }
 
 std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, bool eos) {
+  if (stream_id == "") {
+    LOG(ERROR) << "CNFrameInfo::Create() stream_id is empty string.";
+    return nullptr;
+  }
+
   CNFrameInfo* frameInfo = new CNFrameInfo();
   if (!frameInfo) {
+    LOG(ERROR) << "CNFrameInfo::Create() new CNFrameInfo failed.";
     return nullptr;
   }
   frameInfo->frame.stream_id = stream_id;
   std::shared_ptr<CNFrameInfo> ptr(frameInfo);
+
   if (eos) {
     ptr->frame.flags |= cnstream::CN_FRAME_FLAG_EOS;
     return ptr;

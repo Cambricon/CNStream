@@ -165,8 +165,8 @@ struct CNDataFrame {
   void CopyToSyncMem();
 
  public:
-  void* cpu_data = nullptr;                             ///< CPU data pointer. You need to allocate it by calling CNStreamMallocHost().
-  void* mlu_data = nullptr;                             ///< A pointer to the MLU data.
+  void* cpu_data = nullptr;  ///< CPU data pointer. You need to allocate it by calling CNStreamMallocHost().
+  void* mlu_data = nullptr;  ///< A pointer to the MLU data.
   std::shared_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Synce data helper.
 
 #ifdef HAVE_OPENCV
@@ -200,7 +200,9 @@ struct CNDataFrame {
  * A structure hoding the bounding box for detection information of an object.
  * Normalized coordinates.
  */
-typedef struct { float x, y, w, h; } CNInferBoundingBox;
+typedef struct {
+  float x, y, w, h;
+} CNInferBoundingBox;
 
 /**
  * A structure holding the classification properties of an object.
@@ -219,7 +221,7 @@ typedef std::vector<float> CNInferFeature;
 /**
  * A structure holding the information for an object.
  */
-typedef struct {
+struct CNInferObject {
  public:
   std::string id;           ///< The id of the classification. (label value).
   std::string track_id;     ///< Track result.
@@ -328,7 +330,7 @@ typedef struct {
   std::vector<CNInferFeature> features_;
   std::mutex attribute_mutex_;
   std::mutex feature_mutex_;
-} CNInferObject;
+};
 
 /**
  *  A structure holding the information of a frame.
@@ -345,7 +347,7 @@ struct CNFrameInfo {
    * @return Returns a shared_ptr of CNFrameInfo if runs successfully. Otherwise, returns NULL.
    */
   static std::shared_ptr<CNFrameInfo> Create(const std::string& stream_id, bool eos = false);
-  uint32_t channel_idx;                              ///< The index of the channel.
+  uint32_t channel_idx = INVALID_STREAM_IDX;         ///< The index of the channel, stream_index
   CNDataFrame frame;                                 ///< The data of the frame.
   std::vector<std::shared_ptr<CNInferObject>> objs;  ///< Structured information of the objects for this frame.
   ~CNFrameInfo();
@@ -359,14 +361,6 @@ struct CNFrameInfo {
  public:
   static int parallelism_;
 };
-
-/**
- * Limit the resource for each stream,
- * there will be no more than "parallelism" frames simultanously.
- * Disabled by default.
- */
-void SetParallelism(int parallelism);
-int GetParallelism();
 
 }  // namespace cnstream
 

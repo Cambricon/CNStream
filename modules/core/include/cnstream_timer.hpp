@@ -28,6 +28,7 @@
  */
 
 #include <chrono>
+#include <mutex>
 #include <string>
 
 namespace cnstream {
@@ -69,6 +70,7 @@ class CNTimer {
   double GetAvg() const;
 
  private:
+  mutable std::mutex mutex_;
   std::chrono::time_point<std::chrono::high_resolution_clock> last_t_;
   uint64_t cnt_ = 0;
   double avg_ = 0;

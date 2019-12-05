@@ -1,0 +1,45 @@
+{
+  "source" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "next_modules" : ["pose_estimate"],
+    "custom_params" : {
+      "source_type" : "ffmpeg", 
+      "reuse_codec_buf" : true,
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "device_id" : 0
+    }
+  },
+
+  "pose_estimate" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["encoder"],
+    "custom_params" : {
+      "model_path" : "./openpose-1batch.cambricon",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocPose",
+      "preproc_name" : "PreprocPose",
+      "device_id" : 0
+    }
+  },
+
+  "encoder" : {
+    "class_name" : "cnstream::Encoder",
+    "parallelism" : 4,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["fps_stats"],
+    "custom_params" : {
+      "dump_dir" : "output"
+    }
+  },
+
+  "fps_stats" : {
+    "class_name" : "cnstream::FpsStats",
+    "parallelism" : 4,
+    "max_input_queue_size" : 20
+  }
+
+}

@@ -28,6 +28,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #ifdef HAVE_FREETYPE
@@ -43,6 +44,11 @@
 #include "cnstream_module.hpp"
 
 namespace cnstream {
+
+// Pointer for frame info
+using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
+
+struct OsdContext;
 
 /**
  * @brief Show chinese label in the image
@@ -74,7 +80,7 @@ class CnFont {
    *   color: the color of font
    * @return Size of the string
    */
-  int putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color);
+  int putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color);  // NOLINT
 
  private:
   /**
@@ -87,7 +93,8 @@ class CnFont {
    *   -1: Conversion failure
    *    0: Conversion success
    */
-  int ToWchar(char*& src, wchar_t*& dest, const char* locale = "C.UTF-8");
+  int ToWchar(char*& src, wchar_t*& dest, const char* locale = "C.UTF-8");  // NOLINT
+
   /**
    * @brief Print single wide character in the image
    * @param
@@ -96,7 +103,7 @@ class CnFont {
    *   pos: the show of position
    *   color: the color of font
    */
-  void putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color);
+  void putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color);  // NOLINT
   CnFont& operator=(const CnFont&);
 
   FT_Library m_library;
@@ -110,9 +117,9 @@ class CnFont {
 #else
 
  public:
-  explicit CnFont(const char* font_path){};
-  ~CnFont(){};
-  int putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) { return 0; };
+  explicit CnFont(const char* font_path) {}
+  ~CnFont() {}
+  int putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) { return 0; };  // NOLINT
 #endif
 };
 
@@ -129,6 +136,13 @@ class Osd : public Module, public ModuleCreator<Osd> {
    *  @return None
    */
   explicit Osd(const std::string& name);
+
+  /**
+   * @brief Release osd
+   * @param None
+   * @return None
+   */
+  ~Osd();
 
   /**
    * @brief Called by pipeline when pipeline start.
@@ -164,6 +178,8 @@ class Osd : public Module, public ModuleCreator<Osd> {
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
  private:
+  OsdContext* GetOsdContext(CNFrameInfoPtr data);
+  std::unordered_map<int, OsdContext*> osd_ctxs_;
   std::vector<std::string> labels_;
   bool chinese_label_flag_ = false;
 };  // class osd

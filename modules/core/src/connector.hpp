@@ -74,7 +74,7 @@ class Connector {
 
   void Start();
   void Stop();
-  bool IsStopped() const;
+  bool IsStopped();
   void EmptyDataQueue();
 
  private:

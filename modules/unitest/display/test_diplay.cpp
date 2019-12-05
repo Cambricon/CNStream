@@ -12,18 +12,6 @@
 namespace cnstream {
 
 static constexpr const char *gname = "display";
-TEST(Display, SetGetName) {
-  Displayer module(gname);
-  uint32_t seed = (uint32_t)time(0);
-  srand(time(nullptr));
-  int test_num = rand_r(&seed) % 11 + 10;
-
-  while (test_num--) {
-    std::string name = "testname" + std::to_string(rand_r(&seed));
-    module.SetName(name);
-    EXPECT_EQ(name, module.GetName()) << "Module name not equal";
-  }
-}
 
 TEST(Display, OpenClose) {
   Displayer module(gname);

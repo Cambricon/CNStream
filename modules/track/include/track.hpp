@@ -28,26 +28,21 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 
-#include "cninfer/model_loader.h"
+#include "easyinfer/model_loader.h"
 #include "cnstream_core.hpp"
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
-#include "cntrack/cntrack.h"
+#include "easytrack/easy_track.h"
 
 namespace cnstream {
 
+CNSTREAM_REGISTER_EXCEPTION(Tracker);
+
+struct TrackerContext;
+
 /// Pointer for frame info
 using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
-
-/**
- * @brief Tracker context structure
- */
-struct TrackerContext {
-  libstream::CnTrack *processer_ = nullptr;
-  uint32_t frame_index_;
-};
 
 /**
  *  @brief Tracker is a module for realtime tracking
@@ -107,12 +102,11 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
  private:
-  TrackerContext *GetTrackerContext(CNFrameInfoPtr data);
-  std::unordered_map<int, TrackerContext *> tracker_ctxs_;
+  inline TrackerContext *GetTrackerContext();
   std::string model_path_ = "";
   std::string func_name_ = "";
   std::string track_name_ = "";
-  std::shared_ptr<libstream::ModelLoader> ploader_;
+  std::shared_ptr<edk::ModelLoader> pKCFloader_ = nullptr;
 };  // class Tracker
 
 }  // namespace cnstream

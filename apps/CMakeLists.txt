@@ -1,0 +1,8 @@
+set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin/)
+add_subdirectory(web)
+add_subdirectory(modules)
+add_subdirectory(super_resolution)
+add_subdirectory(pose_estimate)
+add_subdirectory(dehaze)
+add_subdirectory(style_transfer)
+add_subdirectory(step_structure)

@@ -26,21 +26,51 @@
 #include <string>
 #include <vector>
 
-#include "cninfer/mlu_context.h"
-#include "cninfer/mlu_memory_op.h"
-#include "cninfer/model_loader.h"
+#include "easyinfer/mlu_context.h"
+#include "easyinfer/mlu_memory_op.h"
+#include "easyinfer/model_loader.h"
 
 #include "inferencer.hpp"
+#include "postproc.hpp"
+#include "preproc.hpp"
 #include "test_base.hpp"
 
 namespace cnstream {
 
+class FakePostproc : public Postproc, virtual public ReflexObjectEx<Postproc> {
+ public:
+  int Execute(const std::vector<float *> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
+              const CNFrameInfoPtr &package) override {
+    return 0;
+  }
+
+  DECLARE_REFLEX_OBJECT_EX(FakePostproc, Postproc);
+};  // class FakePostproc
+
+IMPLEMENT_REFLEX_OBJECT_EX(FakePostproc, Postproc);
+
+class FakePreproc : public Preproc, virtual public ReflexObjectEx<Preproc> {
+ public:
+  int Execute(const std::vector<float *> &net_inputs, const std::shared_ptr<edk::ModelLoader> &model,
+              const CNFrameInfoPtr &package) override {
+    return 0;
+  }
+
+  DECLARE_REFLEX_OBJECT_EX(FakePreproc, Preproc);
+};  // class FakePreproc
+
+IMPLEMENT_REFLEX_OBJECT_EX(FakePreproc, Preproc);
+
 static const char *name = "test-infer";
-// static const char *g_image_path = "../../samples/data/images/3.jpg";
-// static const char *g_model_path =
-//     "../../samples/data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon";
+static const char *g_image_path = "../../samples/data/images/3.jpg";
+#ifdef CNS_MLU100
+static const char *g_model_path =
+    "../../samples/data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon";
+#elif CNS_MLU270
+static const char *g_model_path = "../../samples/data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
+#endif
 static const char *g_func_name = "subnet0";
-// static const char *g_postproc_name = "PostprocSsd";
+static const char *g_postproc_name = "FakePostproc";
 
 static constexpr int g_dev_id = 0;
 static constexpr int g_channel_id = 0;
@@ -59,15 +89,14 @@ TEST(Inferencer, Open) {
   param["postproc_name"] = "test-postproc-name";
   param["device_id"] = std::to_string(g_dev_id);
   EXPECT_FALSE(infer->Open(param));
-  /*
+
   param["model_path"] = GetExePath() + g_model_path;
   param["func_name"] = g_func_name;
   param["postproc_name"] = g_postproc_name;
   EXPECT_TRUE(infer->Open(param));
   infer->Close();
-  */
 }
-/*
+
 TEST(Inferencer, Process) {
   std::string model_path = GetExePath() + g_model_path;
   std::string image_path = GetExePath() + g_image_path;
@@ -90,15 +119,14 @@ TEST(Inferencer, Process) {
     // fake data
     void *frame_data = nullptr;
     void *planes[CN_MAX_PLANES] = {nullptr, nullptr};
-    libstream::MluMemoryOp mem_op;
-    frame_data = mem_op.alloc_mem_on_mlu(nbytes, 1);
+    edk::MluMemoryOp mem_op;
+    frame_data = mem_op.AllocMlu(nbytes, 1);
     planes[0] = frame_data;                                                                        // y plane
     planes[1] = reinterpret_cast<void *>(reinterpret_cast<int64_t>(frame_data) + width * height);  // uv plane
 
     // test nv12
     {
       auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
-      data->channel_idx = g_channel_id;
       CNDataFrame &frame = data->frame;
       frame.frame_id = 1;
       frame.timestamp = 1000;
@@ -114,12 +142,13 @@ TEST(Inferencer, Process) {
       frame.CopyToSyncMem();
       int ret = infer->Process(data);
       EXPECT_EQ(ret, 1);
+      // create eos frame for clearing stream idx
+      cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
     }
 
     // test nv21
     {
       auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
-      data->channel_idx = g_channel_id;
       CNDataFrame &frame = data->frame;
       frame.frame_id = 1;
       frame.timestamp = 1000;
@@ -135,9 +164,11 @@ TEST(Inferencer, Process) {
       frame.CopyToSyncMem();
       int ret = infer->Process(data);
       EXPECT_EQ(ret, 1);
+      // create eos frame for clearing stream idx
+      cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
     }
 
-    mem_op.free_mem_on_mlu(frame_data);
+    mem_op.FreeMlu(frame_data);
   }
 
   // test with CPU preproc
@@ -146,7 +177,7 @@ TEST(Inferencer, Process) {
     ModuleParamSet param;
     param["model_path"] = model_path;
     param["func_name"] = g_func_name;
-    param["preproc_name"] = "PreprocCpu";
+    param["preproc_name"] = "FakePreproc";
     param["postproc_name"] = g_postproc_name;
     param["device_id"] = std::to_string(g_dev_id);
     ASSERT_TRUE(infer->Open(param));
@@ -156,7 +187,6 @@ TEST(Inferencer, Process) {
     uint8_t *frame_data = new uint8_t[nbytes];
 
     auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
-    data->channel_idx = g_channel_id;
     CNDataFrame &frame = data->frame;
     frame.frame_id = 1;
     frame.timestamp = 1000;
@@ -171,7 +201,16 @@ TEST(Inferencer, Process) {
 
     int ret = infer->Process(data);
     EXPECT_EQ(ret, 1);
+    // create eos frame for clearing stream idx
+    cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
   }
-}*/
+}
+
+TEST(Inferencer, Postproc_set_threshold) {
+  auto postproc = Postproc::Create(std::string(g_postproc_name));
+  ASSERT_NE(postproc, nullptr);
+
+  postproc->set_threshold(0.6);
+}
 
 }  // namespace cnstream

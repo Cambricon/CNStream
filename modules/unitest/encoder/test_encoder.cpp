@@ -32,24 +32,16 @@
 
 namespace cnstream {
 static constexpr const char *gname = "encoder";
-TEST(EncoderModule, SetGetName) {
-  Encoder module(gname);
-  uint32_t seed = (uint32_t)time(0);
-  srand(time(nullptr));
-  int test_num = rand_r(&seed) % 11 + 10;
-
-  while (test_num--) {
-    std::string name = "testname" + std::to_string(rand_r(&seed));
-    module.SetName(name);
-    EXPECT_EQ(name, module.GetName()) << "Module name not equal";
-  }
-}
 
 TEST(EncoderModule, OpenClose) {
   Encoder module(gname);
   ModuleParamSet params;
-  EXPECT_FALSE(module.Open(params));
+
+  params.clear();
+  EXPECT_TRUE(module.Open(params));
+
   params["dump_dir"] = GetExePath();
+  EXPECT_TRUE(module.Open(params));
   module.Close();
   // module.Process(nullptr);
 }

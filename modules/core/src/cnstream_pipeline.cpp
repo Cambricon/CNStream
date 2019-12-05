@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <iostream>
 #include <list>
 #include <map>
 #include <memory>
@@ -79,6 +80,14 @@ void CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
     this->maxInputQueueSize = 20;
   }
 
+  // enablePerfInfo
+  if (end != doc.FindMember("show_perf_info")) {
+    if (!doc["show_perf_info"].IsBool()) throw std::string("show_perf_info must be Boolean type.");
+    this->showPerfInfo = doc["show_perf_info"].GetBool();
+  } else {
+    this->showPerfInfo = false;
+  }
+
   // next
   if (end != doc.FindMember("next_modules")) {
     if (!doc["next_modules"].IsArray()) {
@@ -130,13 +139,32 @@ void CNModuleConfig::ParseByJSONFile(const std::string& jfname) {
   ifs.close();
 
   ParseByJSONStr(jstr);
+
+  /***************************************************
+   * add config file path to custom parameters
+   ***************************************************/
+
+  std::string jf_dir = "";
+  auto slash_pos = jfname.rfind("/");
+  if (slash_pos == std::string::npos) {
+    jf_dir = ".";
+  } else {
+    jf_dir = jfname.substr(0, slash_pos);
+  }
+  jf_dir += '/';
+
+  if (this->parameters.end() != this->parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
+    LOG(WARNING) << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
+                 << "up by cnstream as the directory where the configuration file is located and passed to the module.";
+  }
+
+  this->parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;
 }
 
 struct ModuleAssociatedInfo {
   std::shared_ptr<Module> instance;
   uint32_t parallelism = 0;
-  std::vector<CNTimer> timers_;
-  std::set<int64_t> down_nodes;
+  std::set<std::string> down_nodes;
   std::vector<std::string> input_connectors;
   std::vector<std::string> output_connectors;
 };
@@ -157,7 +185,7 @@ class PipelinePrivate {
   std::unordered_map<std::string, std::shared_ptr<Connector>> links_;
   std::vector<std::thread> threads_;
   std::thread event_thread_;
-  std::map<int64_t, ModuleAssociatedInfo> modules_;
+  std::map<std::string, ModuleAssociatedInfo> modules_;
   std::mutex stop_mtx_;
   uint64_t eos_mask_ = 0;
 
@@ -167,7 +195,7 @@ class PipelinePrivate {
   std::map<std::string, std::shared_ptr<Module>> modules_map_;
   DECLARE_PUBLIC(q_ptr_, Pipeline);
   void SetEOSMask() {
-    for (const std::pair<int64_t, ModuleAssociatedInfo> module_info : modules_) {
+    for (const std::pair<std::string, ModuleAssociatedInfo> module_info : modules_) {
       auto instance = module_info.second.instance;
       eos_mask_ |= (uint64_t)1 << instance->GetId();
     }
@@ -238,9 +266,13 @@ void Pipeline::Close() {}
 int Pipeline::Process(std::shared_ptr<CNFrameInfo> data) { return 0; }
 
 EventHandleFlag Pipeline::DefaultBusWatch(const Event& event, Module* module) {
+  StreamMsg smsg;
   EventHandleFlag ret;
   switch (event.type) {
     case EventType::EVENT_ERROR:
+      smsg.type = ERROR_MSG;
+      smsg.chn_idx = -1;
+      d_ptr_->UpdateByStreamMsg(smsg);
       LOG(ERROR) << "[" << event.module->GetName() << "]: "
                  << "Error: " << event.message;
       ret = EVENT_HANDLE_STOP;
@@ -272,25 +304,25 @@ EventHandleFlag Pipeline::DefaultBusWatch(const Event& event, Module* module) {
 }
 
 bool Pipeline::ProvideData(const Module* module, std::shared_ptr<CNFrameInfo> data) {
-  int64_t hashcode = reinterpret_cast<int64_t>(module);
+  std::string moduleName = module->GetName();
 
-  if (d_ptr_->modules_.find(hashcode) == d_ptr_->modules_.end()) return false;
+  if (d_ptr_->modules_.find(moduleName) == d_ptr_->modules_.end()) return false;
 
-  TransmitData(hashcode, data);
+  TransmitData(moduleName, data);
 
   return true;
 }
 
 bool Pipeline::AddModule(std::shared_ptr<Module> module) {
-  int64_t hashcode = reinterpret_cast<int64_t>(module.get());
+  std::string moduleName = module->GetName();
 
-  if (d_ptr_->modules_.find(hashcode) != d_ptr_->modules_.end()) {
+  if (d_ptr_->modules_.find(moduleName) != d_ptr_->modules_.end()) {
     LOG(WARNING) << "Module [" << module->GetName() << "] has already been added to this pipeline";
     return false;
   }
 
   LOG(INFO) << "Add Module " << module->GetName() << " to pipeline";
-  if (module->GetId() == Module::INVALID_MODULE_ID) {
+  if (module->GetId() == INVALID_MODULE_ID) {
     LOG(ERROR) << "Failed to get module Id";
     return false;
   }
@@ -299,40 +331,44 @@ bool Pipeline::AddModule(std::shared_ptr<Module> module) {
   associated_info.instance = module;
   associated_info.parallelism = 1;
   module->SetContainer(this);
-  d_ptr_->modules_.insert(std::make_pair(hashcode, associated_info));
+  d_ptr_->modules_.insert(std::make_pair(moduleName, associated_info));
 
   return true;
 }
 
 bool Pipeline::SetModuleParallelism(std::shared_ptr<Module> module, uint32_t parallelism) {
-  int64_t hashcode = reinterpret_cast<int64_t>(module.get());
-  if (d_ptr_->modules_.find(hashcode) == d_ptr_->modules_.end()) return false;
-  d_ptr_->modules_[hashcode].parallelism = parallelism;
+  std::string moduleName = module->GetName();
+  if (d_ptr_->modules_.find(moduleName) == d_ptr_->modules_.end()) return false;
+  d_ptr_->modules_[moduleName].parallelism = parallelism;
   return true;
 }
 
 uint32_t Pipeline::GetModuleParallelism(std::shared_ptr<Module> module) {
-  int64_t hashcode = reinterpret_cast<int64_t>(module.get());
-  if (d_ptr_->modules_.find(hashcode) == d_ptr_->modules_.end()) return 0;
-  return d_ptr_->modules_[hashcode].parallelism;
+  std::string moduleName = module->GetName();
+  if (d_ptr_->modules_.find(moduleName) == d_ptr_->modules_.end()) return 0;
+  return d_ptr_->modules_[moduleName].parallelism;
 }
 
 std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_ptr<Module> down_node,
                                   size_t queue_capacity) {
-  int64_t up_node_hashcode = reinterpret_cast<int64_t>(up_node.get());
-  int64_t down_node_hashcode = reinterpret_cast<int64_t>(down_node.get());
+  if (up_node == nullptr || down_node == nullptr) {
+    return "";
+  }
 
-  if (d_ptr_->modules_.find(up_node_hashcode) == d_ptr_->modules_.end() ||
-      d_ptr_->modules_.find(down_node_hashcode) == d_ptr_->modules_.end()) {
+  std::string up_node_name = up_node->GetName();
+  std::string down_node_name = down_node->GetName();
+
+  if (d_ptr_->modules_.find(up_node_name) == d_ptr_->modules_.end() ||
+      d_ptr_->modules_.find(down_node_name) == d_ptr_->modules_.end()) {
     LOG(ERROR) << "module has not been added to this pipeline";
     return "";
   }
 
-  ModuleAssociatedInfo& up_node_info = d_ptr_->modules_.find(up_node_hashcode)->second;
-  ModuleAssociatedInfo& down_node_info = d_ptr_->modules_.find(down_node_hashcode)->second;
+  ModuleAssociatedInfo& up_node_info = d_ptr_->modules_.find(up_node_name)->second;
+  ModuleAssociatedInfo& down_node_info = d_ptr_->modules_.find(down_node_name)->second;
 
   std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
-  auto ret = up_node_info.down_nodes.insert(down_node_hashcode);
+  auto ret = up_node_info.down_nodes.insert(down_node_name);
   if (!ret.second) {
     LOG(ERROR) << "modules have been linked already";
     return link_id;
@@ -390,8 +426,8 @@ bool Pipeline::Start() {
   }
 
   // start data transmit
-  running_ = true;
-  event_bus_->running_ = true;
+  running_.store(true);
+  event_bus_->running_.store(true);
   d_ptr_->event_thread_ = std::thread(&Pipeline::EventLoop, this);
 
   for (std::pair<std::string, std::shared_ptr<Connector>> connector : d_ptr_->links_) {
@@ -400,12 +436,11 @@ bool Pipeline::Start() {
 
   // create process threads
   for (auto& it : d_ptr_->modules_) {
-    const int64_t node_hashcode = it.first;
+    const std::string node_name = it.first;
     ModuleAssociatedInfo& module_info = it.second;
     uint32_t parallelism = module_info.parallelism;
-    module_info.timers_.resize(parallelism);
     for (uint32_t conveyor_idx = 0; conveyor_idx < parallelism; ++conveyor_idx) {
-      d_ptr_->threads_.push_back(std::thread(&Pipeline::TaskLoop, this, node_hashcode, conveyor_idx));
+      d_ptr_->threads_.push_back(std::thread(&Pipeline::TaskLoop, this, node_name, conveyor_idx));
     }
   }
   LOG(INFO) << "Pipeline Start";
@@ -421,8 +456,8 @@ bool Pipeline::Stop() {
   for (std::pair<std::string, std::shared_ptr<Connector>> connector : d_ptr_->links_) {
     connector.second->Stop();
   }
-  running_ = false;
-  event_bus_->running_ = false;
+  running_.store(false);
+  event_bus_->running_.store(false);
   for (std::thread& it : d_ptr_->threads_) {
     if (it.joinable()) it.join();
   }
@@ -446,6 +481,7 @@ void Pipeline::EventLoop() {
   const std::list<std::pair<BusWatcher, Module*>>& kWatchers = event_bus_->GetBusWatchers();
   EventHandleFlag flag = EVENT_HANDLE_NULL;
 
+  SetThreadName("cn-EventLoop", pthread_self());
   // start loop
   while (event_bus_->IsRunning()) {
     Event event = event_bus_->PollEvent();
@@ -471,24 +507,19 @@ void Pipeline::EventLoop() {
 }
 
 void Pipeline::PrintPerformanceInformation() const {
-  printf("\nPipeline Performance information:\n");
+  std::cout << "\nPipeline Performance information:\n";
   for (const auto& it : d_ptr_->modules_) {
     const ModuleAssociatedInfo& module_info = it.second;
-    std::string module_name = module_info.instance->GetName();
-    const std::vector<CNTimer>& fps_calculators = module_info.timers_;
-    if (fps_calculators.size() == 0) continue;
-
-    printf("****************************%s Performance******************************\n", module_name.c_str());
-    for (size_t i = 0; i < fps_calculators.size(); ++i) {
-      fps_calculators[i].PrintFps("thread " + std::to_string(i) + ": ");
+    if (module_info.instance) {
+      module_info.instance->PrintPerfInfo();
     }
   }
 }
 
-void Pipeline::TransmitData(int64_t node_hashcode, std::shared_ptr<CNFrameInfo> data) {
-  LOG_IF(FATAL, d_ptr_->modules_.find(node_hashcode) == d_ptr_->modules_.end());
+void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo> data) {
+  LOG_IF(FATAL, d_ptr_->modules_.find(moduleName) == d_ptr_->modules_.end());
 
-  const ModuleAssociatedInfo& module_info = d_ptr_->modules_[node_hashcode];
+  const ModuleAssociatedInfo& module_info = d_ptr_->modules_[moduleName];
 
   const uint32_t chn_idx = data->channel_idx;
 
@@ -517,8 +548,8 @@ void Pipeline::TransmitData(int64_t node_hashcode, std::shared_ptr<CNFrameInfo> 
   /*
     set module mask
    */
-  for (auto& down_node_hashcode : module_info.down_nodes) {
-    ModuleAssociatedInfo& down_node_info = d_ptr_->modules_.find(down_node_hashcode)->second;
+  for (auto& down_node_name : module_info.down_nodes) {
+    ModuleAssociatedInfo& down_node_info = d_ptr_->modules_.find(down_node_name)->second;
     data->frame.SetModuleMask(down_node_info.instance.get(), module_info.instance.get());
   }
 
@@ -531,13 +562,10 @@ void Pipeline::TransmitData(int64_t node_hashcode, std::shared_ptr<CNFrameInfo> 
   }
 }
 
-void Pipeline::TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx) {
-  LOG_IF(FATAL, d_ptr_->modules_.find(node_hashcode) == d_ptr_->modules_.end());
+void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
+  LOG_IF(FATAL, d_ptr_->modules_.find(node_name) == d_ptr_->modules_.end());
 
-  ModuleAssociatedInfo& module_info = d_ptr_->modules_[node_hashcode];
-
-  LOG_IF(FATAL, conveyor_idx >= module_info.timers_.size());
-  CNTimer& timer = module_info.timers_[conveyor_idx];
+  ModuleAssociatedInfo& module_info = d_ptr_->modules_[node_name];
 
   std::vector<std::shared_ptr<Connector>> input_connectors;
   std::transform(module_info.input_connectors.begin(), module_info.input_connectors.end(),
@@ -546,7 +574,11 @@ void Pipeline::TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx) {
 
   if (input_connectors.size() == 0) return;
 
-  volatile bool has_data = true;
+  size_t len = node_name.size() > 10 ? 10 : node_name.size();
+  std::string thread_name = "cn-" + node_name.substr(0, len) + std::to_string(conveyor_idx);
+  SetThreadName(thread_name, pthread_self());
+
+  bool has_data = true;
   while (has_data) {
     has_data = false;
     std::shared_ptr<CNFrameInfo> data;
@@ -569,17 +601,12 @@ void Pipeline::TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx) {
 
         if (!module_info.instance->hasTranmit() && (CN_FRAME_FLAG_EOS & flags)) {
           /*normal module, transmit EOS by the framework*/
-          TransmitData(node_hashcode, data);
+          TransmitData(node_name, data);
           continue;
         }
 
         {
-          auto start_time = std::chrono::high_resolution_clock::now();
-          int ret = module_info.instance->Process(data);
-          auto end_time = std::chrono::high_resolution_clock::now();
-          std::chrono::duration<double, std::milli> diff = end_time - start_time;
-          if (!(flags & CN_FRAME_FLAG_EOS)) timer.Dot(diff.count(), 1);
-
+          int ret = module_info.instance->DoProcess(data);
           /*process failed*/
           if (ret < 0) {
             Event e;
@@ -603,7 +630,7 @@ void Pipeline::TaskLoop(int64_t node_hashcode, uint32_t conveyor_idx) {
             continue;
           }
         }
-        TransmitData(node_hashcode, data);
+        TransmitData(node_name, data);
       } else {
         // LOG(INFO) << std::hex << data->frame.GetModulesMask(module_info.instance.get()) << " : " <<
         // module_info.instance->GetModulesMask();
@@ -650,8 +677,15 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
   for (auto& v : configs) {
     this->AddModuleConfig(v);
     Module* module = creator.Create(v.className, v.name);
+    if (!module) {
+      LOG(ERROR) << "Failed to create module by className(" << v.className << ") and name(" << v.name << ")";
+      return -1;
+    }
+    module->ShowPerfInfo(v.showPerfInfo);
+
     std::shared_ptr<Module> instance(module);
     d_ptr_->modules_map_[v.name] = instance;
+
     queues_size[v.name] = v.maxInputQueueSize;
     this->AddModule(instance);
     this->SetModuleParallelism(instance, v.parallelism);
@@ -678,6 +712,7 @@ int Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
 
   /* traversing modules */
   std::vector<CNModuleConfig> mconfs;
+  std::vector<std::string> namelist;
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
     throw "Parse pipeline configuration failed. Error code [" + std::to_string(doc.GetParseError()) + "]" +
@@ -687,11 +722,37 @@ int Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
   for (rapidjson::Document::ConstMemberIterator iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter) {
     CNModuleConfig mconf;
     mconf.name = iter->name.GetString();
+    if (find(namelist.begin(), namelist.end(), mconf.name) != namelist.end()) {
+      throw "Module name should be unique in Jason file. Module name : [" + mconf.name + "]" +
+          " appeared more than one time.";
+    }
+    namelist.push_back(mconf.name);
     try {
       rapidjson::StringBuffer sbuf;
       rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
       iter->value.Accept(jwriter);
       mconf.ParseByJSONStr(std::string(sbuf.GetString()));
+
+      /***************************************************
+       * add config file path to custom parameters
+       ***************************************************/
+
+      std::string jf_dir = "";
+      auto slash_pos = config_file.rfind("/");
+      if (slash_pos == std::string::npos) {
+        jf_dir = ".";
+      } else {
+        jf_dir = config_file.substr(0, slash_pos);
+      }
+      jf_dir += '/';
+
+      if (mconf.parameters.end() != mconf.parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
+        LOG(WARNING)
+            << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
+            << "up by cnstream as the directory where the configuration file is located and passed to the module.";
+      }
+
+      mconf.parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;
     } catch (std::string e) {
       throw "Parse module config failed. Module name : [" + mconf.name + "]" + ". Error message: " + e;
     }

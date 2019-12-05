@@ -69,7 +69,6 @@ class InferTask {
   }
 
  private:
-  std::shared_ptr<std::packaged_task<int()>> tfunc_;
   std::promise<int> promise_;
   std::function<int()> func_;
   std::shared_future<int> statem_;

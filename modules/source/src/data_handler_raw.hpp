@@ -35,7 +35,6 @@ class DataHandlerRaw : public DataHandler {
   explicit DataHandlerRaw(DataSource* module, const std::string& stream_id, const std::string& filename, int framerate,
                           bool loop)
       : DataHandler(module, stream_id, framerate, loop), filename_(filename) {}
-  ~DataHandlerRaw() {}
 
  private:
   std::string filename_;
@@ -46,8 +45,11 @@ class DataHandlerRaw : public DataHandler {
   int fd_ = -1;
 
  private:
-  bool PrepareResources() override;
-  void ClearResources() override;
+#ifdef TEST
+ public:  // NOLINT
+#endif
+  bool PrepareResources(bool demux_only = false) override;
+  void ClearResources(bool demux_only = false) override;
   bool Process() override;
   bool Extract();
 

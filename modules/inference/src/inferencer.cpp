@@ -20,6 +20,8 @@
 
 #include "inferencer.hpp"
 
+#include <cnrt.h>
+#include <cassert>
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -29,11 +31,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include "cninfer/cninfer.h"
-#include "cninfer/mlu_context.h"
-#include "cninfer/mlu_memory_op.h"
-#include "cninfer/model_loader.h"
-#include "cnpreproc/resize_and_colorcvt.h"
+#include "easyinfer/easy_infer.h"
+#include "easyinfer/mlu_context.h"
+#include "easyinfer/mlu_memory_op.h"
+#include "easyinfer/model_loader.h"
+#include "easybang/resize_and_colorcvt.h"
 
 #include "cnstream_eventbus.hpp"
 #include "cnstream_frame.hpp"
@@ -45,11 +47,13 @@
 
 #define ROUND_UP(addr, boundary) (((u32_t)(addr) + (boundary)-1) & ~((boundary)-1))
 
+#define TIMEOUT_PRINT_INTERVAL 100
+
 namespace cnstream {
 
-static bool IsYAndUVSplit(const std::shared_ptr<libstream::ModelLoader>& model) {
-  auto shapes = model->input_shapes();
-  return shapes.size() == 2 && shapes[0].c() == 1 && shapes[0].c() == shapes[1].c() &&
+static bool IsYAndUVSplit(const std::shared_ptr<edk::ModelLoader>& model) {
+  auto shapes = model->InputShapes();
+  return shapes.size() == 2 && shapes[0].c == 1 && shapes[0].c == shapes[1].c &&
          1.0 * shapes[0].hw() / shapes[1].hw() == 2.0;
 }
 
@@ -119,7 +123,15 @@ class TimeoutOperator {
       } else if (STATE_DO == state_) {
         CHECK_NE(static_cast<bool>(func_), false) << "Bad logic: state_ is STATE_DO, but function is NULL.";
         func_();
-        LOG(INFO) << "Batching timeout.";
+        timeout_print_cnt_++;
+        if (timeout_print_cnt_ == TIMEOUT_PRINT_INTERVAL) {
+          timeout_print_cnt_ = 0;
+          LOG(INFO) << "Batching timeout. The trigger frequency of timeout processing can be reduced by"
+                       " increasing the timeout time(see batching_timeout parameter of the inferencer module). If the"
+                       " decoder memory is reused, the trigger frequency of timeout processing can also be reduced by"
+                       " increasing the number of cache blocks output by the decoder(see output_buf_number parameter of"
+                       " the source module). ";
+        }
         func_ = NULL;  // unbind resources.
         state_ = STATE_NO_FUNC;
       } else {
@@ -135,6 +147,7 @@ class TimeoutOperator {
   std::function<void()> func_;
   std::thread handle_th_;
   float timeout_ = 0;
+  uint32_t timeout_print_cnt_ = 0;
 };  // class TimeoutOperator
 
 using TimeoutOperatorSptr = std::shared_ptr<TimeoutOperator>;
@@ -150,10 +163,10 @@ struct InferContext {
   InferTaskSptr D2H_task = NULL;
   std::vector<InferTaskSptr> postproc_tasks;
   InferTaskSptr transmit_task = NULL;
-  libstream::MluMemoryOp mem_op;
-  libstream::CnInfer infer;
-  libstream::MluContext env;
-  libstream::MluRCOp rc_op;
+  edk::MluMemoryOp mem_op;
+  edk::EasyInfer infer;
+  edk::MluContext env;
+  edk::MluResizeConvertOp rc_op;
   std::mutex rc_op_mtx;
   struct {
     void* y_plane_data = nullptr;
@@ -171,10 +184,10 @@ struct InferContext {
   ~InferContext() {
     if (initialized) {
       env.ConfigureForThisThread();
-      if (nullptr != mlu_output) mem_op.free_mem_array_on_mlu(mlu_output, mem_op.loader()->output_num());
-      if (nullptr != cpu_output) mem_op.free_output_mem_on_cpu(cpu_output);
-      if (cpu_input != nullptr) mem_op.free_input_mem_on_cpu(cpu_input);
-      if (nullptr != mlu_input) mem_op.free_mem_array_on_mlu(mlu_input, mem_op.loader()->input_num());
+      if (nullptr != mlu_output) mem_op.FreeArrayMlu(mlu_output, mem_op.Loader()->OutputNum());
+      if (nullptr != cpu_output) mem_op.FreeCpuOutput(cpu_output);
+      if (nullptr != cpu_input) mem_op.FreeCpuInput(cpu_input);
+      if (nullptr != mlu_input) mem_op.FreeArrayMlu(mlu_input, mem_op.Loader()->InputNum());
       if (nullptr != rc_input_fake_data.y_plane_data) cnrtFree(rc_input_fake_data.y_plane_data);
       if (nullptr != rc_input_fake_data.uv_plane_data) cnrtFree(rc_input_fake_data.uv_plane_data);
       rc_op.Destroy();
@@ -182,59 +195,73 @@ struct InferContext {
   }
 };  // struct InferContext
 
-static thread_local InferContext g_tl_ctx;
+static thread_local InferContext* g_tl_ctx;
 
-static libstream::MluRCOp::ColorMode FMTCONVERT2CMODE(CNDataFormat fmt) {
+static edk::MluResizeConvertOp::ColorMode FMTCONVERT2CMODE(CNDataFormat fmt) {
   switch (fmt) {
     case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
-      return libstream::MluRCOp::ColorMode::YUV2BGRA_NV12;
+      return edk::MluResizeConvertOp::ColorMode::YUV2BGRA_NV12;
     case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
-      return libstream::MluRCOp::ColorMode::YUV2BGRA_NV21;
+      return edk::MluResizeConvertOp::ColorMode::YUV2BGRA_NV21;
     default:
       LOG(FATAL) << "Can not deal with this format.";
   }
-  return libstream::MluRCOp::ColorMode::YUV2BGRA_NV21;
+  return edk::MluResizeConvertOp::ColorMode::YUV2BGRA_NV21;
 }
 
 class InferencerPrivate {
  public:
   explicit InferencerPrivate(Inferencer* q) : q_ptr_(q) {}
   InferThreadPool tpool_;
-  std::shared_ptr<libstream::ModelLoader> model_loader_;
+  std::shared_ptr<edk::ModelLoader> model_loader_;
   std::shared_ptr<Preproc> cpu_preproc_;
   std::shared_ptr<Postproc> post_proc_;
   int device_id_ = 0;
   int interval_ = 0;
   uint32_t bsize_ = 1;
   float batching_timeout_ = 3000.0;  // ms
+  std::vector<InferContext*> infer_ctxs_;
+  std::mutex ctx_mtx_;
   void CheckAndUpdateRCOp(InferContext* pctx, CNFrameInfoPtr data) {
-    uint32_t w, h, stride;
-    pctx->rc_op.get_src_resolution(&w, &h, &stride);
-    if (static_cast<int>(w) != data->frame.width || static_cast<int>(h) != data->frame.height ||
-        static_cast<int>(stride) != data->frame.stride[0] ||
-        FMTCONVERT2CMODE(data->frame.fmt) != pctx->rc_op.color_mode()) {
+    const edk::MluResizeConvertOp::Attr& attr = pctx->rc_op.GetAttr();
+    if (static_cast<int>(attr.src_w) != data->frame.width || static_cast<int>(attr.src_h) != data->frame.height ||
+        static_cast<int>(attr.src_stride) != data->frame.stride[0] ||
+        FMTCONVERT2CMODE(data->frame.fmt) != attr.color_mode) {
       pctx->rc_op.Destroy();
-      pctx->rc_op.set_src_resolution(data->frame.width, data->frame.height, data->frame.stride[0]);
-      pctx->rc_op.set_cmode(FMTCONVERT2CMODE(data->frame.fmt));
+      edk::Shape model_input_shape = model_loader_->InputShapes()[0];
+      edk::MluResizeConvertOp::Attr new_attr;
+      new_attr.src_h = data->frame.height;
+      new_attr.src_w = data->frame.width;
+      new_attr.dst_h = model_input_shape.h;
+      new_attr.dst_w = model_input_shape.w;
+      new_attr.src_stride = data->frame.stride[0];
+      new_attr.color_mode = FMTCONVERT2CMODE(data->frame.fmt);
       if (nullptr != pctx->rc_input_fake_data.y_plane_data) cnrtFree(pctx->rc_input_fake_data.y_plane_data);
       cnrtRet_t cnret = cnrtMalloc(&(pctx->rc_input_fake_data.y_plane_data), bsize_ * data->frame.GetPlaneBytes(0));
       CHECK_EQ(cnret, CNRT_RET_SUCCESS) << "Malloc resize convert fake data(for y plane) failed.";
       if (nullptr != pctx->rc_input_fake_data.uv_plane_data) cnrtFree(pctx->rc_input_fake_data.uv_plane_data);
       cnret = cnrtMalloc(&(pctx->rc_input_fake_data.uv_plane_data), bsize_ * data->frame.GetPlaneBytes(1));
       CHECK_EQ(cnret, CNRT_RET_SUCCESS) << "Malloc resize convert fake data(for uv plane) failed.";
-      bool ret = pctx->rc_op.Init(bsize_);
+      bool ret = pctx->rc_op.Init(new_attr);
       LOG_IF(FATAL, !ret);
     }
   }
   InferContext* GetInferContext() {
-    InferContext* pctx = &g_tl_ctx;
+    /* control thread context by inferencer itself */
+    if (nullptr == g_tl_ctx) {
+      g_tl_ctx = new InferContext();
+      std::lock_guard<std::mutex> lk(ctx_mtx_);
+      infer_ctxs_.push_back(g_tl_ctx);
+    }
+
+    InferContext* pctx = g_tl_ctx;
 #ifdef CNS_MLU100
     const uint32_t mem_bsize = bsize_;
 #elif CNS_MLU270
     const uint32_t mem_bsize = 1;
 #endif
 
-    if (!g_tl_ctx.initialized) {
+    if (!g_tl_ctx->initialized) {
       // process for first time
 
       // input information flags
@@ -245,31 +272,35 @@ class InferencerPrivate {
       }
 
       pctx->drop_count = 0;
-      pctx->mem_op.set_loader(model_loader_);
+      pctx->mem_op.SetLoader(model_loader_);
 
       // Configure mlu context
-      pctx->env.set_dev_id(device_id_);
+      pctx->env.SetDeviceId(device_id_);
       pctx->env.ConfigureForThisThread();
 
       // Create inference tool
-      pctx->infer.init(model_loader_, mem_bsize);
+      pctx->infer.Init(model_loader_, mem_bsize, device_id_);
 
       // prepare memory
-      pctx->cpu_input = pctx->mem_op.alloc_mem_on_cpu_for_input(mem_bsize);
-      pctx->mlu_output = pctx->mem_op.alloc_mem_on_mlu_for_output(mem_bsize);
-      pctx->cpu_output = pctx->mem_op.alloc_mem_on_cpu_for_output(mem_bsize);
-      pctx->mlu_input = pctx->mem_op.alloc_mem_on_mlu_for_input(mem_bsize);
+      pctx->cpu_input = pctx->mem_op.AllocCpuInput(mem_bsize);
+      pctx->cpu_output = pctx->mem_op.AllocCpuOutput(mem_bsize);
+      pctx->mlu_input = pctx->mem_op.AllocMluInput(mem_bsize);
+      pctx->mlu_output = pctx->mem_op.AllocMluOutput(mem_bsize);
 
       // resize and convert op
       uint32_t src_w = 0;
       uint32_t src_h = 0;
-      libstream::CnShape model_input_shape = model_loader_->input_shapes()[0];
-      uint32_t dst_w = model_input_shape.w();
-      uint32_t dst_h = model_input_shape.h();
-      pctx->rc_op.set_src_resolution(src_w, src_h);
-      pctx->rc_op.set_dst_resolution(dst_w, dst_h);
-      pctx->rc_op.set_cnrt_stream(pctx->infer.rt_stream());
-      pctx->rc_op.set_cmode(libstream::MluRCOp::YUV2BGRA_NV21);
+      edk::Shape model_input_shape = model_loader_->InputShapes()[0];
+      uint32_t dst_w = model_input_shape.w;
+      uint32_t dst_h = model_input_shape.h;
+
+      edk::MluResizeConvertOp::Attr new_attr;
+      new_attr.src_h = src_h;
+      new_attr.src_w = src_w;
+      new_attr.dst_h = dst_h;
+      new_attr.dst_w = dst_w;
+      new_attr.color_mode = edk::MluResizeConvertOp::ColorMode::YUV2BGRA_NV21;
+      pctx->rc_op.SetMluQueue(pctx->infer.GetMluQueue());
       // batching timeout operator
       pctx->timeout_handler = std::make_shared<TimeoutOperator>();
       pctx->timeout_handler->SetTimeout(batching_timeout_);
@@ -289,7 +320,7 @@ class InferencerPrivate {
     CHECK_GT(bidx, 0);
     auto tfunc = [=]() -> int {
       pctx->env.ConfigureForThisThread();
-      auto shapes = model_loader_->input_shapes();
+      auto shapes = model_loader_->InputShapes();
 
       if (cpu_preproc_.get()) {
         /* case A: preprocessing use cpu */
@@ -319,7 +350,7 @@ class InferencerPrivate {
                 pctx->rc_op.InvokeOp will be stuck when pctx->rc_op.src_resolution() is (0, 0)
             */
             pctx->rc_op.BatchingUp(y_plane, uv_plane);
-          } catch (libstream::StreamlibsError& e) {
+          } catch (edk::Exception& e) {
             q_ptr_->PostEvent(EVENT_ERROR, e.what());
             return -1;
           }
@@ -338,8 +369,8 @@ class InferencerPrivate {
 
           if (IsYAndUVSplit(model_loader_)) {
             /* case B.b.1: model with y and uv split input */
-            if (data->frame.width != static_cast<int>(shapes[0].w()) ||
-                data->frame.height != static_cast<int>(shapes[0].h())) {
+            if (data->frame.width != static_cast<int>(shapes[0].w) ||
+                data->frame.height != static_cast<int>(shapes[0].h)) {
               q_ptr_->PostEvent(EVENT_ERROR,
                                 "Can not deal with this frame, wrong size: " + std::to_string(data->frame.width) + "x" +
                                     std::to_string(data->frame.height));
@@ -349,12 +380,9 @@ class InferencerPrivate {
             uint64_t y_plane_offset = 0, uv_plane_offset = 0;
             {
 #ifdef CNS_MLU100
-              unsigned int align_size;
-              cnrtRet_t ret = cnrtGetMemcpyBatchAlignment(model_loader_->input_desc_array()[0], &align_size);
-              CHECK_EQ(ret, CNRT_RET_SUCCESS);
+              unsigned int align_size = model_loader_->GetOutputDataBatchAlignSize(0);
               y_plane_offset = (bidx - 1) * align_size;
-              ret = cnrtGetMemcpyBatchAlignment(model_loader_->input_desc_array()[1], &align_size);
-              CHECK_EQ(ret, CNRT_RET_SUCCESS);
+              align_size = model_loader_->GetOutputDataBatchAlignSize(1);
               uv_plane_offset = (bidx - 1) * align_size;
 #elif CNS_MLU270
               y_plane_offset = (bidx - 1) * shapes[0].hw();
@@ -366,8 +394,8 @@ class InferencerPrivate {
 
           } else {
             /* case B.b.2: model with y and uv packed input */
-            if (data->frame.width != static_cast<int>(shapes[0].w()) ||
-                data->frame.height * 3 / 2 != static_cast<int>(shapes[0].h())) {
+            if (data->frame.width != static_cast<int>(shapes[0].w) ||
+                data->frame.height * 3 / 2 != static_cast<int>(shapes[0].h)) {
               q_ptr_->PostEvent(EVENT_ERROR,
                                 "Can not deal with this frame, wrong size: " + std::to_string(data->frame.width) + "x" +
                                     std::to_string(data->frame.height));
@@ -376,9 +404,7 @@ class InferencerPrivate {
             uint64_t offset = 0;
             {
 #ifdef CNS_MLU100
-              unsigned int align_size;
-              cnrtRet_t ret = cnrtGetMemcpyBatchAlignment(model_loader_->input_desc_array()[0], &align_size);
-              CHECK_EQ(ret, CNRT_RET_SUCCESS);
+              unsigned int align_size = model_loader_->GetOutputDataBatchAlignSize(0);
               offset = (bidx - 1) * align_size;
 #elif CNS_MLU270
               offset = (bidx - 1) * shapes[0].hw();
@@ -420,9 +446,9 @@ class InferencerPrivate {
 #endif
       try {
         if (cpu_preproc_.get() != nullptr) {
-          pctx->mem_op.memcpy_input_h2d(pctx->cpu_input, pctx->mlu_input, mem_bsize);
+          pctx->mem_op.MemcpyInputH2D(pctx->mlu_input, pctx->cpu_input, mem_bsize);
         }
-      } catch (libstream::StreamlibsError& e) {
+      } catch (edk::Exception& e) {
         q_ptr_->PostEvent(EVENT_ERROR, e.what());
         return -1;
       }
@@ -442,23 +468,25 @@ class InferencerPrivate {
       const uint32_t bsize = vec_data.size();
       if (bsize == 0) return 0;
       try {
-        // prepare fake data
-        char* y_plane_fake_data = reinterpret_cast<char*>(pctx->rc_input_fake_data.y_plane_data);
-        char* uv_plane_fake_data = reinterpret_cast<char*>(pctx->rc_input_fake_data.uv_plane_data);
-        for (uint32_t bi = bsize; bi < bsize_; ++bi) {
-          auto src_y = reinterpret_cast<void*>(y_plane_fake_data);
-          auto src_uv = reinterpret_cast<void*>(uv_plane_fake_data);
-          pctx->rc_op.BatchingUp(src_y, src_uv);
-          y_plane_fake_data += vec_data[0]->frame.GetPlaneBytes(0);
-          uv_plane_fake_data += vec_data[0]->frame.GetPlaneBytes(1);
-        }
-        /* do resize convert */
-        if (!pctx->rc_op.SyncOneOutput(pctx->mlu_input[0])) {
-          throw libstream::StreamlibsError(pctx->rc_op.GetLastError());
+        if (cpu_preproc_.get() == nullptr) {
+          // prepare fake data
+          char* y_plane_fake_data = reinterpret_cast<char*>(pctx->rc_input_fake_data.y_plane_data);
+          char* uv_plane_fake_data = reinterpret_cast<char*>(pctx->rc_input_fake_data.uv_plane_data);
+          for (uint32_t bi = bsize; bi < bsize_; ++bi) {
+            auto src_y = reinterpret_cast<void*>(y_plane_fake_data);
+            auto src_uv = reinterpret_cast<void*>(uv_plane_fake_data);
+            pctx->rc_op.BatchingUp(src_y, src_uv);
+            y_plane_fake_data += vec_data[0]->frame.GetPlaneBytes(0);
+            uv_plane_fake_data += vec_data[0]->frame.GetPlaneBytes(1);
+          }
+          /* do resize convert */
+          if (!pctx->rc_op.SyncOneOutput(pctx->mlu_input[0])) {
+            throw edk::Exception(pctx->rc_op.GetLastError());
+          }
         }
         /* inference by offline model */
-        pctx->infer.run(pctx->mlu_input, pctx->mlu_output);
-      } catch (libstream::StreamlibsError& e) {
+        pctx->infer.Run(pctx->mlu_input, pctx->mlu_output);
+      } catch (edk::Exception& e) {
         q_ptr_->PostEvent(EVENT_ERROR, e.what());
         return -1;
       }
@@ -482,8 +510,8 @@ class InferencerPrivate {
 #endif
       try {
         /* copy results to host */
-        pctx->mem_op.memcpy_output_d2h(pctx->mlu_output, pctx->cpu_output, mem_bsize);
-      } catch (libstream::StreamlibsError& e) {
+        pctx->mem_op.MemcpyOutputD2H(pctx->cpu_output, pctx->mlu_output, mem_bsize);
+      } catch (edk::Exception& e) {
         q_ptr_->PostEvent(EVENT_ERROR, e.what());
         return -1;
       }
@@ -500,7 +528,7 @@ class InferencerPrivate {
     auto tfunc = [=]() -> int {
       /* structed inference results */
       if (post_proc_.get() != nullptr) {
-        auto shapes = model_loader_->output_shapes();
+        auto shapes = model_loader_->OutputShapes();
         std::vector<float*> results;
         for (size_t output_i = 0; output_i < shapes.size(); ++output_i) {
 #ifdef CNS_MLU100
@@ -609,10 +637,15 @@ class InferencerPrivate {
     if (!eos) {
       // preprocess tasks
       InferTaskSptr task = CreatePreprocTask(pctx, bidx, data);
-      if (cpu_preproc_.get())
+      if (cpu_preproc_.get()) {
         task->BindFrontTask(pctx->H2D_task);
-      else
+      } else {
+        if (pctx->preproc_tasks.size() > 0) {
+          auto front_preproc_task = pctx->preproc_tasks[pctx->preproc_tasks.size() - 1];
+          task->BindFrontTask(front_preproc_task);
+        }
         task->BindFrontTask(pctx->invoke_task);
+      }
       pctx->preproc_tasks.push_back(task);
       tpool_.SubmitTask(task);
     }
@@ -634,6 +667,16 @@ class InferencerPrivate {
 Inferencer::Inferencer(const std::string& name) : Module(name) {
   d_ptr_ = nullptr;
   hasTransmit_.store(1);  // transmit data by module itself
+  param_register_.SetModuleDesc("Inferencer is a module for running offline model inference.");
+  param_register_.Register("model_path", "The offline model path.");
+  param_register_.Register("func_name", "The offline model func name.");
+  param_register_.Register("postproc_name", "The postproc name.");
+  param_register_.Register("peproc_name", "The preproc name.");
+  param_register_.Register("device_id", "Device ID.");
+  param_register_.Register("batching_timeout", "Batch timeout time.");
+  param_register_.Register("data_order", "Data order.");
+  param_register_.Register("batch_size", "The batch size.");
+  param_register_.Register("infer_interval_", "Infer interval.");
 }
 
 Inferencer::~Inferencer() {}
@@ -650,21 +693,27 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
     return false;
   }
 
-  std::string model_path = GetFullPath(paramSet["model_path"]);
+  std::string model_path = paramSet["model_path"];
+  model_path = GetPathRelativeToTheJSONFile(model_path, paramSet);
+
   std::string func_name = paramSet["func_name"];
   std::string Data_Order;
   if (paramSet.find("data_order") != paramSet.end()) {
     Data_Order = paramSet["data_order"];
   }
   try {
-    d_ptr_->model_loader_ = std::make_shared<libstream::ModelLoader>(model_path, func_name);
+    d_ptr_->model_loader_ = std::make_shared<edk::ModelLoader>(model_path, func_name);
     if (d_ptr_->model_loader_.get() == nullptr) {
       LOG(ERROR) << "[Inferencer] load model failed, model path: " << model_path;
       return false;
     }
     d_ptr_->model_loader_->InitLayout();
-    if (Data_Order == "NCHW")
-      d_ptr_->model_loader_->SetLayout(libstream::DataType::FLOAT32, libstream::DimOrder::NCHW, 0, 0);
+    if (Data_Order == "NCHW") {
+      edk::DataLayout layout;
+      layout.dtype = edk::DataType::FLOAT32;
+      layout.order = edk::DimOrder::NCHW;
+      d_ptr_->model_loader_->SetCpuOutputLayout(layout, 0);
+    }
 
     std::string postproc_name = paramSet["postproc_name"];
     d_ptr_->post_proc_ = std::shared_ptr<cnstream::Postproc>(cnstream::Postproc::Create(postproc_name));
@@ -672,8 +721,8 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
       LOG(ERROR) << "[Inferencer] Can not find Postproc implemention by name: " << postproc_name;
       return false;
     }
-  } catch (libstream::StreamlibsError& e) {
-    LOG(ERROR) << e.what();
+  } catch (edk::Exception& e) {
+    LOG(ERROR) << "model path:" << model_path << ". " << e.what();
     return false;
   }
 
@@ -704,7 +753,7 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
     ss >> d_ptr_->bsize_;
   }
 #elif CNS_MLU270
-  d_ptr_->bsize_ = d_ptr_->model_loader_->input_shapes()[0].n();
+  d_ptr_->bsize_ = d_ptr_->model_loader_->InputShapes()[0].n;
 #endif
   DLOG(INFO) << GetName() << " batch size:" << d_ptr_->bsize_;
 
@@ -737,19 +786,27 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
   }
 
   /* hold this code. when all threads that set the cnrt device id exit, cnrt may release the memory itself */
-  libstream::MluContext ctx;
-  ctx.set_dev_id(d_ptr_->device_id_);
+  edk::MluContext ctx;
+  ctx.SetDeviceId(d_ptr_->device_id_);
   ctx.ConfigureForThisThread();
 
   return true;
 }
 
 void Inferencer::Close() {
+  if (nullptr == d_ptr_) return;
+
   d_ptr_->tpool_.Destroy();
-  if (d_ptr_ != nullptr) {
-    delete d_ptr_;
-    d_ptr_ = nullptr;
+
+  /*destroy infer contexts*/
+  std::lock_guard<std::mutex> lk(d_ptr_->ctx_mtx_);
+  for (InferContext* it : d_ptr_->infer_ctxs_) {
+    delete it;
   }
+  d_ptr_->infer_ctxs_.clear();
+
+  delete d_ptr_;
+  d_ptr_ = nullptr;
 }
 
 int Inferencer::Process(CNFrameInfoPtr data) {
@@ -765,6 +822,31 @@ int Inferencer::Process(CNFrameInfoPtr data) {
   d_ptr_->Forward(data);
 
   return 1;
+}
+
+bool Inferencer::CheckParamSet(ModuleParamSet paramSet) {
+  ParametersChecker checker;
+  for (auto& it : paramSet) {
+    if (!param_register_.IsRegisted(it.first)) {
+      LOG(WARNING) << "[Inferencer] Unknown param: " << it.first;
+    }
+  }
+  if (paramSet.find("model_path") == paramSet.end()
+      || paramSet.find("func_name") == paramSet.end()
+      || paramSet.find("postproc_name") == paramSet.end()) {
+    LOG(ERROR) << "Inferencer must specify [model_path], [func_name], [postproc_name].";
+    return false;
+  }
+  if (!checker.CheckPath(paramSet["model_path"], paramSet)) {
+    LOG(ERROR) << "[Inferencer] [model_path] : " << paramSet["model_path"] << " non-existence.";
+    return false;
+  }
+  std::string err_msg;
+  if (!checker.IsNum({"batching_timeout", "device_id"}, paramSet, err_msg)) {
+    LOG(ERROR) << "[Inferencer] " << err_msg;
+    return false;
+  }
+  return true;
 }
 
 }  // namespace cnstream

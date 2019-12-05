@@ -81,7 +81,7 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
                  It could be found in cambricon_twins file.
                  For most case, it is "subnet0".
       postproc_name: Class name for postprocess. See cnstream::Postproc.
-      cpu_preproc_name: Class name for preprocess on CPU. See cnstream::Preproc.
+      preproc_name: Class name for preprocess on CPU. See cnstream::Preproc.
       device_id: MLU device oridinal.
       batch_size:  maximum 32, default 1. Only active on MLU100.
       batching_timeout: batching timeout. default 3000.0[ms]. type[float]. unit[ms].
@@ -107,6 +107,14 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
    * @retval -1: the process fail
    */
   int Process(CNFrameInfoPtr data) final;
+  /**
+   * @brief Check ParamSet for a module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Returns true if this API run successfully. Otherwise, returns false.
+   */
+  bool CheckParamSet(ModuleParamSet paramSet) override;
 
  protected:
   DECLARE_PRIVATE(d_ptr_, Inferencer);

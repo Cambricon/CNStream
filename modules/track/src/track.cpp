@@ -24,32 +24,59 @@
 
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
-#include "feature_extractor_impl.h"
+#include "feature_extractor.h"
 
 namespace cnstream {
+
+/**************************************************************************
+ * @brief Tracker thread context
+ *************************************************************************/
+struct TrackerContext {
+  std::unique_ptr<edk::EasyTrack> processer_ = nullptr;
+  std::unique_ptr<FeatureExtractor> feature_extractor_ = nullptr;
+  TrackerContext() = default;
+  ~TrackerContext() = default;
+  TrackerContext(const TrackerContext &) = delete;
+  TrackerContext& operator=(const TrackerContext&) = delete;
+};
+
+static thread_local TrackerContext g_tl_ctx;
 
 Tracker::Tracker(const std::string &name) : Module(name) {}
 
 Tracker::~Tracker() { Close(); }
 
-TrackerContext *Tracker::GetTrackerContext(CNFrameInfoPtr data) {
-  TrackerContext *ctx = nullptr;
-  auto it = tracker_ctxs_.find(data->channel_idx);
-  if (it != tracker_ctxs_.end()) {
-    ctx = it->second;
-  } else {
-    ctx = new TrackerContext;
-    ctx->frame_index_ = 0;
-    tracker_ctxs_[data->channel_idx] = ctx;
+inline TrackerContext *Tracker::GetTrackerContext() {
+  if (!g_tl_ctx.processer_) {
+    if ("KCF" == track_name_) {
+      assert(nullptr != pKCFloader_);
+      g_tl_ctx.processer_.reset(new edk::KcfTrack);
+      if (!g_tl_ctx.processer_) return nullptr;
+
+      dynamic_cast<edk::KcfTrack*>(g_tl_ctx.processer_.get())->SetModel(pKCFloader_);
+    } else {  // "FeatureMatch by default"
+      g_tl_ctx.processer_.reset(new edk::FeatureMatchTrack);
+      if (!g_tl_ctx.processer_) return nullptr;
+
+      g_tl_ctx.feature_extractor_ = std::unique_ptr<FeatureExtractor>(new FeatureExtractor);
+      #ifdef CNS_MLU100
+      if (!g_tl_ctx.feature_extractor_->Init(model_path_, func_name_)) {
+        LOG(ERROR) << "FeatureMatchTrack Feature Extractor initial failed.";
+        return nullptr;
+      }
+      #endif
+    }
   }
-  return ctx;
+  return &g_tl_ctx;
 }
 
 bool Tracker::Open(cnstream::ModuleParamSet paramSet) {
   if (paramSet.find("model_path") != paramSet.end() && paramSet.find("func_name") != paramSet.end()) {
-    model_path_ = GetFullPath(paramSet.find("model_path")->second);
+    model_path_ = paramSet["model_path"];
+    model_path_ = GetPathRelativeToTheJSONFile(model_path_, paramSet);
     func_name_ = paramSet.find("func_name")->second;
   } else {
     model_path_ = "";
@@ -64,8 +91,8 @@ bool Tracker::Open(cnstream::ModuleParamSet paramSet) {
     }
     if (track_name_ == "KCF") {
       try {
-        ploader_ = std::make_shared<libstream::ModelLoader>(model_path_, func_name_);
-      } catch (libstream::StreamlibsError &e) {
+        pKCFloader_ = std::make_shared<edk::ModelLoader>(model_path_, func_name_);
+      } catch (edk::Exception &e) {
         LOG(ERROR) << e.what();
         return false;
       }
@@ -75,56 +102,45 @@ bool Tracker::Open(cnstream::ModuleParamSet paramSet) {
   } else {
     track_name_ = "FeatureMatch";
   }
+
   return true;
 }
 
-void Tracker::Close() {
-  for (auto &pair : tracker_ctxs_) {
-    if (pair.second->processer_) {
-      delete pair.second->processer_;
-      pair.second->processer_ = nullptr;
-    }
-    delete pair.second;
-  }
-  tracker_ctxs_.clear();
-}
+void Tracker::Close() {}
 
 int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
-  TrackerContext *ctx = GetTrackerContext(data);
-  if (!ctx->processer_) {
-    if (track_name_ == "FeatureMatch") {
-      ctx->processer_ = libstream::CnTrack::Create("FeatureMatchTrack");
-      auto feat = std::make_shared<FeatureExtractorImpl>();
-      feat->Init(model_path_, func_name_);
-      ctx->processer_->SetFeatureExtractor(feat);
-    } else if (track_name_ == "KCF") {
-      ctx->processer_ = libstream::CnTrack::Create("KcfTrack");
-      ctx->processer_->SetModel(ploader_);
-    }
+  TrackerContext *ctx = GetTrackerContext();
+  if (nullptr == ctx || nullptr == ctx->processer_) {
+    throw TrackerError("Get Tracker Context Failed.");
+    return -1;
   }
 
   if (track_name_ == "FeatureMatch") {
-    std::vector<CnDetectObject> in, out;
+    std::vector<edk::DetectObject> in, out;
     for (size_t i = 0; i < data->objs.size(); i++) {
-      CnDetectObject obj;
+      edk::DetectObject obj;
       obj.label = std::stoi(data->objs[i]->id);
       obj.score = data->objs[i]->score;
-      obj.x = data->objs[i]->bbox.x;
-      obj.y = data->objs[i]->bbox.y;
-      obj.w = data->objs[i]->bbox.w;
-      obj.h = data->objs[i]->bbox.h;
+      obj.bbox.x = data->objs[i]->bbox.x;
+      obj.bbox.y = data->objs[i]->bbox.y;
+      obj.bbox.width = data->objs[i]->bbox.w;
+      obj.bbox.height = data->objs[i]->bbox.h;
       in.push_back(obj);
     }
 
 #ifdef HAVE_OPENCV
     cv::Mat img = *data->frame.ImageBGR();
 
-    libstream::TrackFrame tframe;
+    edk::TrackFrame tframe;
     tframe.data = img.data;
-    tframe.size.w = img.cols;
-    tframe.size.h = img.rows;
-    tframe.format = libstream::CnPixelFormat::RGB24;
-    tframe.dev_type = libstream::TrackFrame::DevType::CPU;
+    tframe.width = img.cols;
+    tframe.height = img.rows;
+    tframe.format = edk::TrackFrame::ColorSpace::RGB24;
+    tframe.dev_type = edk::TrackFrame::DevType::CPU;
+
+    for (auto& obj : in) {
+      obj.feature = ctx->feature_extractor_->ExtractFeature(tframe, obj);
+    }
 
     ctx->processer_->UpdateFrame(tframe, in, &out);
 #else
@@ -137,32 +153,32 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
       obj->id = std::to_string(out[i].label);
       obj->track_id = std::to_string(out[i].track_id);
       obj->score = out[i].score;
-      obj->bbox.x = out[i].x;
-      obj->bbox.y = out[i].y;
-      obj->bbox.w = out[i].w;
-      obj->bbox.h = out[i].h;
+      obj->bbox.x = out[i].bbox.x;
+      obj->bbox.y = out[i].bbox.y;
+      obj->bbox.w = out[i].bbox.width;
+      obj->bbox.h = out[i].bbox.height;
       data->objs.push_back(obj);
     }
   } else if (track_name_ == "KCF") {
-    std::vector<CnDetectObject> in, out;
+    std::vector<edk::DetectObject> in, out;
     for (size_t i = 0; i < data->objs.size(); i++) {
-      CnDetectObject obj;
+      edk::DetectObject obj;
       obj.label = std::stoi(data->objs[i]->id);
       obj.score = data->objs[i]->score;
-      obj.x = data->objs[i]->bbox.x;
-      obj.y = data->objs[i]->bbox.y;
-      obj.w = data->objs[i]->bbox.w;
-      obj.h = data->objs[i]->bbox.h;
+      obj.bbox.x = data->objs[i]->bbox.x;
+      obj.bbox.y = data->objs[i]->bbox.y;
+      obj.bbox.width = data->objs[i]->bbox.w;
+      obj.bbox.height = data->objs[i]->bbox.h;
       in.push_back(obj);
     }
 
-    libstream::TrackFrame tframe;
+    edk::TrackFrame tframe;
     tframe.data = data->frame.data[0]->GetMutableMluData();
-    tframe.size.w = data->frame.width;
-    tframe.size.h = data->frame.height;
-    tframe.format = libstream::CnPixelFormat::YUV420SP_NV21;
-    tframe.frame_id = ctx->frame_index_++;
-    tframe.dev_type = libstream::TrackFrame::DevType::MLU;
+    tframe.width = data->frame.width;
+    tframe.height = data->frame.height;
+    tframe.format = edk::TrackFrame::ColorSpace::NV21;
+    tframe.frame_id = data->frame.frame_id;
+    tframe.dev_type = edk::TrackFrame::DevType::MLU;
     tframe.device_id = data->frame.ctx.dev_id;
 
     ctx->processer_->UpdateFrame(tframe, in, &out);
@@ -173,10 +189,10 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
       obj->id = std::to_string(out[i].label);
       obj->track_id = std::to_string(out[i].track_id);
       obj->score = out[i].score;
-      obj->bbox.x = out[i].x;
-      obj->bbox.y = out[i].y;
-      obj->bbox.w = out[i].w;
-      obj->bbox.h = out[i].h;
+      obj->bbox.x = out[i].bbox.x;
+      obj->bbox.y = out[i].bbox.y;
+      obj->bbox.w = out[i].bbox.width;
+      obj->bbox.h = out[i].bbox.height;
       data->objs.push_back(obj);
     }
   }

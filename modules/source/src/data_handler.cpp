@@ -19,41 +19,15 @@
  *************************************************************************/
 
 #include "data_handler.hpp"
+#include "easyinfer/mlu_context.h"
 #include "fr_controller.hpp"
 #include "glog/logging.h"
 
 namespace cnstream {
 
-std::mutex DataHandler::index_mutex_;
-uint64_t DataHandler::index_mask_ = 0;
-
-/*maxStreamNumber is sizeof(index_mask_) * 8  (bytes->bits)
- */
-size_t DataHandler::GetStreamIndex() {
-  std::unique_lock<std::mutex> lock(index_mutex_);
-  if (streamIndex_ != INVALID_STREAM_ID) {
-    return streamIndex_;
-  }
-  for (size_t i = 0; i < sizeof(index_mask_) * 8; i++) {
-    if (!(index_mask_ & ((uint64_t)1 << i))) {
-      index_mask_ |= (uint64_t)1 << i;
-      streamIndex_ = i;
-      return i;
-    }
-  }
-  return INVALID_STREAM_ID;
-}
-
-void DataHandler::ReturnStreamIndex() const {
-  std::unique_lock<std::mutex> lock(index_mutex_);
-  if (streamIndex_ < 0 || streamIndex_ >= sizeof(index_mask_) * 8) {
-    return;
-  }
-  index_mask_ &= ~((uint64_t)1 << streamIndex_);
-}
-
 bool DataHandler::Open() {
   if (!this->module_) {
+    LOG(ERROR) << "module_ null";
     return false;
   }
 
@@ -62,7 +36,8 @@ bool DataHandler::Open() {
   dev_ctx_.dev_id = 0;
 
   // updated with paramSet
-  param_ = module_->GetSourceParam();
+  DataSource *source = dynamic_cast<DataSource *>(module_);
+  param_ = source->GetSourceParam();
   if (param_.output_type_ == OUTPUT_CPU) {
     dev_ctx_.dev_type = DevContext::CPU;
     dev_ctx_.dev_id = -1;
@@ -70,14 +45,16 @@ bool DataHandler::Open() {
     dev_ctx_.dev_type = DevContext::MLU;
     dev_ctx_.dev_id = param_.device_id_;
   } else {
+    LOG(ERROR) << "output_type not supported:" << param_.output_type_;
     return false;
   }
 
-  size_t chn_idx = this->GetStreamIndex();
-  if (chn_idx == DataHandler::INVALID_STREAM_ID) {
+  size_t chn_idx = stream_index_;
+  if (chn_idx == cnstream::INVALID_STREAM_IDX) {
+    LOG(ERROR) << "invalid chn_idx(stream_idx)";
     return false;
   }
-  dev_ctx_.ddr_channel = chn_idx % 4;
+  dev_ctx_.ddr_channel = chn_idx % 4;  // FIXME
 
   this->interval_ = param_.interval_;
 
@@ -97,7 +74,24 @@ void DataHandler::Close() {
 }
 
 void DataHandler::Loop() {
+  /*meet cnrt requirement*/
+  if (dev_ctx_.dev_id != DevContext::INVALID) {
+    try {
+      edk::MluContext mlu_ctx;
+      mlu_ctx.SetDeviceId(dev_ctx_.dev_id);
+      mlu_ctx.SetChannelId(dev_ctx_.ddr_channel);
+      mlu_ctx.ConfigureForThisThread();
+    } catch (edk::Exception &e) {
+      if (nullptr != module_)
+        module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup dev/channel.");
+      return;
+    }
+  }
+
   if (!PrepareResources()) {
+    if (nullptr != module_)
+      module_->PostEvent(
+          EVENT_ERROR, "stream_id " + stream_id_ + "Prepare codec resources failed, maybe codec resources not enough.");
     return;
   }
 

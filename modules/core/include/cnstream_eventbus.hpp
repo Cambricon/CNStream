@@ -27,6 +27,7 @@
  *  This file contains a declaration of the EventBus class.
  */
 
+#include <atomic>
 #include <functional>
 #include <list>
 #include <mutex>
@@ -128,8 +129,8 @@ class EventBus {
    * @brief Removes all bus watchers.
    */
   void ClearAllWatchers();
-  inline bool IsRunning() const { return running_; }
-  bool running_ = false;
+  inline bool IsRunning() const { return running_.load(); }
+  std::atomic<bool> running_{false};
 
  private:
   std::mutex watcher_mut_;

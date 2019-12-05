@@ -39,9 +39,15 @@ class EventBusPrivate {
   DISABLE_COPY_AND_ASSIGN(EventBusPrivate);
 };  // class EventBusPrivate
 
-EventBus::EventBus() { d_ptr_ = new EventBusPrivate(this); }
+EventBus::EventBus() {
+  running_.store(false);
+  d_ptr_ = new EventBusPrivate(this);
+}
 
-EventBus::~EventBus() { delete d_ptr_; }
+EventBus::~EventBus() {
+  running_.store(false);
+  delete d_ptr_;
+}
 
 // return number of bus watchers
 uint32_t EventBus::AddBusWatch(BusWatcher func, Module *watch_module) {
@@ -58,7 +64,7 @@ void EventBus::ClearAllWatchers() {
 const std::list<std::pair<BusWatcher, Module *>> &EventBus::GetBusWatchers() const { return d_ptr_->bus_watchers_; }
 
 bool EventBus::PostEvent(Event event) {
-  if (!running_) {
+  if (!running_.load()) {
     LOG(WARNING) << "Post event failed, pipeline not running";
     return false;
   }
@@ -70,12 +76,12 @@ bool EventBus::PostEvent(Event event) {
 Event EventBus::PollEvent() {
   Event event;
   event.type = EVENT_INVALID;
-  while (running_) {
+  while (running_.load()) {
     if (d_ptr_->queue_.WaitAndTryPop(event, std::chrono::milliseconds(100))) {
       break;
     }
   }
-  if (!running_) event.type = EVENT_STOP;
+  if (!running_.load()) event.type = EVENT_STOP;
   return event;
 }
 

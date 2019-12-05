@@ -28,7 +28,11 @@ namespace cnstream {
 CNSpinLock Module::module_id_spinlock_;
 uint64_t Module::module_id_mask_ = 0;
 
-/*maxModuleIdNum is sizeof(module_id_mask_) * 8  (bytes->bits)*/
+uint32_t GetMaxModuleNumber() {
+  /*maxModuleIdNum is sizeof(module_id_mask_) * 8  (bytes->bits)*/
+  return sizeof(uint64_t) * 8;
+}
+
 size_t Module::GetId() {
   CNSpinLockGuard guard(module_id_spinlock_);
   if (id_ != INVALID_MODULE_ID) {
@@ -64,6 +68,33 @@ bool Module::PostEvent(EventType type, const std::string& msg) const {
   } else {
     LOG(WARNING) << "[" << GetName() << "] module's container is not set";
     return false;
+  }
+}
+
+int Module::DoProcess(std::shared_ptr<CNFrameInfo> data) {
+  if (!hasTranmit()) {
+    if (!isSource_) fps_stat_.Update(data);
+    return Process(data);
+  }
+  return Process(data);
+}
+
+bool Module::TransmitData(std::shared_ptr<CNFrameInfo> data) {
+  if (hasTranmit()) {
+    if (container_) {
+      if (!isSource_) fps_stat_.Update(data);
+      return container_->ProvideData(this, data);
+    }
+  }
+  return false;
+}
+
+/**
+ * Show performance statistics for this module
+ */
+void Module::PrintPerfInfo() {
+  if (!isSource_ && showPerfInfo_.load()) {
+    fps_stat_.PrintFps(this->GetName());
   }
 }
 

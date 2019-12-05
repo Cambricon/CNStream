@@ -32,8 +32,8 @@
 #include <utility>
 #include <vector>
 
-#include "cnbase/reflex_object.h"
-#include "cninfer/model_loader.h"
+#include "reflex_object.h"
+#include "easyinfer/model_loader.h"
 
 #include "cnstream_frame.hpp"
 
@@ -46,7 +46,7 @@ using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 /**
  * @brief Base class of pre process
  */
-class Preproc {
+class Preproc : virtual public ReflexObjectEx<Preproc> {
  public:
   /**
    * @brief do nothong
@@ -70,7 +70,7 @@ class Preproc {
    *
    * @return return 0 if succeed
    */
-  virtual int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<libstream::ModelLoader>& model,
+  virtual int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
                       const CNFrameInfoPtr& package) = 0;
 };  // class Preproc
 

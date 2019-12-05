@@ -75,7 +75,7 @@ TEST(CoreConveyor, MultiThreadPushPop) {
   Connector* con = new Connector(1, 20);
   Conveyor conveyor(con, 20);
 
-  CNFrameInfoPtr data = cnstream::CNFrameInfo::Create(std::to_string(0));
+  CNFrameInfoPtr data = CNFrameInfo::Create(std::to_string(0));
 
   int id = 0;
   seed_conveyor = (uint32_t)time(0);
@@ -120,7 +120,7 @@ TEST(CoreConveyor, GetBufferSize) {
 
   uint32_t store_num = rand_r(&seed_conveyor) % conveyor_capacity;
   for (uint32_t i = 0; i < store_num; ++i) {
-    auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
+    auto data = CNFrameInfo::Create(std::to_string(0));
     conveyor->PushDataBuffer(data);
   }
   EXPECT_EQ(conveyor->GetBufferSize(), store_num);
@@ -131,11 +131,47 @@ TEST(CoreConveyor, PushPopDataBuffer) {
   uint32_t conveyor_num = 2;
   Connector* connect = new Connector(conveyor_num);
   Conveyor* conveyor = connect->GetConveyor(conveyor_num - 1);
-  std::shared_ptr<CNFrameInfo> sdata = cnstream::CNFrameInfo::Create(std::to_string(0));
+  std::shared_ptr<CNFrameInfo> sdata = CNFrameInfo::Create(std::to_string(0));
   conveyor->PushDataBuffer(sdata);
   auto rdata = conveyor->PopDataBuffer();
   EXPECT_EQ(sdata.get(), rdata.get());
   delete connect;
+}
+
+TEST(CoreConveyor, PushDataFull) {
+  Connector* connect = new Connector(1);
+  size_t max_size = 10;
+  Conveyor* conveyor = new Conveyor(connect, max_size, true);
+  // When data queue is full, conveyor will drop one data from the front.
+  for (uint32_t i = 0; i < max_size + 1; i++) {
+    std::shared_ptr<CNFrameInfo> sdata = CNFrameInfo::Create(std::to_string(0));
+    conveyor->PushDataBuffer(sdata);
+  }
+  delete connect;
+  delete conveyor;
+}
+
+TEST(CoreConveyor, PopAllData) {
+  Connector* connect = new Connector(1);
+  size_t max_size = 10;
+  Conveyor* conveyor = new Conveyor(connect, max_size, true);
+  std::vector<std::shared_ptr<CNFrameInfo>> sdata_vec;
+  std::vector<std::shared_ptr<CNFrameInfo>> rdata_vec;
+  // When data queue is full, conveyor will drop one data from the front.
+  for (uint32_t i = 0; i < max_size + 1; i++) {
+    std::shared_ptr<CNFrameInfo> sdata = CNFrameInfo::Create(std::to_string(0));
+    sdata_vec.push_back(sdata);
+    conveyor->PushDataBuffer(sdata);
+  }
+  rdata_vec = conveyor->PopAllDataBuffer();
+
+  EXPECT_EQ(rdata_vec.size(), max_size);
+  for (uint32_t i = 0; i < max_size; i++) {
+    EXPECT_EQ(sdata_vec[i + 1], rdata_vec[i]);
+  }
+
+  delete connect;
+  delete conveyor;
 }
 
 }  // namespace cnstream

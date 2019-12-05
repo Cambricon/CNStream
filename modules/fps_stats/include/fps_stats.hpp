@@ -24,6 +24,9 @@
  *  \file fps_statistics.hpp
  *
  *  This file contains a declaration of fps_statistics
+ *
+ *  NOTE:
+ *    FpsStat is deprecated since fpsStat has been implemented in Module.
  */
 #include <chrono>
 #include <memory>
@@ -34,6 +37,7 @@
 #include "cnstream_pipeline.hpp"
 
 namespace cnstream {
+
 class FpsStats : public Module, public ModuleCreator<FpsStats> {
  public:
   /**
@@ -41,7 +45,7 @@ class FpsStats : public Module, public ModuleCreator<FpsStats> {
    * @param
    * 	moduleName[in]:defined module name
    */
-  explicit FpsStats(const std::string &moduleName);
+  explicit FpsStats(const std::string& moduleName);
   /**
    * @brief Deconstruct FpsStats object
    *
@@ -66,12 +70,15 @@ class FpsStats : public Module, public ModuleCreator<FpsStats> {
    */
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
+  /* @brief disable module::PrintPerfStat() for compatibility.
+   */
+  void PrintPerfInfo() override {}
+
  public:
   void ShowStatistics();
 
  private:
-  static const int MAX_STREAM_NUM = 64;
-  struct {
+  struct StreamFps {
     std::mutex mutex_;
     std::chrono::time_point<std::chrono::high_resolution_clock> start_time_;
     std::chrono::time_point<std::chrono::high_resolution_clock> end_time_;
@@ -80,8 +87,7 @@ class FpsStats : public Module, public ModuleCreator<FpsStats> {
     void update(std::shared_ptr<CNFrameInfo> data) {
       if (stream_id_.empty()) {
         stream_id_ = data->frame.stream_id;
-        start_time_ = std::chrono::high_resolution_clock::now();
-        end_time_ = std::chrono::high_resolution_clock::now();
+        start_time_ = end_time_ = std::chrono::high_resolution_clock::now();
       }
       if (!(data->frame.flags & CN_FRAME_FLAG_EOS)) {
         ++frame_count_;
@@ -95,7 +101,8 @@ class FpsStats : public Module, public ModuleCreator<FpsStats> {
       }
       return 0.0f;
     }
-  } stream_fps_[MAX_STREAM_NUM];
+  };
+  StreamFps* stream_fps_ = nullptr;
 };  // class FpsStats
 
 }  // namespace cnstream

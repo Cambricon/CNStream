@@ -17,6 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #include <string>
 
 #include "cnstream_eventbus.hpp"
@@ -27,6 +28,9 @@ namespace cnstream {
 Encoder::Encoder(const std::string &name) : Module(name) {}
 
 EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {
+  if (data->channel_idx >= GetMaxStreamNumber()) {
+    return nullptr;
+  }
   EncoderContext *ctx = nullptr;
   auto search = encode_ctxs_.find(data->channel_idx);
   if (search != encode_ctxs_.end()) {
@@ -49,9 +53,21 @@ Encoder::~Encoder() { Close(); }
 
 bool Encoder::Open(ModuleParamSet paramSet) {
   if (paramSet.find("dump_dir") == paramSet.end()) {
-    return false;
+    char *path;
+    path = getcwd(NULL, 0);
+    output_dir_ = path;
+    // return false;
+  } else {
+    output_dir_ = paramSet["dump_dir"];
   }
-  output_dir_ = paramSet["dump_dir"];
+  // 1, one channel binded to one thread, it can't be one channel binded to multi threads.
+  // 2, the hash value, each channel_idx (key) mapped to, is unique. So, each bucket stores one value.
+  // 3, set the buckets number of the unordered map to the maximum channel number before the threads are started,
+  //    thus, it doesn't need to be rehashed after.
+  // The three conditions above will guarantee, multi threads will write the different buckets of the unordered map,
+  // and the unordered map will not be rehashed after, so, it will not cause thread safe issue, when multi threads write
+  // the unordered map at the same time without locks.
+  encode_ctxs_.rehash(GetMaxStreamNumber());
   return true;
 }
 
@@ -68,6 +84,11 @@ void Encoder::Close() {
 
 int Encoder::Process(CNFrameInfoPtr data) {
   EncoderContext *ctx = GetEncoderContext(data);
+  if (ctx == nullptr) {
+    LOG(ERROR) << "Get Encoder Context Failed.";
+    return -1;
+  }
+
   ctx->writer.write(*data->frame.ImageBGR());
   return 0;
 }

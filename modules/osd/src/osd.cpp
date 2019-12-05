@@ -50,6 +50,14 @@ static std::vector<string> LoadLabels(const std::string& label_path) {
 
 namespace cnstream {
 
+/**
+ *@brief osd context structure
+ */
+struct OsdContext {
+  CnOsd* processer_ = nullptr;
+  uint32_t frame_index_;
+};
+
 #ifdef HAVE_FREETYPE
 
 CnFont::CnFont(const char* font_path) {
@@ -179,58 +187,104 @@ void CnFont::putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color
 
 Osd::Osd(const std::string& name) : Module(name) {}
 
+Osd::~Osd() { Close(); }
+
+OsdContext* Osd::GetOsdContext(CNFrameInfoPtr data) {
+  if (data->channel_idx >= GetMaxStreamNumber()) {
+    return nullptr;
+  }
+
+  OsdContext* ctx = nullptr;
+  auto it = osd_ctxs_.find(data->channel_idx);
+  if (it != osd_ctxs_.end()) {
+    ctx = it->second;
+  } else {
+    ctx = new OsdContext;
+    ctx->frame_index_ = 0;
+    osd_ctxs_[data->channel_idx] = ctx;
+  }
+  return ctx;
+}
+
 bool Osd::Open(cnstream::ModuleParamSet paramSet) {
+  std::string label_path = "";
   if (paramSet.find("label_path") == paramSet.end()) {
-    LOG(ERROR) << "Can not find label_path from module parameters.";
-    return false;
-  }
-  std::string label_path = GetFullPath(paramSet.find("label_path")->second);
-  labels_ = ::LoadLabels(label_path);
-  if (labels_.empty()) {
-    return false;
-  }
-#ifdef HAVE_FREETYPE
-  if (paramSet.find("chinese_label_flag") != paramSet.end()) {
-    if (paramSet.find("chinese_label_flag")->second == "true") {
-      chinese_label_flag_ = true;
-    } else if (paramSet.find("chinese_label_flag")->second == "false") {
-      chinese_label_flag_ = false;
+    LOG(WARNING) << "Can not find label_path from module parameters.";
+  } else {
+    label_path = paramSet["label_path"];
+    label_path = GetPathRelativeToTheJSONFile(label_path, paramSet);
+    labels_ = ::LoadLabels(label_path);
+    if (labels_.empty()) {
+      LOG(WARNING) << "Empty label file or wrong file path.";
     } else {
-      LOG(ERROR) << "chinese_label_flag must be set to true or false";
-      return false;
+#ifdef HAVE_FREETYPE
+      if (paramSet.find("chinese_label_flag") != paramSet.end()) {
+        if (paramSet.find("chinese_label_flag")->second == "true") {
+          chinese_label_flag_ = true;
+        } else if (paramSet.find("chinese_label_flag")->second == "false") {
+          chinese_label_flag_ = false;
+        } else {
+          LOG(ERROR) << "chinese_label_flag must be set to true or false";
+          return false;
+        }
+      }
+#endif
     }
   }
-#endif
+  // 1, one channel binded to one thread, it can't be one channel binded to multi threads.
+  // 2, the hash value, each channel_idx (key) mapped to, is unique. So, each bucket stores one value.
+  // 3, set the buckets number of the unordered map to the maximum channel number before the threads are started,
+  //    thus, it doesn't need to be rehashed after.
+  // The three conditions above will guarantee, multi threads will write the different buckets of the unordered map,
+  // and the unordered map will not be rehashed after, so, it will not cause thread safe issue, when multi threads write
+  // the unordered map at the same time without locks
+  osd_ctxs_.rehash(GetMaxStreamNumber());
   return true;
 }
 
-void Osd::Close() { /* empty */
+void Osd::Close() {
+  for (auto& pair : osd_ctxs_) {
+    if (pair.second->processer_) {
+      delete pair.second->processer_;
+      pair.second->processer_ = nullptr;
+    }
+    delete pair.second;
+  }
+  osd_ctxs_.clear();
 }
 
 #define CLIP(x) x < 0 ? 0 : (x > 1 ? 1 : x)
 static thread_local auto font_ = static_cast<std::shared_ptr<CnFont>>(new CnFont("/usr/include/wqy-zenhei.ttc"));
 
 int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
-  CnOsd processor(1, 1, labels_);
+  OsdContext* ctx = GetOsdContext(data);
+  if (ctx == nullptr) {
+    LOG(ERROR) << "Get Osd Context Failed.";
+    return -1;
+  }
 
-  std::vector<CnDetectObject> objs;
+  if (!ctx->processer_) {
+    ctx->processer_ = new CnOsd(1, 1, labels_);
+  }
+
+  std::vector<edk::DetectObject> objs;
   for (const auto& it : data->objs) {
-    CnDetectObject cn_obj;
-    cn_obj.label = std::stoi(it->id);
+    edk::DetectObject cn_obj;
+    cn_obj.label = it->id.empty() ? -1 : std::stoi(it->id);
     cn_obj.score = it->score;
-    cn_obj.x = CLIP(it->bbox.x);
-    cn_obj.y = CLIP(it->bbox.y);
-    cn_obj.w = CLIP(it->bbox.w);
-    cn_obj.h = CLIP(it->bbox.h);
-    cn_obj.w = (it->bbox.x + cn_obj.w > 1) ? (1 - cn_obj.x) : cn_obj.w;
-    cn_obj.h = (it->bbox.y + cn_obj.h > 1) ? (1 - cn_obj.y) : cn_obj.h;
+    cn_obj.bbox.x = CLIP(it->bbox.x);
+    cn_obj.bbox.y = CLIP(it->bbox.y);
+    cn_obj.bbox.width = CLIP(it->bbox.w);
+    cn_obj.bbox.height = CLIP(it->bbox.h);
+    cn_obj.bbox.width = (it->bbox.x + cn_obj.bbox.width > 1) ? (1 - cn_obj.bbox.x) : cn_obj.bbox.width;
+    cn_obj.bbox.height = (it->bbox.y + cn_obj.bbox.height > 1) ? (1 - cn_obj.bbox.y) : cn_obj.bbox.height;
     cn_obj.track_id = it->track_id.empty() ? -1 : std::stoi(it->track_id);
     objs.push_back(cn_obj);
   }
   if (!chinese_label_flag_) {
-    processor.DrawLabel(*data->frame.ImageBGR(), objs);
+    ctx->processer_->DrawLabel(*data->frame.ImageBGR(), objs);
   } else {
-    processor.DrawLabel(*data->frame.ImageBGR(), objs, font_.get());
+    ctx->processer_->DrawLabel(*data->frame.ImageBGR(), objs, font_.get());
   }
   return 0;
 }

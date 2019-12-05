@@ -94,157 +94,22 @@ static vector<Scalar> GenerateColors(const int n) {
   return colors;
 }
 
-static vector<string> LoadLabels(const string& filename) {
-  vector<string> labels;
-  std::ifstream file(filename);
-  if (file.is_open()) {
-    string line;
-    while (std::getline(file, line)) {
-      labels.push_back(string(line));
-    }
-    file.close();
-  } else {
-    printf("[Warnning]: Load labels failed: %s\n", filename.c_str());
-  }
-  return labels;
-}
-
 CnOsd::CnOsd(size_t rows, size_t cols, const vector<string>& labels) : rows_(rows), cols_(cols), labels_(labels) {
   colors_ = ::GenerateColors(labels_.size());
 }
 
-CnOsd::CnOsd(size_t rows, size_t cols, const string& label_fname) : rows_(rows), cols_(cols) {
-  LoadLabels(label_fname);
-}
-
-void CnOsd::LoadLabels(const std::string& fname) {
-  labels_ = ::LoadLabels(fname);
-  colors_ = ::GenerateColors(labels_.size());
-}
-
-void CnOsd::set_font(int font) { font_ = font; }
-
-void CnOsd::DrawId(Mat image, string text) const {
-  auto scale = CalScale(image.cols * image.rows);
-  auto text_size = cv::getTextSize(text, font_, scale, 1, nullptr);
-  Scalar color(0, 255, 255);
-  cv::putText(image, text, Point(0, text_size.height), font_, scale, color, 1, 8, false);
-}
-
-void CnOsd::DrawId(Mat image, size_t chn_id) const {
-  string text = "CHN:" + std::to_string(chn_id);
-  DrawId(image, text);
-}
-
-void CnOsd::DrawFps(Mat image, float fps) const {
-  // check input data
-  if (image.cols * image.rows == 0) {
-    return;
-  }
-
-  string text = "fps: " + ::FloatToString(fps);
-  auto scale = CalScale(image.cols * image.rows);
-  auto text_size = cv::getTextSize(text, font_, scale, 1, nullptr);
-  Scalar color(0, 0, 255);
-  cv::putText(image, text, Point(image.cols - text_size.width, text_size.height), font_, scale, color, 1, 8, false);
-}
-
-void CnOsd::DrawChannelFps(Mat image, const vector<float>& fps) const {
-  // check input data
-  if (cols() * rows() == 0) {
-    return;
-  }
-
-  if (image.cols * image.rows == 0) {
-    return;
-  }
-
-  // draw
-  auto width = image.cols / cols();
-  auto height = image.rows / rows();
-  auto chns = chn_num();
-  auto process_chn_num = std::min(chns, fps.size());
-
-  for (decltype(process_chn_num) chn = 0; chn < process_chn_num; ++chn) {
-    auto r = chn / cols();  // channel on which row.
-    auto c = chn % cols();  // channel on which col.
-    auto roi = image(cv::Rect(c * width, r * height, width, height));
-    DrawFps(roi, fps[chn]);
-  }
-}
-
-void CnOsd::DrawChannelFps(Mat image, float* fps, size_t len) const {
-  vector<float> vec;
-  vec.reserve(len);
-  for (size_t i = 0; i < len; ++i) {
-    vec.push_back(fps[i]);
-  }
-  DrawChannelFps(image, vec);
-}
-
-void CnOsd::DrawChannels(Mat image) const {
-  // check input data
-  if (cols() * rows() == 0) {
-    // Invalid tiling cols() * rows()
-    return;
-  }
-
-  if (image.cols * image.rows == 0) {
-    // Invalid image size [image.cols * image.rows]
-    return;
-  }
-
-  // draw
-  auto width = image.cols / cols();
-  auto height = image.rows / rows();
-  for (size_t chn = 0; chn < chn_num(); ++chn) {
-    auto r = chn / cols();  // channel on which row.
-    auto c = chn % cols();  // channel on which col.
-    auto roi = image(cv::Rect(c * width, r * height, width, height));
-    DrawId(roi, chn);
-  }
-}
-
-void CnOsd::DrawChannel(Mat image, size_t chn_id) const {
-  // check input data
-  if (cols() * rows() == 0) {
-    // Invalid tiling cols() * rows()
-    return;
-  }
-
-  if (image.cols * image.rows == 0) {
-    // Invalid image size [image.cols * image.rows]
-    return;
-  }
-
-  if (chn_id >= chn_num()) {
-    // Invalid channel id: chn_id while there are chn_num() channels
-    return;
-  }
-
-  // draw
-  auto width = image.cols / cols();
-  auto height = image.rows / rows();
-  auto r = chn_id / cols();  // channel on which row.
-  auto c = chn_id % cols();  // channel on which col.
-  auto roi = image(cv::Rect(c * width, r * height, width, height));
-  DrawId(roi, chn_id);
-}
-
-// tl: top left
-// br: bottom right
-// bl: bottom left
-void CnOsd::DrawLabel(Mat image, const vector<CnDetectObject>& objects, cnstream::CnFont* cn_font, bool tiled) const {
+void CnOsd::DrawLabel(Mat image, const vector<edk::DetectObject>& objects, cnstream::CnFont* cn_font,
+                      bool tiled) const {
   // check input data
   if (image.rows * image.cols == 0) {
     return;
   }
 
   for (auto& object : objects) {
-    float xmin = object.x * image.cols;
-    float ymin = object.y * image.rows;
-    float xmax = (object.x + object.w) * image.cols;
-    float ymax = (object.y + object.h) * image.rows;
+    float xmin = object.bbox.x * image.cols;
+    float ymin = object.bbox.y * image.rows;
+    float xmax = (object.bbox.x + object.bbox.width) * image.cols;
+    float ymax = (object.bbox.y + object.bbox.height) * image.rows;
 
     string text;
     Scalar color;

@@ -42,7 +42,7 @@ TEST(FpsStats, Process) {
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
   data->channel_idx = 0;
   auto data1 = cnstream::CNFrameInfo::Create(std::to_string(2));
-  data1->channel_idx = 100;
+  data1->channel_idx = GetMaxStreamNumber();
   EXPECT_EQ(fps_stats->Process(data), 0);
   EXPECT_EQ(fps_stats->Process(data1), -1);
   EXPECT_NO_THROW(fps_stats->ShowStatistics());
@@ -50,4 +50,3 @@ TEST(FpsStats, Process) {
 }
 
 }  // namespace cnstream
-

@@ -22,11 +22,25 @@
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
+#include "easyinfer/mlu_context.h"
+
+class TestEnvironment : public testing::Environment {
+ public:
+  virtual void SetUp() {
+    edk::MluContext mlu_ctx;
+    mlu_ctx.SetDeviceId(0);
+    mlu_ctx.SetChannelId(0);
+    mlu_ctx.ConfigureForThisThread();
+    LOG(INFO) << "Set Up global environment.";
+  }
+};
+
 int main(int argc, char **argv) {
   ::google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
   ::gflags::ParseCommandLineFlags(&argc, &argv, false);
   // FLAGS_alsologtostderr = true;
+  testing::AddGlobalTestEnvironment(new TestEnvironment);
   int ret = RUN_ALL_TESTS();
   ::google::ShutdownGoogleLogging();
   return ret;
