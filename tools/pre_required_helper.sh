@@ -44,7 +44,7 @@ installAptLibs() {
 }
 
 installYumLibs() {
-    ${SUDO_CMD} yum -y install opencv-devel.i686\
+    ${SUDO_CMD} yum -y install opencv-devel.x86_64\
 		gflags.x86_64\
 		glog.x86_64\
 		cmake3.x86_64\

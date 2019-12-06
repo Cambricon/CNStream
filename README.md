@@ -17,7 +17,7 @@ You can find the cambricon dependencies, including headers and libraries, in the
 
 ### Quick Start ###
 
-This section introduces how to quickly build instructions on CNStream and how to develop your own applications based on CNStream.
+This section introduces how to quickly build instructions on CNStream and how to develop your own applications based on CNStream. We strongly recommend you to excute `pre_required_helper.sh` to prepare the environment. If not, please follow below commands.
 
 #### **Required environments** ####
 
@@ -27,6 +27,7 @@ Before building instructions, you need to install the following software:
 - GFlags2.1.2
 - GLog0.3.4
 - Cmake2.8.7+
+- Live555   // if rtsp_sink enable, could install by running `build_live555.sh`
 
 #### Ubuntu or Debian ####
 
@@ -44,7 +45,7 @@ If you are using Ubuntu or Debian, run the following commands:
 If you are using Centos, run the following commands:
 
 ```bash
-  OpenCV2.4.9+  >>>>>>>>>   sudo yum install opencv-devel.i686
+  OpenCV2.4.9+  >>>>>>>>>   sudo yum install opencv-devel.x86_64
   GFlags2.1.2   >>>>>>>>>   sudo yum install gflags.x86_64
   GLog0.3.4     >>>>>>>>>   sudo yum install glog.x86_64
   Cmake2.8.7+   >>>>>>>>>   sudo yum install cmake3.x86_64
