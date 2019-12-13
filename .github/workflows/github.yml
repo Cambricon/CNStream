@@ -20,7 +20,5 @@ jobs:
     - name: Mkdir build
       run: |
         mkdir build
-    #- name: cmake
         cmake ..
-    #- name: make
         make -j16
