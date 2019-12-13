@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branchs:
+      - master
+
+jobs:
+  job_lintgit_check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Run lintgit
+      run: ./tools/lintgit master $PWD
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkou@v2
+    - name: Mkdir build
+      run: mkdir build
+    - name: cmake
+      run: cmake ..
+    - name: make
+      run: make -j16
