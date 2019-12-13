@@ -18,8 +18,9 @@ jobs:
     steps:
     - uses: actions/checkou@v2
     - name: Mkdir build
-      run: mkdir build
-    - name: cmake
-      run: cmake ..
-    - name: make
-      run: make -j16
+      run: |
+        mkdir build
+    #- name: cmake
+        cmake ..
+    #- name: make
+        make -j16
