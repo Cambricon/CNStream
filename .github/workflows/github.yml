@@ -21,5 +21,7 @@ jobs:
       run: ./tools/download_live.sh 
     - name: configure
       run: mkdir build && cd build && cmake -DMLU=MLU270 .. && make -j16
+    - name: export LD_LIBRARY_PATH
+      run: export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`pwd`
     - name: test
       run: ./build/bin/cnstream_test
