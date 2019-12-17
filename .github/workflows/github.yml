@@ -16,7 +16,6 @@ jobs:
   build:
     runs-on: [self-hosted]
     steps:
-    - uses: actions/checkou@v2
     - name: Mkdir build
       run: |
         mkdir build
