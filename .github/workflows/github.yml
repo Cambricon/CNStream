@@ -24,4 +24,4 @@ jobs:
     - name: export LD_LIBRARY_PATH
       run: cd mlu/MLU270/libs/x86_64/ && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`pwd`
     - name: test
-      run: ./build/bin/cnstream_test
+      run: echo $LD_LIBRARY_PATH && ./build/bin/cnstream_test
