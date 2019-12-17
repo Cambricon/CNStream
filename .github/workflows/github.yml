@@ -21,3 +21,5 @@ jobs:
       run: ./tools/download_live.sh 
     - name: configure
       run: mkdir build && cd build && cmake -DMLU=MLU270 .. && make -j16
+    - name: test
+      run: ./build/bin/cnstream_test
