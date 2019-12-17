@@ -7,18 +7,18 @@ on:
 
 jobs:
   job_lintgit_check:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted]
     steps:
     - uses: actions/checkout@v1
     - name: Run lintgit
       run: ./tools/lintgit master $PWD
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted]
     steps:
     - uses: actions/checkou@v2
     - name: Mkdir build
       run: |
         mkdir build
-        cmake ..
+        cmake -DMLU=MLU270 ..
         make -j16
