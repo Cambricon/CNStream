@@ -18,4 +18,4 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: configure
-      run: mkdir build && cd build && cmake -DMLU=MLU270 .. && make -j16
+      run: mkdir build && cd build && cmake -DWITH_RTSP=OFF -DMLU=MLU270 .. && make -j16
