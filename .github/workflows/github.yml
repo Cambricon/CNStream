@@ -16,9 +16,8 @@ jobs:
   build:
     runs-on: [self-hosted]
     steps:
-      - uses: action/checkou@v1
-      - name: Mkdir build
-        run: |
-          mkdir build
-          cmake -DMLU=MLU270 ..
-          make -j16
+    - uses: actions/checkout@v1
+    - name: configure
+      run: mkdir build && cd build && cmake -DMLU=MLU270 ..
+    - name: build
+      run: make -j16
