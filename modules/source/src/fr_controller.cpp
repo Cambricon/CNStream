@@ -29,10 +29,13 @@ void FrController::Control() {
   double delay = 1000.0 / frame_rate_;
   end_ = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double, std::milli> diff = end_ - start_;
-  auto gap = delay - diff.count();
+  auto gap = delay - diff.count() - time_gap_;
   if (gap > 0) {
     std::chrono::duration<double, std::milli> dura(gap);
     std::this_thread::sleep_for(dura);
+    time_gap_ = 0;
+  } else {
+    time_gap_ = -gap;
   }
   Start();
 }

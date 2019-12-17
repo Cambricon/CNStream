@@ -1,5 +1,5 @@
-#include <opencv2/opencv.hpp>
 #include <math.h>
+#include <opencv2/opencv.hpp>
 
 #include <algorithm>
 #include <cstring>
@@ -14,8 +14,7 @@
 namespace cv {
 class PostprocDehaze : public cnstream::Postproc {
  public:
-  int Execute(const std::vector<float *> &net_outputs,
-              const std::shared_ptr<edk::ModelLoader> &model,
+  int Execute(const std::vector<float *> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
               const cnstream::CNFrameInfoPtr &package);
 
  private:
@@ -40,8 +39,7 @@ Mat PostprocDehaze::Guidedfilter(cv::Mat img, cv::Mat mat) {
   double eps = 0.0001;
   Mat mean_I;
   mean_I.convertTo(mean_I, CV_32FC1);
-  boxFilter(gray, mean_I, -1, Size(r, r), Point(-1, -1), true,
-            BORDER_DEFAULT);
+  boxFilter(gray, mean_I, -1, Size(r, r), Point(-1, -1), true, BORDER_DEFAULT);
   Mat mean_p;
   mean_p.convertTo(mean_p, CV_32FC1);
   boxFilter(mat, mean_p, -1, Size(r, r), Point(-1, -1), true, BORDER_DEFAULT);
@@ -95,11 +93,11 @@ Mat PostprocDehaze::Guidedfilter(cv::Mat img, cv::Mat mat) {
 }
 
 double PostprocDehaze::Acount(cv::Mat dark, cv::Mat img) {
-  double sum = 0;  // The sum of the pixel points according to condition A
+  double sum = 0;    // The sum of the pixel points according to condition A
   int pointNum = 0;  // Number of pixels that meet the requirements
-  double A = 0;  // Atmospheric light intensity A
-  double pix = 0;  // Pixel value in the first 0.1% range of luminance in dark channel image
-  CvScalar pixel;  // According to the point a in the figure, the corresponding pixel in the fog figure
+  double A = 0;      // Atmospheric light intensity A
+  double pix = 0;    // Pixel value in the first 0.1% range of luminance in dark channel image
+  CvScalar pixel;    // According to the point a in the figure, the corresponding pixel in the fog figure
   float stretch_p[256], stretch_p1[256], stretch_num[256];
   int height = img.rows;
   int width = img.cols;
@@ -132,7 +130,7 @@ double PostprocDehaze::Acount(cv::Mat dark, cv::Mat img) {
 
   /**
    Count the probability of each gray level, take the first 0.1% of pixels
-   from the dark channel image according to the brightness,and pix is the 
+   from the dark channel image according to the brightness,and pix is the
    dividing point
    */
   for (int i = 0; i < 256; i++) {
@@ -167,10 +165,8 @@ double PostprocDehaze::Acount(cv::Mat dark, cv::Mat img) {
   return A;
 }
 
-int PostprocDehaze::Execute(
-    const std::vector<float *> &net_outputs,
-    const std::shared_ptr<edk::ModelLoader> &model,
-    const cnstream::CNFrameInfoPtr &package) {
+int PostprocDehaze::Execute(const std::vector<float *> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
+                            const cnstream::CNFrameInfoPtr &package) {
   if (net_outputs.size() != 1) {
     std::cerr << "[Warnning] Ssd neuron network only has one output,"
                  " but get " +
@@ -187,32 +183,30 @@ int PostprocDehaze::Execute(
   return 0;
 }
 
-void PostprocDehaze::Process(std::shared_ptr<cnstream::CNFrameInfo> data,
-                             Mat mat) {
+void PostprocDehaze::Process(std::shared_ptr<cnstream::CNFrameInfo> data, Mat mat) {
   int width = mat.cols;
   int height = mat.rows;
   cv::Mat img;
   img = *data->frame.ImageBGR();
   Mat q, Dehaze;
-  double A = 0.0;  // Atmospheric optical value
+  double A = 0.0;           // Atmospheric optical value
   imwrite("img.jpg", img);  // Get the original picture
   cv::resize(img, img, Size(width, height));
   std::vector<Mat> rgb;
   split(img, rgb);
 
   /**
-   In fact, the dark channel is composed of gray-scale image 
+   In fact, the dark channel is composed of gray-scale image
    by taking the minimum value from three RGB channels
   */
-  Mat dc = cv::min(cv::min(rgb.at(0), rgb.at(1)),
-                   rgb.at(2));
+  Mat dc = cv::min(cv::min(rgb.at(0), rgb.at(1)), rgb.at(2));
   Mat kernel = getStructuringElement(cv::MORPH_RECT, Size(15, 15));
   Mat dark;
   erode(dc, dark, kernel);  // Corrosion is minimum filtering
 
   /**
-   Take the first 0.1% of pixels from the dark channel image according to 
-   the brightness. 2. In these positions, find the corresponding value 
+   Take the first 0.1% of pixels from the dark channel image according to
+   the brightness. 2. In these positions, find the corresponding value
    with the highest brightness point in the original image as a value.
    */
   A = Acount(dark, img);

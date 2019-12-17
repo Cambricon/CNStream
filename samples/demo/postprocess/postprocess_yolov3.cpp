@@ -86,4 +86,3 @@ class PostprocYolov3 : public cnstream::Postproc {
 };  // class PostprocessYolov3
 
 IMPLEMENT_REFLEX_OBJECT_EX(PostprocYolov3, cnstream::Postproc);
-

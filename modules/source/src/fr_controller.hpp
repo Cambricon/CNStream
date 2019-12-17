@@ -37,6 +37,7 @@ class FrController {
 
  private:
   uint32_t frame_rate_ = 0;
+  double time_gap_ = 0;
   std::chrono::time_point<std::chrono::high_resolution_clock> start_, end_;
 };  // class FrController
 

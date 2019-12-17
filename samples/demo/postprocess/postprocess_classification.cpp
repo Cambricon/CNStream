@@ -39,7 +39,8 @@ int PostprocClassification::Execute(const std::vector<float*>& net_outputs,
                                     const cnstream::CNFrameInfoPtr& package) {
   if (net_outputs.size() != 1) {
     LOG(ERROR) << "[Warning] classification neuron network only has one output,"
-                  " but get " + std::to_string(net_outputs.size());
+                  " but get " +
+                      std::to_string(net_outputs.size());
     return -1;
   }
 
@@ -65,4 +66,3 @@ int PostprocClassification::Execute(const std::vector<float*>& net_outputs,
   package->objs.push_back(obj);
   return 0;
 }
-

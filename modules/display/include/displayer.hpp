@@ -41,7 +41,7 @@ namespace cnstream {
 /// Pointer for frame info
 using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
 
-class DisplayStream;
+class SDLVideoPlayer;
 
 /**
  * @brief Displayer is a module for displaying the vedio
@@ -103,8 +103,28 @@ class Displayer : public Module, public ModuleCreator<Displayer> {
    */
   int Process(CNFrameInfoPtr data) override;
 
+  /**
+   * @brief GUI event loop
+   */
+  void GUILoop(const std::function<void()>& quit_callback);
+
+  /**
+   *@brief return whether show
+   */
+  inline bool Show() { return show_; }
+
+  /**
+   * @brief Check ParamSet for a module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Returns true if this API run successfully. Otherwise, returns false.
+   */
+  bool CheckParamSet(ModuleParamSet paramSet) override;
+
  private:
-  DisplayStream* stream_;
+  SDLVideoPlayer* player_;
+  bool show_ = false;
 };  // class Displayer
 
 }  // namespace cnstream

@@ -23,7 +23,11 @@
 #include <string>
 
 namespace cnstream {
-DiscardFrame::DiscardFrame(const std::string& name) : Module(name) { hasTransmit_.store(1); }
+DiscardFrame::DiscardFrame(const std::string& name) : Module(name) {
+  hasTransmit_.store(1);
+  param_register_.SetModuleDesc("DiscardFrame is a module for discard frame every n frames.");
+  param_register_.Register("discard_interval", "Discard frame interval.");
+}
 
 bool DiscardFrame::Open(ModuleParamSet paramSet) {
   if (paramSet.find("discard_interval") == paramSet.end()) {
@@ -58,5 +62,23 @@ int DiscardFrame::Process(std::shared_ptr<CNFrameInfo> data) {
 }
 
 DiscardFrame::~DiscardFrame() {}
+
+bool DiscardFrame::CheckParamSet(ModuleParamSet paramSet) {
+  ParametersChecker checker;
+  for (auto& it : paramSet) {
+    if (!param_register_.IsRegisted(it.first)) {
+      LOG(WARNING) << "[DiscardFrame] Unknown param: " << it.first;
+    }
+  }
+
+  if (paramSet.find("discard_interval") != paramSet.end()) {
+    std::string err_msg;
+    if (!checker.IsNum({"discard_interval"}, paramSet, err_msg)) {
+      LOG(ERROR) << "[DiscardFrame] " << err_msg;
+      return false;
+    }
+  }
+  return true;
+}
 
 }  // namespace cnstream

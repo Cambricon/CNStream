@@ -98,18 +98,17 @@ CnOsd::CnOsd(size_t rows, size_t cols, const vector<string>& labels) : rows_(row
   colors_ = ::GenerateColors(labels_.size());
 }
 
-void CnOsd::DrawLabel(Mat image, const vector<edk::DetectObject>& objects, cnstream::CnFont* cn_font,
-                      bool tiled) const {
+void CnOsd::DrawLabel(Mat image, const vector<DetectObject>& objects, cnstream::CnFont* cn_font, bool tiled) const {
   // check input data
   if (image.rows * image.cols == 0) {
     return;
   }
 
   for (auto& object : objects) {
-    float xmin = object.bbox.x * image.cols;
-    float ymin = object.bbox.y * image.rows;
-    float xmax = (object.bbox.x + object.bbox.width) * image.cols;
-    float ymax = (object.bbox.y + object.bbox.height) * image.rows;
+    float xmin = object.x * image.cols;
+    float ymin = object.y * image.rows;
+    float xmax = (object.x + object.width) * image.cols;
+    float ymax = (object.y + object.height) * image.rows;
 
     string text;
     Scalar color;

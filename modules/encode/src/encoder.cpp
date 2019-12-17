@@ -19,15 +19,20 @@
  *************************************************************************/
 
 #include <string>
+#include <thread>
 
 #include "cnstream_eventbus.hpp"
 #include "encoder.hpp"
 
 namespace cnstream {
 
-Encoder::Encoder(const std::string &name) : Module(name) {}
+Encoder::Encoder(const std::string &name) : Module(name) {
+  param_register_.SetModuleDesc("Encoder is a module for encode the video or image.");
+  param_register_.Register("dump_dir", "Output path.");
+}
 
 EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {
+  std::unique_lock<std::mutex> lock(encoder_mutex_);
   if (data->channel_idx >= GetMaxStreamNumber()) {
     return nullptr;
   }
@@ -40,7 +45,7 @@ EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {
     ctx = new EncoderContext;
     ctx->size = cv::Size(data->frame.width, data->frame.height);
     std::string video_file = output_dir_ + "/" + std::to_string(data->channel_idx) + ".avi";
-    ctx->writer = std::move(cv::VideoWriter(video_file, CV_FOURCC('D', 'I', 'V', 'X'), 20, ctx->size));
+    ctx->writer = cv::VideoWriter(video_file, CV_FOURCC('D', 'I', 'V', 'X'), 20, ctx->size);
     if (!ctx->writer.isOpened()) {
       PostEvent(cnstream::EventType::EVENT_ERROR, "Create video file failed");
     }
@@ -72,6 +77,7 @@ bool Encoder::Open(ModuleParamSet paramSet) {
 }
 
 void Encoder::Close() {
+  std::unique_lock<std::mutex> lock(encoder_mutex_);
   if (encode_ctxs_.empty()) {
     return;
   }
@@ -91,6 +97,15 @@ int Encoder::Process(CNFrameInfoPtr data) {
 
   ctx->writer.write(*data->frame.ImageBGR());
   return 0;
+}
+
+bool Encoder::CheckParamSet(ModuleParamSet paramSet) {
+  for (auto &it : paramSet) {
+    if (!param_register_.IsRegisted(it.first)) {
+      LOG(WARNING) << "[Encoder] Unknown param: " << it.first;
+    }
+  }
+  return true;
 }
 
 }  // namespace cnstream

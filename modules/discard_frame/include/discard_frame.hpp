@@ -78,6 +78,15 @@ class DiscardFrame : public Module, public ModuleCreator<DiscardFrame> {
    */
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
+  /**
+   * @brief Check ParamSet for a module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Returns true if this API run successfully. Otherwise, returns false.
+   */
+  bool CheckParamSet(ModuleParamSet paramSet) override;
+
   virtual ~DiscardFrame();
 
  private:

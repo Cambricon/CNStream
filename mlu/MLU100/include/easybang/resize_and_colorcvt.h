@@ -72,10 +72,10 @@ class MluResizeConvertOp {
    * @brief Enumeration to specify date transform mode
    */
   enum class DataMode {
-    FP162FP16 = 0,   ///< Transform data type from float16 to float16
-    FP162UINT8 = 1,  ///< Transform data type from float16 to uint8
-    UINT82FP16 = 2,  ///< Transform data type from uint8 to float16
-    UINT82UINT8 = 3  ///< Transform data type from uint8 to uint8
+    FP16ToFP16 = 0,   ///< Transform data type from float16 to float16
+    FP16ToUINT8 = 1,  ///< Transform data type from float16 to uint8
+    UINT8ToFP16 = 2,  ///< Transform data type from uint8 to float16
+    UINT8ToUINT8 = 3  ///< Transform data type from uint8 to uint8
   };                 // enum DataMode
 
   /**
@@ -85,7 +85,7 @@ class MluResizeConvertOp {
     /// Color convert mode
     ColorMode color_mode = ColorMode::YUV2RGBA_NV21;
     /// Data type transform mode
-    DataMode data_mode = DataMode::UINT82UINT8;
+    DataMode data_mode = DataMode::UINT8ToUINT8;
     /// Input image resolution
     uint32_t src_w, src_h, src_stride;
     /// Output image resolution

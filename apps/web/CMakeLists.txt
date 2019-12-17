@@ -7,5 +7,6 @@ aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/preprocess preprocess_srcs)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/postprocess postprocess_srcs)
 set(SRC detection.cpp)
 ADD_LIBRARY(pydetector SHARED ${SRC} ${preprocess_srcs} ${postprocess_srcs})
+install(TARGETS pydetector LIBRARY DESTINATION lib)
 target_link_libraries(pydetector ${Example_LINKER_LIBS} ${FFMPEG_LIBRARIES} ${OpenCV_LIBS})
 

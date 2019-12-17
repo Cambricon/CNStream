@@ -194,7 +194,7 @@ class EasyEncode {
    * @brief Get the encoder instance attribute
    * @return Encoder attribute
    */
-  Attr GetAttr() const;
+  inline Attr GetAttr() const;
 
   /**
    * @brief Destroy the Easy Encode object

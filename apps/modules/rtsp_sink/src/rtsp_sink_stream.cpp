@@ -34,12 +34,12 @@ bool RTSPSinkJoinStream::Open(int width, int height, PictureFormat format, float
   if (width < 1 || height < 1 || udp_port < 1 || http_port < 1) {
     return false;
   }
-  if ( rows > 0 || cols > 0 ) {
+  if (rows > 0 || cols > 0) {
     is_mosaic_style = true;
     cols_ = cols;
     rows_ = rows;
-    mosaic_win_width_ = width/cols;
-    mosaic_win_height_ = height/rows;
+    mosaic_win_width_ = width / cols;
+    mosaic_win_height_ = height / rows;
   }
   refresh_rate_ = refresh_rate;
   udp_port_ = udp_port > 0 ? udp_port : 8554;
@@ -130,7 +130,7 @@ void RTSPSinkJoinStream::Close() {
 
 bool RTSPSinkJoinStream::Update(cv::Mat image, int64_t timestamp, int channel_id) {
   canvas_lock_.lock();
-  if ( is_mosaic_style && channel_id >= 0 ) {
+  if (is_mosaic_style && channel_id >= 0) {
     int x = channel_id % cols_ * mosaic_win_width_;
     int y = channel_id / cols_ * mosaic_win_height_;
     cv::resize(image, image, cv::Size(mosaic_win_width_, mosaic_win_height_), cv::INTER_CUBIC);

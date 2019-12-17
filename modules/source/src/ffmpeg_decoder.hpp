@@ -37,11 +37,12 @@ extern "C" {
 #include <memory>
 #include <string>
 #include <thread>
-#include "easycodec/easy_decode.h"
 #include "cnstream_frame.hpp"
 #include "cnstream_timer.hpp"
-#include "easycodec/vformat.h"
 #include "data_handler.hpp"
+#include "easycodec/easy_decode.h"
+#include "easycodec/vformat.h"
+#include "easyinfer/mlu_context.h"
 
 namespace cnstream {
 
@@ -76,7 +77,12 @@ class FFmpegDecoder {
 class FFmpegMluDecoder : public FFmpegDecoder {
  public:
   explicit FFmpegMluDecoder(DataHandler &handler) : FFmpegDecoder(handler) {}
-  ~FFmpegMluDecoder() { PrintPerformanceInfomation(); }
+  ~FFmpegMluDecoder() {
+    edk::MluContext env;
+    env.SetDeviceId(dev_ctx_.dev_id);
+    env.ConfigureForThisThread();
+    PrintPerformanceInfomation();
+  }
   bool Create(AVStream *st) override;
   void Destroy() override;
   bool Process(AVPacket *pkt, bool eos) override;

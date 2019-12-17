@@ -27,12 +27,14 @@
  */
 
 #include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 
-#include "easyinfer/model_loader.h"
 #include "cnstream_core.hpp"
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
+#include "easyinfer/model_loader.h"
 #include "easytrack/easy_track.h"
 
 namespace cnstream {
@@ -101,8 +103,19 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
    */
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
+  /**
+   * @brief Check ParamSet for a module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Returns true if this API run successfully. Otherwise, returns false.
+   */
+  bool CheckParamSet(ModuleParamSet paramSet) override;
+
  private:
-  inline TrackerContext *GetTrackerContext();
+  inline TrackerContext *GetTrackerContext(CNFrameInfoPtr data);
+  std::unordered_map<std::string, TrackerContext *> tracker_ctxs_;
+  std::mutex tracker_mutex_;
   std::string model_path_ = "";
   std::string func_name_ = "";
   std::string track_name_ = "";

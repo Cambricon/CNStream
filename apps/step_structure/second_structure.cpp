@@ -222,7 +222,6 @@ int main(int argc, char** argv) {
   watcher.Stop();
   std::cout << "\n\n\n\n\n\n";
 
-  if (gfps_stats)
-    gfps_stats->ShowStatistics();
+  if (gfps_stats) gfps_stats->ShowStatistics();
   return EXIT_SUCCESS;
 }

@@ -28,15 +28,16 @@
  */
 
 #include <opencv2/opencv.hpp>
+
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
-#include <unordered_map>
 
-#include "reflex_object.h"
-#include "easyinfer/model_loader.h"
 #include "cnstream_frame.hpp"
+#include "easyinfer/model_loader.h"
+#include "reflex_object.h"
 
 namespace cnstream {
 
@@ -72,7 +73,9 @@ class Preproc {
    * @return return 0 if succeed
    */
   virtual int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
-                      const CNFrameInfoPtr& package) { return 0; }
+                      const CNFrameInfoPtr& package) {
+    return 0;
+  }
 
   /**
    * @brief Execute preproc
@@ -81,13 +84,15 @@ class Preproc {
    *
    * @return the preproc result
    */
-  virtual cv::Mat Execute(const cv::Mat &image) { return image; }
-  virtual std::shared_ptr<float> Execute(const cv::Mat &image,
-                                         const std::shared_ptr<edk::ModelLoader>& model) { return nullptr; }
-
+  virtual cv::Mat Execute(const cv::Mat& image) { return image; }
+  virtual std::shared_ptr<float> Execute(const cv::Mat& image, const std::shared_ptr<edk::ModelLoader>& model) {
+    return nullptr;
+  }
 
   virtual int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
-    const CNFrameInfoPtr& package, cnstream::CNInferBoundingBox bbox) { return 0; }
+                      const CNFrameInfoPtr& package, cnstream::CNInferBoundingBox bbox) {
+    return 0;
+  }
 };  // class Preproc
 
 }  // namespace cnstream

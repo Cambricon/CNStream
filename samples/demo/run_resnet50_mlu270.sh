@@ -15,7 +15,6 @@
 #
 # @notice: other flags see ./../bin/demo --help
 #*************************************************************************#
-set -x
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 MODEL_PATH=$CURRENT_DIR/../data/models/MLU270/Classification/resnet50
 mkdir -p $MODEL_PATH
@@ -23,13 +22,12 @@ mkdir -p $MODEL_PATH
 pushd $MODEL_PATH
     if [ ! -f "resnet50_offline.cambricon" ]; then
       wget -O resnet50_offline.cambricon https://github.com/Cambricon/models/raw/master/MLU270/Classification/resnet50/resnet50_offline.cambricon
-    else
-      echo "resnet50 offline model exists."
-    fi    
+	else
+	  echo "resnet50 offline model exists."
+	fi    
 popd 
 
 source env.sh
-
 mkdir -p output
 ./../bin/demo  \
     --data_path ./files.list_video \

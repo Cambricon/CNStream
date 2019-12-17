@@ -26,14 +26,14 @@
  *
  *  This file contains a declaration of class Postproc
  */
+#include <fstream>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
-#include <fstream>
 
-#include "reflex_object.h"
 #include "easyinfer/model_loader.h"
+#include "reflex_object.h"
 
 #include "cnstream_frame.hpp"
 
@@ -62,7 +62,7 @@ class Postproc {
    *
    * @return None
    */
-  static Postproc* Create(const std::string& proc_name);
+  static Postproc *Create(const std::string &proc_name);
 
   /**
    * @brief load labels if there's one.
@@ -79,7 +79,7 @@ class Postproc {
    * @param label_path labels file path
    *
    * @return true for success, false otherwise
-   */  
+   */
   bool LoadMultiLabels(const std::vector<std::string> &label_path);
 
   /**
@@ -100,8 +100,10 @@ class Postproc {
    *
    * @return return 0 if succeed
    */
-  virtual int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
-                      const CNFrameInfoPtr& package) { return 0; }
+  virtual int Execute(const std::vector<float *> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
+                      const CNFrameInfoPtr &package) {
+    return 0;
+  }
 
   /**
    * @brief Execute postproc with neural network outputs
@@ -111,19 +113,7 @@ class Postproc {
    *
    * @return 0 for success, error code otherwise
    */
-  virtual int Execute(const std::pair<float*, uint64_t> &net_outputs,
-                      StringPairs *result) { return 0; }
-
-  /**
-   * @brief Execute postproc with neural network outputs
-   *
-   * @param[in] net_outputs neural network outputs
-   * @param[out] result the result parsed from network outputs
-   *
-   * @return 0 for success, error code otherwise
-  */
-  virtual int Execute(const std::vector<std::pair<float*, uint64_t>> &net_outputs,
-                      StringPairs *result) { return 0; }
+  virtual int Execute(const std::pair<float *, uint64_t> &net_outputs, StringPairs *result) { return 0; }
 
   /**
    * @brief Execute postproc with neural network outputs
@@ -133,18 +123,27 @@ class Postproc {
    *
    * @return 0 for success, error code otherwise
    */
-  virtual int Execute(const std::pair<float*, uint64_t> &net_outputs,
-                      std::vector<float> *result) { return 0; }
+  virtual int Execute(const std::vector<std::pair<float *, uint64_t>> &net_outputs, StringPairs *result) { return 0; }
+
+  /**
+   * @brief Execute postproc with neural network outputs
+   *
+   * @param[in] net_outputs neural network outputs
+   * @param[out] result the result parsed from network outputs
+   *
+   * @return 0 for success, error code otherwise
+   */
+  virtual int Execute(const std::pair<float *, uint64_t> &net_outputs, std::vector<float> *result) { return 0; }
 
   /**
    * @brief Execute postproc on neural network outputs
    *
    * @param package: smart pointer of struct to store origin data
    * @oaran poutput: pointer of output
-   * 
+   *
    * @return return 0 if succeed
    */
-  virtual int Execute(const CNFrameInfoPtr& package, char* poutput, int len) { return 0; }
+  virtual int Execute(const CNFrameInfoPtr &package, char *poutput, int len) { return 0; }
 
  protected:
   float threshold_ = 0;

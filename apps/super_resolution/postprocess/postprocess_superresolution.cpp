@@ -2,11 +2,11 @@
 
 #include <cmath>
 #include <memory>
-#include <vector>
 #include <string>
+#include <vector>
 
-#include "easyinfer/shape.h"
 #include "easyinfer/model_loader.h"
+#include "easyinfer/shape.h"
 #include "postproc.hpp"
 
 class PostprocSR : public cnstream::Postproc {

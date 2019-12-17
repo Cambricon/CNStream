@@ -37,9 +37,10 @@ wget_dnld () {
 			echo "Failed to extract $2";
 			exit 1
 		fi
-
+    else
+		echo "\"$DOWNLOAD_PATH/$2\" exists, if want to download the latest,please remove \"$2\" firstly!"
+		exit 0
 	fi
 }
 
-rm -f $CWD/live555-latest.tar.gz
 wget_dnld "http://www.live555.com/liveMedia/public/live555-latest.tar.gz" "live.tar.gz"

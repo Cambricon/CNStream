@@ -66,8 +66,8 @@ bool DataHandlerFFmpeg::PrepareResources(bool demux_only) {
   // format context
   p_format_ctx_ = avformat_alloc_context();
 
-  if (0 == strncasecmp(filename_.c_str(), p_rtmp_start_str, strlen(p_rtmp_start_str))||
-    0 == strncasecmp(filename_.c_str(), p_rtsp_start_str, strlen(p_rtsp_start_str))) {
+  if (0 == strncasecmp(filename_.c_str(), p_rtmp_start_str, strlen(p_rtmp_start_str)) ||
+      0 == strncasecmp(filename_.c_str(), p_rtsp_start_str, strlen(p_rtsp_start_str))) {
     AVIOInterruptCB intrpt_callback = {InterruptCallBack, this};
     p_format_ctx_->interrupt_callback = intrpt_callback;
     last_receive_frame_time_ = GetTickCount();
@@ -197,7 +197,7 @@ bool DataHandlerFFmpeg::Extract() {
               need_insert_sps_pps_ = true;
             }
           } else if (AV_CODEC_ID_HEVC == codec_id) {
-            int type = (packet_.data[3] & 0x7e) >>1;
+            int type = (packet_.data[3] & 0x7e) >> 1;
             if (32 != type) {
               need_insert_sps_pps_ = true;
             }
@@ -249,7 +249,7 @@ bool DataHandlerFFmpeg::Process() {
       decoder_->Process(nullptr, true);
       return false;
     }
-  }  // if (!ret)
+  }                                                       // if (!ret)
   if (need_insert_sps_pps_ && !insert_spspps_whenidr_) {  // this is hack flow,aim to add sps/pps.
     AVStream* vstream = p_format_ctx_->streams[video_index_];
 #if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
@@ -259,7 +259,7 @@ bool DataHandlerFFmpeg::Process() {
     uint8_t* extradata = vstream->codec->extradata;
     int extradata_size = vstream->codec->extradata_size;
 #endif
-    AVPacket pkt = { 0 };
+    AVPacket pkt = {0};
     pkt.data = extradata;
     pkt.size = extradata_size;
     pkt.pts = 0;

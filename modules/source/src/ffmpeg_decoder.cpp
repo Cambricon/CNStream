@@ -335,7 +335,7 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
   }
   data->channel_idx = stream_idx_;
 
-  if (instance_->pix_fmt != AV_PIX_FMT_YUV420P) {
+  if (instance_->pix_fmt != AV_PIX_FMT_YUV420P && instance_->pix_fmt != AV_PIX_FMT_YUVJ420P) {
     LOG(ERROR) << "FFmpegCpuDecoder only supports AV_PIX_FMT_YUV420P at this moment";
     return false;
   }

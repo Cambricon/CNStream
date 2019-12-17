@@ -19,8 +19,10 @@
  *************************************************************************/
 
 #include <opencv2/opencv.hpp>
+
 #include <memory>
 #include <vector>
+
 #include "easyinfer/model_loader.h"
 #include "easyinfer/shape.h"
 #include "preproc.hpp"
@@ -116,4 +118,3 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
   delete[] img_data;
   return 0;
 }
-

@@ -17,9 +17,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include "preproc.hpp"
 #include <memory>
 #include <vector>
+#include "preproc.hpp"
 
 namespace iva {
 
@@ -28,17 +28,16 @@ class PreprocMultiStep : public cnstream::Preproc {
   DECLARE_REFLEX_OBJECT_EX(iva::PreprocMultiStep, cnstream::Preproc);
 
   int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
-    const cnstream::CNFrameInfoPtr& package, cnstream::CNInferBoundingBox bbox) override;
+              const cnstream::CNFrameInfoPtr& package, cnstream::CNInferBoundingBox bbox) override;
 };  // class PreprocMultiStep
 
 IMPLEMENT_REFLEX_OBJECT_EX(iva::PreprocMultiStep, cnstream::Preproc)
 
-int PreprocMultiStep::Execute(const std::vector<float*>& net_inputs,
-    const std::shared_ptr<edk::ModelLoader>& model,
-    const cnstream::CNFrameInfoPtr& package, cnstream::CNInferBoundingBox bbox) {
+int PreprocMultiStep::Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
+                              const cnstream::CNFrameInfoPtr& package, cnstream::CNInferBoundingBox bbox) {
   // get the frame bgr data.
   const auto input_shapes = model->InputShapes();
-  cv::Mat  img = *package->frame.ImageBGR();
+  cv::Mat img = *package->frame.ImageBGR();
 
   int32_t box_x = bbox.x * img.cols;
   int32_t box_y = bbox.y * img.rows;
@@ -67,4 +66,4 @@ int PreprocMultiStep::Execute(const std::vector<float*>& net_inputs,
   return 0;
 }
 
-}  // namespace cnstream namespace iva
+}  // namespace iva

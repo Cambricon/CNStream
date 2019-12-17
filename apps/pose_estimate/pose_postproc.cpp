@@ -56,8 +56,7 @@ class PostprocPose : public cnstream::Postproc {
     }
   }
 
-  int Execute(const std::vector<float *> &net_outputs,
-              const std::shared_ptr<edk::ModelLoader> &model,
+  int Execute(const std::vector<float *> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
               const cnstream::CNFrameInfoPtr &package) override;
 
  private:
@@ -71,8 +70,7 @@ class PostprocPose : public cnstream::Postproc {
 
 IMPLEMENT_REFLEX_OBJECT_EX(PostprocPose, cnstream::Postproc)
 
-int PostprocPose::Execute(const std::vector<float *> &net_outputs,
-                          const std::shared_ptr<edk::ModelLoader> &model,
+int PostprocPose::Execute(const std::vector<float *> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
                           const cnstream::CNFrameInfoPtr &package) {
   auto input_shapes = model->InputShapes();
   if (net_outputs.size() != 1) {
@@ -100,8 +98,7 @@ int PostprocPose::Execute(const std::vector<float *> &net_outputs,
     nms_output_blob_ = createBlobData(1, output_c - 1, POSE_MAX_PEOPLE + 1, 3);
   }
   if (!input_blob_) {
-    input_blob_ =
-        createBlobData(1, output_c, netin_size.height, netin_size.width);
+    input_blob_ = createBlobData(1, output_c, netin_size.height, netin_size.width);
   }
   if (!net_output_blob_) {
     net_output_blob_ = createBlobData(output_n, output_c, output_h, output_w);
@@ -109,16 +106,15 @@ int PostprocPose::Execute(const std::vector<float *> &net_outputs,
 
   memset(nms_output_blob_->list, 0,  // NOLINT
          nms_output_blob_->count * sizeof(float));
-  memset(input_blob_->list, 0, input_blob_->count * sizeof(float)); // NOLINT
-  memset(net_output_blob_->list, 0,  // NOLINT
+  memset(input_blob_->list, 0, input_blob_->count * sizeof(float));  // NOLINT
+  memset(net_output_blob_->list, 0,                                  // NOLINT
          net_output_blob_->count * sizeof(float));
 
   // trans nhwc to nchw
   for (int i = 0; i < output_h; i++) {
     for (int j = 0; j < output_w; j++) {
       for (int k = 0; k < output_c; k++) {
-        nchw_netout_data_[i * output_w + j + k * output_w * output_h] =
-            netout_data[(i * output_w + j) * output_c + k];
+        nchw_netout_data_[i * output_w + j + k * output_w * output_h] = netout_data[(i * output_w + j) * output_c + k];
       }
     }
   }
@@ -131,9 +127,9 @@ int PostprocPose::Execute(const std::vector<float *> &net_outputs,
     input_img_data_ = new uint8_t[package->frame.GetBytes()];
   }
   uint8_t *p = input_img_data_;
-  memset(input_img_data_, 0, package->frame.GetBytes()); // NOLINT
+  memset(input_img_data_, 0, package->frame.GetBytes());  // NOLINT
   for (int i = 0; i < package->frame.GetPlanes(); i++) {
-    memcpy(p, package->frame.data[i]->GetCpuData(), // NOLINT
+    memcpy(p, package->frame.data[i]->GetCpuData(),  // NOLINT
            package->frame.GetPlaneBytes(i));
     p += package->frame.GetPlaneBytes(i);
   }
@@ -143,15 +139,13 @@ int PostprocPose::Execute(const std::vector<float *> &net_outputs,
                input_blob_->list + netin_size.height * netin_size.width * i);
 
     resize(cv::Mat(net_output_blob_->height, net_output_blob_->width, CV_32F,
-                   net_output_blob_->list +
-                       net_output_blob_->width * net_output_blob_->height * i),
+                   net_output_blob_->list + net_output_blob_->width * net_output_blob_->height * i),
            um, netin_size, 0, 0, cv::INTER_CUBIC);
   }
 
   bool maxpositive = true;
   float num_threshold = getDefaultNmsThreshold(maxpositive);
-  float interMinAboveThreshold =
-      getDefaultConnectInterMinAboveThreshold(maxpositive);
+  float interMinAboveThreshold = getDefaultConnectInterMinAboveThreshold(maxpositive);
   float connectInterThreshold = getDefaultConnectInterThreshold(maxpositive);
   float minSubsetCnt = getDefaultMinSubsetCnt(maxpositive);
   float connectMinSubsetScore = getDefaultConnectMinSubsetScore(maxpositive);
@@ -162,16 +156,14 @@ int PostprocPose::Execute(const std::vector<float *> &net_outputs,
   std::vector<int> shape;
   shape.resize(3);
 
-  connectBodyParts(&keypoints, input_blob_->list, nms_output_blob_->list,
-                   netin_size, POSE_MAX_PEOPLE, interMinAboveThreshold,
-                   connectInterThreshold, minSubsetCnt, connectMinSubsetScore,
-                   1, maxpositive, &shape);
+  connectBodyParts(&keypoints, input_blob_->list, nms_output_blob_->list, netin_size, POSE_MAX_PEOPLE,
+                   interMinAboveThreshold, connectInterThreshold, minSubsetCnt, connectMinSubsetScore, 1, maxpositive,
+                   &shape);
 
   // render key points on input img
   float render_threshold = getDefaultRenderThreshold();
   float scale = getScaleFactor(cv::Size(height, width), netin_size);
-  renderPoseKeypoints(package->frame.ImageBGR(), keypoints, shape,
-                      render_threshold, scale);
+  renderPoseKeypoints(package->frame.ImageBGR(), keypoints, shape, render_threshold, scale);
 
   return 0;
 }

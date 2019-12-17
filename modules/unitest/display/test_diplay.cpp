@@ -21,28 +21,26 @@ TEST(Display, OpenClose) {
 
   params["window-width"] = "1920";
   params["window-height"] = "1080";
-  params["rows"] = "2";
-  params["cols"] = "2";
   params["refresh-rate"] = "22";
+  params["max-channels"] = "16";
   params["show"] = "false";
+  params["full-screen"] = "false";
   EXPECT_TRUE(module.Open(params));
   module.Close();
 
-  // invalid rows and cols
-  params["window-width"] = "1920";
-  params["window-height"] = "1080";
-  params["rows"] = "0";
-  params["cols"] = "-2";
+  // invalid window-width and window-height
+  params["window-width"] = "-1920";
+  params["window-height"] = "-1080";
   params["refresh-rate"] = "22";
+  params["max-channels"] = "16";
   params["show"] = "false";
   EXPECT_FALSE(module.Open(params));
 
   params["window-width"] = "1920";
   params["window-height"] = "1080";
-  params["rows"] = "1";
-  params["cols"] = "1";
   params["refresh-rate"] = "22";
-  params["show"] = "true";
+  params["max-channels"] = "16";
+  params["show"] = "false";
   EXPECT_TRUE(module.Open(params));
   module.Close();
 }
@@ -54,9 +52,8 @@ TEST(Display, Process) {
   ModuleParamSet params;
   params["window-width"] = std::to_string(width);
   params["window-height"] = std::to_string(height);
-  params["rows"] = "1";
-  params["cols"] = "1";
   params["refresh-rate"] = "22";
+  params["max-channels"] = "16";
   params["show"] = "false";
   ASSERT_TRUE(display->Open(params));
   cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));

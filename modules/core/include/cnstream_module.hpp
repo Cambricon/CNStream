@@ -33,13 +33,13 @@
 
 #include <atomic>
 #include <functional>
+#include <list>
 #include <memory>
 #include <string>
 #include <typeinfo>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include <list>
 
 #include "cnstream_common.hpp"
 #include "cnstream_eventbus.hpp"
@@ -96,15 +96,13 @@ class Module {
       module_params_.push_back(std::make_pair(key, desc));
     }
 
-    std::vector<std::pair<std::string, std::string>> GetParams() {
-      return module_params_;
-    }
+    std::vector<std::pair<std::string, std::string>> GetParams() { return module_params_; }
 
-    bool IsRegisted(const std::string& key) {
+    bool IsRegisted(const std::string &key) {
       if (strcmp(key.c_str(), CNS_JSON_DIR_PARAM_NAME) == 0) {
         return true;
       }
-      for (auto& it : module_params_) {
+      for (auto &it : module_params_) {
         if (key == it.first) {
           return true;
         }
@@ -112,13 +110,9 @@ class Module {
       return false;
     }
 
-    void SetModuleDesc(const std::string& desc) {
-      module_desc_ = desc;
-    }
+    void SetModuleDesc(const std::string &desc) { module_desc_ = desc; }
 
-    std::string GetModuleDesc() {
-      return module_desc_;
-    }
+    std::string GetModuleDesc() { return module_desc_; }
   };
 
   ParamRegister param_register_;
@@ -340,7 +334,7 @@ class ModuleFactory {
    */
   std::vector<std::string> GetRegisted() {
     std::vector<std::string> registed_modules;
-    for (auto& it : map_) {
+    for (auto &it : map_) {
       registed_modules.push_back(it.first);
     }
     return registed_modules;
@@ -349,7 +343,7 @@ class ModuleFactory {
  private:
   ModuleFactory() {}
   static ModuleFactory *factory_;
-  std::unordered_map<std::string, std::function<Module *(const std::string &)> > map_;
+  std::unordered_map<std::string, std::function<Module *(const std::string &)>> map_;
 };
 
 /**
@@ -404,17 +398,17 @@ class ModuleCreatorWorker {
 class ParametersChecker {
  public:
   // check path is existence
-  bool CheckPath(const std::string& path, const ModuleParamSet& paramSet) {
-    std::string relative_path =  GetPathRelativeToTheJSONFile(path, paramSet);
+  bool CheckPath(const std::string &path, const ModuleParamSet &paramSet) {
+    std::string relative_path = GetPathRelativeToTheJSONFile(path, paramSet);
     if ((access(relative_path.c_str(), R_OK)) == -1) {
       return false;
     }
     return true;
   }
   // check str is number
-  bool IsNum(const std::list<std::string>& check_list,
-      const ModuleParamSet& paramSet, std::string& err_msg) { // NOLINT
-    for (auto& it : check_list) {
+  bool IsNum(const std::list<std::string> &check_list, const ModuleParamSet &paramSet, std::string &err_msg, // NOLINT
+             bool greater_than_zero = false) {
+    for (auto &it : check_list) {
       if (paramSet.find(it) != paramSet.end()) {
         std::stringstream sin(paramSet.find(it)->second);
         double d;
@@ -426,6 +420,12 @@ class ParametersChecker {
         if (sin >> c) {
           err_msg = "[" + it + "] : " + paramSet.find(it)->second + " is not a number.";
           return false;
+        }
+        if (greater_than_zero) {
+          if (d < 0) {
+            err_msg = "[" + it + "] : " + paramSet.find(it)->second + " must be greater than zero.";
+            return false;
+          }
         }
       }
     }

@@ -111,6 +111,15 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
    */
   void Close() override;
 
+  /**
+   * @brief Check ParamSet for a module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Returns true if this API run successfully. Otherwise, returns false.
+   */
+  bool CheckParamSet(ModuleParamSet paramSet) override;
+
  public:
   /**
    * @brief Add one stream to DataSource module, should be called after pipeline starts.

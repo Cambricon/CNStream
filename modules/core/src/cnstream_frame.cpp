@@ -26,8 +26,8 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 #include "cnstream_module.hpp"
 
 #define ROUND_UP(addr, boundary) (((u32_t)(addr) + (boundary)-1) & ~((boundary)-1))

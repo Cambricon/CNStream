@@ -82,6 +82,8 @@ struct CnFrame {
   uint64_t frame_size;
   /// Frame color space, @see PixelFmt
   PixelFmt pformat;
+  /// MLU channel in which memory stored, not supported on MLU100
+  int channel_id;
   /// Plane count for this frame, always be 1 on MLU100.
   uint32_t n_planes;
   /// Frame strides for each plane

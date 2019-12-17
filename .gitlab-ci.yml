@@ -1,4 +1,10 @@
 stages:
+  - daily_1
+  - daily_2
+  - daily_4
+  - daily_8
+  - daily_16
+  - daily_32
   - lintgit_check
   - build
   - test
@@ -13,40 +19,12 @@ job_lintgit_check:
   tags:
     - MLU100
 
-job_build_100:
-  stage: build
-  script: 
-    - mkdir build
-    - cd build
-    - cmake -Dcnstream_build_integrated_lib=OFF ..
-    - make -j16
-    - cd ..
-    - rm -rf build/
-  only:
-    - merge_requests
-  tags:
-    - MLU100
-
-job_build_270:
-  stage: build
-  script:
-    - mkdir build
-    - cd build
-    - cmake -DMLU=MLU270 -Dcnstream_build_integrated_lib=OFF ..
-    - make -j16
-    - cd ..
-    - rm -rf build/
-  only:
-    - merge_requests
-  tags:
-    - MLU270
-
 job_test_100:
   stage: test
   script:
     - mkdir build
     - pushd build
-    - cmake -Dcnstream_build_tests=ON -Dcnstream_build_test_coverage=ON ..
+    - cmake -Dcnstream_build_tests=ON -Dbuild_test_coverage=ON ..
     - make -j16
     - pushd bin
     - export LD_LIBRARY_PATH=../../mlu/MLU100/libs/x86_64/:../3rdparty/lib:../../lib:../../3rdparty/ffmpeg/lib
@@ -67,7 +45,7 @@ job_test_100:
 #  script:
 #    - mkdir build
 #    - pushd build
-#    - cmake -DMLU=MLU270 -Dcnstream_build_tests=ON -Dcnstream_build_test_coverage=ON ..
+#    - cmake -DMLU=MLU270 -Dcnstream_build_tests=ON -Dbuild_test_coverage=ON ..
 #    - make -j16
 #    - pushd bin
 #    - ./cnstream_test
@@ -122,7 +100,7 @@ job_demo_270:
     - MLU270
 
 job_daily_test_1:
-  stage: build
+  stage: daily_1
   script:
     - mkdir build
     - pushd build/
@@ -139,7 +117,7 @@ job_daily_test_1:
     - MLU100
 
 job_daily_test_2:
-  stage: build
+  stage: daily_2
   script:
     - mkdir build
     - pushd build/
@@ -156,7 +134,7 @@ job_daily_test_2:
     - MLU100
 
 job_daily_test_4:
-  stage: build
+  stage: daily_4
   script:
     - mkdir build
     - pushd build/
@@ -173,7 +151,7 @@ job_daily_test_4:
     - MLU100
 
 job_daily_test_8:
-  stage: build
+  stage: daily_8
   script:
     - mkdir build
     - pushd build/
@@ -190,7 +168,7 @@ job_daily_test_8:
     - MLU100
 
 job_daily_test_16:
-  stage: build
+  stage: daily_16
   script:
     - mkdir build
     - pushd build/
@@ -207,7 +185,7 @@ job_daily_test_16:
     - MLU100
 
 job_daily_test_32:
-  stage: build
+  stage: daily_32
   script:
     - mkdir build
     - pushd build/

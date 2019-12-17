@@ -22,19 +22,19 @@
 #define MODULES_CLASSIFIER_INCLUDE_MULTISTEP_IMPL_HPP_
 /**
  *  \file multistep_classifier_impl.hpp
- * 
+ *
  *  This file contains a declaration of class MultiStepClassifierImpl
  */
 
 #include <memory>
-#include <vector>
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 #include <utility>
-#include "easyinfer/model_loader.h"
+#include <vector>
 #include "easyinfer/easy_infer.h"
 #include "easyinfer/mlu_context.h"
 #include "easyinfer/mlu_memory_op.h"
+#include "easyinfer/model_loader.h"
 #ifdef HAVE_OPENCV
 #include "opencv2/opencv.hpp"
 #else
@@ -49,23 +49,22 @@ struct MultiStepClassifierImplData {
   int id;
 };
 
-
 /**
  * @brief MultiStepClassifierImpl is implementation of multi-step classifier
  */
 class MultiStepClassifierImpl {
  public:
-  /** 
+  /**
    *  @brief  Generate MultiStepClassifierImpl
    *
    *  @param  Name : module name
    *
    *  @return None
    */
-  explicit MultiStepClassifierImpl(int step1_classid, int bsize,
-      int device_id, std::unordered_map<int, std::shared_ptr<edk::ModelLoader>> modelloader,
-      std::unordered_map<int, std::vector<std::string>> labels);
-  /** 
+  explicit MultiStepClassifierImpl(int step1_classid, int bsize, int device_id,
+                                   std::unordered_map<int, std::shared_ptr<edk::ModelLoader>> modelloader,
+                                   std::unordered_map<int, std::vector<std::string>> labels);
+  /**
    *  @brief  Release MultiStepClassifierImpl
    *
    *  @param  None
@@ -74,28 +73,28 @@ class MultiStepClassifierImpl {
    */
   ~MultiStepClassifierImpl();
 
-   /**
-   * @brief Called by pipeline when pipeline start.
-   *
-   * @param paramSet :
-   @verbatim
-      dump_dir: ouput_dir 
-   @endverbatim
-   *
-   * @return if module open succeed
-   */
+  /**
+  * @brief Called by pipeline when pipeline start.
+  *
+  * @param paramSet :
+  @verbatim
+     dump_dir: ouput_dir
+  @endverbatim
+  *
+  * @return if module open succeed
+  */
   bool Init();
 
   /**
-	* @brief  Called by pipeline when pipeline stop
-	*
-	* @param  None
-	*
-	* @return  None
-	*/
+   * @brief  Called by pipeline when pipeline stop
+   *
+   * @param  None
+   *
+   * @return  None
+   */
   void Destory();
 
- /**
+  /**
    * @brief Encode each frame
    *
    * @param data : data to be processed

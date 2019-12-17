@@ -47,8 +47,8 @@ class RTSPSinkJoinStream {
     FFMPEG = 0,
     MLU,
   };
-  bool Open(int width, int height, PictureFormat format, float refresh_rate, int udp_port, int http_port,
-            int rows = -1, int cols = -1, CodecHWType hw = FFMPEG);
+  bool Open(int width, int height, PictureFormat format, float refresh_rate, int udp_port, int http_port, int rows = -1,
+            int cols = -1, CodecHWType hw = FFMPEG);
   void Close();
   bool Update(cv::Mat image, int64_t timestamp, int channel_id = -1);
 
@@ -70,6 +70,5 @@ class RTSPSinkJoinStream {
   bool start_refresh_ = false;
   bool is_mosaic_style = false;
 };
-
 
 #endif  // RTSP_SINK_JOIN_STREAM_HPP_

@@ -17,7 +17,7 @@ You can find the cambricon dependencies, including headers and libraries, in the
 
 ### Quick Start ###
 
-This section introduces how to quickly build instructions on CNStream and how to develop your own applications based on CNStream. We strongly recommend you to excute `pre_required_helper.sh` to prepare the environment. If not, please follow below commands.
+This section introduces how to quickly build instructions on CNStream and how to develop your own applications based on CNStream. **We strongly recommend you to excute `pre_required_helper.sh` to prepare the environment.** If not, please follow below commands.
 
 #### **Required environments** ####
 
@@ -27,7 +27,8 @@ Before building instructions, you need to install the following software:
 - GFlags2.1.2
 - GLog0.3.4
 - Cmake2.8.7+
-- Live555   // if rtsp_sink enable, could install by running `build_live555.sh`
+- Live555         // if WITH_RTSP=ON, please run `download_live
+- SDL22.0.4+      // if build_display=ON
 
 #### Ubuntu or Debian ####
 
@@ -38,6 +39,7 @@ If you are using Ubuntu or Debian, run the following commands:
   GFlags2.1.2   >>>>>>>>>   sudo apt-get install libgflags-dev
   GLog0.3.4     >>>>>>>>>   sudo apt-get install libgoogle-glog-dev
   Cmake2.8.7+   >>>>>>>>>   sudo apt-get install cmake
+  SDL22.0.4+    >>>>>>>>>   sudo apt-get install libsdl2-dev
 ```
 
 #### Centos ####
@@ -49,6 +51,7 @@ If you are using Centos, run the following commands:
   GFlags2.1.2   >>>>>>>>>   sudo yum install gflags.x86_64
   GLog0.3.4     >>>>>>>>>   sudo yum install glog.x86_64
   Cmake2.8.7+   >>>>>>>>>   sudo yum install cmake3.x86_64
+  SDL22.0.4+    >>>>>>>>>   sudo yum install SDL2_gfx-devel.x86_64
 ```
 
 ## Build Instructions Using CMake ##
@@ -78,7 +81,7 @@ After finished prerequiste, you can build instructions with the following steps:
    a. Run the following command:
 
       ```bash
-      cmake -Dcnstream_build_samples=ON ${CNSTREAM_DIR}
+      cmake -Dbuild_samples=ON ${CNSTREAM_DIR}
       ```
 
    b. Run the following command to add the MLU platform definition. If you are using MLU100:

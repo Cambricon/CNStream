@@ -40,7 +40,8 @@ installAptLibs() {
 		libgoogle-glog-dev\
 		libfreetype6\
 		ttf-wqy-zenhei\
-		cmake
+		cmake\
+		libsdl2-dev
 }
 
 installYumLibs() {
@@ -49,6 +50,7 @@ installYumLibs() {
 		glog.x86_64\
 		cmake3.x86_64\
 		freetype-devel\
+		SDL2_gfx-devel.x86_64\
 		wqy-zenhei-fonts
     ${SUDO_CMD} yum install -y epel-release rpm
     ${SUDO_CMD} yum update -y

@@ -74,6 +74,15 @@ class FpsStats : public Module, public ModuleCreator<FpsStats> {
    */
   void PrintPerfInfo() override {}
 
+  /**
+   * @brief Check ParamSet for a module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Returns true if this API run successfully. Otherwise, returns false.
+   */
+  bool CheckParamSet(ModuleParamSet paramSet) override;
+
  public:
   void ShowStatistics();
 

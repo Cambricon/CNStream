@@ -35,7 +35,7 @@
 
 DEFINE_bool(rtsp, false, "use rtsp");
 DEFINE_bool(loop, false, "display repeat");
-DEFINE_string(config_fname, "./detection_config.json", "pipeline config filename");
+DEFINE_string(config_fname, "./dehaze_config.json", "pipeline config filename");
 
 cnstream::FpsStats* gfps_stats = nullptr;
 
