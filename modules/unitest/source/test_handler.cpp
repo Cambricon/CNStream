@@ -248,6 +248,7 @@ TEST(SourceHandlerFFmpeg, Extract) {
   ffmpeg_handler->ClearResources();
 }
 
+/*
 TEST(SourceHandlerFFmpeg, ProcessMlu) {
   DataSource src(gname);
   std::string mp4_path = GetExePath() + "../../modules/unitest/source/data/img.mp4";
@@ -303,6 +304,7 @@ TEST(SourceHandlerFFmpeg, ProcessMlu) {
 
   ffmpeg_handler->ClearResources();
 }
+*/
 
 TEST(SourceHandlerFFmpeg, ProcessCpu) {
   DataSource src(gname);

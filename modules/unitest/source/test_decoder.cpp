@@ -252,6 +252,7 @@ TEST(SourceMluFFmpegDecoder, ProcessFrame) {
   cnrtFree(mlu_ptr);
 }
 
+/*
 // Cpu FFmpeg Decoder
 TEST(SourceCpuFFmpegDecoder, CreateDestroy) {
   PrepareEnv env(1);
@@ -293,7 +294,7 @@ TEST(SourceCpuFFmpegDecoder, CreateDestroy) {
 #endif
   EXPECT_FALSE(env.ffmpeg_cpu_decoder->Create(env.st));
   env.ffmpeg_cpu_decoder->Destroy();
-}
+} 
 
 TEST(SourceCpuFFmpegDecoder, Process) {
   PrepareEnv env(1);
@@ -346,7 +347,7 @@ TEST(SourceCpuFFmpegDecoder, ProcessFrameInvalidContext) {
 
   // create eos frame for clear stream idx
   CNFrameInfo::Create("0", true);
-}
+} */
 
 // Mlu Raw Decoder
 TEST(SourceMluRawDecoder, CreateDestroy) {

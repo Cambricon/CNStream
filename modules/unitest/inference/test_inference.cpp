@@ -62,14 +62,15 @@ class FakePreproc : public Preproc, virtual public ReflexObjectEx<Preproc> {
 IMPLEMENT_REFLEX_OBJECT_EX(FakePreproc, Preproc);
 
 static const char *name = "test-infer";
-static const char *g_image_path = "../../samples/data/images/3.jpg";
+// static const char *g_image_path = "../../samples/data/images/3.jpg";
 #ifdef CNS_MLU100
 static const char *g_model_path =
     "../../samples/data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon";
 #elif CNS_MLU270
-static const char *g_model_path = "../../samples/data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
+// static const char *g_model_path =
+// "../../samples/data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
 #endif
-static const char *g_func_name = "subnet0";
+// static const char *g_func_name = "subnet0";
 static const char *g_postproc_name = "FakePostproc";
 
 static constexpr int g_dev_id = 0;
@@ -80,6 +81,7 @@ TEST(Inferencer, Construct) {
   EXPECT_STREQ(infer->GetName().c_str(), name);
 }
 
+/*
 TEST(Inferencer, Open) {
   std::shared_ptr<Module> infer = std::make_shared<Inferencer>(name);
   ModuleParamSet param;
@@ -205,6 +207,7 @@ TEST(Inferencer, Process) {
     cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
   }
 }
+*/
 
 TEST(Inferencer, Postproc_set_threshold) {
   auto postproc = Postproc::Create(std::string(g_postproc_name));

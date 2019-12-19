@@ -135,6 +135,7 @@ TEST(Tracker, ProcessMluFeature) {
 }
 #endif
 
+/*
 TEST(Tracker, ProcessCpuFeature) {
   // create track
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
@@ -152,5 +153,6 @@ TEST(Tracker, ProcessCpuFeature) {
     }
   }
 }
+*/
 
 }  // namespace cnstream

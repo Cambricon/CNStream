@@ -347,6 +347,7 @@ TEST(Source, FFMpegCPU) {
   src->Close();
 }
 
+/*
 TEST(Source, RawMLU) {
   std::string h264_path = GetExePath() + "../../modules/unitest/source/data/raw.h264";
   std::string h265_path = GetExePath() + "../../modules/unitest/source/data/raw.h265";
@@ -388,5 +389,6 @@ TEST(Source, RawMLU) {
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
   src->Close();
 }
+*/
 
 }  // namespace cnstream
