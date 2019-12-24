@@ -18,7 +18,7 @@
     "max_input_queue_size" : 20,
     "next_modules" : ["fps_stats"],
     "custom_params" : {
-      "model_path" : "SuperResolution.cambricon",
+      "model_path" : "./model/SuperResolution.cambricon",
       "func_name" : "subnet0",
       "preproc_name" : "PreprocSR",
       "postproc_name" : "PostprocSR",

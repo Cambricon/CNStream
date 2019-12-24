@@ -16,7 +16,7 @@
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "custom_params" : {
-      "model_path" : "Dehaze.cambricon",
+      "model_path" : "./model/Dehaze.cambricon",
       "func_name" : "subnet0",
       "postproc_name" : "PostprocDehaze",
       "device_id" : 0
