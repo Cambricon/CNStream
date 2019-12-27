@@ -54,7 +54,6 @@ CNSyncedMemory::~CNSyncedMemory() {
     free(cpu_ptr_);
   }
   if (mlu_ptr_ && own_mlu_data_) {
-    // set device id before call cnrt functions, or CNRT_RET_ERR_EXISTS will be returned from cnrt function
     CALL_CNRT_BY_CONTEXT(cnrtFree(mlu_ptr_), dev_id_, ddr_chn_);
   }
 }

@@ -16,7 +16,7 @@
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "custom_params" : {
-      "model_path" : "japan_8mp.cambricon",
+      "model_path" : "./model/japan_8mp.cambricon",
       "func_name" : "subnet0",
       "data_order" : "NCHW",
       "preproc_name" : "PreprocStyle_transfer",
