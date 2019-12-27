@@ -1,7 +1,3 @@
-#include <string.h>
-#include <iostream>
-#include <thread>
-
 #include "VideoEncoder.h"
 
 #define DEFAULT_SYNC_OUTPUT_BUFFER_SIZE 0x100000
@@ -154,7 +150,6 @@ void VideoEncoder::Stop() {
 bool VideoEncoder::SendFrame(uint8_t *data, int64_t timestamp) {
   if (!running_) return false;
   VideoFrame *frame = nullptr;
-
   if (init_timestamp_ == -1) {
     init_timestamp_ = timestamp;
     timestamp = 0;
@@ -164,7 +159,9 @@ bool VideoEncoder::SendFrame(uint8_t *data, int64_t timestamp) {
 
   input_mutex_.lock();
   if (input_queue_size_ == 0) {
-    if (!sync_input_frame_) sync_input_frame_ = NewFrame();
+    if (sync_input_frame_ == nullptr) {
+      sync_input_frame_ = NewFrame();
+    }
     sync_input_frame_->Fill(data, timestamp);
     EncodeFrame(sync_input_frame_);
     input_mutex_.unlock();
@@ -182,7 +179,7 @@ bool VideoEncoder::SendFrame(uint8_t *data, int64_t timestamp) {
         input_data_q_.push(frame);
       } else {
         input_frames_dropped++;
-        // std::cout << "### drop input frame" << std::endl;
+        std::cout << "### drop input frame" << std::endl;
         input_mutex_.unlock();
         return false;
       }

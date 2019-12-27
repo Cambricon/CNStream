@@ -19,9 +19,9 @@ source env.sh
 mkdir -p output
 ./../bin/demo  \
     --data_path ./files.list_video \
-    --src_frame_rate 60   \
+    --src_frame_rate 25   \
     --wait_time 0 \
     --rtsp=false \
     --loop=false \
-    --config_fname "resnet50_config_mlu270.json" \
+    --config_fname "resnet50_config_cnencode.json" \
     --alsologtostderr

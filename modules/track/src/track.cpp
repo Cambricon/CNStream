@@ -27,6 +27,7 @@
 #include <thread>
 #include <vector>
 
+#include "easyinfer/mlu_context.h"
 #include "feature_extractor.h"
 
 namespace cnstream {
@@ -35,7 +36,7 @@ namespace cnstream {
  * @brief Tracker thread context
  *************************************************************************/
 struct TrackerContext {
-  std::unique_ptr<edk::EasyTrack> processer_ = nullptr;
+  TrackPtr processer_ = nullptr;
   std::unique_ptr<FeatureExtractor> feature_extractor_ = nullptr;
   TrackerContext() = default;
   ~TrackerContext() = default;
@@ -53,33 +54,47 @@ Tracker::Tracker(const std::string &name) : Module(name) {
 Tracker::~Tracker() { Close(); }
 
 inline TrackerContext *Tracker::GetTrackerContext(CNFrameInfoPtr data) {
-  std::unique_lock<std::mutex> lock(tracker_mutex_);
+  std::lock_guard<std::mutex> lock(tracker_mutex_);
   TrackerContext *ctx = nullptr;
-  auto it = tracker_ctxs_.find(data->frame.stream_id);
-  if (it != tracker_ctxs_.end()) {
-    ctx = it->second;
+  std::string data_chn = data->frame.stream_id;
+  std::thread::id tid = std::this_thread::get_id();
+  if (ctx_map_.find(tid) != ctx_map_.end()) {
+    ctx = ctx_map_[tid];
   } else {
-    ctx = new TrackerContext;
-    tracker_ctxs_[data->frame.stream_id] = ctx;
-    if (!ctx->processer_) {
-      if ("KCF" == track_name_) {
-        assert(nullptr != pKCFloader_);
-        auto pKcfTrack = new edk::KcfTrack;
-        pKcfTrack->SetModel(pKCFloader_);
-        ctx->processer_.reset(new edk::KcfTrack);
-        if (!ctx->processer_) return nullptr;
-      } else {  // "FeatureMatch by default"
-        ctx->processer_.reset(new edk::FeatureMatchTrack);
-        if (!ctx->processer_) return nullptr;
-
-        ctx->feature_extractor_.reset(new FeatureExtractor);
-#ifdef CNS_MLU100
-        if (!ctx->feature_extractor_->Init(model_path_, func_name_)) {
-          LOG(ERROR) << "FeatureMatchTrack Feature Extractor initial failed.";
-          return nullptr;
-        }
-#endif
+    edk::MluContext m_ctx;
+    m_ctx.SetDeviceId(0);
+    m_ctx.ConfigureForThisThread();
+    ctx = new(std::nothrow) TrackerContext;
+    LOG_IF(FATAL, nullptr == ctx) << "Tracker::GetTrackerContext() new TrackerContext failed";
+    ctx_map_[tid] = ctx;
+    if ("FeatureMatch" == track_name_) {
+      FeatureExtractor* FeatureExtractor_ptr = new(std::nothrow) FeatureExtractor;
+      LOG_IF(FATAL, nullptr == FeatureExtractor_ptr) << "Tracker::GetTrackerContext() new FeatureExtractor failed";
+      ctx->feature_extractor_.reset(FeatureExtractor_ptr);
+      #ifdef CNS_MLU100
+      if (!ctx->feature_extractor_->Init(model_path_, func_name_)) {
+        LOG(ERROR) << "FeatureMatchTrack Feature Extractor initial failed.";
       }
+      #endif
+    }
+  }
+  if (tracker_map_.find(data_chn) != tracker_map_.end()) {
+    ctx->processer_ = tracker_map_[data_chn];
+  } else {
+    if ("KCF" == track_name_) {
+      assert(nullptr != pKCFloader_);
+      auto pKcfTrack = new(std::nothrow) edk::KcfTrack;
+      LOG_IF(FATAL, nullptr == pKcfTrack) << "Tracker::GetTrackerContext() new edk::KcfTrack failed";
+      pKcfTrack->SetModel(pKCFloader_);
+      ctx->processer_.reset(pKcfTrack);
+      if (!ctx->processer_) return nullptr;
+      tracker_map_[data_chn] = ctx->processer_;
+    } else {  // "FeatureMatch by default"
+      auto pFeatureMatchTrack = new(std::nothrow) edk::FeatureMatchTrack;
+      LOG_IF(FATAL, nullptr == pFeatureMatchTrack) << "Tracker::GetTrackerContext() new edk::FeatureMatchTrack failed";
+      ctx->processer_.reset(pFeatureMatchTrack);
+      if (!ctx->processer_) return nullptr;
+      tracker_map_[data_chn] = ctx->processer_;
     }
   }
   return ctx;
@@ -119,17 +134,18 @@ bool Tracker::Open(cnstream::ModuleParamSet paramSet) {
 }
 
 void Tracker::Close() {
-  std::unique_lock<std::mutex> lock(tracker_mutex_);
-  for (auto &pair : tracker_ctxs_) {
-    delete pair.second;
+  std::lock_guard<std::mutex> lock(tracker_mutex_);
+  tracker_map_.clear();
+  for (auto &it : ctx_map_) {
+    delete it.second;
   }
-  tracker_ctxs_.clear();
+  ctx_map_.clear();
 }
 
 int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
   TrackerContext *ctx = GetTrackerContext(data);
   if (nullptr == ctx || nullptr == ctx->processer_) {
-    throw TrackerError("Get Tracker Context Failed.");
+    LOG(ERROR) << "Get Tracker Context Failed.";
     return -1;
   }
 

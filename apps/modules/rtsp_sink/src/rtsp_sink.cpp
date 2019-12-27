@@ -63,7 +63,7 @@ RtspSinkContext *RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {
       ctx->stream_ = new RTSPSinkJoinStream;
 
       if (!ctx->stream_->Open(data->frame.width, data->frame.height, format_, frame_rate_ /* 30000.0f / 1001 */,
-                              udp_port_ + data->channel_idx, http_port_,
+                              udp_port_ + data->channel_idx, http_port_, -1, -1,
                               enc_type == "mlu" ? RTSPSinkJoinStream::MLU : RTSPSinkJoinStream::FFMPEG)) {
         LOG(ERROR) << "[RTSPSink] Invalid parameter";
       }
@@ -97,7 +97,7 @@ bool RtspSink::Open(ModuleParamSet paramSet) {
     is_mosaic_style_ = true;
     LOG(INFO) << "mosaic windows cols: " << cols_ << " ,rows: " << rows_;
   }
-  format_ = RTSPSinkJoinStream::BGR24;
+  format_ = RTSPSinkJoinStream::BGR24;  // BGR24
   return true;
 }
 
@@ -116,7 +116,6 @@ void RtspSink::Close() {
 int RtspSink::Process(CNFrameInfoPtr data) {
   RtspSinkContext *ctx = GetRtspSinkContext(data);
   cv::Mat image = *data->frame.ImageBGR();
-  if (format_ == RTSPSinkJoinStream::YUV420P) cv::cvtColor(image, image, cv::COLOR_BGR2YUV_I420);
   if (is_mosaic_style_) {
     ctx->stream_->Update(image, data->frame.timestamp, data->channel_idx);
   } else {

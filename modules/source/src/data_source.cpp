@@ -204,9 +204,14 @@ std::shared_ptr<SourceHandler> DataSource::CreateSource(const std::string &strea
   }
   SourceHandler *ptr = nullptr;
   if (param_.source_type_ == SOURCE_RAW) {
-    ptr = dynamic_cast<SourceHandler *>(new DataHandlerRaw(this, stream_id, filename, framerate, loop));
+    DataHandlerRaw* DataHandlerRaw_ptr = new(std::nothrow) DataHandlerRaw(this, stream_id, filename, framerate, loop);
+    LOG_IF(FATAL, nullptr == DataHandlerRaw_ptr) << "DataSource::CreateSource() new DataHandlerRaw failed";
+    ptr = dynamic_cast<SourceHandler *>(DataHandlerRaw_ptr);
   } else if (param_.source_type_ == SOURCE_FFMPEG) {
-    ptr = dynamic_cast<SourceHandler *>(new DataHandlerFFmpeg(this, stream_id, filename, framerate, loop));
+    DataHandlerFFmpeg* DataHandlerFFmpeg_ptr =
+      new(std::nothrow) DataHandlerFFmpeg(this, stream_id, filename, framerate, loop);
+    LOG_IF(FATAL, nullptr == DataHandlerFFmpeg_ptr) << "DataSource::CreateSource() new DataHandlerFFmpeg failed";
+    ptr = dynamic_cast<SourceHandler *>(DataHandlerFFmpeg_ptr);
   } else {
     LOG(ERROR) << "source, not supported yet";
   }

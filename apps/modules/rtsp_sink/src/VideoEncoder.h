@@ -1,10 +1,15 @@
 #ifndef __VIDEO_ENCODER_H__
 #define __VIDEO_ENCODER_H__
+extern "C" {
+#include <string.h>
+}
 
+#include <iostream>
 #include <functional>
 #include <mutex>
 #include <queue>
 #include <thread>
+
 
 class VideoEncoder {
  public:
@@ -107,5 +112,4 @@ class VideoEncoder {
 
   std::function<void(Event)> event_callback_ = nullptr;
 };  // VideoEncoder
-
 #endif  //  __VIDEO_ENCODER_H__

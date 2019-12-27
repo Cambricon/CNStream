@@ -138,16 +138,16 @@ struct CNModuleConfig {
   /**
    * Parses members from JSON string except CNModuleConfig::name.
    *
-   * @note If the JSON file is parsed unsuccessfully, std::string will be thrown.
+   * @return Returns true if the JSON file is parsed successfully. Otherwise returns false.
    */
-  void ParseByJSONStr(const std::string& jstr) noexcept(false);
+  bool ParseByJSONStr(const std::string& jstr);
 
   /**
    * Parses members from JSON file except CNModuleConfig::name.
    *
-   * @note If the JSON file is parsed unsuccessfully, std::string will be thrown.
+   * @return Returns true if the JSON file is parsed successfully. Otherwise returns false.
    */
-  void ParseByJSONFile(const std::string& jfname) noexcept(false);
+  bool ParseByJSONFile(const std::string& jfname);
 };
 
 /**
@@ -263,9 +263,9 @@ class Pipeline : public Module {
    * @param config_file The configuration file in JSON format.
    *
    * @return Returns 0 if this function run successfully. Otherwise, returns -1.
-   *         If the JSON file is parsed unsuccessfully, a string will be thrown.
+   *
    */
-  int BuildPipelineByJSONFile(const std::string& config_file) noexcept(false);
+  int BuildPipelineByJSONFile(const std::string& config_file);
   /**
    * Gets a module in a pipeline by name.
    *
