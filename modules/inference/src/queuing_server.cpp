@@ -44,8 +44,9 @@ QueuingTicket QueuingServer::PickUpTicket(bool reserve) {
     tickets_q_.back().reserved_time++;
     reserved_ = true;
   } else {
+    // do not reserve the current ticket
     reserved_ = false;
-    tickets_q_.back().reserved_time = 0;
+    // tickets_q_.back().reserved_time = 0;
   }
   return ticket;
 }
@@ -78,6 +79,7 @@ QueuingTicket QueuingServer::PickUpNewTicket(bool reserve) {
   }
   return ticket;
 }
+
 void QueuingServer::DeallingDone() {
   std::lock_guard<std::mutex> lk(mtx_);
   if (!tickets_q_.empty()) {
@@ -92,6 +94,7 @@ void QueuingServer::DeallingDone() {
 
 void QueuingServer::WaitByTicket(QueuingTicket* pticket) { pticket->get(); }
 
+// set a signal
 void QueuingServer::Call() {
   if (!tickets_q_.empty()) {
     QueuingTicketRoot& ticket_root = tickets_q_.front();

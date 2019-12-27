@@ -288,7 +288,8 @@ class ModuleFactory {
  public:
   static ModuleFactory *Instance() {
     if (nullptr == factory_) {
-      factory_ = new ModuleFactory();
+      factory_ = new(std::nothrow) ModuleFactory();
+      LOG_IF(FATAL, nullptr == factory_) << "ModuleFactory::Instance() new ModuleFactory failed.";
     }
     return (factory_);
   }
@@ -370,11 +371,11 @@ class ModuleCreator {
       }
       ModuleFactory::Instance()->Regist(strTypeName, CreateObject);
     }
-    inline void do_nothing() const {};
+    inline void do_nothing() const {}
   };
   ModuleCreator() { register_.do_nothing(); }
-  virtual ~ModuleCreator() { register_.do_nothing(); };
-  static T *CreateObject(const std::string &name) { return new T(name); }
+  virtual ~ModuleCreator() { register_.do_nothing(); }
+  static T *CreateObject(const std::string &name) { return new(std::nothrow) T(name); }
   static Register register_;
 };
 

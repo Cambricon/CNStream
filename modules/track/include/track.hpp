@@ -45,6 +45,7 @@ struct TrackerContext;
 
 /// Pointer for frame info
 using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
+using TrackPtr = std::shared_ptr<edk::EasyTrack>;
 
 /**
  *  @brief Tracker is a module for realtime tracking
@@ -114,7 +115,8 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
 
  private:
   inline TrackerContext *GetTrackerContext(CNFrameInfoPtr data);
-  std::unordered_map<std::string, TrackerContext *> tracker_ctxs_;
+  std::unordered_map<std::string, TrackPtr> tracker_map_;
+  std::unordered_map<std::thread::id, TrackerContext*> ctx_map_;
   std::mutex tracker_mutex_;
   std::string model_path_ = "";
   std::string func_name_ = "";

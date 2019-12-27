@@ -154,13 +154,9 @@ int main(int argc, char **argv) {
     create pipeline
   */
   cnstream::Pipeline pipeline("pipeline");
-  try {
-    if (0 != pipeline.BuildPipelineByJSONFile(FLAGS_config_fname)) {
-      LOG(ERROR) << "Build pipeline failed.";
-      return EXIT_FAILURE;
-    }
-  } catch (std::string &e) {
-    LOG(ERROR) << e;
+
+  if (0 != pipeline.BuildPipelineByJSONFile(FLAGS_config_fname)) {
+    LOG(ERROR) << "Build pipeline failed.";
     return EXIT_FAILURE;
   }
 

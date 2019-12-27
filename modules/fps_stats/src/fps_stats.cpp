@@ -29,7 +29,8 @@
 namespace cnstream {
 
 FpsStats::FpsStats(const std::string& name) : Module(name) {
-  stream_fps_ = new StreamFps[GetMaxStreamNumber()];
+  stream_fps_ = new(std::nothrow) StreamFps[GetMaxStreamNumber()];
+  LOG_IF(FATAL, nullptr == stream_fps_) << "FpsStats::FpsStats() new StreamFps failed";
   param_register_.SetModuleDesc("FpsStats is a module for show fps stats.");
 }
 

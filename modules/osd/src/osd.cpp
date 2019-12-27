@@ -114,7 +114,7 @@ int CnFont::ToWchar(char*& src, wchar_t*& dest, const char* locale) {
     return -1;
   }
 
-  dest = new wchar_t[w_size];
+  dest = new(std::nothrow) wchar_t[w_size];
   if (!dest) {
     return -1;
   }
@@ -203,7 +203,11 @@ OsdContext* Osd::GetOsdContext(CNFrameInfoPtr data) {
   if (it != osd_ctxs_.end()) {
     ctx = it->second;
   } else {
-    ctx = new OsdContext;
+    ctx = new(std::nothrow) OsdContext;
+    if (!ctx) {
+      LOG(ERROR) << "Osd::GetOsdContext() new OsdContext Failed";
+      return nullptr;
+    }
     ctx->frame_index_ = 0;
     osd_ctxs_[data->channel_idx] = ctx;
   }
@@ -268,7 +272,11 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
   }
 
   if (!ctx->processer_) {
-    ctx->processer_ = new CnOsd(1, 1, labels_);
+    ctx->processer_ = new(std::nothrow) CnOsd(1, 1, labels_);
+    if (!ctx->processer_) {
+      LOG(ERROR) << "Osd::Process() new CnOsd failed";
+      return -1;
+    }
   }
 
   std::vector<DetectObject> objs;

@@ -205,8 +205,10 @@ void RCOpResource::AllocateFakeData() {
   uint32_t stride = op_attr.src_stride;
   uint32_t y_plane_size = stride * h;
   uint32_t uv_plane_size = stride * h / 2;
-  void** y_planes = new void*[batchsize_];
-  void** uv_planes = new void*[batchsize_];
+  void** y_planes = new(std::nothrow) void*[batchsize_];
+  LOG_IF(FATAL, nullptr == y_planes) << "RCOpResource::AllocateFakeData() new y_planes failed";
+  void** uv_planes = new(std::nothrow) void*[batchsize_];
+  LOG_IF(FATAL, nullptr == uv_planes) << "RCOpResource::AllocateFakeData() new uv_planes failed";
   for (uint32_t bidx = 0; bidx < batchsize_; ++bidx) {
     if (CNRT_RET_SUCCESS != cnrtMalloc(&y_planes[bidx], y_plane_size)) {
       throw CnstreamError(std::string("RCOp malloc fake data(y plane) on device failed, size:") +

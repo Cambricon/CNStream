@@ -50,7 +50,8 @@ class DataHandler : public SourceHandler {
     if (send_flow_eos_.load()) {
       auto data = CNFrameInfo::Create(stream_id_, true);
       if (!data) {
-        throw std::string("SendFlowEos: Create CNFrameInfo failed while received eos. stream id is ") + stream_id_;
+        LOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
+        return;
       }
       data->channel_idx = stream_index_;
 

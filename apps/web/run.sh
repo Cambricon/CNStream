@@ -23,3 +23,5 @@ pushd $CURRENT_DIR
     fi
     gunicorn -c web.conf object_detector_sever:app
 popd
+
+gunicorn -c web.conf object_detector_sever:app
