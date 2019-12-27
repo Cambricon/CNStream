@@ -34,10 +34,10 @@ namespace cnstream {
 std::shared_ptr<InferTask> IOBatchingStage::Batching(std::shared_ptr<CNFrameInfo> finfo) {
   bool reserve_ticket = false;
   if (batch_idx_ + 1 == batchsize_) {
-    // in one batch, reserve resource ticket to parallel.
+    // ready to next batch, do not reserve resource ticket.
     reserve_ticket = false;
   } else {
-    // ready to next batch, do not reserve resource ticket.
+    // in one batch, reserve resource ticket to parallel.
     reserve_ticket = true;
   }
   QueuingTicket ticket = output_res_->PickUpTicket(reserve_ticket);
@@ -50,7 +50,7 @@ std::shared_ptr<InferTask> IOBatchingStage::Batching(std::shared_ptr<CNFrameInfo
     return 0;
   });
   task->task_msg = "infer task.";
-  batch_idx_ = batch_idx_ + 1 % batchsize_;
+  batch_idx_ = (batch_idx_ + 1) % batchsize_;
   return task;
 }
 

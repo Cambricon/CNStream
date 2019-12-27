@@ -234,7 +234,6 @@ bool DataHandlerFFmpeg::Process() {
     if (this->loop_) {
       LOG(INFO) << "Clear resources and restart";
       EnableFlowEos(false);
-      decoder_->Process(nullptr, true);
       ClearResources(true);
       if (!PrepareResources(true)) {
         if (nullptr != module_)

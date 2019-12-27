@@ -3,8 +3,10 @@
 
 #include "easycodec/easy_encode.h"
 #include "easycodec/vformat.h"
-
 #include "VideoEncoder.h"
+
+#include "FFmpegSws.h"
+
 
 class CNVideoEncoder : public VideoEncoder {
  public:
@@ -27,10 +29,11 @@ class CNVideoEncoder : public VideoEncoder {
    private:
     CNVideoEncoder *encoder_ = nullptr;
     edk::CnFrame *frame_ = nullptr;
+    FFSws ffsws_;
   };
 
-  VideoFrame *NewFrame() override;
-  void EncodeFrame(VideoFrame *frame) override;
+  virtual VideoFrame *NewFrame();
+  virtual void EncodeFrame(VideoFrame *frame);
 
   void PacketCallback(const edk::CnPacket &packet);
   void EosCallback();
@@ -39,15 +42,13 @@ class CNVideoEncoder : public VideoEncoder {
 
   uint32_t picture_width_;
   uint32_t picture_height_;
-  edk::PixelFmt picture_format_ = edk::PixelFmt::BGR24;
+  edk::PixelFmt picture_format_;
   edk::CodecType codec_type_ = edk::CodecType::H264;
   uint32_t frame_rate_num_;
   uint32_t frame_rate_den_;
   uint32_t gop_size_;
   uint32_t bit_rate_;
   uint32_t frame_count_ = 0;
-  bool copy_frame_buffer_ = false;
-
   edk::EasyEncode *encoder_ = nullptr;
 };  // CNVideoEncoder
 #endif

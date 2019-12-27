@@ -445,48 +445,48 @@ TEST(CorePipeline, ParseByJSONStrNextModule) {
 TEST(CorePipeline, ParseByJSONStrParseError) {
   CNModuleConfig m_cfg;
   std::string json_str = "";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONStrClassNameError) {
   CNModuleConfig m_cfg;
   // there is no class name, throw error
   std::string json_str = "{}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
   // class name must be string type
   json_str = "{\"class_name\":0}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONStrParallelismError) {
   CNModuleConfig m_cfg;
   // parallelism must be uint type
   std::string json_str = "{\"class_name\":\"test\",\"parallelism\":\"0\"}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONStrMaxInputQueueError) {
   CNModuleConfig m_cfg;
   // max input queue size must be uint type
   std::string json_str = "{\"class_name\":\"test\",\"max_input_queue_size\":-1}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONStrNextModuleError) {
   CNModuleConfig m_cfg;
   // next module must be array
   std::string json_str = "{\"class_name\":\"test\",\"next_modules\":\"next\"}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
   // next module must be array of string
   json_str = "{\"class_name\":\"test\",\"next_modules\":[\"next\", 0]}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONStrCustomParamsError) {
   CNModuleConfig m_cfg;
   // custom params must be an object
   std::string json_str = "{\"class_name\":\"test\",\"custom_params\":\"wrong\"}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONFile) {
@@ -506,7 +506,7 @@ TEST(CorePipeline, ParseByJSONFile) {
 TEST(CorePipeline, ParseByJSONFileError) {
   CNModuleConfig m_cfg;
   // invaid file path
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONFile(""));
+  EXPECT_FALSE(m_cfg.ParseByJSONFile(""));
 }
 
 TEST(CorePipeline, OpenCloseProcess) {
@@ -1105,13 +1105,13 @@ TEST(CorePipeline, BuildPipelineByJSONFile) {
 TEST(CorePipeline, BuildPipelineByJSONFileFailed) {
   Pipeline pipeline("test pipeline");
   std::string empty_file_path = "";
-  EXPECT_ANY_THROW(pipeline.BuildPipelineByJSONFile(empty_file_path));
+  EXPECT_EQ(pipeline.BuildPipelineByJSONFile(empty_file_path), -1);
 
   std::string parse_error_file_path = GetExePath() + "../../modules/unitest/core/data/parse_error.json";
-  EXPECT_ANY_THROW(pipeline.BuildPipelineByJSONFile(parse_error_file_path));
+  EXPECT_EQ(pipeline.BuildPipelineByJSONFile(parse_error_file_path), -1);
 
   std::string name_error_file_path = GetExePath() + "../../modules/unitest/core/data/name_error.json";
-  EXPECT_ANY_THROW(pipeline.BuildPipelineByJSONFile(name_error_file_path));
+  EXPECT_EQ(pipeline.BuildPipelineByJSONFile(name_error_file_path), -1);
 }
 
 TEST(CorePipeline, GetModule) {

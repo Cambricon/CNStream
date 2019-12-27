@@ -46,11 +46,12 @@
 
 namespace cnstream {
 
-void CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
+bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
-    throw "Parse module configuration failed. Error code [" + std::to_string(doc.GetParseError()) + "]" + " Offset [" +
-        std::to_string(doc.GetErrorOffset()) + "]. JSON:" + jstr;
+    LOG(ERROR) << "Parse module configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
+      << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. JSON:" << jstr;
+    return false;
   }
 
   /* get members */
@@ -58,15 +59,22 @@ void CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
 
   // className
   if (end == doc.FindMember("class_name")) {
-    throw std::string("Module has to have a class_name.");
+    LOG(ERROR) << "Module has to have a class_name.";
+    return false;
   } else {
-    if (!doc["class_name"].IsString()) throw std::string("class_name must be string type.");
+    if (!doc["class_name"].IsString()) {
+      LOG(ERROR) << "class_name must be string type.";
+      return false;
+    }
     this->className = doc["class_name"].GetString();
   }
 
   // parallelism
   if (end != doc.FindMember("parallelism")) {
-    if (!doc["parallelism"].IsUint()) throw std::string("parallelism must be uint type.");
+    if (!doc["parallelism"].IsUint()) {
+      LOG(ERROR) << "parallelism must be uint type.";
+      return false;
+    }
     this->parallelism = doc["parallelism"].GetUint();
   } else {
     this->parallelism = 1;
@@ -74,7 +82,10 @@ void CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
 
   // maxInputQueueSize
   if (end != doc.FindMember("max_input_queue_size")) {
-    if (!doc["max_input_queue_size"].IsUint()) throw std::string("max_input_queue_size must be uint type.");
+    if (!doc["max_input_queue_size"].IsUint()) {
+      LOG(ERROR) << "max_input_queue_size must be uint type.";
+      return false;
+    }
     this->maxInputQueueSize = doc["max_input_queue_size"].GetUint();
   } else {
     this->maxInputQueueSize = 20;
@@ -82,7 +93,10 @@ void CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
 
   // enablePerfInfo
   if (end != doc.FindMember("show_perf_info")) {
-    if (!doc["show_perf_info"].IsBool()) throw std::string("show_perf_info must be Boolean type.");
+    if (!doc["show_perf_info"].IsBool()) {
+      LOG(ERROR) << "show_perf_info must be Boolean type.";
+      return false;
+    }
     this->showPerfInfo = doc["show_perf_info"].GetBool();
   } else {
     this->showPerfInfo = false;
@@ -91,12 +105,14 @@ void CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   // next
   if (end != doc.FindMember("next_modules")) {
     if (!doc["next_modules"].IsArray()) {
-      throw std::string("next_modules must be array type.");
+      LOG(ERROR) << "next_modules must be array type.";
+      return false;
     }
     auto values = doc["next_modules"].GetArray();
     for (auto iter = values.begin(); iter != values.end(); ++iter) {
       if (!iter->IsString()) {
-        throw std::string("next_modules must be an array of strings.");
+        LOG(ERROR) << "next_modules must be an array of strings.";
+        return false;
       }
       this->next.push_back(iter->GetString());
     }
@@ -108,7 +124,8 @@ void CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   if (end != doc.FindMember("custom_params")) {
     rapidjson::Value& custom_params = doc["custom_params"];
     if (!custom_params.IsObject()) {
-      throw std::string("custom_params must be an object.");
+      LOG(ERROR) << "custom_params must be an object.";
+      return false;
     }
     this->parameters.clear();
     for (auto iter = custom_params.MemberBegin(); iter != custom_params.MemberEnd(); ++iter) {
@@ -126,19 +143,23 @@ void CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   } else {
     this->parameters = {};
   }
+  return true;
 }
 
-void CNModuleConfig::ParseByJSONFile(const std::string& jfname) {
+bool CNModuleConfig::ParseByJSONFile(const std::string& jfname) {
   std::ifstream ifs(jfname);
 
   if (!ifs.is_open()) {
-    throw "File open failed :" + jfname;
+    LOG(ERROR) << "File open failed :" << jfname;
+    return false;
   }
 
   std::string jstr((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
   ifs.close();
 
-  ParseByJSONStr(jstr);
+  if (!ParseByJSONStr(jstr)) {
+    return false;
+  }
 
   /***************************************************
    * add config file path to custom parameters
@@ -159,6 +180,7 @@ void CNModuleConfig::ParseByJSONFile(const std::string& jfname) {
   }
 
   this->parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;
+  return true;
 }
 
 struct ModuleAssociatedInfo {
@@ -245,9 +267,11 @@ class PipelinePrivate {
 };  // class PipelinePrivate
 
 Pipeline::Pipeline(const std::string& name) : Module(name) {
-  d_ptr_ = new PipelinePrivate(this);
+  d_ptr_ = new(std::nothrow) PipelinePrivate(this);
+  LOG_IF(FATAL, nullptr == d_ptr_) << "Pipeline::Pipeline() failed to alloc PipelinePrivate";
 
-  event_bus_ = new EventBus();
+  event_bus_ = new(std::nothrow) EventBus();
+  LOG_IF(FATAL, nullptr == event_bus_) << "Pipeline::Pipeline() failed to alloc EventBus";
   GetEventBus()->AddBusWatch(std::bind(&Pipeline::DefaultBusWatch, this, std::placeholders::_1, std::placeholders::_2),
                              this);
 }
@@ -704,7 +728,8 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
 int Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
   std::ifstream ifs(config_file);
   if (!ifs.is_open()) {
-    throw "Open file filed: " + config_file;
+    LOG(ERROR) << "Failed to open file: " << config_file;
+    return -1;
   }
 
   std::string jstr((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
@@ -715,47 +740,50 @@ int Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
   std::vector<std::string> namelist;
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
-    throw "Parse pipeline configuration failed. Error code [" + std::to_string(doc.GetParseError()) + "]" +
-        " Offset [" + std::to_string(doc.GetErrorOffset()) + "]. ";
+    LOG(ERROR) << "Parse pipeline configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
+          << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. ";
+    return -1;
   }
 
   for (rapidjson::Document::ConstMemberIterator iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter) {
     CNModuleConfig mconf;
     mconf.name = iter->name.GetString();
     if (find(namelist.begin(), namelist.end(), mconf.name) != namelist.end()) {
-      throw "Module name should be unique in Jason file. Module name : [" + mconf.name + "]" +
-          " appeared more than one time.";
+      LOG(ERROR) << "Module name should be unique in Jason file. Module name : [" << mconf.name + "]"
+          << " appeared more than one time.";
+      return -1;
     }
     namelist.push_back(mconf.name);
-    try {
-      rapidjson::StringBuffer sbuf;
-      rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
-      iter->value.Accept(jwriter);
-      mconf.ParseByJSONStr(std::string(sbuf.GetString()));
 
-      /***************************************************
-       * add config file path to custom parameters
-       ***************************************************/
+    rapidjson::StringBuffer sbuf;
+    rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
+    iter->value.Accept(jwriter);
 
-      std::string jf_dir = "";
-      auto slash_pos = config_file.rfind("/");
-      if (slash_pos == std::string::npos) {
-        jf_dir = ".";
-      } else {
-        jf_dir = config_file.substr(0, slash_pos);
-      }
-      jf_dir += '/';
-
-      if (mconf.parameters.end() != mconf.parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
-        LOG(WARNING)
-            << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
-            << "up by cnstream as the directory where the configuration file is located and passed to the module.";
-      }
-
-      mconf.parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;
-    } catch (std::string e) {
-      throw "Parse module config failed. Module name : [" + mconf.name + "]" + ". Error message: " + e;
+    if (!mconf.ParseByJSONStr(std::string(sbuf.GetString()))) {
+      LOG(ERROR) << "Parse module config failed. Module name : [" <<  mconf.name << "]";
+      return -1;
     }
+
+    /***************************************************
+     * add config file path to custom parameters
+     ***************************************************/
+
+    std::string jf_dir = "";
+    auto slash_pos = config_file.rfind("/");
+    if (slash_pos == std::string::npos) {
+      jf_dir = ".";
+    } else {
+      jf_dir = config_file.substr(0, slash_pos);
+    }
+    jf_dir += '/';
+
+    if (mconf.parameters.end() != mconf.parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
+      LOG(WARNING)
+        << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
+        << "up by cnstream as the directory where the configuration file is located and passed to the module.";
+    }
+
+    mconf.parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;
     mconfs.push_back(mconf);
   }
 

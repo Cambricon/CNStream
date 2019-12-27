@@ -1,11 +1,13 @@
 #include "RtspStreamPipe.h"
 #include <iostream>
 #include <thread>
+#include "VideoEncoder.h"
 #include "CNVideoEncoder.h"
 #include "FFmpegVideoEncoder.h"
 #include "LiveRTSPServer.h"
 #include "NanoTimer.h"
-#include "VideoEncoder.h"
+
+
 struct StreamPipeCtx {
   VideoEncoder *video_encoder_ = nullptr;
   RTSPStreaming::LiveRTSPServer *live_server_ = nullptr;
@@ -24,11 +26,20 @@ StreamPipeCtx *StreamPipeCreate(StreamContext *ctx) {
     case ColorFormat_YUV420:
       format = VideoEncoder::YUV420P;
       break;
+    case ColorFormat_RGB24:
+      format = VideoEncoder::RGB24;
+      break;
     case ColorFormat_BGR24:
       format = VideoEncoder::BGR24;
       break;
+     case ColorFormat_NV21:
+      format = VideoEncoder::NV21;
+      break;
+    case ColorFormat_NV12:
+      format = VideoEncoder::NV12;
+      break;
     default:
-      format = VideoEncoder::BGR24;
+      format = VideoEncoder::NV12;
       break;
   }
   VideoEncoder::CodecType codec;

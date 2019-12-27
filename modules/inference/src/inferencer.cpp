@@ -104,8 +104,9 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
     return false;
   }
 
-  d_ptr_ = new InferencerPrivate(this);
+  d_ptr_ = new(std::nothrow) InferencerPrivate(this);
   if (!d_ptr_) {
+    LOG(ERROR) << "Inferencer::Open() new InferencerPrivate failed";
     return false;
   }
 

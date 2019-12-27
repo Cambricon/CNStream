@@ -174,6 +174,13 @@ int RawMluDecoder::ProcessFrame(const edk::CnFrame &frame, bool *reused) {
   data->frame.height = frame.height;
   data->frame.fmt = PixelFmt2CnDataFormat(frame.pformat);
   for (int i = 0; i < data->frame.GetPlanes(); i++) {
+    // for debug,
+#if 1
+    if (frame.strides[i] == 0) {
+      LOG(ERROR) << "frame.strides[" << i << "] is zero";
+      return -1;
+    }
+#endif
     data->frame.stride[i] = frame.strides[i];
     data->frame.ptr[i] = reinterpret_cast<void *>(frame.ptrs[i]);
   }

@@ -130,9 +130,17 @@ std::vector<float> FeatureExtractor::ExtractFeature(const edk::TrackFrame &frame
     return std::vector<float>(begin, end);
   } else {
 #if (CV_MAJOR_VERSION == 2)
-    cv::Ptr<cv::ORB> processer = new cv::ORB(128);
+    cv::Ptr<cv::ORB> processer = new(std::nothrow) cv::ORB(128);
+    if (!processer) {
+      LOG(ERROR) << "[FeatureExtractor] new cv::ORB(128) failed";
+      return {};
+    }
 #elif (CV_MAJOR_VERSION >= 3)  // NOLINT
     cv::Ptr<cv::ORB> processer = cv::ORB::create(128);
+    if (!processer) {
+      LOG(ERROR) << "[FeatureExtractor] new cv::ORB(128) failed";
+      return {};
+    }
 #endif
     std::vector<cv::KeyPoint> keypoints;
     processer->detect(obj_img, keypoints);

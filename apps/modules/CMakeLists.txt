@@ -1,7 +1,7 @@
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib/)
 
 if(WITH_RTSP)
-  set(app_modules_list rtsp_sink)
+  set(app_modules_list rtsp_sink cnencode)
 endif()
 foreach(app_module ${app_modules_list})
   include_directories(${PROJECT_SOURCE_DIR}/apps/modules/${app_module}/include)

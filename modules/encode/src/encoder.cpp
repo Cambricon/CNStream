@@ -42,7 +42,8 @@ EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {
     // context exists
     ctx = search->second;
   } else {
-    ctx = new EncoderContext;
+    ctx = new(std::nothrow) EncoderContext;
+    LOG_IF(FATAL, nullptr == ctx) << "Encoder::GetEncoderContext() new EncoderContext failed";
     ctx->size = cv::Size(data->frame.width, data->frame.height);
     std::string video_file = output_dir_ + "/" + std::to_string(data->channel_idx) + ".avi";
     ctx->writer = cv::VideoWriter(video_file, CV_FOURCC('D', 'I', 'V', 'X'), 20, ctx->size);

@@ -108,18 +108,15 @@ class Detector {
   ~Detector() {
     delete msg_observer_;
     delete pipeline_;
-  };
+  }
   void BuildPipelineByJSONFile(char* config_fname) {
     const std::string config = config_fname;
-    try {
-      if (0 != pipeline_->BuildPipelineByJSONFile(config)) {
-        LOG(ERROR) << "Build pipeline failed.";
-        throw "Pipeline error";
-      }
-    } catch (std::string& e) {
-      LOG(ERROR) << e;
-      throw e;
+
+    if (0 != pipeline_->BuildPipelineByJSONFile(config)) {
+      LOG(ERROR) << "Build pipeline failed.";
+      throw "Pipeline error";
     }
+
     LOG(INFO) << "build pipeline success!";
     if (!pipeline_->Start()) {
       LOG(ERROR) << "Pipeline start failed.";

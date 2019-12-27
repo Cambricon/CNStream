@@ -27,7 +27,8 @@
 namespace cnstream {
 
 Displayer::Displayer(const std::string &name) : Module(name) {
-  player_ = new SDLVideoPlayer;
+  player_ = new(std::nothrow) SDLVideoPlayer;
+  LOG_IF(FATAL, nullptr == player_) << "Displayer::Displayer() new SDLVideoPlayer failed.";
   param_register_.SetModuleDesc("Displayer is a module for displaying the vedio.");
   param_register_.Register("window-width", "Width for displayer window.");
   param_register_.Register("window-height", "Height for displayer window.");
