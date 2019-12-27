@@ -54,7 +54,7 @@ CNSyncedMemory::~CNSyncedMemory() {
     free(cpu_ptr_);
   }
   if (mlu_ptr_ && own_mlu_data_) {
-    CNS_CNRT_CHECK(cnrtFree(mlu_ptr_));
+    CALL_CNRT_BY_CONTEXT(cnrtFree(mlu_ptr_), dev_id_, ddr_chn_);
   }
 }
 
