@@ -22,7 +22,7 @@
 #define MODULES_CLASSIFIER_INCLUDE_MULTISTEP_HPP_
 /**
  *  \file multistep_classifier.hpp
- * 
+ *
  *  This file contains a declaration of class MultiStepClassifier
  */
 
@@ -30,13 +30,12 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include "cnstream_pipeline.hpp"
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
+#include "cnstream_pipeline.hpp"
 #include "multistep_classifier_impl.hpp"
-#include "preprocess/preproc.hpp"
 #include "postprocess/postproc.hpp"
-
+#include "preprocess/preproc.hpp"
 
 /// Pointer for frame info
 using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
@@ -45,7 +44,7 @@ using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
  * @brief MultiStepClassifier context structer
  */
 struct MultiStepClassifierContext {
-  cnstream::MultiStepClassifierImpl *impl;
+  cnstream::MultiStepClassifierImpl* impl;
 };
 
 /**
@@ -53,7 +52,7 @@ struct MultiStepClassifierContext {
  */
 class MultiStepClassifier : public cnstream::Module, public cnstream::ModuleCreator<MultiStepClassifier> {
  public:
-  /** 
+  /**
    *  @brief  Generate MultiStepClassifier
    *
    *  @param  Name : module name
@@ -61,7 +60,7 @@ class MultiStepClassifier : public cnstream::Module, public cnstream::ModuleCrea
    *  @return None
    */
   explicit MultiStepClassifier(const std::string& name);
-  /** 
+  /**
    *  @brief  Release MultiStepClassifier
    *
    *  @param  None
@@ -70,28 +69,28 @@ class MultiStepClassifier : public cnstream::Module, public cnstream::ModuleCrea
    */
   ~MultiStepClassifier();
 
-   /**
-   * @brief Called by pipeline when pipeline start.
-   *
-   * @param paramSet :
-   @verbatim
-      dump_dir: ouput_dir 
-   @endverbatim
-   *
-   * @return if module open succeed
-   */
+  /**
+  * @brief Called by pipeline when pipeline start.
+  *
+  * @param paramSet :
+  @verbatim
+     dump_dir: ouput_dir
+  @endverbatim
+  *
+  * @return if module open succeed
+  */
   bool Open(cnstream::ModuleParamSet paramSet) override;
 
   /**
-	* @brief  Called by pipeline when pipeline stop
-	*
-	* @param  None
-	*
-	* @return  None
-	*/
+   * @brief  Called by pipeline when pipeline stop
+   *
+   * @param  None
+   *
+   * @return  None
+   */
   void Close() override;
 
- /**
+  /**
    * @brief Encode each frame
    *
    * @param data : data to be processed

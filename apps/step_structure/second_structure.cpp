@@ -138,13 +138,8 @@ int main(int argc, char** argv) {
   cnstream::Pipeline pipeline("pipeline");
   // pipeline.BuildPipeline({source_config, detector_config, tracker_config});
 
-  try {
-    if (0 != pipeline.BuildPipelineByJSONFile(FLAGS_config_fname)) {
-      LOG(ERROR) << "Build pipeline failed.";
-      return EXIT_FAILURE;
-    }
-  } catch (std::string& e) {
-    LOG(ERROR) << e;
+  if (0 != pipeline.BuildPipelineByJSONFile(FLAGS_config_fname)) {
+    LOG(ERROR) << "Build pipeline failed.";
     return EXIT_FAILURE;
   }
 
@@ -222,7 +217,6 @@ int main(int argc, char** argv) {
   watcher.Stop();
   std::cout << "\n\n\n\n\n\n";
 
-  if (gfps_stats)
-    gfps_stats->ShowStatistics();
+  if (gfps_stats) gfps_stats->ShowStatistics();
   return EXIT_SUCCESS;
 }

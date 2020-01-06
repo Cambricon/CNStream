@@ -20,7 +20,7 @@
 
 # 1. put your neuware package under the directory of CNStream
 # 2. docker build -f Dockerfile --build-arg mlu_platform=${board_series} --build-arg neuware_package=${neuware_package_name} -t ubuntu_cnstream:v1 .
-# 3. docker run -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --pid=host -v $HOME/.Xauthority -v /tmp/.X11-unix:/tmp/.X11-unix -it --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
+# 3. docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
 
 FROM ubuntu:16.04
 

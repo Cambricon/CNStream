@@ -20,9 +20,9 @@
 
 #include "cnosd.h"
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 using std::to_string;
 
@@ -100,8 +100,8 @@ CnOsd::CnOsd(size_t rows, size_t cols, const vector<string>& labels) : rows_(row
 }
 
 void CnOsd::DrawLabel(Mat image, const vector<edk::DetectObject>& objects,
-    std::vector<std::shared_ptr<cnstream::CNInferObject>> objs,
-    cnstream::CnFont* cn_font, bool tiled) const {
+                      std::vector<std::shared_ptr<cnstream::CNInferObject>> objs, cnstream::CnFont* cn_font,
+                      bool tiled) const {
   // check input data
   if (image.rows * image.cols == 0) {
     return;

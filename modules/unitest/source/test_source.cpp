@@ -26,9 +26,9 @@
 #include <string>
 #include <thread>
 
-#include "easyinfer/mlu_context.h"
 #include "cnstream_module.hpp"
 #include "data_source.hpp"
+#include "easyinfer/mlu_context.h"
 #include "test_base.hpp"
 
 namespace cnstream {

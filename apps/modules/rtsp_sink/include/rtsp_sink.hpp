@@ -99,6 +99,15 @@ class RtspSink : public Module, public ModuleCreator<RtspSink> {
    */
   int Process(CNFrameInfoPtr data) override;
 
+  /**
+   * @brief Check ParamSet for a module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Returns true if this API run successfully. Otherwise, returns false.
+   */
+  bool CheckParamSet(ModuleParamSet paramSet) override;
+
  private:
   RtspSinkContext* GetRtspSinkContext(CNFrameInfoPtr data);
   int http_port_;

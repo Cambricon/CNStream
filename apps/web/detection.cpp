@@ -35,7 +35,7 @@
 
 DEFINE_bool(rtsp, false, "use rtsp");
 DEFINE_bool(loop, false, "display repeat");
-DEFINE_string(config_fname, "./detection_config.json", "pipeline config filename");
+DEFINE_string(config_fname, "./dehaze_config.json", "pipeline config filename");
 
 cnstream::FpsStats* gfps_stats = nullptr;
 
@@ -108,18 +108,15 @@ class Detector {
   ~Detector() {
     delete msg_observer_;
     delete pipeline_;
-  };
+  }
   void BuildPipelineByJSONFile(char* config_fname) {
     const std::string config = config_fname;
-    try {
-      if (0 != pipeline_->BuildPipelineByJSONFile(config)) {
-        LOG(ERROR) << "Build pipeline failed.";
-        throw "Pipeline error";
-      }
-    } catch (std::string& e) {
-      LOG(ERROR) << e;
-      throw e;
+
+    if (0 != pipeline_->BuildPipelineByJSONFile(config)) {
+      LOG(ERROR) << "Build pipeline failed.";
+      throw "Pipeline error";
     }
+
     LOG(INFO) << "build pipeline success!";
     if (!pipeline_->Start()) {
       LOG(ERROR) << "Pipeline start failed.";

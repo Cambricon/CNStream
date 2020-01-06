@@ -23,17 +23,9 @@ UPLOAD_FOLDER = os.path.abspath(
 
 app = flask.Flask(__name__)
 
-
-my_detector = detector.Detector()
-config_path = "./detection_config.json"
-my_detector.build_pipeline_by_JSONFile(config_path)
-label = osd.parse_label(config_path)
-colors = osd.generate_colors(len(label));
-
 @app.route('/', methods=['GET', 'objPOST'])
 def classify_index():
     string_buffer = None
-
     if flask.request.method == 'GET':
         url = flask.request.args.get('url')
         if url:
@@ -62,7 +54,7 @@ def classify_index():
 
 
 @app.route('/detection_url', methods=['GET'])
-def detection_url():
+def detection_url():   
     imageurl = flask.request.args.get('image_url', '')
     filename_ = str(datetime.datetime.now()).replace(' ', '_') + 'samplefile.png'
     localfile = os.path.join(UPLOAD_FOLDER, filename_)
@@ -91,19 +83,73 @@ def detection_url():
         )
 
     app.logger.info('Image: %s', imageurl)
+    if flask.request.args.get('web_type') == 'detection':
+       my_detector = detector.Detector()
+       config_path = "./detection_config.json"
+       my_detector.build_pipeline_by_JSONFile(config_path)
+       label = osd.parse_label(config_path)
+       colors = osd.generate_colors(len(label));
 
-    # names, time_cost, probs = app.clf.classify_image(localfile)
-    chn_idx = my_detector.detect_image(localfile)
-    json_file = "/tmp/" + str(chn_idx) + ".json";
-    image_shape = image.shape
-    ids, cls, bboxs, scores, json_str = osd.parse_json_file(json_file, image_shape, label)
-    osd.draw_labels(image, ids, cls, bboxs, scores, colors)    
-    os.remove(localfile)
-    return flask.render_template(
-        'detection.html',
-        imagesrc=embed_image_html(image), has_result=True,
-        jsonstr=json_str
-    )
+       chn_idx = my_detector.detect_image(localfile)
+       json_file = "/tmp/" + str(chn_idx) + ".json";
+       image_shape = image.shape
+       ids, cls, bboxs, scores, json_str = osd.parse_json_file(json_file, image_shape, label)
+       osd.draw_labels(image, ids, cls, bboxs, scores, colors)    
+       os.remove(localfile)
+       temp = flask.request.args.get('web_type')
+
+       return flask.render_template(
+           'detection.html',
+           imagesrc=embed_image_html(image, temp), has_result=True,
+           jsonstr=json_str
+       )
+    elif flask.request.args.get('web_type') == 'dehaze':
+         my_detector = detector.Detector()
+         config_path = "./dehaze_config.json"
+         my_detector.build_pipeline_by_JSONFile(config_path)
+         cchn_idx = my_detector.detect_image(localfile)
+         
+         dehaze_path = os.path.abspath(
+          os.path.dirname(os.path.abspath(__file__)) + "/end.jpg")
+         dehaze_image = cv.imread(dehaze_path)
+         de_image = cv.cvtColor(dehaze_image,cv.COLOR_BGR2RGB)
+         image_shape = image.shape   
+         temp = flask.request.args.get('web_type')
+
+         return flask.render_template(
+             'detection.html', imagesrc=embed_image_html(de_image, temp), has_result=True, jsonstr=""
+         )
+    elif flask.request.args.get('web_type') == 'style_transfer':
+         my_detector = detector.Detector()
+         config_path = "./style_config.json"
+         my_detector.build_pipeline_by_JSONFile(config_path)
+         cchn_idx = my_detector.detect_image(localfile)
+         
+         style_path = os.path.abspath(
+          os.path.dirname(os.path.abspath(__file__)) + "/style.jpg")
+         style_image = cv.imread(style_path)
+         st_image = cv.cvtColor(style_image,cv.COLOR_BGR2RGB)
+         image_shape = image.shape   
+         temp = flask.request.args.get('web_type')
+
+         return flask.render_template(
+             'detection.html', imagesrc=embed_image_html(st_image, temp), has_result=True, jsonstr=""
+         )
+    elif flask.request.args.get('web_type') == "SuperResolution":
+         my_detector = detector.Detector()
+         config_path = "./SuperResolution.json"
+         my_detector.build_pipeline_by_JSONFile(config_path)
+         cchn_idx = my_detector.detect_image(localfile)
+         image_shape = image.shape
+         result_path = os.path.abspath(os.path.dirname(os.path.abspath(__file__))+ "/output/result.png")
+         image = exifutil.open_oriented_im(result_path)
+         os.remove(localfile)
+         temp = flask.request.args.get('web_type')
+         return flask.render_template(
+             'detection.html',
+             imagesrc=embed_image_html(image,temp), has_result=True,
+             jsonstr=""
+         )
 
 
 @app.route('/detection_upload', methods=['POST'])
@@ -132,23 +178,81 @@ def classify_upload():
             'detection.html', imagesrc="", has_result=False,
             jsonstr='Cannot open uploaded image.'
         )
+    if flask.request.form["web_type"] == 'dehaze':
+        my_detector = detector.Detector()
+        config_path = "./dehaze_config.json"
+        my_detector.build_pipeline_by_JSONFile(config_path)
+        chn_idx = my_detector.detect_image(filename)
 
-    # names,time_cost, probs = app.clf.classify_image(filename)
-    chn_idx = my_detector.detect_image(filename)
-    json_file = "/tmp/" + str(chn_idx) + ".json";
-    image_shape = image.shape
-    ids, cls, bboxs, scores, json_str = osd.parse_json_file(json_file, image_shape, label)
-    osd.draw_labels(image, ids, cls, bboxs, scores, colors)    
-    os.remove(filename)
+        dehaze_path = os.path.abspath(
+         os.path.dirname(os.path.abspath(__file__)) + "/end.jpg")
+        dehaze_image = cv.imread(dehaze_path)
+        de_image = cv.cvtColor(dehaze_image,cv.COLOR_BGR2RGB)
+        image_shape = image.shape   
+        os.remove(filename)
+        temp = flask.request.form["web_type"]
 
-    return flask.render_template(
-        'detection.html', imagesrc=embed_image_html(image), has_result=True, jsonstr=json_str
-    )
+        return flask.render_template(
+            'detection.html', imagesrc=embed_image_html(de_image, temp), has_result=True, jsonstr=""
+        )
+    elif flask.request.form["web_type"] == 'style_transfer':
+        my_detector = detector.Detector()
+        config_path = "./style_config.json"
+        my_detector.build_pipeline_by_JSONFile(config_path)
+        chn_idx = my_detector.detect_image(filename)
 
+        style_path = os.path.abspath(
+         os.path.dirname(os.path.abspath(__file__)) + "/style.jpg")
+        style_image = cv.imread(style_path)
+        st_image = cv.cvtColor(style_image,cv.COLOR_BGR2RGB)
+        image_shape = image.shape   
+        os.remove(filename)
+        temp = flask.request.form["web_type"]
 
-def embed_image_html(image):
+        return flask.render_template(
+            'detection.html', imagesrc=embed_image_html(st_image, temp), has_result=True, jsonstr=""
+        )
+    elif flask.request.args.get('web_type') == "SuperResolution":
+        my_detector = detector.Detector()
+        config_path = "./SuperResolution.json"
+        my_detector.build_pipeline_by_JSONFile(config_path)
+        cchn_idx = my_detector.detect_image(localfile)
+        image_shape = image.shape
+        result_path = os.path.abspath(os.path.dirname(os.path.abspath(__file__))+ "/output/result.png")
+        image = exifutil.open_oriented_im(result_path)
+        os.remove(filename)
+        temp = flask.request.form["web_type"]
+        return flask.render_template(
+            'detection.html', imagesrc=embed_image_html(image, temp), has_result=True, jsonstr=""
+        )
+
+    elif flask.request.form["web_type"] == 'detection':
+        my_detector = detector.Detector()
+        config_path = "./detection_config.json"
+        my_detector.build_pipeline_by_JSONFile(config_path)
+        label = osd.parse_label(config_path)
+        colors = osd.generate_colors(len(label));
+
+        chn_idx = my_detector.detect_image(filename)
+        json_file = "/tmp/" + str(chn_idx) + ".json";
+        image_shape = image.shape
+        ids, cls, bboxs, scores, json_str = osd.parse_json_file(json_file, image_shape, label)
+        osd.draw_labels(image, ids, cls, bboxs, scores, colors)    
+        os.remove(filename)
+        temp = flask.request.form["web_type"]
+
+        return flask.render_template(
+            'detection.html', imagesrc=embed_image_html(image, temp), has_result=True, jsonstr=json_str
+        )
+
+def embed_image_html(image, type):
     """Creates an image embedded in HTML base64 format."""
-    image_pil = Image.fromarray((255 * image).astype('uint8'))
+    if type == 'dehaze':
+       image_pil = Image.fromarray((image).astype('uint8'))
+    elif type == 'style_transfer':
+       image_pil = Image.fromarray((image).astype('uint8'))
+    else:
+       image_pil = Image.fromarray((255 * image).astype('uint8'))
     if sys.version_info.major == 2:
         string_buf=StringIO.StringIO()
         image_pil.save(string_buf, format='png')

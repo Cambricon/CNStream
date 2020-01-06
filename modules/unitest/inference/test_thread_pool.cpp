@@ -34,16 +34,13 @@ namespace cnstream {
 class InferThreadPoolTest {
  public:
   explicit InferThreadPoolTest(InferThreadPool* tp) : tp_(tp) {}
-  InferTaskSptr PopTask() {
-    return tp_->PopTask();
-  }
-  int GetThreadNum() {
-    return static_cast<int>(tp_->threads_.size());
-  }
+  InferTaskSptr PopTask() { return tp_->PopTask(); }
+  int GetThreadNum() { return static_cast<int>(tp_->threads_.size()); }
   int GetTaskNum() {
     std::unique_lock<std::mutex> lk(tp_->mtx_);
     return static_cast<int>(tp_->task_q_.size());
   }
+
  private:
   InferThreadPool* tp_;
 };
@@ -57,27 +54,25 @@ TEST(Inferencer, InferThreadPool_Constructor) {
 
 TEST(Inferencer, InferThreadPool_Init) {
   InferThreadPool tp;
-  EXPECT_NO_THROW(tp.Init(0));
+  EXPECT_NO_THROW(tp.Init(0, 0));
   InferThreadPoolTest tp_test(&tp);
   EXPECT_EQ(tp_test.GetThreadNum(), 0);
   tp.Destroy();
-  EXPECT_NO_THROW(tp.Init(5));
+  EXPECT_NO_THROW(tp.Init(0, 5));
   EXPECT_EQ(tp_test.GetThreadNum(), 5);
   tp.Destroy();
 }
 
 TEST(Inferencer, InferThreadPool_Destroy) {
   InferThreadPool tp;
-  EXPECT_NO_THROW(tp.Init(1));
+  EXPECT_NO_THROW(tp.Init(0, 1));
   EXPECT_NO_THROW(tp.Destroy());
   InferThreadPoolTest tp_test(&tp);
   EXPECT_EQ(tp_test.GetThreadNum(), 0);
 }
 
 TEST(Inferencer, InferThreadPool_SubmitTask) {
-  InferTaskSptr task = std::make_shared<InferTask>([] () -> int {
-    return 1;
-  });
+  InferTaskSptr task = std::make_shared<InferTask>([]() -> int { return 1; });
   InferThreadPool tp;
   tp.Destroy();
   /* not running, submit task failed */
@@ -88,7 +83,7 @@ TEST(Inferencer, InferThreadPool_SubmitTask) {
   std::condition_variable pause;
   std::mutex mtx;
   std::atomic<bool> task_run(false);
-  task = std::make_shared<InferTask>([&] () -> int {
+  task = std::make_shared<InferTask>([&]() -> int {
     std::unique_lock<std::mutex> lk(mtx);
     /*
       pause and block the only one thread in threadpool
@@ -97,8 +92,8 @@ TEST(Inferencer, InferThreadPool_SubmitTask) {
     pause.wait(lk);
     return 0;
   });
-  auto task2 = std::make_shared<InferTask>([] () -> int { return 0; });
-  tp.Init(1);
+  auto task2 = std::make_shared<InferTask>([]() -> int { return 0; });
+  tp.Init(0, 1);
   EXPECT_NO_THROW(tp.SubmitTask(task));
   while (!task_run.load()) {
     // wait for the first task is running
@@ -114,7 +109,7 @@ TEST(Inferencer, InferThreadPool_PopTask) {
   std::condition_variable pause;
   std::mutex mtx;
   std::atomic<bool> task_run(false);
-  InferTaskSptr task = std::make_shared<InferTask>([&] () -> int {
+  InferTaskSptr task = std::make_shared<InferTask>([&]() -> int {
     task_run.store(true);
     std::unique_lock<std::mutex> lk(mtx);
     /*
@@ -124,11 +119,9 @@ TEST(Inferencer, InferThreadPool_PopTask) {
     return 1;
   });
   InferThreadPool tp;
-  tp.Init(1);
+  tp.Init(0, 1);
   tp.SubmitTask(task);
-  InferTaskSptr task_for_pop = std::make_shared<InferTask>([&] () -> int {
-    return 1;
-  });
+  InferTaskSptr task_for_pop = std::make_shared<InferTask>([&]() -> int { return 1; });
   task_for_pop->task_msg = "test_pop";
   tp.SubmitTask(task_for_pop);
   while (!task_run.load()) {
@@ -144,14 +137,14 @@ TEST(Inferencer, InferThreadPool_PopTask) {
 TEST(Inferencer, InferThreadPool_TaskSequence) {
   constexpr int ktask_num = 5;
   InferThreadPool tp;
-  tp.Init(ktask_num);
+  tp.Init(0, ktask_num);
   std::chrono::high_resolution_clock::time_point ts[ktask_num];  // NOLINT
-  InferTaskSptr tasks[ktask_num];  // NOLINT
-  std::function<int(std::chrono::high_resolution_clock::time_point* t)> func
-    = [] (std::chrono::high_resolution_clock::time_point* t) -> int {
-      *t = std::chrono::high_resolution_clock::now();
-      return 0;
-    };
+  InferTaskSptr tasks[ktask_num];                                // NOLINT
+  std::function<int(std::chrono::high_resolution_clock::time_point * t)> func =
+      [](std::chrono::high_resolution_clock::time_point* t) -> int {
+    *t = std::chrono::high_resolution_clock::now();
+    return 0;
+  };
   for (int i = 0; i < ktask_num; ++i) {
     tasks[i] = std::make_shared<InferTask>(std::bind(func, ts + i));
     if (i != 0) {
@@ -163,7 +156,7 @@ TEST(Inferencer, InferThreadPool_TaskSequence) {
     tp.SubmitTask(tasks[i]);
   }
 
-  for (auto & task : tasks) {
+  for (auto& task : tasks) {
     task->WaitForTaskComplete();
   }
 

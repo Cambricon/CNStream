@@ -21,8 +21,10 @@
 #ifndef MODULES_INFERENCE_SRC_INFER_THREAD_POOL_HPP_
 #define MODULES_INFERENCE_SRC_INFER_THREAD_POOL_HPP_
 
+#include <functional>
 #include <mutex>
 #include <queue>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -38,11 +40,15 @@ class InferThreadPool {
 
   ~InferThreadPool() {}
 
-  void Init(size_t thread_num);
+  void Init(int dev_id, size_t thread_num);
 
   void Destroy();
 
   void SubmitTask(const InferTaskSptr& task);
+
+  void SubmitTask(const std::vector<InferTaskSptr>& tasks);
+
+  void SetErrorHandleFunc(const std::function<void(const std::string& err_msg)>& err_func);
 
  private:
   InferTaskSptr PopTask();
@@ -55,6 +61,8 @@ class InferThreadPool {
   std::condition_variable q_push_cond_;
   std::condition_variable q_pop_cond_;
   volatile bool running_ = false;
+  int dev_id_ = 0;
+  std::function<void(const std::string& err_msg)> error_func_ = NULL;
 };  // class InferThreadPool
 
 }  // namespace cnstream

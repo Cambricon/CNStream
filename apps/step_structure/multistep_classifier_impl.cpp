@@ -22,20 +22,22 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
-#include <unordered_map>
 
-#include "multistep_classifier_impl.hpp"
 #include "cnstream_frame.hpp"
+#include "multistep_classifier_impl.hpp"
 
 namespace cnstream {
-MultiStepClassifierImpl::MultiStepClassifierImpl(int step1_classid, int bsize,
-      int device_id, std::unordered_map<int, std::shared_ptr<edk::ModelLoader>> modelloader,
-      std::unordered_map<int, std::vector<std::string>> labels)
-      : step1_class_index_(step1_classid), batch_size_(bsize),
-        model_loaders_(modelloader),  device_id_(device_id),
-        labels_(labels) { }
+MultiStepClassifierImpl::MultiStepClassifierImpl(int step1_classid, int bsize, int device_id,
+                                                 std::unordered_map<int, std::shared_ptr<edk::ModelLoader>> modelloader,
+                                                 std::unordered_map<int, std::vector<std::string>> labels)
+    : step1_class_index_(step1_classid),
+      batch_size_(bsize),
+      model_loaders_(modelloader),
+      device_id_(device_id),
+      labels_(labels) {}
 
 MultiStepClassifierImpl::~MultiStepClassifierImpl() { Destory(); }
 
@@ -55,9 +57,9 @@ bool MultiStepClassifierImpl::Init() {
         LOG(ERROR) << "[MultiStepClassifierImpl] Model has wrong IO shape ";
       }
 
-      edk::EasyInfer* infer = new edk::EasyInfer;
-      edk::MluMemoryOp* memop = new edk::MluMemoryOp;
-      edk::MluContext* env = new edk::MluContext;
+      edk::EasyInfer *infer = new edk::EasyInfer;
+      edk::MluMemoryOp *memop = new edk::MluMemoryOp;
+      edk::MluContext *env = new edk::MluContext;
       env->SetDeviceId(device_id_);
       env->ConfigureForThisThread();
       memop->SetLoader(model_load_);
@@ -81,7 +83,7 @@ bool MultiStepClassifierImpl::Init() {
 }
 
 void MultiStepClassifierImpl::Destory() {
-  std::unordered_map<int, void**>::iterator iter;
+  std::unordered_map<int, void **>::iterator iter;
   for (iter = cpu_inputs_.begin(); iter != cpu_inputs_.end(); iter++) {
     memops_[iter->first]->FreeCpuOutput(iter->second);
   }
@@ -95,7 +97,7 @@ void MultiStepClassifierImpl::Destory() {
     memops_[iter->first]->FreeArrayMlu(iter->second, memops_[iter->first]->Loader()->OutputNum());
   }
 
-  std::unordered_map<int, edk::MluMemoryOp*> ::iterator iter1;
+  std::unordered_map<int, edk::MluMemoryOp *>::iterator iter1;
   for (iter1 = memops_.begin(); iter1 != memops_.end(); iter1++) {
     delete memops_[iter->first];
     delete envs_[iter->first];
@@ -103,15 +105,14 @@ void MultiStepClassifierImpl::Destory() {
   }
 }
 
-std::vector<std::pair<float*, uint64_t>>
- MultiStepClassifierImpl::Classify(const int& class_idx) {
+std::vector<std::pair<float *, uint64_t>> MultiStepClassifierImpl::Classify(const int &class_idx) {
   // set cpu input
   void **cpu_input = cpu_inputs_[class_idx];
   void **mlu_input = mlu_inputs_[class_idx];
   void **cpu_output = cpu_outputs_[class_idx];
   void **mlu_output = mlu_outputs_[class_idx];
-  edk::MluMemoryOp* memop = memops_[class_idx];
-  edk::EasyInfer* infer = infers_[class_idx];
+  edk::MluMemoryOp *memop = memops_[class_idx];
+  edk::EasyInfer *infer = infers_[class_idx];
 
   //  multiclassify by offline model
   memop->MemcpyInputH2D(mlu_input, cpu_input, 1);
@@ -119,9 +120,9 @@ std::vector<std::pair<float*, uint64_t>>
   memop->MemcpyOutputD2H(cpu_output, mlu_output, 1);
 
   auto shapes = model_loaders_.find(class_idx)->second->OutputShapes();
-  std::vector<std::pair<float*, uint64_t>> results;
+  std::vector<std::pair<float *, uint64_t>> results;
   for (size_t batch_index = 0; batch_index < batch_size_; ++batch_index) {
-    std::pair<float*, uint64_t> net_res;
+    std::pair<float *, uint64_t> net_res;
     for (size_t i = 0; i < shapes.size(); ++i) {
       float *data = static_cast<float *>(cpu_output[i]);
       uint64_t data_count = shapes[i].DataCount();
@@ -133,6 +134,6 @@ std::vector<std::pair<float*, uint64_t>>
   }
 
   return results;
-  }
+}
 
 }  // namespace cnstream

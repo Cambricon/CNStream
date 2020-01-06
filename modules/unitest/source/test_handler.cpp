@@ -424,9 +424,10 @@ TEST(SourceHandlerRaw, Extract) {
 }
 
 TEST(SourceHandlerRaw, Process) {
+  int frame_rate = 30;
   DataSource src(gname);
   std::string h264_path = GetExePath() + "../../modules/unitest/source/data/raw.h264";
-  auto raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, 30, false);
+  auto raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, frame_rate, false);
 
   ModuleParamSet param;
   param["source_type"] = "raw";
@@ -438,7 +439,7 @@ TEST(SourceHandlerRaw, Process) {
   param["width"] = "256";
   param["height"] = "256";
   param["interlaced"] = "false";
-  raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, 30, false);
+  raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, frame_rate, false);
   EXPECT_TRUE(src.Open(param));
   EXPECT_TRUE(raw_handler->Open());
   raw_handler->Close();
@@ -448,21 +449,24 @@ TEST(SourceHandlerRaw, Process) {
 
   raw_handler->ClearResources();
 
-  raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, 30, true);
+  raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, frame_rate, true);
   EXPECT_TRUE(src.Open(param));
   EXPECT_TRUE(raw_handler->Open());
   raw_handler->Close();
   EXPECT_TRUE(raw_handler->PrepareResources());
+
   // FIXME
-  /*
-    uint32_t loop = 10;
-    while (loop--) {
-      // valid data
-      EXPECT_TRUE(raw_handler->Process());
-      // eos
-      EXPECT_TRUE(raw_handler->Process());
-    }
-  */
+  uint32_t loop = 10;
+  while (loop--) {
+    // valid data
+    EXPECT_TRUE(raw_handler->Process());
+    std::chrono::duration<double, std::milli> dura(1000.0 / frame_rate);
+    std::this_thread::sleep_for(dura);
+    // eos
+    EXPECT_TRUE(raw_handler->Process());
+    std::this_thread::sleep_for(dura);
+  }
+
   raw_handler->ClearResources();
 }
 

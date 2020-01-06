@@ -26,13 +26,21 @@
 #include "cnstream_eventbus.hpp"
 #include "rtsp_sink.hpp"
 
-RtspSink::RtspSink(const std::string &name) : Module(name) {}
+RtspSink::RtspSink(const std::string &name) : Module(name) {
+  param_register_.SetModuleDesc("RtspSink is a module to deliver stream by RTSP protocol.");
+  param_register_.Register("http-port", "Http port.");
+  param_register_.Register("udp-port", "UDP port.");
+  param_register_.Register("encoder-type", "Encode type.");
+  param_register_.Register("frame-rate", "Frame rate.");
+  param_register_.Register("cols", "Video cols.");
+  param_register_.Register("rows", "Video rows.");
+}
 
 RtspSinkContext *RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {
   RtspSinkContext *ctx = nullptr;
-  if ( is_mosaic_style_ ) {
+  if (is_mosaic_style_) {
     auto search = ctxs_.find(0);
-    if ( search != ctxs_.end() ) {
+    if (search != ctxs_.end()) {
       ctx = search->second;
     } else {
       ctx = new RtspSinkContext;
@@ -55,7 +63,7 @@ RtspSinkContext *RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {
       ctx->stream_ = new RTSPSinkJoinStream;
 
       if (!ctx->stream_->Open(data->frame.width, data->frame.height, format_, frame_rate_ /* 30000.0f / 1001 */,
-                              udp_port_ + data->channel_idx, http_port_,
+                              udp_port_ + data->channel_idx, http_port_, -1, -1,
                               enc_type == "mlu" ? RTSPSinkJoinStream::MLU : RTSPSinkJoinStream::FFMPEG)) {
         LOG(ERROR) << "[RTSPSink] Invalid parameter";
       }
@@ -83,13 +91,13 @@ bool RtspSink::Open(ModuleParamSet paramSet) {
     if (frame_rate_ < 0) frame_rate_ = 0;
   }
 
-  if ( paramSet.find("cols") != paramSet.end() && paramSet.find("rows") != paramSet.end() ) {
+  if (paramSet.find("cols") != paramSet.end() && paramSet.find("rows") != paramSet.end()) {
     cols_ = std::stoi(paramSet["cols"]);
     rows_ = std::stoi(paramSet["rows"]);
-    is_mosaic_style_ =  true;
+    is_mosaic_style_ = true;
     LOG(INFO) << "mosaic windows cols: " << cols_ << " ,rows: " << rows_;
   }
-  format_ = RTSPSinkJoinStream::BGR24;
+  format_ = RTSPSinkJoinStream::BGR24;  // BGR24
   return true;
 }
 
@@ -108,11 +116,37 @@ void RtspSink::Close() {
 int RtspSink::Process(CNFrameInfoPtr data) {
   RtspSinkContext *ctx = GetRtspSinkContext(data);
   cv::Mat image = *data->frame.ImageBGR();
-  if ( format_ == RTSPSinkJoinStream::YUV420P ) cv::cvtColor(image, image, cv::COLOR_BGR2YUV_I420);
-  if ( is_mosaic_style_ ) {
+  if (is_mosaic_style_) {
     ctx->stream_->Update(image, data->frame.timestamp, data->channel_idx);
   } else {
     ctx->stream_->Update(image, data->frame.timestamp);
   }
   return 0;
+}
+
+bool RtspSink::CheckParamSet(ModuleParamSet paramSet) {
+  ParametersChecker checker;
+  for (auto &it : paramSet) {
+    if (!param_register_.IsRegisted(it.first)) {
+      LOG(WARNING) << "[RtspSink] Unknown param: " << it.first;
+    }
+  }
+
+  if (paramSet.find("http-port") == paramSet.end() || paramSet.find("udp-port") == paramSet.end() ||
+      paramSet.find("encoder-type") == paramSet.end()) {
+    LOG(ERROR) << "RtspSink must specify [http-port], [udp-port], [encoder-type].";
+    return false;
+  }
+
+  std::string err_msg;
+  if (!checker.IsNum({"http-port", "udp-port", "frame-rate", "cols", "rows"}, paramSet, err_msg, true)) {
+    LOG(ERROR) << "[RtspSink] " << err_msg;
+    return false;
+  }
+
+  if (paramSet["encoder-type"] != "mlu" && paramSet["encoder-type"] != "ffmpeg") {
+    LOG(ERROR) << "[RtspSink] Not support encoder type: " << paramSet["encoder-type"];
+    return false;
+  }
+  return true;
 }

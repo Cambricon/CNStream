@@ -6,6 +6,6 @@ Instructions:
 
 Usage(make sure neuware version is v8.2.0):
 
-1. compile cnstream(enable cnstream_build_apps option)
+1. compile cnstream(enable build_apps option)
 2. `./run_mlu100.sh`
 3. output file for the app:`./output/0.avi`

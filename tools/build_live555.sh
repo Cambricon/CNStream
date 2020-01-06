@@ -5,13 +5,15 @@ LIVE555_INST_DIR=${CWD}/../3rdparty/live555
 #LIVE555_CONFIG=linux
 LIVE555_CONFIG=linux-with-shared-libraries
 
-if [[ -n $NUMJOBS ]]; then
-    MJOBS=$NUMJOBS
-elif [[ -f /proc/cpuinfo ]]; then
-    MJOBS=$(grep -c processor /proc/cpuinfo)
+
+
+if [ -f "$CWD/build_live555.done" ]; then
+  echo "build_live555.done already exist. Remove $CWD/build_live555.done lockfile to re-building it."
+  exit 0
 else
-    MJOBS=4
+  touch "$CWD/build_live555.done"
 fi
+
 
 if [ -f "$LIVE555_INST_DIR/lib/libliveMedia.so" ];then
   echo "live555 has been built and installed already"
@@ -38,7 +40,7 @@ fi
 cd ${CWD}/${PACKAGE_NAME}
 sed -i '/COMPILE_OPTS =/ s/$/ -DRTP_PAYLOAD_MAX_SIZE=8192 -DALLOW_SERVER_PORT_REUSE=1 -DALLOW_RTSP_SERVER_PORT_REUSE=1/' ./config.${LIVE555_CONFIG}
 ./genMakefiles ${LIVE555_CONFIG}
-make -j $MJOBS
+make
 if [ $? = 0 ]; then
   echo "build ${PACKAGE_NAME} done"
   make install PREFIX=${LIVE555_INST_DIR}
@@ -46,9 +48,11 @@ if [ $? = 0 ]; then
 fi
 make clean
 cd ${CWD}
+rm -rf "$CWD/build_live555.done"
 if [ ${SRC_TYPE} = 2 ]; then
   rm -rf ${CWD}/${PACKAGE_NAME}
 fi
+
 
 
 

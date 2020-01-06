@@ -43,18 +43,19 @@ class RTSPSinkJoinStream {
     NV21,
     NV12,
   };
-  enum CodecHWType {
+  typedef enum CodecHWType_enum {
     FFMPEG = 0,
     MLU,
-  };
+  }CodecHWType;
   bool Open(int width, int height, PictureFormat format, float refresh_rate, int udp_port, int http_port,
-            int rows = -1, int cols = -1, CodecHWType hw = FFMPEG);
+            int rows, int cols, CodecHWType hw);
   void Close();
   bool Update(cv::Mat image, int64_t timestamp, int channel_id = -1);
 
  private:
   void RefreshLoop();
-  void EncodeFrame(uint8_t *data, int64_t timestamp);
+  void EncodeFrame(const cv::Mat &bgr24, int64_t timestamp);
+  PictureFormat pix_format_;
   std::mutex canvas_lock_;
   cv::Mat canvas_;
   std::thread *refresh_thread_ = nullptr;
@@ -70,6 +71,5 @@ class RTSPSinkJoinStream {
   bool start_refresh_ = false;
   bool is_mosaic_style = false;
 };
-
 
 #endif  // RTSP_SINK_JOIN_STREAM_HPP_

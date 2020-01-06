@@ -53,9 +53,7 @@ void CheckExePath(const std::string &path) {
   }
 }
 
-inline bool exists_file(const std::string &name) {
-  return (access(name.c_str(), F_OK) != -1);
-}
+inline bool exists_file(const std::string &name) { return (access(name.c_str(), F_OK) != -1); }
 
 std::list<std::string> ReadFileList(const std::string &list) {
   std::ifstream ifile;
@@ -98,19 +96,16 @@ bool CheckDir(const std::string &path, std::string *estr) {
   if (::stat(path.c_str(), &st)) {
     // errmsg
     ret = false;
-    *estr = std::string("Check dir '") + path + "' failed: " +
-            std::string(strerror(errno));
+    *estr = std::string("Check dir '") + path + "' failed: " + std::string(strerror(errno));
 
   } else {
     if (!(st.st_mode & S_IFDIR)) {
-      *estr = std::string("Check dir '") + path + "' failed: " +
-              std::string("Not a directory");
+      *estr = std::string("Check dir '") + path + "' failed: " + std::string("Not a directory");
       ret = false;
     } else {
       if (access(path.c_str(), W_OK)) {
         ret = false;
-        *estr = std::string("Check dir '") + path + "' failed: " +
-                std::string(strerror(errno));
+        *estr = std::string("Check dir '") + path + "' failed: " + std::string(strerror(errno));
       }
     }
   }

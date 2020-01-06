@@ -20,13 +20,25 @@
 
 #include "postproc.hpp"
 
+#include <algorithm>
+#include <cstring>
+#include <iostream>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
+
+using std::cerr;
+using std::endl;
+using std::pair;
+using std::to_string;
+using std::vector;
 
 namespace cnstream {
 
-Postproc* Postproc::Create(const std::string& proc_name) {
-  return ReflexObjectEx<Postproc>::CreateObject(proc_name);
-}
+#define CLIP(x) ((x) < 0 ? 0 : ((x) > 1 ? 1 : (x)))
+
+Postproc* Postproc::Create(const std::string& proc_name) { return ReflexObjectEx<Postproc>::CreateObject(proc_name); }
 
 void Postproc::set_threshold(const float threshold) { threshold_ = threshold; }
 

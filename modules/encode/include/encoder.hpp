@@ -28,6 +28,7 @@
 
 #include <memory>
 #include <string>
+#include <mutex>
 #include <unordered_map>
 #ifdef HAVE_OPENCV
 #include <opencv2/opencv.hpp>
@@ -104,7 +105,17 @@ class Encoder : public Module, public ModuleCreator<Encoder> {
    */
   int Process(CNFrameInfoPtr data) override;
 
+  /**
+   * @brief Check ParamSet for a module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Returns true if this API run successfully. Otherwise, returns false.
+   */
+  bool CheckParamSet(ModuleParamSet paramSet) override;
+
  private:
+  std::mutex encoder_mutex_;
   EncoderContext* GetEncoderContext(CNFrameInfoPtr data);
   std::string output_dir_;
   std::unordered_map<int, EncoderContext*> encode_ctxs_;

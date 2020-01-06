@@ -18,6 +18,7 @@
     "custom_params" : {
       "model_path" : "japan_8mp.cambricon",
       "func_name" : "subnet0",
+      "data_order" : "NCHW",
       "preproc_name" : "PreprocStyle_transfer",
       "postproc_name" : "PostprocStyle_transfer",
       "device_id" : 0

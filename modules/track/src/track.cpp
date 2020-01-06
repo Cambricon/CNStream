@@ -27,6 +27,7 @@
 #include <thread>
 #include <vector>
 
+#include "easyinfer/mlu_context.h"
 #include "feature_extractor.h"
 
 namespace cnstream {
@@ -35,42 +36,68 @@ namespace cnstream {
  * @brief Tracker thread context
  *************************************************************************/
 struct TrackerContext {
-  std::unique_ptr<edk::EasyTrack> processer_ = nullptr;
+  TrackPtr processer_ = nullptr;
   std::unique_ptr<FeatureExtractor> feature_extractor_ = nullptr;
   TrackerContext() = default;
   ~TrackerContext() = default;
   TrackerContext(const TrackerContext &) = delete;
-  TrackerContext& operator=(const TrackerContext&) = delete;
+  TrackerContext &operator=(const TrackerContext &) = delete;
 };
 
-static thread_local TrackerContext g_tl_ctx;
-
-Tracker::Tracker(const std::string &name) : Module(name) {}
+Tracker::Tracker(const std::string &name) : Module(name) {
+  param_register_.SetModuleDesc("Tracker is a module for realtime tracking.");
+  param_register_.Register("model_path", "The offline model path.");
+  param_register_.Register("func_name", "The offline model func name.");
+  param_register_.Register("track_name", "Track type, must be FeatureMatch or KCF.");
+}
 
 Tracker::~Tracker() { Close(); }
 
-inline TrackerContext *Tracker::GetTrackerContext() {
-  if (!g_tl_ctx.processer_) {
-    if ("KCF" == track_name_) {
-      assert(nullptr != pKCFloader_);
-      g_tl_ctx.processer_.reset(new edk::KcfTrack);
-      if (!g_tl_ctx.processer_) return nullptr;
-
-      dynamic_cast<edk::KcfTrack*>(g_tl_ctx.processer_.get())->SetModel(pKCFloader_);
-    } else {  // "FeatureMatch by default"
-      g_tl_ctx.processer_.reset(new edk::FeatureMatchTrack);
-      if (!g_tl_ctx.processer_) return nullptr;
-
-      g_tl_ctx.feature_extractor_ = std::unique_ptr<FeatureExtractor>(new FeatureExtractor);
+inline TrackerContext *Tracker::GetTrackerContext(CNFrameInfoPtr data) {
+  std::lock_guard<std::mutex> lock(tracker_mutex_);
+  TrackerContext *ctx = nullptr;
+  std::string data_chn = data->frame.stream_id;
+  std::thread::id tid = std::this_thread::get_id();
+  if (ctx_map_.find(tid) != ctx_map_.end()) {
+    ctx = ctx_map_[tid];
+  } else {
+    edk::MluContext m_ctx;
+    m_ctx.SetDeviceId(0);
+    m_ctx.ConfigureForThisThread();
+    ctx = new(std::nothrow) TrackerContext;
+    LOG_IF(FATAL, nullptr == ctx) << "Tracker::GetTrackerContext() new TrackerContext failed";
+    ctx_map_[tid] = ctx;
+    if ("FeatureMatch" == track_name_) {
+      FeatureExtractor* FeatureExtractor_ptr = new(std::nothrow) FeatureExtractor;
+      LOG_IF(FATAL, nullptr == FeatureExtractor_ptr) << "Tracker::GetTrackerContext() new FeatureExtractor failed";
+      ctx->feature_extractor_.reset(FeatureExtractor_ptr);
       #ifdef CNS_MLU100
-      if (!g_tl_ctx.feature_extractor_->Init(model_path_, func_name_)) {
+      if (!ctx->feature_extractor_->Init(model_path_, func_name_)) {
         LOG(ERROR) << "FeatureMatchTrack Feature Extractor initial failed.";
-        return nullptr;
       }
       #endif
     }
   }
-  return &g_tl_ctx;
+  if (tracker_map_.find(data_chn) != tracker_map_.end()) {
+    ctx->processer_ = tracker_map_[data_chn];
+  } else {
+    if ("KCF" == track_name_) {
+      assert(nullptr != pKCFloader_);
+      auto pKcfTrack = new(std::nothrow) edk::KcfTrack;
+      LOG_IF(FATAL, nullptr == pKcfTrack) << "Tracker::GetTrackerContext() new edk::KcfTrack failed";
+      pKcfTrack->SetModel(pKCFloader_);
+      ctx->processer_.reset(pKcfTrack);
+      if (!ctx->processer_) return nullptr;
+      tracker_map_[data_chn] = ctx->processer_;
+    } else {  // "FeatureMatch by default"
+      auto pFeatureMatchTrack = new(std::nothrow) edk::FeatureMatchTrack;
+      LOG_IF(FATAL, nullptr == pFeatureMatchTrack) << "Tracker::GetTrackerContext() new edk::FeatureMatchTrack failed";
+      ctx->processer_.reset(pFeatureMatchTrack);
+      if (!ctx->processer_) return nullptr;
+      tracker_map_[data_chn] = ctx->processer_;
+    }
+  }
+  return ctx;
 }
 
 bool Tracker::Open(cnstream::ModuleParamSet paramSet) {
@@ -106,12 +133,19 @@ bool Tracker::Open(cnstream::ModuleParamSet paramSet) {
   return true;
 }
 
-void Tracker::Close() {}
+void Tracker::Close() {
+  std::lock_guard<std::mutex> lock(tracker_mutex_);
+  tracker_map_.clear();
+  for (auto &it : ctx_map_) {
+    delete it.second;
+  }
+  ctx_map_.clear();
+}
 
 int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
-  TrackerContext *ctx = GetTrackerContext();
+  TrackerContext *ctx = GetTrackerContext(data);
   if (nullptr == ctx || nullptr == ctx->processer_) {
-    throw TrackerError("Get Tracker Context Failed.");
+    LOG(ERROR) << "Get Tracker Context Failed.";
     return -1;
   }
 
@@ -138,7 +172,7 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
     tframe.format = edk::TrackFrame::ColorSpace::RGB24;
     tframe.dev_type = edk::TrackFrame::DevType::CPU;
 
-    for (auto& obj : in) {
+    for (auto &obj : in) {
       obj.feature = ctx->feature_extractor_->ExtractFeature(tframe, obj);
     }
 
@@ -198,6 +232,34 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
   }
 
   return 0;
+}
+
+bool Tracker::CheckParamSet(ModuleParamSet paramSet) {
+  ParametersChecker checker;
+  for (auto &it : paramSet) {
+    if (!param_register_.IsRegisted(it.first)) {
+      LOG(WARNING) << "[Tracker] Unknown param: " << it.first;
+    }
+  }
+
+  if (paramSet.find("model_path") == paramSet.end() || paramSet.find("func_name") == paramSet.end()) {
+    LOG(ERROR) << "[Tracker] must specify [model_path], [func_name].";
+    return false;
+  }
+
+  if (!checker.CheckPath(paramSet["model_path"], paramSet)) {
+    LOG(ERROR) << "[Tracker] [model_path] : " << paramSet["model_path"] << " non-existence.";
+    return false;
+  }
+
+  if (paramSet.find("track_name") != paramSet.end()) {
+    std::string track_name = paramSet["track_name"];
+    if (track_name != "FeatureMatch" && track_name != "KCF") {
+      LOG(ERROR) << "[Tracker] [track_name] Unsupported tracker type " << track_name;
+      return false;
+    }
+  }
+  return true;
 }
 
 }  // namespace cnstream

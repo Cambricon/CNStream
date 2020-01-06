@@ -19,8 +19,10 @@
  *************************************************************************/
 
 #include <opencv2/opencv.hpp>
+
 #include <memory>
 #include <vector>
+
 #include "easyinfer/model_loader.h"
 #include "easyinfer/shape.h"
 #include "preproc.hpp"
@@ -65,7 +67,11 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
   int dst_w = input_shapes[0].w;
   int dst_h = input_shapes[0].h;
 
-  uint8_t* img_data = new uint8_t[package->frame.GetBytes()];
+  uint8_t* img_data = new(std::nothrow) uint8_t[package->frame.GetBytes()];
+  if (!img_data) {
+    LOG(ERROR) << "Failed to alloc memory, size: " << package->frame.GetBytes();
+    return -1;
+  }
   uint8_t* t = img_data;
 
   for (int i = 0; i < package->frame.GetPlanes(); ++i) {
@@ -116,4 +122,3 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
   delete[] img_data;
   return 0;
 }
-

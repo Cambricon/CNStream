@@ -76,9 +76,7 @@ class PipelineWatcher {
       if (gfps_stats) {
         gfps_stats->ShowStatistics();
       } else {
-        std::cout
-            << "FpsStats has not been added to pipeline, fps will not be print."
-            << std::endl;
+        std::cout << "FpsStats has not been added to pipeline, fps will not be print." << std::endl;
       }
     }
   }
@@ -109,12 +107,10 @@ std::list<std::string> ReadFileList(const std::string &list) {
 
 class MsgObserver : cnstream::StreamMsgObserver {
  public:
-  MsgObserver(int chn_cnt, cnstream::Pipeline *pipeline)
-      : chn_cnt_(chn_cnt), pipeline_(pipeline) {}
+  MsgObserver(int chn_cnt, cnstream::Pipeline *pipeline) : chn_cnt_(chn_cnt), pipeline_(pipeline) {}
 
   void Update(const cnstream::StreamMsg &smsg) override {
-    if (stop_)
-      return;
+    if (stop_) return;
     if (smsg.type == cnstream::StreamMsgType::EOS_MSG) {
       eos_chn_.push_back(smsg.chn_idx);
       if (static_cast<int>(eos_chn_.size()) == chn_cnt_) {
@@ -147,8 +143,7 @@ int main(int argc, char **argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, false);
 
   std::cout << "\033[01;31m"
-            << "CNSTREAM VERSION:" << cnstream::VersionString() << "\033[0m"
-            << std::endl;
+            << "CNSTREAM VERSION:" << cnstream::VersionString() << "\033[0m" << std::endl;
 
   /*
     flags to variables
@@ -159,13 +154,9 @@ int main(int argc, char **argv) {
     create pipeline
   */
   cnstream::Pipeline pipeline("pipeline");
-  try {
-    if (0 != pipeline.BuildPipelineByJSONFile(FLAGS_config_fname)) {
-      LOG(ERROR) << "Build pipeline failed.";
-      return EXIT_FAILURE;
-    }
-  } catch (std::string &e) {
-    LOG(ERROR) << e;
+
+  if (0 != pipeline.BuildPipelineByJSONFile(FLAGS_config_fname)) {
+    LOG(ERROR) << "Build pipeline failed.";
     return EXIT_FAILURE;
   }
 
@@ -173,8 +164,7 @@ int main(int argc, char **argv) {
     message observer
    */
   MsgObserver msg_observer(static_cast<int>(video_urls.size()), &pipeline);
-  pipeline.SetStreamMsgObserver(
-      reinterpret_cast<cnstream::StreamMsgObserver *>(&msg_observer));
+  pipeline.SetStreamMsgObserver(reinterpret_cast<cnstream::StreamMsgObserver *>(&msg_observer));
 
   /*
     start pipeline
@@ -187,19 +177,16 @@ int main(int argc, char **argv) {
   /*
     add stream sources...
   */
-  cnstream::DataSource *source =
-      dynamic_cast<cnstream::DataSource *>(pipeline.GetModule("source"));
+  cnstream::DataSource *source = dynamic_cast<cnstream::DataSource *>(pipeline.GetModule("source"));
   int streams = static_cast<int>(video_urls.size());
   auto url_iter = video_urls.begin();
   for (int i = 0; i < streams; i++, url_iter++) {
     const std::string &filename = *url_iter;
-    source->AddVideoSource(std::to_string(i), filename, FLAGS_src_frame_rate,
-                           false);
+    source->AddVideoSource(std::to_string(i), filename, FLAGS_src_frame_rate, false);
   }
 
   /* watcher, for rolling print */
-  gfps_stats =
-      dynamic_cast<cnstream::FpsStats *>(pipeline.GetModule("fps_stats"));
+  gfps_stats = dynamic_cast<cnstream::FpsStats *>(pipeline.GetModule("fps_stats"));
   PipelineWatcher watcher(&pipeline);
   watcher.Start();
 
@@ -217,7 +204,6 @@ int main(int argc, char **argv) {
   watcher.Stop();
   std::cout << "\n\n\n\n\n\n";
 
-  if (gfps_stats)
-    gfps_stats->ShowStatistics();
+  if (gfps_stats) gfps_stats->ShowStatistics();
   return EXIT_SUCCESS;
 }

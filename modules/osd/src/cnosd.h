@@ -29,7 +29,6 @@
 #include <string>
 #include <vector>
 
-#include "easytrack/easy_track.h"
 #include "osd.hpp"
 
 using cv::Mat;
@@ -37,6 +36,19 @@ using cv::Point;
 using cv::Scalar;
 using std::string;
 using std::vector;
+
+struct DetectObject {
+  /// Object detection label
+  int label;
+  /// Object detection confidence rate
+  float score;
+  /// Struct BoundingBox
+  float x;
+  float y;
+  float width;
+  float height;
+  int track_id;
+};
 
 class CnOsd {
  private:
@@ -66,7 +78,7 @@ class CnOsd {
   inline int get_box_thickness() const { return box_thickness_; }
   inline size_t chn_num() const { return rows() * cols(); }
   inline const std::vector<std::string> labels() const { return labels_; }
-  void DrawLabel(Mat image, const vector<edk::DetectObject>& objects, cnstream::CnFont* cn_font = nullptr,
+  void DrawLabel(Mat image, const vector<DetectObject>& objects, cnstream::CnFont* cn_font = nullptr,
                  bool tiled = false) const;
 };
 

@@ -114,7 +114,7 @@ int CnFont::ToWchar(char*& src, wchar_t*& dest, const char* locale) {
     return -1;
   }
 
-  dest = new wchar_t[w_size];
+  dest = new(std::nothrow) wchar_t[w_size];
   if (!dest) {
     return -1;
   }
@@ -185,7 +185,11 @@ void CnFont::putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color
 }
 #endif
 
-Osd::Osd(const std::string& name) : Module(name) {}
+Osd::Osd(const std::string& name) : Module(name) {
+  param_register_.SetModuleDesc("Osd is a module for draw objects on image,output is bgr24 images.");
+  param_register_.Register("label_path", "The label path.");
+  param_register_.Register("chinese_label_flag", "Whether use chinese label.");
+}
 
 Osd::~Osd() { Close(); }
 
@@ -199,7 +203,11 @@ OsdContext* Osd::GetOsdContext(CNFrameInfoPtr data) {
   if (it != osd_ctxs_.end()) {
     ctx = it->second;
   } else {
-    ctx = new OsdContext;
+    ctx = new(std::nothrow) OsdContext;
+    if (!ctx) {
+      LOG(ERROR) << "Osd::GetOsdContext() new OsdContext Failed";
+      return nullptr;
+    }
     ctx->frame_index_ = 0;
     osd_ctxs_[data->channel_idx] = ctx;
   }
@@ -264,22 +272,26 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
   }
 
   if (!ctx->processer_) {
-    ctx->processer_ = new CnOsd(1, 1, labels_);
+    ctx->processer_ = new(std::nothrow) CnOsd(1, 1, labels_);
+    if (!ctx->processer_) {
+      LOG(ERROR) << "Osd::Process() new CnOsd failed";
+      return -1;
+    }
   }
 
-  std::vector<edk::DetectObject> objs;
+  std::vector<DetectObject> objs;
   for (const auto& it : data->objs) {
-    edk::DetectObject cn_obj;
-    cn_obj.label = it->id.empty() ? -1 : std::stoi(it->id);
-    cn_obj.score = it->score;
-    cn_obj.bbox.x = CLIP(it->bbox.x);
-    cn_obj.bbox.y = CLIP(it->bbox.y);
-    cn_obj.bbox.width = CLIP(it->bbox.w);
-    cn_obj.bbox.height = CLIP(it->bbox.h);
-    cn_obj.bbox.width = (it->bbox.x + cn_obj.bbox.width > 1) ? (1 - cn_obj.bbox.x) : cn_obj.bbox.width;
-    cn_obj.bbox.height = (it->bbox.y + cn_obj.bbox.height > 1) ? (1 - cn_obj.bbox.y) : cn_obj.bbox.height;
-    cn_obj.track_id = it->track_id.empty() ? -1 : std::stoi(it->track_id);
-    objs.push_back(cn_obj);
+    DetectObject obj;
+    obj.label = it->id.empty() ? -1 : std::stoi(it->id);
+    obj.score = it->score;
+    obj.x = CLIP(it->bbox.x);
+    obj.y = CLIP(it->bbox.y);
+    obj.width = CLIP(it->bbox.w);
+    obj.height = CLIP(it->bbox.h);
+    obj.width = (obj.x + obj.width > 1) ? (1 - obj.x) : obj.width;
+    obj.height = (obj.y + obj.height > 1) ? (1 - obj.y) : obj.height;
+    obj.track_id = it->track_id.empty() ? -1 : std::stoi(it->track_id);
+    objs.push_back(obj);
   }
   if (!chinese_label_flag_) {
     ctx->processer_->DrawLabel(*data->frame.ImageBGR(), objs);
@@ -287,6 +299,28 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
     ctx->processer_->DrawLabel(*data->frame.ImageBGR(), objs, font_.get());
   }
   return 0;
+}
+
+bool Osd::CheckParamSet(ModuleParamSet paramSet) {
+  ParametersChecker checker;
+  for (auto& it : paramSet) {
+    if (!param_register_.IsRegisted(it.first)) {
+      LOG(WARNING) << "[Osd] Unknown param: " << it.first;
+    }
+  }
+  if (paramSet.find("label_path") != paramSet.end()) {
+    if (!checker.CheckPath(paramSet["label_path"], paramSet)) {
+      LOG(ERROR) << "[Osd] [label_path] : " << paramSet["label_path"] << " non-existence.";
+      return false;
+    }
+  }
+  if (paramSet.find("chinese_label_flag") != paramSet.end()) {
+    if (paramSet["chinese_label_flag"] != "true" && paramSet["chinese_label_flag"] != "false") {
+      LOG(ERROR) << "[Osd] [chinese_label_flag] must be true or false.";
+      return false;
+    }
+  }
+  return true;
 }
 
 }  // namespace cnstream

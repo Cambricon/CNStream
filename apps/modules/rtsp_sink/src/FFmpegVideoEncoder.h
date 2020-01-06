@@ -36,13 +36,13 @@ class FFmpegVideoEncoder : public VideoEncoder {
     AVFrame *frame_ = nullptr;
   };
 
-  virtual VideoFrame *NewFrame() override;
-  virtual void EncodeFrame(VideoFrame *frame) override;
+  virtual VideoFrame *NewFrame();
+  virtual void EncodeFrame(VideoFrame *frame);
   void Destroy();
 
   uint32_t picture_width_;
   uint32_t picture_height_;
-  ::AVPixelFormat picture_format_;
+  AVPixelFormat picture_format_;
   AVRational frame_rate_;
   uint32_t gop_size_;
   uint32_t bit_rate_;

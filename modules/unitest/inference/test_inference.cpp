@@ -111,6 +111,7 @@ TEST(Inferencer, Process) {
     param["func_name"] = g_func_name;
     param["postproc_name"] = g_postproc_name;
     param["device_id"] = std::to_string(g_dev_id);
+    param["batching_timeout"] = "30";
     ASSERT_TRUE(infer->Open(param));
 
     const int width = 1280, height = 720;
@@ -148,6 +149,9 @@ TEST(Inferencer, Process) {
       cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
     }
 
+    ASSERT_NO_THROW(infer->Close());
+    ASSERT_TRUE(infer->Open(param));
+
     // test nv21
     {
       auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
@@ -170,6 +174,7 @@ TEST(Inferencer, Process) {
       cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
     }
 
+    ASSERT_NO_THROW(infer->Close());
     mem_op.FreeMlu(frame_data);
   }
 
@@ -182,6 +187,7 @@ TEST(Inferencer, Process) {
     param["preproc_name"] = "FakePreproc";
     param["postproc_name"] = g_postproc_name;
     param["device_id"] = std::to_string(g_dev_id);
+    param["batching_timeout"] = "30";
     ASSERT_TRUE(infer->Open(param));
 
     const int width = 1920, height = 1080;
@@ -201,10 +207,13 @@ TEST(Inferencer, Process) {
     frame.ctx.dev_type = DevContext::DevType::CPU;
     frame.CopyToSyncMem();
 
+
     int ret = infer->Process(data);
     EXPECT_EQ(ret, 1);
+    delete []frame_data;
     // create eos frame for clearing stream idx
     cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
+    ASSERT_NO_THROW(infer->Close());
   }
 }
 */

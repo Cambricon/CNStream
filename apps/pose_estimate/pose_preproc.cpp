@@ -42,8 +42,7 @@ class PreprocPose : public cnstream::Preproc {
     }
   }
 
-  int Execute(const std::vector<float *> &net_inputs,
-              const std::shared_ptr<edk::ModelLoader> &model,
+  int Execute(const std::vector<float *> &net_inputs, const std::shared_ptr<edk::ModelLoader> &model,
               const cnstream::CNFrameInfoPtr &package) override;
 
  private:
@@ -53,8 +52,7 @@ class PreprocPose : public cnstream::Preproc {
 
 IMPLEMENT_REFLEX_OBJECT_EX(PreprocPose, cnstream::Preproc)
 
-int PreprocPose::Execute(const std::vector<float *> &net_inputs,
-                         const std::shared_ptr<edk::ModelLoader> &model,
+int PreprocPose::Execute(const std::vector<float *> &net_inputs, const std::shared_ptr<edk::ModelLoader> &model,
                          const cnstream::CNFrameInfoPtr &package) {
   // check params
   auto input_shapes = model->InputShapes();
@@ -83,16 +81,16 @@ int PreprocPose::Execute(const std::vector<float *> &net_inputs,
   //  convert color space
   cv::Mat img;
   switch (package->frame.fmt) {
-  case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21: {
-    img = cv::Mat(src_height * 3 / 2, src_width, CV_8UC1, input_img_data_);
-    cv::Mat bgr(src_height, src_width, CV_8UC3);
-    cv::cvtColor(img, bgr, cv::COLOR_YUV2BGR_NV21);
-    img = bgr;
-  } break;
-  default:
-    LOG(WARNING) << "[PosePreprocess] Unsupport pixel format, only support "
-                    "NV21 currently.";
-    return -1;
+    case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21: {
+      img = cv::Mat(src_height * 3 / 2, src_width, CV_8UC1, input_img_data_);
+      cv::Mat bgr(src_height, src_width, CV_8UC3);
+      cv::cvtColor(img, bgr, cv::COLOR_YUV2BGR_NV21);
+      img = bgr;
+    } break;
+    default:
+      LOG(WARNING) << "[PosePreprocess] Unsupport pixel format, only support "
+                      "NV21 currently.";
+      return -1;
   }
 
   //  resize image for input

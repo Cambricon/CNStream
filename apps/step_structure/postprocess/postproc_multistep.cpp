@@ -17,28 +17,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include "postproc.hpp"
 #include <iostream>
 #include <utility>
 #include <vector>
+#include "postproc.hpp"
 
 namespace iva {
 
 class PostprocMultiStep : public cnstream::Postproc {
  public:
-DECLARE_REFLEX_OBJECT_EX(iva::PostprocMultiStep, cnstream::Postproc);
-int Execute(const std::vector<std::pair<float*, uint64_t>> &net_outputs,
-              cnstream::StringPairs *result) override;
+  DECLARE_REFLEX_OBJECT_EX(iva::PostprocMultiStep, cnstream::Postproc);
+  int Execute(const std::vector<std::pair<float *, uint64_t>> &net_outputs, cnstream::StringPairs *result) override;
 };  // class PostprocMultiStep
 
 IMPLEMENT_REFLEX_OBJECT_EX(iva::PostprocMultiStep, cnstream::Postproc)
 
-int PostprocMultiStep::Execute(const std::vector<std::pair<float*, uint64_t>> &net_outputs,
-                                   cnstream::StringPairs *result) {
+int PostprocMultiStep::Execute(const std::vector<std::pair<float *, uint64_t>> &net_outputs,
+                               cnstream::StringPairs *result) {
   float max_score = 0;
   int max_index = 0;
-  for (const auto& net_output : net_outputs) {
-    float* net_result = net_output.first;
+  for (const auto &net_output : net_outputs) {
+    float *net_result = net_output.first;
     uint64_t length = net_output.second;
     for (uint64_t i = 0; i < length; ++i) {
       if (net_result[i] > max_score) {

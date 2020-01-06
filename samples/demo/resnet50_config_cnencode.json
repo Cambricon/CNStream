@@ -1,0 +1,35 @@
+{
+  "source" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "next_modules" : ["cnencoder"],
+    "custom_params" : {
+      "source_type" : "ffmpeg",
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "reuse_cndec_buf" : true,
+      "input_buf_number": 2,
+      "output_buf_number": 2,
+      "device_id" : 0
+    }
+  },
+
+  "cnencoder" : {
+    "class_name" : "cnstream::CNEncoder",
+    "parallelism" : 12,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["fps_stats"],
+    "custom_params" : {
+      "frame_rate" : 25,
+      "bit_rate" : 3072,
+      "gop_size" : 15,
+      "device_id": 0
+    }
+  },
+
+  "fps_stats" : {
+    "class_name" : "cnstream::FpsStats",
+    "parallelism" : 12,
+    "max_input_queue_size" : 20
+  }
+}

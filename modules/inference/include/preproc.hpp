@@ -32,8 +32,8 @@
 #include <utility>
 #include <vector>
 
-#include "reflex_object.h"
 #include "easyinfer/model_loader.h"
+#include "reflex_object.h"
 
 #include "cnstream_frame.hpp"
 

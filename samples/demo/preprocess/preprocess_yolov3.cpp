@@ -19,6 +19,7 @@
  *************************************************************************/
 
 #include <opencv2/opencv.hpp>
+
 #include <algorithm>
 #include <memory>
 #include <vector>
@@ -41,7 +42,11 @@ class PreprocYolov3 : public cnstream::Preproc {
     int dst_w = input_shapes[0].w;
     int dst_h = input_shapes[0].h;
 
-    uint8_t* img_data = new uint8_t[package->frame.GetBytes()];
+    uint8_t* img_data = new(std::nothrow) uint8_t[package->frame.GetBytes()];
+    if (!img_data) {
+      LOG(ERROR) << "Failed to alloc memory, size:" << package->frame.GetBytes();
+      return -1;
+    }
     uint8_t* t = img_data;
 
     for (int i = 0; i < package->frame.GetPlanes(); ++i) {
@@ -108,4 +113,3 @@ class PreprocYolov3 : public cnstream::Preproc {
 };  // class PreprocYolov3
 
 IMPLEMENT_REFLEX_OBJECT_EX(PreprocYolov3, cnstream::Preproc);
-

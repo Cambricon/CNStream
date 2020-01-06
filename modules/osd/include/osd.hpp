@@ -177,6 +177,15 @@ class Osd : public Module, public ModuleCreator<Osd> {
    */
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
+  /**
+   * @brief Check ParamSet for a module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Returns true if this API run successfully. Otherwise, returns false.
+   */
+  bool CheckParamSet(ModuleParamSet paramSet) override;
+
  private:
   OsdContext* GetOsdContext(CNFrameInfoPtr data);
   std::unordered_map<int, OsdContext*> osd_ctxs_;

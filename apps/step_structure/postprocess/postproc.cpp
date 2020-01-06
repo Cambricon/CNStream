@@ -38,13 +38,11 @@ namespace cnstream {
 
 #define CLIP(x) ((x) < 0 ? 0 : ((x) > 1 ? 1 : (x)))
 
-Postproc* Postproc::Create(const std::string& proc_name) {
-  return ReflexObjectEx<Postproc>::CreateObject(proc_name);
-}
+Postproc* Postproc::Create(const std::string& proc_name) { return ReflexObjectEx<Postproc>::CreateObject(proc_name); }
 
 void Postproc::set_threshold(const float threshold) { threshold_ = threshold; }
 
-bool Postproc::LoadLabels(const std::string &label_path) {
+bool Postproc::LoadLabels(const std::string& label_path) {
   std::ifstream ifs(label_path);
   if (!ifs) {
     return false;
@@ -58,13 +56,13 @@ bool Postproc::LoadLabels(const std::string &label_path) {
   return !labels_.empty();
 }
 
-
-bool Postproc::LoadMultiLabels(const std::vector<std::string> &label_path) {
+bool Postproc::LoadMultiLabels(const std::vector<std::string>& label_path) {
   for (auto path : label_path) {
     try {
       path.erase(path.find_first_of(' '), path.find_first_not_of(' '));
       path.erase(path.find_last_not_of(' ') + 1);
-    } catch(...) {}
+    } catch (...) {
+    }
     std::ifstream ifs(path);
     std::vector<std::string> labels;
     if (!ifs) {

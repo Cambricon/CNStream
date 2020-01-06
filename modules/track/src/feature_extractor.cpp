@@ -39,7 +39,7 @@
 #include "easyinfer/mlu_context.h"
 
 bool FeatureExtractor::Init(const std::string &model_path, const std::string &func_name, int dev_id,
-                                uint32_t batch_size) {
+                            uint32_t batch_size) {
   if (model_path.empty() || func_name.empty()) {
     LOG(WARNING) << "[FeatureExtractor] Do not need to init if extract feature on CPU";
     LOG(INFO) << "[FeatureExtractor] Model not set, using opencv to extract feature on CPU";
@@ -112,8 +112,8 @@ std::vector<float> FeatureExtractor::ExtractFeature(const edk::TrackFrame &frame
   }
 
   cv::Mat image(frame.height, frame.width, CV_8UC3, frame.data);
-  cv::Mat obj_img(image, cv::Rect(obj.bbox.x * frame.width, obj.bbox.y * frame.height,
-                                  obj.bbox.width * frame.width, obj.bbox.height * frame.height));
+  cv::Mat obj_img(image, cv::Rect(obj.bbox.x * frame.width, obj.bbox.y * frame.height, obj.bbox.width * frame.width,
+                                  obj.bbox.height * frame.height));
 
   if (extract_feature_mlu_) {
     std::lock_guard<std::mutex> lk(mlu_proc_mutex_);
@@ -130,9 +130,17 @@ std::vector<float> FeatureExtractor::ExtractFeature(const edk::TrackFrame &frame
     return std::vector<float>(begin, end);
   } else {
 #if (CV_MAJOR_VERSION == 2)
-    cv::Ptr<cv::ORB> processer = new cv::ORB(128);
+    cv::Ptr<cv::ORB> processer = new(std::nothrow) cv::ORB(128);
+    if (!processer) {
+      LOG(ERROR) << "[FeatureExtractor] new cv::ORB(128) failed";
+      return {};
+    }
 #elif (CV_MAJOR_VERSION >= 3)  // NOLINT
     cv::Ptr<cv::ORB> processer = cv::ORB::create(128);
+    if (!processer) {
+      LOG(ERROR) << "[FeatureExtractor] new cv::ORB(128) failed";
+      return {};
+    }
 #endif
     std::vector<cv::KeyPoint> keypoints;
     processer->detect(obj_img, keypoints);

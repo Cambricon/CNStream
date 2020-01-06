@@ -26,9 +26,9 @@
 
 #include <cstring>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 #include "cnstream_frame.hpp"
 #include "easytrack/easy_track.h"
@@ -67,10 +67,9 @@ class CnOsd {
   inline size_t cols() const { return cols_; }
   inline int get_box_thickness() const { return box_thickness_; }
   inline size_t chn_num() const { return rows() * cols(); }
-  inline const std::vector<std::string> labels() const { return labels_;}
+  inline const std::vector<std::string> labels() const { return labels_; }
   void DrawLabel(Mat image, const vector<edk::DetectObject>& objects,
-      std::vector<std::shared_ptr<cnstream::CNInferObject>> objs,
-      cnstream::CnFont* cn_font = nullptr,
+                 std::vector<std::shared_ptr<cnstream::CNInferObject>> objs, cnstream::CnFont* cn_font = nullptr,
                  bool tiled = false) const;
 };
 

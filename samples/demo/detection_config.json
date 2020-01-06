@@ -39,20 +39,25 @@
     "class_name" : "cnstream::Osd",
     "parallelism" : 4,
     "max_input_queue_size" : 20,
-    "next_modules" : ["encoder"],
+    "next_modules" : ["displayer"],
     "custom_params" : {
       "chinese_label_flag" : "false", 
       "label_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/label_voc.txt"
     }
   },
 
-  "encoder" : {
-    "class_name" : "cnstream::Encoder",
-    "parallelism" : 4,
+  "displayer" : {
+    "class_name" : "cnstream::Displayer",
+    "parallelism" : 16,
     "max_input_queue_size" : 20,
     "next_modules" : ["fps_stats"],
     "custom_params" : {
-      "dump_dir" : "output"
+      "window-width" : 1920,
+      "window-height" : 1080,
+      "refresh-rate" : 25,
+      "max-channels" : 32,
+      "show" : "false",
+      "full-screen" : "false"
     }
   },
 

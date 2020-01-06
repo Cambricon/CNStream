@@ -29,6 +29,7 @@
 
 #include "cnstream_core.hpp"
 #include "data_source.hpp"
+#include "displayer.hpp"
 #include "fps_stats.hpp"
 #include "util.hpp"
 
@@ -40,6 +41,7 @@ DEFINE_bool(loop, false, "display repeat");
 DEFINE_string(config_fname, "", "pipeline config filename");
 
 cnstream::FpsStats* gfps_stats = nullptr;
+cnstream::Displayer* gdisplayer = nullptr;
 
 class PipelineWatcher {
  public:
@@ -138,13 +140,8 @@ int main(int argc, char** argv) {
   cnstream::Pipeline pipeline("pipeline");
   // pipeline.BuildPipeline({source_config, detector_config, tracker_config});
 
-  try {
-    if (0 != pipeline.BuildPipelineByJSONFile(FLAGS_config_fname)) {
-      LOG(ERROR) << "Build pipeline failed.";
-      return EXIT_FAILURE;
-    }
-  } catch (std::string& e) {
-    LOG(ERROR) << e;
+  if (0 != pipeline.BuildPipelineByJSONFile(FLAGS_config_fname)) {
+    LOG(ERROR) << "Build pipeline failed.";
     return EXIT_FAILURE;
   }
 
@@ -183,42 +180,53 @@ int main(int argc, char** argv) {
 
   /* watcher, for rolling print */
   gfps_stats = dynamic_cast<cnstream::FpsStats*>(pipeline.GetModule("fps_stats"));
+  gdisplayer = dynamic_cast<cnstream::Displayer*>(pipeline.GetModule("displayer"));
   PipelineWatcher watcher(&pipeline);
   watcher.Start();
 
-  /*
-    close pipeline
-  */
-  if (FLAGS_loop) {
-    /*
-      loop, must stop by hand or by FLAGS_wait_time
-    */
-    if (FLAGS_wait_time) {
-      std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_time));
-    } else {
-      getchar();
-    }
-
+  auto quit_callback = [&pipeline, streams, &source]() {
     for (int i = 0; i < streams; i++) {
       source->RemoveSource(std::to_string(i));
     }
-
     pipeline.Stop();
+  };
+
+  if (gdisplayer && gdisplayer->Show()) {
+    gdisplayer->GUILoop(quit_callback);
   } else {
-    /*
-      stop by hand or by FLGAS_wait_time
-    */
-    if (FLAGS_wait_time) {
-      std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_time));
+      /*
+       * close pipeline
+       */
+    if (FLAGS_loop) {
+      /*
+       * loop, must stop by hand or by FLAGS_wait_time
+       */
+      if (FLAGS_wait_time) {
+        std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_time));
+      } else {
+        getchar();
+      }
+
       for (int i = 0; i < streams; i++) {
         source->RemoveSource(std::to_string(i));
       }
+
       pipeline.Stop();
     } else {
-      msg_observer.WaitForStop();
+      /*
+       * stop by hand or by FLGAS_wait_time
+       */
+      if (FLAGS_wait_time) {
+        std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_time));
+        for (int i = 0; i < streams; i++) {
+          source->RemoveSource(std::to_string(i));
+        }
+        pipeline.Stop();
+      } else {
+        msg_observer.WaitForStop();
+      }
     }
   }
-
   watcher.Stop();
   std::cout << "\n\n\n\n\n\n";
 

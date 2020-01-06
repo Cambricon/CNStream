@@ -20,6 +20,8 @@
 #include "rtsp_sink_stream.hpp"
 #include <glog/logging.h>
 
+#include "easyinfer/mlu_context.h"
+
 #ifdef HAVE_OPENCV
 #include "opencv2/opencv.hpp"
 #endif
@@ -34,12 +36,13 @@ bool RTSPSinkJoinStream::Open(int width, int height, PictureFormat format, float
   if (width < 1 || height < 1 || udp_port < 1 || http_port < 1) {
     return false;
   }
+
   if ( rows > 0 || cols > 0 ) {
     is_mosaic_style = true;
     cols_ = cols;
     rows_ = rows;
-    mosaic_win_width_ = width/cols;
-    mosaic_win_height_ = height/rows;
+    mosaic_win_width_ = width / cols;
+    mosaic_win_height_ = height / rows;
   }
   refresh_rate_ = refresh_rate;
   udp_port_ = udp_port > 0 ? udp_port : 8554;
@@ -98,13 +101,11 @@ bool RTSPSinkJoinStream::Open(int width, int height, PictureFormat format, float
   LOG(INFO) << "format: " << rtsp_ctx.format;
   LOG(INFO) << "kbps:　" << rtsp_ctx.kbps;
   LOG(INFO) << "gop: " << rtsp_ctx.gop;
+  LOG(INFO) << "code type: " << rtsp_ctx.hw;
   ctx_ = StreamPipeCreate(&rtsp_ctx);
 
-  if (format == RGB24 || format == BGR24) {
-    canvas_ = cv::Mat(height, width, CV_8UC3);
-  } else {
-    canvas_ = cv::Mat(height * 3 / 2, width, CV_8UC1);
-  }
+  canvas_ = cv::Mat(height, width, CV_8UC3);  // for bgr24
+
   refresh_thread_ = new std::thread(&RTSPSinkJoinStream::RefreshLoop, this);
 
   std::cout << "\n***** Start RTSP server, UDP port:" << udp_port_ << ", HTTP port:" << http_port_ << std::endl;
@@ -112,7 +113,9 @@ bool RTSPSinkJoinStream::Open(int width, int height, PictureFormat format, float
   return true;
 }
 
-void RTSPSinkJoinStream::EncodeFrame(uint8_t *data, int64_t timestamp) { StreamPipePutPacket(ctx_, data, timestamp); }
+void RTSPSinkJoinStream::EncodeFrame(const cv::Mat &bgr24, int64_t timestamp) {
+  StreamPipePutPacket(ctx_, bgr24.data, timestamp);
+}
 
 void RTSPSinkJoinStream::Close() {
   running_ = false;
@@ -130,7 +133,7 @@ void RTSPSinkJoinStream::Close() {
 
 bool RTSPSinkJoinStream::Update(cv::Mat image, int64_t timestamp, int channel_id) {
   canvas_lock_.lock();
-  if ( is_mosaic_style && channel_id >= 0 ) {
+  if (is_mosaic_style && channel_id >= 0) {
     int x = channel_id % cols_ * mosaic_win_width_;
     int y = channel_id / cols_ * mosaic_win_height_;
     cv::resize(image, image, cv::Size(mosaic_win_width_, mosaic_win_height_), cv::INTER_CUBIC);
@@ -143,6 +146,16 @@ bool RTSPSinkJoinStream::Update(cv::Mat image, int64_t timestamp, int channel_id
 }
 
 void RTSPSinkJoinStream::RefreshLoop() {
+  try {
+    edk::MluContext context;
+    context.SetDeviceId(0);
+    // context.SetChannelId(0);
+    context.ConfigureForThisThread();
+  } catch(edk::MluContextError & err) {
+    std::cout << "set mlu env faild" << std::endl;
+    return;
+  }
+
   int64_t delay_us = 0;
   auto start = std::chrono::high_resolution_clock::now();
   int64_t pts_us;
@@ -163,7 +176,7 @@ void RTSPSinkJoinStream::RefreshLoop() {
 
     if (ctx_) {
       canvas_lock_.lock();
-      EncodeFrame(canvas_.data, pts_us / 1000);
+      EncodeFrame(canvas_, pts_us / 1000);
       canvas_lock_.unlock();
       delay_us = index * 1e6 / refresh_rate_ - pts_us;
     }

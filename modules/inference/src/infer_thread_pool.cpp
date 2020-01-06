@@ -19,15 +19,18 @@
  *************************************************************************/
 
 #include "infer_thread_pool.hpp"
-
+#include <easyinfer/mlu_context.h>
 #include <glog/logging.h>
 #include <cassert>
 #include <string>
+#include <vector>
+#include "cnstream_error.hpp"
 
 namespace cnstream {
 
-void InferThreadPool::Init(size_t thread_num) {
+void InferThreadPool::Init(int dev_id, size_t thread_num) {
   std::unique_lock<std::mutex> lk(mtx_);
+  dev_id_ = dev_id;
   running_ = true;
   max_tnum_ = 2 * thread_num;
   for (size_t ti = 0; ti < thread_num; ++ti) {
@@ -54,6 +57,7 @@ void InferThreadPool::Destroy() {
 }
 
 void InferThreadPool::SubmitTask(const InferTaskSptr& task) {
+  if (!task.get()) return;
   std::unique_lock<std::mutex> lk(mtx_);
 
   q_push_cond_.wait(lk, [this]() -> bool { return task_q_.size() < max_tnum_ || !running_; });
@@ -63,6 +67,10 @@ void InferThreadPool::SubmitTask(const InferTaskSptr& task) {
 
   task_q_.push(task);
   q_pop_cond_.notify_one();
+}
+
+void InferThreadPool::SubmitTask(const std::vector<InferTaskSptr>& tasks) {
+  for (auto it : tasks) SubmitTask(it);
 }
 
 InferTaskSptr InferThreadPool::PopTask() {
@@ -79,7 +87,15 @@ InferTaskSptr InferThreadPool::PopTask() {
   return task;
 }
 
+void InferThreadPool::SetErrorHandleFunc(const std::function<void(const std::string& err_msg)>& err_func) {
+  std::lock_guard<std::mutex> lk(mtx_);
+  error_func_ = err_func;
+}
+
 void InferThreadPool::TaskLoop() {
+  edk::MluContext context;
+  context.SetDeviceId(dev_id_);
+  context.ConfigureForThisThread();
   while (running_) {
     InferTaskSptr task = PopTask();
     if (task.get() == nullptr) {
@@ -90,7 +106,15 @@ void InferThreadPool::TaskLoop() {
     task->WaitForFrontTasksComplete();
 
     int ret = 0;
-    ret = task->Execute();
+    try {
+      ret = task->Execute();
+    } catch (CnstreamError& e) {
+      if (error_func_) {
+        error_func_(e.what());
+      } else {
+        LOG(FATAL) << "Not handled error: " << std::string(e.what());
+      }
+    }
 
     if (ret != 0) {
       DLOG(INFO) << "Inference task execute failed. Error code [" << ret << "]. Task message: " << task->task_msg;

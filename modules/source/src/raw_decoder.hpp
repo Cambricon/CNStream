@@ -25,11 +25,12 @@
 #include <memory>
 #include <string>
 #include <thread>
-#include "easycodec/easy_decode.h"
 #include "cnstream_frame.hpp"
 #include "cnstream_timer.hpp"
-#include "easycodec/vformat.h"
 #include "data_handler.hpp"
+#include "easycodec/easy_decode.h"
+#include "easycodec/vformat.h"
+#include "easyinfer/mlu_context.h"
 
 namespace cnstream {
 
@@ -80,7 +81,12 @@ class RawDecoder {
 class RawMluDecoder : public RawDecoder {
  public:
   explicit RawMluDecoder(DataHandler &handler) : RawDecoder(handler) {}
-  ~RawMluDecoder() { PrintPerformanceInfomation(); }
+  ~RawMluDecoder() {
+    edk::MluContext env;
+    env.SetDeviceId(dev_ctx_.dev_id);
+    env.ConfigureForThisThread();
+    PrintPerformanceInfomation();
+  }
   bool Create(DecoderContext *ctx) override;
   void Destroy() override;
   bool Process(RawPacket *pkt, bool eos) override;

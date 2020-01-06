@@ -28,10 +28,10 @@
 
 #include "cnrt.h"
 #include "cnstream_source.hpp"
-#include "easyinfer/mlu_context.h"
 #include "data_handler_ffmpeg.hpp"
 #include "data_handler_raw.hpp"
 #include "data_source.hpp"
+#include "easyinfer/mlu_context.h"
 #include "ffmpeg_decoder.hpp"
 #include "test_base.hpp"
 
