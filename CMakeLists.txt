@@ -42,6 +42,12 @@ option(WITH_OPENCV "with opencv" ON)
 option(WITH_CHINESE "with chinese" OFF)
 option(WITH_RTSP "with rtsp" ON)
 
+option(SANITIZE_LINK_STATIC "Try to link static against sanitizers." OFF)
+option(SANITIZE_MEMORY "Enable MemorySanitizer for sanitized targets." OFF)
+option(SANITIZE_ADDRESS "Enable AddressSanitizer for sanitized targets." OFF)
+option(SANITIZE_THREAD "Enable ThreadSanitizer for sanitized targets." OFF)
+option(SANITIZE_UNDEFINED "Enable UndefinedBehaviorSanitizer for sanitized targets." OFF)
+
 #if (MLU_PLATFORM STREQUAL MLU220_SOC)
 #  set(build_source OFF)
 #  set(build_inference OFF)
@@ -82,10 +88,14 @@ elseif(MLU STREQUAL MLU270)
   message("generate MLU270 Makefile")
   set(MLU_PLATFORM MLU270)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCNS_MLU270 -DCNSTK_MLU270")
+elseif(MLU STREQUAL MLU220_SOC)
+  message("generate MLU220_SOC Makefile")
+  set(MLU_PLATFORM MLU220_SOC)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCNS_MLU220_SOC")
 else()
-  message("generate default(MLU100) Makefile")
-  set(MLU_PLATFORM MLU100)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCNS_MLU100 -DCNSTK_MLU100")
+  message("generate default(MLU270) Makefile")
+  set(MLU_PLATFORM MLU270)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCNS_MLU270 -DCNSTK_MLU270")
 endif()
 
 # -- Build Flags
@@ -219,6 +229,10 @@ if(WITH_CHINESE)
   endif (FREETYPE_FOUND)
 endif()
 
+if(SANITIZE_LINK_STATIC)
+    find_package(Sanitizers)
+endif()
+
 # ---[ dependencies
 # neuware include/libs
 if(NOT DEFINED ENV{NEUWARE_HOME})
@@ -248,6 +262,7 @@ endif()
 
 # cns modules libs
 link_directories(${PROJECT_SOURCE_DIR}/lib)
+
 
 # ---[ Includes
 include_directories(${PROJECT_SOURCE_DIR}/modules/core/include)

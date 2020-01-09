@@ -10,6 +10,11 @@ if(WITH_RTSP)
   link_directories(${PROJECT_SOURCE_DIR}/3rdparty/live555/lib)
 endif()
 add_executable(${name} ${srcs} ${preprocess_srcs} ${postprocess_srcs})
+
+if(SANITIZE_LINK_STATIC)
+    add_sanitizers(${name})
+endif()
+
 target_link_libraries(${name} ${Example_LINKER_LIBS})
 
 if(WITH_RTSP)

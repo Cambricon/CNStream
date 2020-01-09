@@ -171,6 +171,12 @@ MatchResult &FeatureMatchPrivate::MatchCascade() {
     res.unmatched_detections.insert(res.unmatched_detections.end(), remained_detections.begin(),
                                     remained_detections.end());
   }
+
+  for (size_t i = 0; i < confirmed_track_.size(); ++i) {
+    if (tracks_[confirmed_track_[i]].time_since_last_update > fm_->max_age_) {
+      res.unmatched_tracks.push_back(confirmed_track_[i]);
+    }
+  }
   return res;
 }
 
@@ -290,6 +296,7 @@ void FeatureMatchTrack::UpdateFrame(const TrackFrame &frame, const Objects &dete
     match_iou_track.insert(match_iou_track.end(), fm_p_->unconfirmed_track_.begin(), fm_p_->unconfirmed_track_.end());
     for (auto &idx : res_f.unmatched_tracks) {
       fm_p_->tracks_[idx].feature_unmatched = true;
+      fm_p_->MarkMiss(&(fm_p_->tracks_[idx]));
       if (fm_p_->tracks_[idx].time_since_last_update == 1) {
         match_iou_track.push_back(idx);
       }

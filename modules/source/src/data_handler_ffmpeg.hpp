@@ -65,7 +65,7 @@ class DataHandlerFFmpeg : public DataHandler {
   bool insert_spspps_whenidr_ = false;  // [in]: true, insert SPSPPS before IDR,false not,only before first I frame
 
  private:
-#ifdef TEST
+#ifdef UNIT_TEST
  public:  // NOLINT
 #endif
   bool PrepareResources(bool demux_only = false) override;

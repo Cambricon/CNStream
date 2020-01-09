@@ -186,7 +186,7 @@ class CNSyncedMemory {
   void* cpu_ptr_ = nullptr;  ///< CPU data pointer.
   void* mlu_ptr_ = nullptr;  ///< MLU data pointer.
 
-#ifdef TEST
+#ifdef UNIT_TEST
 
  public:
 #endif
@@ -196,7 +196,7 @@ class CNSyncedMemory {
   bool own_cpu_data_ = false;  ///< Whether CPU data is allocated by SyncedMemory.
   bool own_mlu_data_ = false;  ///< Whether MLU data is allocated by SyncedMemory.
 
-#ifdef TEST
+#ifdef UNIT_TEST
 
  private:
 #endif

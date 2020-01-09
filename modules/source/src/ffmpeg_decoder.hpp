@@ -94,11 +94,11 @@ class FFmpegMluDecoder : public FFmpegDecoder {
   std::atomic<int> cndec_buf_ref_count_{0};
   void FrameCallback(const edk::CnFrame &frame);
   void EOSCallback();
-#ifdef TEST
+#ifdef UNIT_TEST
  public:  // NOLINT
 #endif
   int ProcessFrame(const edk::CnFrame &frame, bool *reused);
-#ifdef TEST
+#ifdef UNIT_TEST
  private:  // NOLINT
 #endif
   CNTimer fps_calculators[4];
@@ -144,7 +144,7 @@ class FFmpegCpuDecoder : public FFmpegDecoder {
   bool Process(AVPacket *pkt, bool eos) override;
 
  private:
-#ifdef TEST
+#ifdef UNIT_TEST
  public:  // NOLINT
 #endif
   bool ProcessFrame(AVFrame *frame);

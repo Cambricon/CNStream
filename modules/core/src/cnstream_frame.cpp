@@ -285,15 +285,12 @@ std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, b
     LOG(ERROR) << "CNFrameInfo::Create() stream_id is empty string.";
     return nullptr;
   }
-
-  CNFrameInfo* frameInfo = new(std::nothrow) CNFrameInfo();
-  if (!frameInfo) {
+  std::shared_ptr<CNFrameInfo> ptr(new(std::nothrow) CNFrameInfo());
+  if (!ptr) {
     LOG(ERROR) << "CNFrameInfo::Create() new CNFrameInfo failed.";
     return nullptr;
   }
-  frameInfo->frame.stream_id = stream_id;
-  std::shared_ptr<CNFrameInfo> ptr(frameInfo);
-
+  ptr->frame.stream_id = stream_id;
   if (eos) {
     ptr->frame.flags |= cnstream::CN_FRAME_FLAG_EOS;
     return ptr;

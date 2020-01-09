@@ -111,7 +111,7 @@ class EventBus {
   uint32_t AddBusWatch(BusWatcher func, Module *watch_module);
 
  private:
-#ifdef TEST
+#ifdef UNIT_TEST
 
  public:
 #endif

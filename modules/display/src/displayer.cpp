@@ -29,12 +29,12 @@ namespace cnstream {
 Displayer::Displayer(const std::string &name) : Module(name) {
   player_ = new(std::nothrow) SDLVideoPlayer;
   LOG_IF(FATAL, nullptr == player_) << "Displayer::Displayer() new SDLVideoPlayer failed.";
-  param_register_.SetModuleDesc("Displayer is a module for displaying the vedio.");
-  param_register_.Register("window-width", "Width for displayer window.");
-  param_register_.Register("window-height", "Height for displayer window.");
-  param_register_.Register("refresh-rate", "Displayer refresh rate.");
+  param_register_.SetModuleDesc("Displayer is a module for displaying video.");
+  param_register_.Register("window-width", "Width of the displayer window.");
+  param_register_.Register("window-height", "Height of the displayer window.");
+  param_register_.Register("refresh-rate", "Refresh rate of the displayer window.");
   param_register_.Register("max-channels", "Max channel number.");
-  param_register_.Register("full-screen", "Whether full screen.");
+  param_register_.Register("full-screen", "Whether the video will be displayed on full screen.");
   param_register_.Register("show", "Whether show.");
 }
 
@@ -44,7 +44,7 @@ bool Displayer::Open(ModuleParamSet paramSet) {
   if (paramSet.find("window-width") == paramSet.end() || paramSet.find("window-height") == paramSet.end() ||
       paramSet.find("refresh-rate") == paramSet.end() || paramSet.find("max-channels") == paramSet.end() ||
       paramSet.find("show") == paramSet.end()) {
-    LOG(ERROR) << "[Displayer] [window-width] [window-height] [refresh-rate] [max-channels] [show] should be set";
+    LOG(ERROR) << "[Displayer] [window-width] [window-height] [refresh-rate] [max-channels] should be set";
     return false;
   }
   bool full_screen = false;
@@ -129,12 +129,14 @@ bool Displayer::CheckParamSet(ModuleParamSet paramSet) {
       return false;
     }
   }
+
   if (paramSet.find("show") != paramSet.end()) {
     if (paramSet["show"] != "true" && paramSet["show"] != "false") {
       LOG(ERROR) << "[Displayer] [show] should be true or false.";
       return false;
     }
   }
+
   return true;
 }
 

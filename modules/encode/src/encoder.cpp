@@ -27,8 +27,9 @@
 namespace cnstream {
 
 Encoder::Encoder(const std::string &name) : Module(name) {
-  param_register_.SetModuleDesc("Encoder is a module for encode the video or image.");
-  param_register_.Register("dump_dir", "Output path.");
+  param_register_.SetModuleDesc("Encoder is a module for encode video or images.");
+  param_register_.Register("dump_dir", "Where to store the encoded video."
+                           " For example, '.' means storing to current directory.");
 }
 
 EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {

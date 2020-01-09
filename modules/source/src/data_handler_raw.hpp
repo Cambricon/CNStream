@@ -45,7 +45,7 @@ class DataHandlerRaw : public DataHandler {
   int fd_ = -1;
 
  private:
-#ifdef TEST
+#ifdef UNIT_TEST
  public:  // NOLINT
 #endif
   bool PrepareResources(bool demux_only = false) override;

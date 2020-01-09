@@ -30,10 +30,10 @@ RtspSink::RtspSink(const std::string &name) : Module(name) {
   param_register_.SetModuleDesc("RtspSink is a module to deliver stream by RTSP protocol.");
   param_register_.Register("http-port", "Http port.");
   param_register_.Register("udp-port", "UDP port.");
-  param_register_.Register("encoder-type", "Encode type.");
+  param_register_.Register("encoder-type", "Encode type. It should be 'mlu' or not 'mlu' but other string.");
   param_register_.Register("frame-rate", "Frame rate.");
-  param_register_.Register("cols", "Video cols.");
-  param_register_.Register("rows", "Video rows.");
+  param_register_.Register("cols", "Video width.");
+  param_register_.Register("rows", "Video height.");
 }
 
 RtspSinkContext *RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {

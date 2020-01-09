@@ -26,7 +26,8 @@ namespace cnstream {
 DiscardFrame::DiscardFrame(const std::string& name) : Module(name) {
   hasTransmit_.store(1);
   param_register_.SetModuleDesc("DiscardFrame is a module for discard frame every n frames.");
-  param_register_.Register("discard_interval", "Discard frame interval.");
+  param_register_.Register("discard_interval", "How many frames will be discarded between two frames"
+                           " which will be sent to next modeule.");
 }
 
 bool DiscardFrame::Open(ModuleParamSet paramSet) {

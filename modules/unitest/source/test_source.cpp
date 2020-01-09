@@ -35,7 +35,7 @@ namespace cnstream {
 
 static constexpr const char *gname = "source";
 static constexpr const char *gvideo_path = "../../modules/unitest/source/data/cars_short.mp4";
-static constexpr const char *gimage_path = "../../samples/data/images/%d.jpg";
+static constexpr const char *gimage_path = "../../data/images/%d.jpg";
 
 void ResetParam(ModuleParamSet &param) {  // NOLINT
   param["source_type"] = "raw";

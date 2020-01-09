@@ -29,7 +29,7 @@ MAINTAINER <Cambricon, Inc.>
 WORKDIR /root/CNStream/
 
 ARG neuware_package=neuware-standard-8.1.1.deb
-ARG mlu_platform=MLU100
+ARG mlu_platform=MLU270
 
 RUN echo -e 'nameserver 114.114.114.114' > /etc/resolv.conf
 
@@ -51,6 +51,7 @@ RUN echo deb http://mirrors.aliyun.com/ubuntu/ xenial main restricted  > /etc/ap
             libopencv-dev \
             libgoogle-glog-dev \
             openssh-server \
+            libsdl2-dev  \ 
             net-tools && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

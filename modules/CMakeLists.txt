@@ -48,6 +48,11 @@ foreach(module ${module_list})
   list(APPEND srcs ${module_src})
 endforeach()
 add_library(cnstream SHARED ${srcs})
+
+if(SANITIZE_LINK_STATIC)
+    add_sanitizers(cnstream)
+endif()
+
 install(TARGETS cnstream LIBRARY DESTINATION lib)
 target_link_libraries(cnstream ${SOURCE_LINKER_LIBS})
 set_target_properties(cnstream PROPERTIES VERSION ${CNSTREAM_TARGET_VERSION} SOVERSION ${CNSTREAM_TARGET_SOVERSION})

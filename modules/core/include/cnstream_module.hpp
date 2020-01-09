@@ -207,7 +207,8 @@ class Module {
   friend class Pipeline;
   friend class PipelinePrivate;
 
-#ifdef TEST
+#ifdef UNIT_TEST
+
  public:
 #endif
   /**
