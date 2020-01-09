@@ -232,5 +232,7 @@ int main(int argc, char** argv) {
 
   if (gfps_stats)
     gfps_stats->ShowStatistics();
+
+  google::ShutdownGoogleLogging();
   return EXIT_SUCCESS;
 }

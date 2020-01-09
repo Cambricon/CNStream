@@ -237,7 +237,10 @@ bool FFmpegCpuDecoder::Create(AVStream *st) {
     LOG(ERROR) << "avcodec_find_decoder failed";
     return false;
   }
-#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(58, 0, 0)
+#if (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 14, 0)) \
+  || ((LIBAVCODEC_VERSION_MICRO >= 100) && (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 33, 100)))
+  instance_ = st->codec;
+#else
   instance_ = avcodec_alloc_context3(dec);
   if (!instance_) {
     LOG(ERROR) << "Failed to do avcodec_alloc_context3";
@@ -248,8 +251,6 @@ bool FFmpegCpuDecoder::Create(AVStream *st) {
     return false;
   }
   av_codec_set_pkt_timebase(instance_, st->time_base);
-#else
-  instance_ = st->codec;
 #endif
   if (avcodec_open2(instance_, dec, NULL) < 0) {
     LOG(ERROR) << "Failed to open codec";
@@ -273,7 +274,8 @@ void FFmpegCpuDecoder::Destroy() {
       std::this_thread::yield();
     }
     eos_got_.store(0);
-#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(58, 0, 0)
+#if !((LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 14, 0)) \
+        || ((LIBAVCODEC_VERSION_MICRO >= 100) && (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 33, 100))))
     avcodec_free_context(&instance_);
 #endif
     instance_ = nullptr;

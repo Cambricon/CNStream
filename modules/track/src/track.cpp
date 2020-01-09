@@ -46,9 +46,10 @@ struct TrackerContext {
 
 Tracker::Tracker(const std::string &name) : Module(name) {
   param_register_.SetModuleDesc("Tracker is a module for realtime tracking.");
-  param_register_.Register("model_path", "The offline model path.");
-  param_register_.Register("func_name", "The offline model func name.");
-  param_register_.Register("track_name", "Track type, must be FeatureMatch or KCF.");
+  param_register_.Register("model_path", "The offline model path. Normally offline model is a file"
+                           " with cambricon extension.");
+  param_register_.Register("func_name", "The offline model function name, usually is 'subnet0'.");
+  param_register_.Register("track_name", "Track algorithm name. Choose from FeatureMatch and KCF.");
 }
 
 Tracker::~Tracker() { Close(); }

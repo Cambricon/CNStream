@@ -23,7 +23,6 @@
 #include <sstream>
 #include <string>
 
-#include "cnstream_eventbus.hpp"
 #include "cnencoder.hpp"
 #include "easycodec/easy_encode.h"
 #include "easycodec/vformat.h"
@@ -33,10 +32,15 @@ namespace cnstream {
 
 CNEncoder::CNEncoder(const std::string &name) : Module(name) {
   param_register_.SetModuleDesc("CNEncoder is a module to encode use cnencode.");
-  param_register_.Register("frame_rate", "Frame rate.");
-  param_register_.Register("bit_rate", "Bit rate.");
-  param_register_.Register("gop_size", "Gop size.");
-  param_register_.Register("device_id", "Device_Id.");
+  param_register_.Register("dst_width", "The image width of the output.");
+  param_register_.Register("dst_height", "The image height of the output.");
+  param_register_.Register("frame_rate", "Frame rate of the encoded video.");
+  param_register_.Register("bit_rate", "The amount data encoded for a unit of time."
+                           " A higher bitrate means a higher quality video.");
+  param_register_.Register("gop_size", "Group of pictures is known as GOP."
+                           " gop_size is the number of frames between two I-frames.");
+  param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
+  param_register_.Register("pre_type", "Resize and colorspace convert type.");
   hasTransmit_.store(1);  // for receive eos
 }
 
@@ -47,9 +51,24 @@ CNEncoderContext *CNEncoder::GetCNEncoderContext(CNFrameInfoPtr data) {
     ctx = search->second;
   } else {
     ctx = new CNEncoderContext;
+    cn_type_ = CNEncoderStream::H264;
+    switch (data->frame.fmt) {
+      case cnstream::CNDataFormat::CN_PIXEL_FORMAT_BGR24:
+        cn_format_ = CNEncoderStream::BGR24;
+        break;
+      case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
+        cn_format_ = CNEncoderStream::NV12;
+        break;
+      case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
+        cn_format_ = CNEncoderStream::NV21;
+        break;
+      default:
+        LOG(WARNING) << "[CNEncoder] unsuport pixel format.";
+        break;
+    }
     // build cnencoder
-    ctx->stream_ = new CNEncoderStream(data->frame.width, data->frame.height, frame_rate_,
-                  cn_format_, bit_rate_, gop_size_, cn_type_, data->channel_idx, device_id_);
+    ctx->stream_ = new CNEncoderStream(data->frame.width, data->frame.height, dst_width_, dst_height_,
+                 frame_rate_, cn_format_, bit_rate_, gop_size_, cn_type_, data->channel_idx, device_id_, pre_type_);
     // open cnencoder
     ctx->stream_->Open();
     // add into map
@@ -82,10 +101,24 @@ bool CNEncoder::Open(ModuleParamSet paramSet) {
   } else {
     device_id_ = std::stoi(paramSet["device_id"]);
   }
+  if (paramSet.find("dst_width") == paramSet.end()) {
+    dst_width_ = 960;
+  } else {
+    dst_width_ = std::stoi(paramSet["dst_width"]);
+  }
+  if (paramSet.find("dst_height") == paramSet.end()) {
+    dst_height_ = 540;
+  } else {
+    dst_height_ = std::stoi(paramSet["dst_height"]);
+  }
+  if (paramSet.find("pre_type") == paramSet.end()) {
+    pre_type_ = "opencv";
+  } else {
+    pre_type_ = paramSet["pre_type"];
+  }
 
-  cn_type_ = CNEncoderStream::H264;
-  cn_format_ = CNEncoderStream::NV12;
-
+  // cn_type_ = CNEncoderStream::H264;
+  // cn_format_ = CNEncoderStream::NV21;
   edk::MluContext tx;
   tx.SetDeviceId(device_id_);
   tx.ConfigureForThisThread();
@@ -106,15 +139,29 @@ void CNEncoder::Close() {
 
 int CNEncoder::Process(CNFrameInfoPtr data) {
   bool eos = data->frame.flags & CNFrameFlag::CN_FRAME_FLAG_EOS;
-
   CNEncoderContext *ctx = GetCNEncoderContext(data);
   if (!eos) {
-    cv::Mat image = *data->frame.ImageBGR();
-    ctx->stream_->Update(image, data->frame.timestamp, data->channel_idx);
+    if (pre_type_ == "opencv" || pre_type_ == "ffmpeg") {
+      cv::Mat image = *data->frame.ImageBGR();
+      ctx->stream_->Update(image, data->frame.timestamp, data->channel_idx);
+    } else if (pre_type_ == "mlu") {
+      uint8_t *image_data = new uint8_t[data->frame.GetBytes()];
+      uint8_t *plane_0 = reinterpret_cast<uint8_t *>(data->frame.data[0]->GetMutableCpuData());
+      uint8_t *plane_1 = reinterpret_cast<uint8_t *>(data->frame.data[1]->GetMutableCpuData());
+      memcpy(image_data, plane_0, data->frame.GetPlaneBytes(0));
+      memcpy(image_data + data->frame.GetPlaneBytes(0), plane_1, data->frame.GetPlaneBytes(1));
+      ctx->stream_->Update(image_data, data->frame.timestamp, data->channel_idx);
+      delete []image_data;
+      image_data = nullptr;
+    } else {
+      std::cout << "pre_type err !!!" << std::endl;
+      return 0;
+    }
+
   } else {
-    ctx->stream_->RefreshEOS(eos);
-    // TransmitData(data);
+      ctx->stream_->RefreshEOS(eos);
   }
+  // TransmitData(data);
   return 0;
 }
 
@@ -126,16 +173,20 @@ bool CNEncoder::CheckParamSet(ModuleParamSet paramSet) {
     }
   }
 
-  if (paramSet.find("frame_rate") == paramSet.end()
+  if (paramSet.find("dst_width") == paramSet.end()
+      || paramSet.find("dst_height") == paramSet.end()
+      || paramSet.find("frame_rate") == paramSet.end()
       || paramSet.find("bit_rate") == paramSet.end()
       || paramSet.find("gop_size") == paramSet.end()
-      || paramSet.find("device_id") == paramSet.end()) {
-    LOG(ERROR) << "CNEncoder must specify [frame_rate], [bit_rate], [gop_size], [device_id].";
+      || paramSet.find("device_id") == paramSet.end()
+      || paramSet.find("pre_type") == paramSet.end()) {
+    LOG(ERROR) << "CNEncoder must specify ";
+    LOG(ERROR) << "[dst_width], [dst_height], [frame_rate], [bit_rate], [gop_size], [device_id], [pre_type].";
     return false;
   }
 
   std::string err_msg;
-  if (!checker.IsNum({"frame_rate", "bit_rate", "gop_size", "device_id"},
+  if (!checker.IsNum({"dst_width", "dst_height, frame_rate", "bit_rate", "gop_size", "device_id", "pre_type"},
         paramSet, err_msg, true)) {
     LOG(ERROR) << "[CNEncoder] " << err_msg;
     return false;

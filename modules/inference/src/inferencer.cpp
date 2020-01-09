@@ -83,16 +83,21 @@ class InferencerPrivate {
 Inferencer::Inferencer(const std::string& name) : Module(name) {
   d_ptr_ = nullptr;
   hasTransmit_.store(1);  // transmit data by module itself
-  param_register_.SetModuleDesc("Inferencer is a module for running offline model inference.");
-  param_register_.Register("model_path", "The offline model path.");
-  param_register_.Register("func_name", "The offline model func name.");
-  param_register_.Register("postproc_name", "The postproc name.");
-  param_register_.Register("peproc_name", "The preproc name.");
-  param_register_.Register("device_id", "Device ID.");
-  param_register_.Register("batching_timeout", "Batch timeout time.");
-  param_register_.Register("data_order", "Data order.");
-  param_register_.Register("batch_size", "The batch size.");
-  param_register_.Register("infer_interval_", "Infer interval.");
+  param_register_.SetModuleDesc("Inferencer is a module for running offline model inference,"
+                                " as well as preprocedding and postprocessing.");
+  param_register_.Register("model_path", "The offline model path. Normally offline model is a file"
+                           " with cambricon extension.");
+  param_register_.Register("func_name", "The offline model function name, usually is 'subnet0'.");
+  param_register_.Register("peproc_name", "The preprocessing method name.");
+  param_register_.Register("postproc_name", "The postprocessing method name.");
+  param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
+  param_register_.Register("batching_timeout", "If we can not get a certain number (batch size) of frames"
+                           " within a certain time (batching_timeout), we will stop waiting and append fake data.");
+  param_register_.Register("data_order", "It should be 'NCHW' (if the data is like, for example, rrr ggg bbb) or"
+                           " 'NHWC' (e.g., rgb rgb rgb).");
+  param_register_.Register("batch_size", "How many frames will be fed to model in one inference.");
+  param_register_.Register("infer_interval", "How many frames will be discarded between two frames"
+                           " which will be fed to model for inference.");
 }
 
 Inferencer::~Inferencer() {}
@@ -100,7 +105,7 @@ Inferencer::~Inferencer() {}
 bool Inferencer::Open(ModuleParamSet paramSet) {
   if (paramSet.find("model_path") == paramSet.end() || paramSet.find("func_name") == paramSet.end() ||
       paramSet.find("postproc_name") == paramSet.end()) {
-    LOG(WARNING) << "Inferencer must specify [model_path]、[func_name]、[postproc_name].";
+    LOG(WARNING) << "Inferencer must specify [model_path], [func_name], [postproc_name].";
     return false;
   }
 
@@ -125,12 +130,6 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
       return false;
     }
     if (Data_Order == "NCHW") {
-      for (uint32_t index = 0; index < d_ptr_->model_loader_->InputNum(); ++index) {
-        edk::DataLayout layout;
-        layout.dtype = edk::DataType::FLOAT32;
-        layout.order = edk::DimOrder::NCHW;
-        d_ptr_->model_loader_->SetCpuInputLayout(layout, index);
-      }
       for (uint32_t index = 0; index < d_ptr_->model_loader_->OutputNum(); ++index) {
         edk::DataLayout layout;
         layout.dtype = edk::DataType::FLOAT32;

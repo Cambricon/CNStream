@@ -413,7 +413,7 @@ class Pipeline : public Module {
   /* ------Internal methods------ */
 
  private:
-#ifdef TEST
+#ifdef UNIT_TEST
  public:  // NOLINT
 #endif
   void TransmitData(const std::string node_name, std::shared_ptr<CNFrameInfo> data);

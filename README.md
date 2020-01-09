@@ -77,6 +77,27 @@ After finished prerequiste, you can build instructions with the following steps:
 
    `${CNSTREAM_DIR}` specifies the directory where CNStream saves for.
 
+   | cmake option        | range                                    | default | description                |
+   | ------------------- | ---------------------------------------- | ------- | -------------------------- |
+   | build_display       | ON / OFF                                 | ON      | build display module       |
+   | build_encode        | ON / OFF                                 | ON      | build encode module        |
+   | build_fps_stats     | ON / OFF                                 | ON      | build fps_stats module     |
+   | build_inference     | ON / OFF                                 | ON      | build inference module     |
+   | build_osd           | ON / OFF                                 | ON      | build osd module           |
+   | build_source        | ON / OFF                                 | ON      | build source module        |
+   | build_track         | ON / OFF                                 | ON      | build track module         |
+   | build_discard_frame | ON / OFF                                 | ON      | build discard_frame module |
+   | build_tests         | ON / OFF                                 | ON      | build tests                |
+   | build_samples       | ON / OFF                                 | ON      | build samples              |
+   | build_apps          | ON / OFF                                 | ON      | build apps                 |
+   | build_test_coverage | ON / OFF                                 | OFF     | build test coverage        |
+   | MLU                 | MLU270  / MLU220_SOC                     | MLU270  | specify MLU platform       |
+   | RELEASE             | ON / OFF                                 | ON      | release / debug            |
+   | WITH_FFMPEG         | ON / OFF                                 | ON      | build with FFMPEG          |
+   | WITH_OPENCV         | ON / OFF                                 | ON      | build with OPENCV          |
+   | WITH_CHINESE        | ON / OFF                                 | OFF     | build with CHINESE         |
+   | WITH_RTSP           | ON / OFF                                 | ON      | build with RTSP            |
+
 3. If you want to build CNStream samples:
    a. Run the following command:
 
@@ -84,19 +105,14 @@ After finished prerequiste, you can build instructions with the following steps:
       cmake -Dbuild_samples=ON ${CNSTREAM_DIR}
       ```
 
-   b. Run the following command to add the MLU platform definition. If you are using MLU100:
-
-      ```bash
-      -DMLU=MLU100  // build the software support MLU100
-      ```
+   b. Run the following command to add the MLU platform definition. If you are using MLU270:
 
       If you are using MLU270:
 
       ```bash
       -DMLU=MLU270  // build the software support MLU270
-
       ```
-
+   
 4. Run the following command to build instructions:
 
       ```bash
@@ -173,18 +189,18 @@ Modify the `files.list_video` file, which is under the cnstream/samples/demo dir
               /*
                net_outputs : the result of the inference
     		   net_outputs[i].first : The data pointer of the i-th (starting from 0) output of the offline model.
-			   net_outputs[i].second : The length of the output data of the i-th (starting from 0) of the offline model.
+    		   net_outputs[i].second : The length of the output data of the i-th (starting from 0) of the offline model.
                */
 
 
 			 /*Do something and put the detection information into data*/
-
-            }
-
-            DECLARE_REFLEX_OBJECT_EX(SsdPostproc, Postproc)
-          };  // class MyPostproc
-
-          ```
+	
+	        }
+	
+	        DECLARE_REFLEX_OBJECT_EX(SsdPostproc, Postproc)
+	      };  // class MyPostproc
+	
+	      ```
 
 . Modify the `postproc_name` parameter in `cnstream/samples/demo/detection_config.json` to the post-processing class name (MyPostproc).
 

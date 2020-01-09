@@ -62,12 +62,12 @@ class FakePreproc : public Preproc, virtual public ReflexObjectEx<Preproc> {
 IMPLEMENT_REFLEX_OBJECT_EX(FakePreproc, Preproc);
 
 static const char *name = "test-infer";
-static const char *g_image_path = "../../samples/data/images/3.jpg";
+static const char *g_image_path = "../../data/images/3.jpg";
 #ifdef CNS_MLU100
 static const char *g_model_path =
-    "../../samples/data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon";
+    "../../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon";
 #elif CNS_MLU270
-static const char *g_model_path = "../../samples/data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
+static const char *g_model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
 #endif
 static const char *g_func_name = "subnet0";
 static const char *g_postproc_name = "FakePostproc";

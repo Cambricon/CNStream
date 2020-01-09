@@ -700,16 +700,13 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
   std::map<std::string, int> queues_size;
   for (auto& v : configs) {
     this->AddModuleConfig(v);
-    Module* module = creator.Create(v.className, v.name);
-    if (!module) {
+    std::shared_ptr<Module> instance(creator.Create(v.className, v.name));
+    if (!instance) {
       LOG(ERROR) << "Failed to create module by className(" << v.className << ") and name(" << v.name << ")";
       return -1;
     }
-    module->ShowPerfInfo(v.showPerfInfo);
-
-    std::shared_ptr<Module> instance(module);
+    instance->ShowPerfInfo(v.showPerfInfo);
     d_ptr_->modules_map_[v.name] = instance;
-
     queues_size[v.name] = v.maxInputQueueSize;
     this->AddModule(instance);
     this->SetModuleParallelism(instance, v.parallelism);

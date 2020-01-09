@@ -140,9 +140,10 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
    */
   DataSourceParam GetSourceParam() const { return param_; }
 
-#ifdef TEST
+#ifdef UNIT_TEST
   bool SendData(std::shared_ptr<CNFrameInfo> data) { return SourceModule::SendData(data); }
 #endif
+
  private:
   DataSourceParam param_;
 };  // class DataSource

@@ -60,7 +60,7 @@ class Conveyor {
   uint32_t GetBufferSize();
 
  private:
-#ifdef TEST
+#ifdef UNIT_TEST
  public:
 #endif
   Conveyor(Connector* container, size_t max_size, bool enable_drop = false);

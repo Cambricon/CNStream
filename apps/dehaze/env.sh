@@ -42,7 +42,7 @@ pushd $CURRENT_DIR
     echo "generate files.list_video in $CURRENT_DIR"
     for ((i = 0; i < 2; ++i))
     do
-      echo "$CURRENT_DIR/../../samples/data/videos/cars.mp4" >> files.list_video
+      echo "$CURRENT_DIR/../../data/videos/cars.mp4" >> files.list_video
     done
   fi
   if [ ! -f $CURRENT_DIR/files.list_image ]; then

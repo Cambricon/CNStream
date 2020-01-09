@@ -32,8 +32,10 @@
 #include <unordered_map>
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
+#include "cnstream_eventbus.hpp"
 
 #include "cnencoder_stream.hpp"
+#include "cnrt.h"
 
 namespace cnstream {
 
@@ -115,10 +117,13 @@ class CNEncoder : public Module, public ModuleCreator<CNEncoder> {
 
  private:
   CNEncoderContext* GetCNEncoderContext(CNFrameInfoPtr data);
+  std::string pre_type_;
   uint32_t device_id_ = 0;
   uint32_t bit_rate_ = 0;
   uint32_t gop_size_ = 0;
   uint32_t frame_rate_ = 0;
+  uint32_t dst_width_ = 0;
+  uint32_t dst_height_ = 0;
   CNEncoderStream::CodecType cn_type_;
   CNEncoderStream::PictureFormat cn_format_;
   std::unordered_map<int, CNEncoderContext*> ctxs_;

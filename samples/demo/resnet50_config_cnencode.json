@@ -9,7 +9,7 @@
       "decoder_type" : "mlu",
       "reuse_cndec_buf" : true,
       "input_buf_number": 2,
-      "output_buf_number": 2,
+      "output_buf_number": 3,
       "device_id" : 0
     }
   },
@@ -20,9 +20,12 @@
     "max_input_queue_size" : 20,
     "next_modules" : ["fps_stats"],
     "custom_params" : {
+      "dst_width": 960,
+      "dst_height": 540,
       "frame_rate" : 25,
       "bit_rate" : 3072,
       "gop_size" : 15,
+      "pre_type" : "mlu",
       "device_id": 0
     }
   },
@@ -30,6 +33,6 @@
   "fps_stats" : {
     "class_name" : "cnstream::FpsStats",
     "parallelism" : 12,
-    "max_input_queue_size" : 20
+    "max_input_queue_size" : 10
   }
 }

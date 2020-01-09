@@ -34,14 +34,14 @@ namespace cnstream {
 static constexpr const char *gname = "track";
 static constexpr const char *gfunc_name = "subnet0";
 #ifdef CNS_MLU100
-static constexpr const char *g_dsmodel_path = "../../samples/data/models/MLU100/Track/track.cambricon";
+static constexpr const char *g_dsmodel_path = "../../data/models/MLU100/Track/track.cambricon";
 #elif CNS_MLU270
 static constexpr const char *g_dsmodel_path =
-    "../../samples/data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
+    "../../data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
 #endif
 static constexpr const char *ds_track = "FeatureMatch";
 static constexpr const char *kcf_track = "KCF";
-// static constexpr const char *g_kcfmodel_path = "../../samples/data/models/MLU100/";
+// static constexpr const char *g_kcfmodel_path = "../../data/models/MLU100/";
 
 TEST(Tracker, Construct) {
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);

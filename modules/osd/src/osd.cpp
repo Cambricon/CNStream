@@ -186,9 +186,9 @@ void CnFont::putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color
 #endif
 
 Osd::Osd(const std::string& name) : Module(name) {
-  param_register_.SetModuleDesc("Osd is a module for draw objects on image,output is bgr24 images.");
-  param_register_.Register("label_path", "The label path.");
-  param_register_.Register("chinese_label_flag", "Whether use chinese label.");
+  param_register_.SetModuleDesc("Osd is a module for drawing objects on image. Output image is BGR24 format.");
+  param_register_.Register("label_path", "The path of the label file.");
+  param_register_.Register("chinese_label_flag", "Whether chinese label will be used.");
 }
 
 Osd::~Osd() { Close(); }

@@ -17,7 +17,7 @@
     "max_input_queue_size" : 20,
     "next_modules" : ["tracker"],
     "custom_params" : {
-      "model_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon",
+      "model_path" : "../../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon",
       "func_name" : "subnet0",
       "postproc_name" : "PostprocSsd",
       "device_id" : 0
@@ -30,7 +30,7 @@
     "max_input_queue_size" : 20,
     "next_modules" : ["osd"],
     "custom_params" : {
-      "model_path" : "../data/models/MLU100/Track/track.cambricon",
+      "model_path" : "../../data/models/MLU100/Track/track.cambricon",
       "func_name" : "subnet0"
     }
   },
@@ -42,7 +42,7 @@
     "next_modules" : ["displayer"],
     "custom_params" : {
       "chinese_label_flag" : "false", 
-      "label_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/label_voc.txt"
+      "label_path" : "../../data/models/MLU100/Primary_Detector/resnet34ssd/label_voc.txt"
     }
   },
 

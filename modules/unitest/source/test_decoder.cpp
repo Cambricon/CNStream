@@ -41,7 +41,7 @@ namespace cnstream {
 
 static constexpr const char *gname = "source";
 static constexpr const char *gmp4_path = "../../modules/unitest/source/data/img.mp4";
-static constexpr const char *gimage_path = "../../samples/data/images/%d.jpg";
+static constexpr const char *gimage_path = "../../data/images/%d.jpg";
 
 class PrepareEnv {
  public:

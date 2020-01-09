@@ -68,19 +68,87 @@ static void PrintVersion() {
   return;
 }
 
+static uint32_t GetFirstLetterPos(std::string desc, uint32_t begin, uint32_t length) {
+  if (begin + length > desc.length()) {
+    length = desc.length() - begin;
+  }
+  for (uint32_t i = 0; i < length; i++) {
+    if (desc.substr(begin + i, 1) != " ") {
+      return begin + i;
+    }
+  }
+  return begin;
+}
+
+static uint32_t GetLastSpacePos(std::string desc, uint32_t end, uint32_t length) {
+  if (end > desc.length()) {
+    end = desc.length();
+  }
+  if (end - length < 0) {
+    length = end;
+  }
+  for (uint32_t i = 0; i < length; i++) {
+    if (desc.substr(end - i, 1) == " ") {
+      return end - i;
+    }
+  }
+  return end;
+}
+
+static uint32_t GetSubStrEnd(std::string desc, uint32_t begin, uint32_t sub_str_len) {
+  if (begin + sub_str_len < desc.length()) {
+    return GetLastSpacePos(desc, begin + sub_str_len, sub_str_len);
+  } else {
+    return desc.length();
+  }
+}
+
+static void PrintDesc(std::string desc, uint32_t indent, uint32_t sub_len) {
+  uint32_t len = desc.length();
+
+  uint32_t sub_begin = GetFirstLetterPos(desc, 0, sub_len);
+  uint32_t sub_end = GetSubStrEnd(desc, sub_begin, sub_len);
+
+  // std::cout << std::left << std::setw(first_width) << desc.substr(sub_begin, sub_end - sub_begin) << std::endl;
+  std::cout << desc.substr(sub_begin, sub_end - sub_begin) << std::endl;
+
+  while (sub_begin + sub_len < len) {
+    sub_begin = GetFirstLetterPos(desc, sub_end, sub_len);
+    sub_end = GetSubStrEnd(desc, sub_begin, sub_len);
+    std::cout << std::left << std::setw(indent) << "" << desc.substr(sub_begin, sub_end - sub_begin) << std::endl;
+    if (sub_end != len && sub_end + sub_len >= len) {
+      sub_begin = GetFirstLetterPos(desc, sub_end, len - sub_end);
+      std::cout << std::left << std::setw(indent) << "" << desc.substr(sub_begin, len - sub_begin) << std::endl;
+    }
+  }
+}
+
 static void PrintAllModulesDesc() {
+  const uint32_t width = 40;
+  const uint32_t sub_str_len = 80;
+
   std::vector<std::string> modules = cnstream::ModuleFactory::Instance()->GetRegisted();
   cnstream::ModuleCreatorWorker creator;
-  std::cout << std::left << std::setw(40) << "Module Name"
-            << "Description" << std::endl;
+
+  std::cout << "\033[01;32m"<< std::left << std::setw(width) << "Module Name"
+            << "Description" << "\033[01;0m" << std::endl;
+
   for (auto& it : modules) {
     cnstream::Module* module = creator.Create(it, it);
-    std::cout << std::left << std::setw(40) << it << module->param_register_.GetModuleDesc() << std::endl;
+    std::cout << "\033[01;1m" << std::left << std::setw(width) << it << "\033[0m";
+
+    std::string desc = module->param_register_.GetModuleDesc();
+
+    PrintDesc(desc, width, sub_str_len);
+
     delete module;
   }
 }
 
 static void PrintModuleParameters(const std::string& module_name) {
+  const uint32_t width = 30;
+  const uint32_t sub_str_len = 80;
+
   std::string name = module_name;
   cnstream::ModuleCreatorWorker creator;
   cnstream::Module* module = creator.Create(name, name);
@@ -93,11 +161,15 @@ static void PrintModuleParameters(const std::string& module_name) {
     }
   }
   auto module_params = module->param_register_.GetParams();
-  std::cout << module_name << " Details:" << std::endl;
-  std::cout << "  " << std::left << std::setw(40) << "Parameter"
-            << "Description" << std::endl;
+  std::cout <<"\033[01;33m" <<  module_name << " Details:" << "\033[0m" << std::endl;
+  std::cout << "\033[01;32m" << "  " << std::left << std::setw(width) << "Parameter"
+            << "Description" << "\033[0m" << std::endl;
   for (auto& it : module_params) {
-    std::cout << "  " << std::left << std::setw(40) << it.first << it.second << std::endl;
+    std::cout << "\033[01;1m" << "  " << std::left << std::setw(width) << it.first << "\033[0m";
+
+    PrintDesc(it.second, width + 2, sub_str_len);
+
+    std::cout << std::endl;
   }
   delete module;
 }

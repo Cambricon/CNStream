@@ -99,11 +99,11 @@ class RawMluDecoder : public RawDecoder {
   void FrameCallback(const edk::CnFrame &frame);
   void EOSCallback();
 
-#ifdef TEST
+#ifdef UNIT_TEST
  public:  // NOLINT
 #endif
   int ProcessFrame(const edk::CnFrame &frame, bool *reused);
-#ifdef TEST
+#ifdef UNIT_TEST
  private:  // NOLINT
 #endif
   CNTimer fps_calculators[4];
