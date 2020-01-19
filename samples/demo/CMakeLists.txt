@@ -11,7 +11,7 @@ if(WITH_RTSP)
 endif()
 add_executable(${name} ${srcs} ${preprocess_srcs} ${postprocess_srcs})
 
-if(SANITIZE_LINK_STATIC)
+if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED)
     add_sanitizers(${name})
 endif()
 

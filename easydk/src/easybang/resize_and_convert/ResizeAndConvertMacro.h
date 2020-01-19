@@ -55,19 +55,19 @@
 
 #define PAD_UP(x, y) (x / y + (int)((x) % y > 0)) * y
 #define PAD_DN(x, y) (x / y) * y
-#if (__BANG_ARCH__ >= 200) || CNSTK_MLU270
-#define PAD_SIZE 64
-#define CI 64
-#define MULTCI 64
-#define CO 256
-#define LT_NUM 64
-#else
-#define PAD_SIZE 32
-#define CI 32
-#define MULTCI 64
-#define CO 128
-#define LT_NUM 16
-#endif
+// #if (__BANG_ARCH__ >= 200) || CNSTK_MLU270
+// #define PAD_SIZE 64
+// #define CI 64
+// #define MULTCI 64
+// #define CO 256
+// #define LT_NUM 64
+// #else
+// #define PAD_SIZE 32
+// #define CI 32
+// #define MULTCI 64
+// #define CO 128
+// #define LT_NUM 16
+// #endif
 
 #define IN_DATA_TYPE unsigned char
 #define OUT_DATA_TYPE unsigned char

@@ -20,6 +20,7 @@
 
 #include <string>
 #include <thread>
+#include <utility>
 
 #include "cnstream_eventbus.hpp"
 #include "encoder.hpp"
@@ -31,6 +32,45 @@ Encoder::Encoder(const std::string &name) : Module(name) {
   param_register_.Register("dump_dir", "Where to store the encoded video."
                            " For example, '.' means storing to current directory.");
 }
+
+#ifdef CNS_MLU220_SOC
+static std::mutex dir_mutex;
+static bool CreateDirectory(const std::string &dir_path) {
+  if (dir_path.empty()) return true;
+  std::unique_lock<std::mutex> lock(dir_mutex);
+  std::string path;
+  std::string sub;
+  for (auto it = dir_path.begin(); it != dir_path.end(); ++it) {
+    const char c = *it;
+    sub.push_back(c);
+    if (c == '/') {
+      path.append(sub);
+      if (access(path.c_str(), 0)) {
+        int err = mkdir(path.c_str(), 0644);
+        if (err) {
+          LOG(ERROR) << "Failed ot create directory";
+          return false;
+        } else {
+          LOG(INFO) << "create dir: " << path;
+        }
+      }
+    }
+    sub.clear();
+  }
+
+  path = dir_path;
+  if (access(path.c_str(), 0)) {
+    int err = mkdir(path.c_str(), 0644);
+    if (err) {
+      LOG(ERROR) << "Failed ot create directory";
+      return false;
+    } else {
+      LOG(INFO) << "create dir: " << path;
+    }
+  }
+  return true;
+}
+#endif
 
 EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {
   std::unique_lock<std::mutex> lock(encoder_mutex_);
@@ -46,8 +86,21 @@ EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {
     ctx = new(std::nothrow) EncoderContext;
     LOG_IF(FATAL, nullptr == ctx) << "Encoder::GetEncoderContext() new EncoderContext failed";
     ctx->size = cv::Size(data->frame.width, data->frame.height);
-    std::string video_file = output_dir_ + "/" + std::to_string(data->channel_idx) + ".avi";
-    ctx->writer = cv::VideoWriter(video_file, CV_FOURCC('D', 'I', 'V', 'X'), 20, ctx->size);
+    std::string filename = std::to_string(data->channel_idx) + ".avi";
+    std::string video_file;
+    if (output_dir_.empty())
+      video_file = filename;
+    else
+      video_file = output_dir_ + "/" + filename;
+#ifdef CNS_MLU220_SOC
+    if (CreateDirectory(output_dir_) != true) {
+      delete ctx;
+      return nullptr;
+    }
+    ctx->writer = std::move(cv::VideoWriter(video_file, CV_FOURCC('M', 'J', 'P', 'G'), 20, ctx->size));
+#else
+    ctx->writer = std::move(cv::VideoWriter(video_file, CV_FOURCC('D', 'I', 'V', 'X'), 20, ctx->size));
+#endif
     if (!ctx->writer.isOpened()) {
       PostEvent(cnstream::EventType::EVENT_ERROR, "Create video file failed");
     }

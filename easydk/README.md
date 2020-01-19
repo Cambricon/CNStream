@@ -1,6 +1,6 @@
 # Cambricon Easy Development Kit
 
-Cambricon Easy Development Kit is a toolkit, which aim at helping with developing software on Cambricon MLU platform.
+Cambricon Easy Development Kit is a toolkit, which aim at helping with developing software on Cambricon MLU270/MLU220 M2 platform.
 
 Toolkit provides following modules:
 - EasyCodec: easy decode and encode on MLU
@@ -80,17 +80,15 @@ After finished prerequiste, you can build instructions with the following steps:
    | WITH_INFER    | ON / OFF        | ON      | build infer          |
    | WITH_TRACKER  | ON / OFF        | ON      | build tracker        |
    | WITH_BANG     | ON / OFF        | ON      | build bang           |
-   | MLU           | MLU100 / MLU270 | MLU100  | specify MLU platform |
 
    Example:
 
    ```bash
    cd build
-   # build without samples and tests on MLU270
+   # build without samples and tests
    cmake ${TOOLKIT_DIR}      \
         -DBUILD_SAMPLES=OFF  \
-        -DBUILD_TESTS=OFF     \
-        -DMLU=MLU270
+        -DBUILD_TESTS=OFF
    ```
 
 3. Run the following command to build instructions:

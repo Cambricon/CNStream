@@ -5,7 +5,7 @@
 CWD="$( cd "$( dirname "$0"  )" && pwd  )"
 
 cp -p $1/include/cnrt.h $2
-cp -p $1/include/cn_video_*.h $2
+cp -p $1/include/cn_*.h $2
 cp -p $1/lib64/libcnrt.* $3
 cp -p $1/lib64/libcncodec.* $3
 cp -p $1/lib64/libmsgq.* $3

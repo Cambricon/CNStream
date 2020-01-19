@@ -71,7 +71,7 @@ void data_gen(std::vector<edk::DetectObject>* objs, int det) {
     objs->push_back(edk::DetectObject({3, 0.87f, {0.2f, 0.3f, 0.4f - d, 0.2f + d}}));
     objs->push_back(edk::DetectObject({2, 0.78f, {0.6f - d, 0.55f - d, 0.3f, 0.4f}}));
   }
-  for (int i = 0; i < 128; ++i) {
+  for (int i = 0; i < 127; ++i) {
     feature_1[i] += 1e-3;
     feature_2[i] += 1e-3;
     feature_3[i] += 1e-3;
@@ -135,6 +135,7 @@ TEST(Easytrack, IouMatch) {
   }
 }
 
+#if 0
 TEST(Easytrack, KCF) {
   bool ret = true;
 #ifdef CNSTK_MLU100
@@ -204,3 +205,5 @@ TEST(Easytrack, KCF) {
 #endif
   EXPECT_TRUE(ret);
 }
+#endif
+

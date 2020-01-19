@@ -70,7 +70,7 @@ TEST(Osd, Process) {
   frame.timestamp = 1000;
   frame.width = width;
   frame.height = height;
-  frame.ptr[0] = img.data;
+  frame.ptr_cpu[0] = img.data;
   frame.stride[0] = width;
   frame.ctx.dev_type = DevContext::DevType::CPU;
   frame.fmt = CN_PIXEL_FORMAT_BGR24;

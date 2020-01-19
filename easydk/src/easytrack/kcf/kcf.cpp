@@ -30,11 +30,7 @@
 #include "kcf.h"
 #include "kcf_macro.h"
 
-#ifdef CNSTK_MLU100
-#include "dft_mat_zipped.hpp"
-#else
 #include "dft_mat_c20_zipped.hpp"
-#endif
 
 #define STORE_USEC_TIME_OF_DAY_TO_INT64(i)  \
   do {                                      \
@@ -263,7 +259,6 @@ void kcf_destroy(KCFHandle* handle) {
   CNRT_CHECK(cnrtFree(handle->cos_table));
   CNRT_CHECK(cnrtFree(handle->scale));
   CNRT_CHECK(cnrtFree(handle->args));
-  // CNRT_CHECK(cnrtDestroyQueue(handle->pQueue));
   free(handle->cpu_buffer);
 }
 

@@ -35,26 +35,6 @@
 
 namespace edk {
 
-enum class VideoMode {
-  FRAME_MODE,  ///< packet with one frame
-  STREAM_MODE  ///< stream packet
-};
-
-/**
- * @brief Performance info for decode.
- * @attention Only supported on mlu100.
- */
-struct DecodePerfInfo {
-  /// Transfer from codec to mlu for this frame. units: microsecond.
-  uint64_t transfer_us;
-  /// Decode delay for this frame. units: microsecond
-  uint64_t decode_us;
-  /// Total delay (from send data to frame callback). units: microsecond
-  uint64_t total_us;
-  /// pts for this frame
-  uint64_t pts;
-};
-
 /**
  * @brief Decode packet callback function type
  * @param CnFrame[in] Frame containing decoded frame information
@@ -63,12 +43,6 @@ using DecodeFrameCallback = std::function<void(const CnFrame&)>;
 
 /// Decode EOS callback function type
 using DecodeEOSCallback = std::function<void()>;
-
-/**
- * @brief Decode performance callback function type
- * @param DecodePerfInfo[in] Decoder performance information for one frame.
- */
-using DecodePerfCallback = std::function<void(const DecodePerfInfo&)>;
 
 class DecodeHandler;
 
@@ -80,44 +54,32 @@ TOOLKIT_REGISTER_EXCEPTION(EasyDecode);
 class EasyDecode {
  public:
   struct Attr {
-    /// The ratio of drop frame, only support on MLU100
-    double drop_rate = 0;
-
-    /// The maximum resolution that this decoder can handle.
-    Geometry maximum_geometry;
-
-    /// The resolution of the output frames.
-    Geometry output_geometry;
-
-    /// Substream geometry, only support on MLU100. Substream will be disabled, if w or h is 0.
-    Geometry substream_geometry;
+    /// The frame resolution that this decoder can handle.
+    Geometry frame_geometry;
 
     /// Video codec type
     CodecType codec_type;
 
-    /// Video mode, support on mlu100
-    VideoMode video_mode;
-
     /// The pixel format of output frames.
     PixelFmt pixel_format;
 
-    /// The input buffer count, only supported on mlu270
+    /// Color space standard
+    ColorStd color_std = ColorStd::ITU_BT_709;
+
+    /// Specify library in which manage input and output buffer
+    BufferStrategy buf_strategy = BufferStrategy::CNCODEC;
+
+    /// The input buffer count
     uint32_t input_buffer_num = 2;
 
     /// The output buffer count.
-    uint32_t frame_buffer_num = 3;
+    uint32_t output_buffer_num = 3;
 
-    /// Interlaced data or progressive data, not supported on mlu100.
+    /// Interlaced data or progressive data
     bool interlaced = false;
 
     /// Frame callback
     DecodeFrameCallback frame_callback = NULL;
-
-    /// Substream callback. supported on mlu100
-    DecodeFrameCallback substream_callback = NULL;
-
-    /// Decode perfomance infomations callback for each frame, only supported on MLU100
-    DecodePerfCallback perf_callback = NULL;
 
     /// EOS callback
     DecodeEOSCallback eos_callback = NULL;
@@ -159,19 +121,8 @@ class EasyDecode {
    */
   Status GetStatus() const;
 
-  /**
-   * @brief Turn status from RUNNING to PAUSED.
-   * @note Do nothing and return false if status is not RUNNING, otherwise, turn to PAUSED and return true.
-   * @return Return true if pause succeeded.
-   */
-  bool Pause();
-
-  /**
-   * @brief Turn status from PAUSED to RUNNING, unblock SendData and Callback.
-   * @note Do nothing and return false if status is not PAUSED, otherwise, turn to RUNNING and return true.
-   * @return Return true if resume succeeded.
-   */
   bool Resume();
+  bool Pause();
 
   /**
    * @brief Send data to decoder, block when STATUS is pause.
@@ -185,7 +136,7 @@ class EasyDecode {
    * @note Release decoder buffer While buffer content will not be used, or decoder may be blocked.
    * @param buf_id[in] Codec buffer id.
    */
-  void ReleaseBuffer(uint32_t buf_id);
+  void ReleaseBuffer(uint64_t buf_id);
 
   /**
    * @brief copy frame from device to host.
@@ -193,13 +144,7 @@ class EasyDecode {
    * @param frame[in] Frame you want to copy
    * @return when error occurs, return false.
    */
-  bool CopyFrame(void* dst, const CnFrame& frame);
-
-  /**
-   * @brief Query whether substream is enabled.
-   * @return Return true if substream is enabled.
-   */
-  bool SubstreamEnabled() const;
+  bool CopyFrameD2H(void* dst, const CnFrame& frame);
 
   /**
    * @brief Destroy the Easy Decode object
@@ -209,17 +154,14 @@ class EasyDecode {
   friend class DecodeHandler;
 
  private:
-  explicit EasyDecode(const Attr& attr);
+  EasyDecode();
   EasyDecode(const EasyDecode&) = delete;
   EasyDecode& operator=(const EasyDecode&) = delete;
-  Attr attr_;
+  EasyDecode(EasyDecode&&) = delete;
+  EasyDecode& operator=(EasyDecode&&) = delete;
 
   DecodeHandler* handler_ = nullptr;
 };  // class EasyDecode
-
-inline EasyDecode::Attr EasyDecode::GetAttr() const { return attr_; }
-
-inline bool EasyDecode::SubstreamEnabled() const { return attr_.substream_geometry.w * attr_.substream_geometry.h > 0; }
 
 }  // namespace edk
 

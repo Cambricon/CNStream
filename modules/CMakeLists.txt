@@ -49,7 +49,7 @@ foreach(module ${module_list})
 endforeach()
 add_library(cnstream SHARED ${srcs})
 
-if(SANITIZE_LINK_STATIC)
+if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED)
     add_sanitizers(cnstream)
 endif()
 

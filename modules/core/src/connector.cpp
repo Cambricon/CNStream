@@ -83,7 +83,7 @@ ConnectorPrivate::~ConnectorPrivate() {
 
 Conveyor* ConnectorPrivate::GetConveyorByIdx(int idx) const {
   CHECK_GE(idx, 0);
-  CHECK_LT(idx, vec_conveyor_.size());
+  CHECK_LT(idx, static_cast<int>(vec_conveyor_.size()));
   return vec_conveyor_[idx];
 }
 

@@ -41,43 +41,38 @@ struct RateControl {
   bool vbr;
   /// The interval of ISLICE.
   uint32_t gop;
-  /// The rate statistic time, the unit is senconds(s)
-  uint32_t stat_time;
   /// The numerator of input frame rate of the venc channel
   uint32_t src_frame_rate_num;
   /// The denominator of input frame rate of the venc channel
   uint32_t src_frame_rate_den;
-  /// The numerator of target frame rate of the venc channel
-  uint32_t dst_frame_rate_num;
-  /// The denominator of target frame rate of the venc channel
-  uint32_t dst_frame_rate_den;
   /// Average bitrate in unit of kpbs, for cbr only.
   uint32_t bit_rate;
-  /**
-   * @brief level [0..5].scope of bitrate fluctuate.
-   *
-   * 1-5: 10%-50%. 0: SDK optimized, recommended;
-   */
-  uint32_t fluctuate_level;
   /// The max bitrate in unit of kbps, for vbr only .
   uint32_t max_bit_rate;
   /// The max qp
-  uint32_t max_qp;
+  uint32_t max_qp = 51;
   /// The min qp
-  uint32_t min_qp;
+  uint32_t min_qp = 0;
 };
 
 /**
  * @brief Video profile enumaration.
  */
 enum class VideoProfile {
-  BASELINE = 0,
-  MAIN,
-  HIGH,
+  H264_BASELINE = 0,
+  H264_MAIN,
+  H264_HIGH,
+  H264_HIGH_10,
+
+  H265_MAIN = 10,
+  H265_MAIN_STILL,
+  H265_MAIN_INTRA,
+  H265_MAIN_10,
 };
 
 /**
  * @brief Crop config parameters to control image crop attribute
+ * @attention Not support on MLU270 and MLU220
  */
 struct CropConfig {
   bool enable = false;
@@ -88,20 +83,6 @@ struct CropConfig {
 };
 
 /**
- *  @brief Performance info for encode, only supported on mlu100.
- */
-struct EncodePerfInfo {
-  /// Transfer from codec to mlu for this frame, units: microsecond
-  uint64_t transfer_us;
-  /// Encode delay for this frame. units: microsecond
-  uint64_t encode_us;
-  /// input delay(from send data to codec), units: microsecond
-  uint64_t input_transfer_us;
-  /// pts for this frame
-  uint64_t pts;
-};
-
-/**
  * @brief Encode packet callback function type
  * @param CnPacket[in] Packet containing encoded frame information
  */
@@ -109,12 +90,6 @@ using EncodePacketCallback = std::function<void(const CnPacket&)>;
 
 /// Encode EOS callback function type
 using EncodeEosCallback = std::function<void()>;
-
-/**
- * @brief Encode performance callback function type
- * @param EncodePerfInfo[in] Encoder performance information for one frame.
- */
-using EncodePerfCallback = std::function<void(const EncodePerfInfo&)>;
 
 TOOLKIT_REGISTER_EXCEPTION(EasyEncode);
 
@@ -128,10 +103,7 @@ class EasyEncode {
   friend class EncodeHandler;
   struct Attr {
     /// The maximum resolution that this endecoder can handle.
-    Geometry maximum_geometry;
-
-    /// The resolution of the output video.
-    Geometry output_geometry;
+    Geometry frame_geometry;
 
     /// Input pixel format
     PixelFmt pixel_format;
@@ -141,16 +113,16 @@ class EasyEncode {
      * @note support h264/jpeg on mlu100
      *       support h264/h265/jpeg on mlu200
      */
-    CodecType codec_type;
+    CodecType codec_type = CodecType::H264;
+
+    ///
+    ColorStd color_std = ColorStd::ITU_BT_2020;
 
     /// Qulity factor for jpeg encoder.
     uint32_t jpeg_qfactor = 50;
 
     /// Profile for video encoder.
-    VideoProfile profile = VideoProfile::MAIN;
-
-    /// Level for video encoder.
-    uint32_t level;
+    VideoProfile profile = VideoProfile::H264_MAIN;
 
     /// Video rate control parameters.
     RateControl rate_control;
@@ -158,14 +130,26 @@ class EasyEncode {
     /// Crop parameters
     CropConfig crop_config;
 
-    /// Whether convert to gray colorspace
-    bool color2gray = false;
-
-    /// Output packet memory on cpu or mlu
-    bool output_on_cpu = true;
+    /// Input buffer number
+    uint32_t input_buffer_num = 3;
 
     /// Output buffer number
-    uint32_t packet_buffer_num = 4;
+    uint32_t output_buffer_num = 4;
+
+    /// P frame number in gop default 0
+    uint32_t p_frame_num = 0;
+
+    /// B frame number in gop when profile is above main, default 0
+    uint32_t b_frame_num = 0;
+
+    /// Intra MB refresh, default 0
+    uint32_t ir_count = 0;
+
+    /// Slice max MB count, default 0
+    uint32_t max_mb_per_slice = 0;
+
+    /// Init table for CABAC, 0,1,2 for H264 and 0,1 for HEVC, default 0
+    uint32_t cabac_init_idc = 0;
 
     /// Whether to print encoder attribute
     bool silent = false;
@@ -175,9 +159,6 @@ class EasyEncode {
 
     /// Callback for receive eos
     EncodeEosCallback eos_callback = NULL;
-
-    /// Callback for receive performance informations each packet, only supported on MLU100.
-    EncodePerfCallback perf_callback = NULL;
 
     /// Indentification to specify device on which create encoder
     int dev_id = 0;
@@ -194,7 +175,7 @@ class EasyEncode {
    * @brief Get the encoder instance attribute
    * @return Encoder attribute
    */
-  inline Attr GetAttr() const;
+  Attr GetAttr() const;
 
   /**
    * @brief Destroy the Easy Encode object
@@ -207,7 +188,7 @@ class EasyEncode {
   * @param eos[in] default false
   * @return Return false if send data failed.
   */
-  bool SendData(const CnFrame& frame, bool eos = false);
+  bool SendDataCPU(const CnFrame& frame, bool eos = false);
 
   /**
    * @brief Release encoder buffer.
@@ -215,27 +196,16 @@ class EasyEncode {
    *       otherwise encoder may be blocked.
    * @param buf_id[in] Codec buffer id.
    */
-  void ReleaseBuffer(uint32_t buf_id);
-
-  /**
-   * @brief Copy output packet to dst.
-   * @param dst[in] Copy destination
-   * @param frame[in] Frame to copy
-   * @return Return false when error occurs.
-   */
-  bool CopyPacket(void* dst, const CnPacket& packet);
+  void ReleaseBuffer(uint64_t buf_id);
 
  private:
-  EasyEncode(const Attr& attr, EncodeHandler* handler);
+  EasyEncode();
 
-  Attr attr_;
-  EncodeHandler* handler_;
+  EncodeHandler* handler_ = nullptr;
 
   EasyEncode(const EasyEncode&) = delete;
   const EasyEncode& operator=(const EasyEncode&) = delete;
 };  // class EasyEncode
-
-inline EasyEncode::Attr EasyEncode::GetAttr() const { return attr_; }
 
 }  // namespace edk
 

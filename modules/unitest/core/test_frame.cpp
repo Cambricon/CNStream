@@ -38,20 +38,20 @@ void InitFrame(CNDataFrame* frame, int image_type) {
   frame->width = 1920;
   frame->stride[0] = 1920;
   if (image_type == 0) {  // RGB or BGR
-    frame->ptr[0] = malloc(sizeof(uint32_t) * frame->height * frame->stride[0] * 3);
+    frame->ptr_cpu[0] = malloc(sizeof(uint32_t) * frame->height * frame->stride[0] * 3);
   } else if (image_type == 1) {  // YUV
     frame->stride[1] = 1920;
-    frame->ptr[0] = malloc(sizeof(uint32_t) * frame->height * frame->stride[0]);
-    frame->ptr[1] = malloc(sizeof(uint32_t) * frame->height * frame->stride[1] * 0.5);
+    frame->ptr_cpu[0] = malloc(sizeof(uint32_t) * frame->height * frame->stride[0]);
+    frame->ptr_cpu[1] = malloc(sizeof(uint32_t) * frame->height * frame->stride[1] * 0.5);
   }
 }
 
 void RunConvertImageTest(CNDataFrame* frame, int image_type) {
   frame->CopyToSyncMem();
   EXPECT_NE(frame->ImageBGR(), nullptr);
-  free(frame->ptr[0]);
+  free(frame->ptr_cpu[0]);
   if (image_type == 1) {  // YUV
-    free(frame->ptr[1]);
+    free(frame->ptr_cpu[1]);
   }
 }
 #ifdef HAVE_OPENCV
@@ -97,8 +97,8 @@ TEST(CoreFrame, ConvertImageToBGRFailed) {
   frame.CopyToSyncMem();
   frame.fmt = CN_INVALID;
   EXPECT_EQ(frame.ImageBGR(), nullptr);
-  free(frame.ptr[0]);
-  free(frame.ptr[1]);
+  free(frame.ptr_cpu[0]);
+  free(frame.ptr_cpu[1]);
 }
 #endif
 
@@ -113,7 +113,7 @@ TEST(CoreFrameDeathTest, CopyToSyncMemFailed) {
   frame.ctx.dev_type = DevContext::INVALID;
   EXPECT_DEATH(frame.CopyToSyncMem(), "");
 
-  free(frame.ptr[0]);
+  free(frame.ptr_cpu[0]);
 }
 
 TEST(CoreFrame, InferObjAddAttribute) {
@@ -248,3 +248,4 @@ TEST(CoreFrame, CreateFrameInfoMultiParal) {
 }
 
 }  // namespace cnstream
+

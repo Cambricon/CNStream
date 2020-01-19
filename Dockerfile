@@ -18,7 +18,7 @@
 # * THE SOFTWARE.
 # *************************************************************************/
 
-# 1. put your neuware package under the directory of CNStream
+# 1. copy your neuware package into the directory of CNStream
 # 2. docker build -f Dockerfile --build-arg mlu_platform=${board_series} --build-arg neuware_package=${neuware_package_name} -t ubuntu_cnstream:v1 .
 # 3. docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
 
@@ -28,7 +28,8 @@ MAINTAINER <Cambricon, Inc.>
 
 WORKDIR /root/CNStream/
 
-ARG neuware_package=neuware-standard-8.1.1.deb
+ARG neuware_version=neuware-mlu270-1.2.4
+ARG neuware_package=${neuware_version}-1_Ubuntu16.04_amd64.deb
 ARG mlu_platform=MLU270
 
 RUN echo -e 'nameserver 114.114.114.114' > /etc/resolv.conf
@@ -59,7 +60,10 @@ RUN echo deb http://mirrors.aliyun.com/ubuntu/ xenial main restricted  > /etc/ap
 COPY . /root/CNStream/
 
 RUN dpkg -i /root/CNStream/$neuware_package && \
-    mkdir build && cd build && cmake .. -DMLU=$mlu_platform && make -j8 && \
+    dpkg -i /var/${neuware_version}/cndev*.deb && \
+    dpkg -i /var/${neuware_version}/cnrt*.deb && \
+    dpkg -i /var/${neuware_version}/cncodec*.deb && \
+    mkdir build && cd build && cmake .. -DMLU=$mlu_platform && make && \
     rm -rf /root/CNStream/$neuware_package
 
 WORKDIR /root/CNStream/samples/demo

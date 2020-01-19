@@ -86,7 +86,10 @@ int MluContext::ChannelId() const { return channel_id_; }
 
 void MluContext::SetChannelId(int id) { channel_id_ = id; }
 
-void MluContext::ConfigureForThisThread() const {
+void MluContext::ConfigureForThisThread() {
+  // static thread_local bool init = false;
+  static bool has_core_version = false;
+  static CoreVersion version_tmp = CoreVersion::MLU270;
   CnrtInitTool::instance()->init();
   int err_code;
   cnrtDev_t dev;
@@ -112,6 +115,30 @@ void MluContext::ConfigureForThisThread() const {
       throw MluContextError("Set current channel failed. error code " + std::to_string(err_code));
     }
   }
+  if (!has_core_version) {
+    cnrtDeviceInfo_t device_info;
+    err_code = cnrtGetDeviceInfo(&device_info, dev_id_);
+    if (CNRT_RET_SUCCESS != err_code) {
+      throw MluContextError("Get device info failed. error code " + std::to_string(err_code));
+    }
+    switch (device_info.core_version) {
+      case CNRT_MLU220: {
+        version_tmp = CoreVersion::MLU220;
+        LOG(INFO, "Get Core Version MLU220");
+        break;
+      }
+      case CNRT_MLU270: {
+        version_tmp = CoreVersion::MLU270;
+        LOG(INFO, "Get Core Version MLU270");
+        break;
+      }
+      default: throw MluContextError(
+        "Unsupport cnrt core version " + std::to_string(static_cast<int>(device_info.core_version)));
+    }
+    has_core_version = true;
+  }
+  version_ = version_tmp;
 }
 
 }  // namespace edk
+

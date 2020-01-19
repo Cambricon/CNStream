@@ -105,12 +105,10 @@ After finished prerequiste, you can build instructions with the following steps:
       cmake -Dbuild_samples=ON ${CNSTREAM_DIR}
       ```
 
-   b. Run the following command to add the MLU platform definition. If you are using MLU270:
-
-      If you are using MLU270:
+   b. Run the following command to add the MLU platform definition. If you are using MLU220 SOC:
 
       ```bash
-      -DMLU=MLU270  // build the software support MLU270
+   -DMLU=MLU220_SOC  // build the software support MLU220 soc
       ```
    
 4. Run the following command to build instructions:
@@ -125,16 +123,18 @@ After finished prerequiste, you can build instructions with the following steps:
 
 The samples/demo is a cnstream-based target detection demo, which includes the following Plug-in modules：
 
-- source: With MLU to decode video streams, such as local video files, rtmp, and rtsp.
-- inferencer: With MLU for Neural Network Inferencing.
-- osd: Draws Inferencing results on images.
-- tracker: Track multi objects.
-- encoder: Encodes images with inferencing results(detection result).
+- **source**: With MLU to decode video streams, such as local video files, rtmp, and rtsp.
+- **inferencer**: With MLU for Neural Network Inferencing.
+- **osd**: Draw Inferencing results on images.
+- **tracker**: Track multi objects.
+- **encoder**: Encode images with inferencing results(detection result).
+- **displayer**: Displays inferencing results on the screen.
+- **fps** **statistics**: Prints the statistics on the terminal.
 
+In the script run.sh, we set detection_config.json as the config file. If we check the config file, it will be found out that, resnet34_ssd.cambricon is the offline model used for inference, which means, after decoding, the data will be feed to a ssd model. And the results will be shown on the screen.
 
-In this demo, resnet34_ssd.cambricon that is an offline model used for inference.
-Output AVI file is in cnstream/samples/demo/output directory. The output directory can be specified by the [dump_dir] parameter.
-in addition,See the comments in cnstream/samples/demo/run.sh for details.)
+In addition, see the comments in cnstream/samples/demo/run.sh for details.)
+
 
 ### **Run samples** ###
 
@@ -148,6 +148,8 @@ To run the CNStream sample:
 
    ./run.sh
    ```
+
+
 
 ## Best Practices ##
 

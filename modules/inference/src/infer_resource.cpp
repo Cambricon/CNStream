@@ -44,11 +44,7 @@ IOResValue CpuInputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, u
   mem_op.SetLoader(model);
   IOResValue value;
   value.datas.resize(input_num);
-#ifdef CNS_MLU100
-  value.ptrs = mem_op.AllocCpuInput(batchsize);
-#elif CNS_MLU270
   value.ptrs = mem_op.AllocCpuInput(1);
-#endif
   for (int input_idx = 0; input_idx < input_num; ++input_idx) {
     value.datas[input_idx].ptr = value.ptrs[input_idx];
     value.datas[input_idx].shape = model->InputShapes()[input_idx];
@@ -76,15 +72,12 @@ IOResValue CpuOutputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, 
   mem_op.SetLoader(model);
   IOResValue value;
   value.datas.resize(output_num);
-#ifdef CNS_MLU100
-  value.ptrs = mem_op.AllocCpuOutput(batchsize);
-#elif CNS_MLU270
   value.ptrs = mem_op.AllocCpuOutput(1);
-#endif
   for (int output_idx = 0; output_idx < output_num; ++output_idx) {
     value.datas[output_idx].ptr = value.ptrs[output_idx];
     value.datas[output_idx].shape = model->OutputShapes()[output_idx];
-    value.datas[output_idx].batch_offset = static_cast<size_t>(value.datas[output_idx].shape.hwc()) * sizeof(float);
+    value.datas[output_idx].batch_offset =
+      static_cast<size_t>(value.datas[output_idx].shape.nhwc() / batchsize) * sizeof(float);
     value.datas[output_idx].batchsize = batchsize;
   }
   return value;
@@ -108,11 +101,7 @@ IOResValue MluInputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, u
   mem_op.SetLoader(model);
   IOResValue value;
   value.datas.resize(input_num);
-#ifdef CNS_MLU100
-  value.ptrs = mem_op.AllocMluInput(batchsize);
-#elif CNS_MLU270
   value.ptrs = mem_op.AllocMluInput(1);
-#endif
   for (int input_idx = 0; input_idx < input_num; ++input_idx) {
     value.datas[input_idx].ptr = value.ptrs[input_idx];
     value.datas[input_idx].shape = model->InputShapes()[input_idx];
@@ -141,11 +130,7 @@ IOResValue MluOutputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, 
   mem_op.SetLoader(model);
   IOResValue value;
   value.datas.resize(output_num);
-#ifdef CNS_MLU100
-  value.ptrs = mem_op.AllocMluOutput(batchsize);
-#elif CNS_MLU270
   value.ptrs = mem_op.AllocMluOutput(1);
-#endif
   for (int output_idx = 0; output_idx < output_num; ++output_idx) {
     value.datas[output_idx].ptr = value.ptrs[output_idx];
     value.datas[output_idx].shape = model->OutputShapes()[output_idx];
@@ -175,7 +160,7 @@ RCOpResource::~RCOpResource() {
 }
 
 void RCOpResource::Init(uint32_t src_w, uint32_t src_h, uint32_t src_stride, uint32_t dst_w, uint32_t dst_h,
-                        edk::MluResizeConvertOp::ColorMode cmode) {
+                        edk::MluResizeConvertOp::ColorMode cmode, edk::CoreVersion core_ver) {
   if (Initialized()) {
     Destroy();
   }
@@ -187,6 +172,7 @@ void RCOpResource::Init(uint32_t src_w, uint32_t src_h, uint32_t src_stride, uin
   op_attr.dst_h = dst_h;
   op_attr.color_mode = cmode;
   op_attr.batch_size = batchsize_;
+  op_attr.core_version = core_ver;
   value_->op.Init(op_attr);
   value_->initialized = true;
   AllocateFakeData();

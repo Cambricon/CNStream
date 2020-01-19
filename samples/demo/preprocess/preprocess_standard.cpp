@@ -122,3 +122,4 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
   delete[] img_data;
   return 0;
 }
+

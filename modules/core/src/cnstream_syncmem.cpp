@@ -109,6 +109,28 @@ const void* CNSyncedMemory::GetCpuData() {
   return const_cast<const void*>(cpu_ptr_);
 }
 
+#ifdef CNS_MLU220_SOC
+void CNSyncedMemory::SetMluCpuData(void *mlu_data, void *cpu_data) {
+  if (0 == size_) return;
+  LOG_IF(FATAL, NULL == mlu_data) << "mlu_data is NULL.";
+  LOG_IF(FATAL, NULL == cpu_data) << "cpu_data is NULL.";
+
+  if (own_mlu_data_) {
+    CALL_CNRT_BY_CONTEXT(cnrtFree(mlu_ptr_), dev_id_, ddr_chn_);
+  }
+  mlu_ptr_ = mlu_data;
+  head_ = SYNCED;
+  own_mlu_data_ = false;
+
+  if (own_cpu_data_) {
+    CNStreamFreeHost(cpu_ptr_);
+  }
+  cpu_ptr_ = cpu_data;
+  head_ = SYNCED;
+  own_cpu_data_ = false;
+}
+#endif
+
 void CNSyncedMemory::SetCpuData(void* data) {
   if (0 == size_) return;
   LOG_IF(FATAL, NULL == data) << "data is NULL.";

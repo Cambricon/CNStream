@@ -152,18 +152,14 @@ TEST_P(ResizeConvertParam, Execute) {
   std::cout << "Convert " << color_mode_map[cmode] << std::endl;
 
   src_image = cv::imread(image_path);
-  
+
   ASSERT_FALSE(src_image.empty()) << "read \"" << image_path << "\" failed";
 
   width = src_image.cols;
   height = src_image.rows;
   stride = ALIGN_64(width);
   input_size = stride * height * 3 / 2;
-#ifdef CNSTK_MLU100
-  dst_stride = ALIGN_16(dst_w);
-#else
   dst_stride = dst_w;
-#endif
   output_size = dst_stride * dst_h * 4;
 
   cpu_input = new uint8_t[input_size];
@@ -173,7 +169,6 @@ TEST_P(ResizeConvertParam, Execute) {
 
   edk::MluContext context;
   context.SetDeviceId(0);
-  context.SetChannelId(0);
   context.ConfigureForThisThread();
 
   if (CNRT_RET_SUCCESS != cnrtCreateQueue(&rc_queue)) {
@@ -196,6 +191,7 @@ TEST_P(ResizeConvertParam, Execute) {
   attr.dst_w = dst_w;
   attr.data_mode = edk::MluResizeConvertOp::DataMode::UINT8ToUINT8;
   attr.color_mode = cmode;
+  attr.core_version = context.GetCoreVersion();
 
   if (!rc_op->Init(attr)) {
     rc_op->Destroy();

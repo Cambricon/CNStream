@@ -37,29 +37,10 @@ class ModelLoaderInternalInterface {
  public:
   explicit ModelLoaderInternalInterface(ModelLoader* model) : model_(model) {}
 
-#ifdef CNSTK_MLU100
-  /**
-   * @brief Get model input cnrtDataDescArray_t
-   *
-   * @return cnrtDataDescArray_t
-   */
-  cnrtDataDescArray_t InputDescArray() const;
-
-  /**
-   * @brief Get model output cnrtDataDescArray_t
-   *
-   * @return cnrtDataDescArray_t
-   */
-  cnrtDataDescArray_t OutputDescArray() const;
-
-#elif CNSTK_MLU270
-
   int64_t InputDataSize(int data_index) const;
   int64_t OutputDataSize(int data_index) const;
   DataLayout GetMluInputLayout(int data_index) const;
   DataLayout GetMluOutputLayout(int data_index) const;
-
-#endif
 
   /**
    * @brief Get inference function stored in model

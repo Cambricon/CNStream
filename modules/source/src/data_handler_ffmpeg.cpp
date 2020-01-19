@@ -248,7 +248,7 @@ bool DataHandlerFFmpeg::Process() {
       decoder_->Process(nullptr, true);
       return false;
     }
-  }                                                       // if (!ret)
+  }  // if (!ret)
   if (need_insert_sps_pps_ && !insert_spspps_whenidr_) {  // this is hack flow,aim to add sps/pps.
     AVStream* vstream = p_format_ctx_->streams[video_index_];
 #if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1

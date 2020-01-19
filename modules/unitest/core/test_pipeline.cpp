@@ -311,8 +311,8 @@ void TestProcess(const std::vector<std::list<int>>& neighbor_list) {
   for (size_t i = 1; i < modules.size(); ++i) {
     auto processor = dynamic_cast<TestProcessor*>(modules[i].get());
     EXPECT_TRUE(nullptr != processor);
-    for (size_t i = 1; i < processor->GetCnts().size(); ++i) {
-      EXPECT_EQ(provider->GetFrameCnts()[i], processor->GetCnts()[i]);
+    for (size_t j = 0; j < processor->GetCnts().size(); ++j) {
+      EXPECT_EQ(provider->GetFrameCnts()[j], processor->GetCnts()[j]);
     }
   }
 }

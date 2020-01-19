@@ -18,22 +18,25 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include "easybang/resize_and_colorcvt.h"
 #include <deque>
 #include <memory>
 #include <string>
 #include <utility>
 
+#include "cxxutil/logger.h"
+#include "easybang/resize_and_colorcvt.h"
+#include "easyinfer/mlu_context.h"
 #include "../../easyinfer/mlu_task_queue.h"
 
 using std::string;
 extern int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h,
-                              int color_mode, int data_type, int bsize_, KernelParam** param, string* estr);
+                              int color_mode, int data_type, int bsize_, KernelParam** param,
+                              int dev_type, string* estr);
 
 extern void FreeKernelParam(KernelParam* param);
 
 extern float ResizeAndConvert(void* dst, void* srcY, void* srcUV, KernelParam* param, cnrtFunctionType_t ftype,
-                              cnrtDim3_t dim, cnrtQueue_t queue, string* estr);
+                              cnrtDim3_t dim, cnrtQueue_t queue, int dev_type, string* estr);
 
 namespace edk {
 
@@ -113,11 +116,13 @@ bool MluResizeConvertOp::Init(const MluResizeConvertOp::Attr& attr) {
       return false;
   }
 
+  LOG(INFO, "Init ResizeAndConvert Operator");
+
   return 0 == ::PrepareKernelParam(d_ptr_->attr_.src_h, d_ptr_->attr_.src_stride, d_ptr_->attr_.dst_h,
                                    d_ptr_->attr_.dst_w, crop_x, crop_y, crop_w, crop_h,
                                    static_cast<int>(d_ptr_->attr_.color_mode),
                                    static_cast<int>(d_ptr_->attr_.data_mode), d_ptr_->attr_.batch_size,
-                                   &d_ptr_->kparam_, &d_ptr_->estr_);
+                                   &d_ptr_->kparam_, static_cast<int>(d_ptr_->attr_.core_version), &d_ptr_->estr_);
 }
 
 int MluResizeConvertOp::InvokeOp(void* dst, void* srcY, void* srcUV) {
@@ -137,6 +142,7 @@ int MluResizeConvertOp::InvokeOp(void* dst, void* srcY, void* srcUV) {
 }
 
 void MluResizeConvertOp::BatchingUp(void* src_y, void* src_uv) {
+  LOG(TRACE, "Store resize and convert operator input for batching, %p, %p", src_y, src_uv);
   d_ptr_->yuv_ptrs_cache_.push_back(std::make_pair(src_y, src_uv));
 }
 
@@ -170,8 +176,10 @@ bool MluResizeConvertOp::SyncOneOutput(void* dst) {
   dim.x = d_ptr_->attr_.batch_size;
   dim.y = 1;
   dim.z = 1;
+
+  LOG(TRACE, "Do resize and convert process, dst: %p", dst);
   return -1 != ::ResizeAndConvert(dst, d_ptr_->y_ptrs_mlu_, d_ptr_->uv_ptrs_mlu_, d_ptr_->kparam_, d_ptr_->ftype_, dim,
-                                  d_ptr_->queue_->queue, &d_ptr_->estr_);
+                                  d_ptr_->queue_->queue, static_cast<int>(d_ptr_->attr_.core_version), &d_ptr_->estr_);
 }
 
 void MluResizeConvertOp::Destroy() {

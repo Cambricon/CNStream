@@ -28,6 +28,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+
 #include "cnstream_module.hpp"
 
 #define ROUND_UP(addr, boundary) (((u32_t)(addr) + (boundary)-1) & ~((boundary)-1))
@@ -40,6 +41,14 @@ CNDataFrame::~CNDataFrame() {
   }
   if (nullptr != cpu_data) {
     CNStreamFreeHost(cpu_data), cpu_data = nullptr;
+  }
+
+  if (nullptr != mapper_) {
+    mapper_.reset();
+  }
+
+  if (nullptr != deAllocator_) {
+    deAllocator_.reset();
   }
 #ifdef HAVE_OPENCV
   if (nullptr != bgr_mat) {
@@ -123,14 +132,24 @@ size_t CNDataFrame::GetBytes() const {
 
 void CNDataFrame::CopyToSyncMem() {
   if (this->deAllocator_ != nullptr) {
+#ifdef CNS_MLU220_SOC
+    if (this->ctx.dev_type == DevContext::MLU_CPU) {
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        this->data[i].reset(new(std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
+        this->data[i]->SetMluCpuData(this->ptr_mlu[i], this->ptr_cpu[i]);
+      }
+    } else {
+      LOG(FATAL) << " unsupported dev_type";
+    }
+#else
     /*cndecoder buffer will be used to avoid dev2dev copy*/
     for (int i = 0; i < GetPlanes(); i++) {
       size_t plane_size = GetPlaneBytes(i);
-      CNSyncedMemory* CNSyncedMemory_ptr = new(std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel);
-      LOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "CNDataFrame::CopyToSyncMem() failed to alloc CNSyncedMemory";
-      this->data[i].reset(CNSyncedMemory_ptr);
-      this->data[i]->SetMluData(this->ptr[i]);
+      this->data[i].reset(new(std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
+      this->data[i]->SetMluData(this->ptr_mlu[i]);
     }
+#endif
     return;
   }
   /*deep copy*/
@@ -144,11 +163,9 @@ void CNDataFrame::CopyToSyncMem() {
     void* dst = mlu_data;
     for (int i = 0; i < GetPlanes(); i++) {
       size_t plane_size = GetPlaneBytes(i);
-      CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dst, ptr[i], plane_size, CNRT_MEM_TRANS_DIR_DEV2DEV), ctx.dev_id,
+      CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dst, ptr_mlu[i], plane_size, CNRT_MEM_TRANS_DIR_DEV2DEV), ctx.dev_id,
                            ctx.ddr_channel);
-      CNSyncedMemory* CNSyncedMemory_ptr = new(std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel);
-      LOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "CNDataFrame::CopyToSyncMem() failed to alloc CNSyncedMemory";
-      this->data[i].reset(CNSyncedMemory_ptr);
+      this->data[i].reset(new(std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
       this->data[i]->SetMluData(dst);
       dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
     }
@@ -165,13 +182,15 @@ void CNDataFrame::CopyToSyncMem() {
     void* dst = cpu_data;
     for (int i = 0; i < GetPlanes(); i++) {
       size_t plane_size = GetPlaneBytes(i);
-      memcpy(dst, ptr[i], plane_size);
-      CNSyncedMemory* CNSyncedMemory_ptr = new(std::nothrow) CNSyncedMemory(plane_size);
-      LOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "CNDataFrame::CopyToSyncMem() failed to alloc CNSyncedMemory";
-      this->data[i].reset(CNSyncedMemory_ptr);
+      memcpy(dst, ptr_cpu[i], plane_size);
+      this->data[i].reset(new(std::nothrow) CNSyncedMemory(plane_size));
       this->data[i]->SetCpuData(dst);
       dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
     }
+#ifdef CNS_MLU220_SOC
+  } else if (this->ctx.dev_type == DevContext::MLU_CPU) {
+    LOG(FATAL) << "MLU220_SOC: MLU_CPU deepCopy not supported yet";
+#endif
   } else {
     LOG(FATAL) << "Device type not supported";
   }

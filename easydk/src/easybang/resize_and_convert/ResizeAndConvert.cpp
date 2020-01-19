@@ -58,7 +58,11 @@ void FreeKernelParam(KernelParam* param) {
 }
 
 int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h,
-                       int color_mode, int data_type, int batchsize, KernelParam** param, string* estr) {
+                       int color_mode, int data_type, int batchsize, KernelParam** param, int dev_type, string* estr) {
+  const int CI = 64;
+  const int CO = 256;
+  const int LT_NUM = 64;
+
   *param = new KernelParam;
   // parse mode
   int inputType, outputType;
@@ -276,7 +280,6 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
         }
         consts[idx * LT_NUM + lt + 2 * CI * CO] =  // bias
             (-222.912 * ((lt % 4) == rIdx) + 135.616 * ((lt % 4) == gIdx) + -276.800 * ((lt % 4) == bIdx));
-#if CNSTK_MLU270
         // Y
         ((int16_t*)consts)[offsetY] = ((lt % 4) != zIdx) * 0x253F;
 
@@ -287,17 +290,6 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
         ((int16_t*)consts)[offsetV] = ((lt % 4) == rIdx) * 0x3312       // R
                                       + ((lt % 4) == gIdx) * (0xE5FC);  // G
 
-#elif CNSTK_MLU100
-        // Y
-        consts[offsetY] = ((lt % 4) != zIdx) * 1.164;
-
-        // U
-        consts[offsetU] = ((lt % 4) == gIdx) * (-0.392)  // G
-                          + ((lt % 4) == bIdx) * 2.017;  // B
-        // V
-        consts[offsetV] = ((lt % 4) == rIdx) * 1.586        // R
-                          + ((lt % 4) == gIdx) * (-0.813);  // G
-#endif
       }
     }
   }
@@ -326,14 +318,12 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
   }
   free(consts);
 
-#ifdef CNSTK_MLU270
   ecode = cnrtMalloc((void**)&((*param)->cycles), sizeof(uint32_t));
   if (CNRT_RET_SUCCESS != ecode) {
     *estr = "cnrt malloc failed. ERRCODE:" + to_string(ecode);
     FreeKernelParam(*param);
     return -1;
   }
-#endif
   // // malloc and copy maskUV_mlu
   // if (CNRT_RET_SUCCESS !=
   //   cnrtMalloc((void**)&maskUV_mlu, CI * CI * total * sizeof(half))) {
@@ -371,7 +361,7 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
 }
 
 float reSizedConvert(half* dst, half* srcY, half* srcUV, KernelParam* kparam, cnrtFunctionType_t func_type,
-                     cnrtDim3_t dim, cnrtQueue_t queue, string* estr) {
+                     cnrtDim3_t dim, cnrtQueue_t queue, int dev_type, string* estr) {
   int pad = 0;  // useless, make no difference
   cnrtKernelParamsBuffer_t params;
   cnrtGetKernelParamsBuffer(&params);
@@ -393,11 +383,19 @@ float reSizedConvert(half* dst, half* srcY, half* srcUV, KernelParam* kparam, cn
   cnrtKernelParamsBufferAddParam(params, &kparam->output2uint, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &kparam->batchNum, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &pad, sizeof(int));
-#ifdef CNSTK_MLU270
   cnrtKernelParamsBufferAddParam(params, &kparam->cycles, sizeof(uint32_t*));
-#endif
-
-  int ecode = cnrtInvokeKernel_V2((void*)&ResizeAndConvertKernel, dim, params, func_type, queue);
+  int ecode;
+  if (1 == dev_type) {
+    ecode = cnrtInvokeKernel_V2((void*)&ResizeAndConvertKernelMlu220, dim,
+        params, func_type, queue);
+  } else if (2 == dev_type) {
+    ecode = cnrtInvokeKernel_V2((void*)&ResizeAndConvertKernelMlu270, dim,
+        params, func_type, queue);
+  } else {
+    ecode = cnrtInvokeKernel_V2((void*)&ResizeAndConvertKernel, dim, params,
+      func_type, queue);
+  }
+  
   if (CNRT_RET_SUCCESS != ecode) {
     if (estr) {
       *estr = "[ResizeAndConvert] cnrtInvokeKernel FAILED. ERRCODE:" + to_string(ecode);
@@ -408,7 +406,6 @@ float reSizedConvert(half* dst, half* srcY, half* srcUV, KernelParam* kparam, cn
 
   float _time = 0;
 
-#ifdef CNSTK_MLU270
   uint32_t cycles = 0;
   ecode = cnrtMemcpy(&cycles, srcY, 1 * sizeof(uint32_t), CNRT_MEM_TRANS_DIR_DEV2HOST);
   if (CNRT_RET_SUCCESS != ecode) {
@@ -419,7 +416,6 @@ float reSizedConvert(half* dst, half* srcY, half* srcUV, KernelParam* kparam, cn
     return -1;
   }
   _time = cycles * 0.04 / 1000;
-#endif
 
   // free resources
   //  if (CNRT_RET_SUCCESS != cnrtFree(consts_mlu)) {
@@ -443,7 +439,7 @@ float reSizedConvert(half* dst, half* srcY, half* srcUV, KernelParam* kparam, cn
 }
 
 float ResizeAndConvert(void* dst, void* srcY, void* srcUV, KernelParam* param, cnrtFunctionType_t func_type,
-                       cnrtDim3_t dim, cnrtQueue_t queue, string* estr) {
+                       cnrtDim3_t dim, cnrtQueue_t queue, int dev_type, string* estr) {
   return reSizedConvert(reinterpret_cast<half*>(dst), reinterpret_cast<half*>(srcY), reinterpret_cast<half*>(srcUV),
-                        param, func_type, dim, queue, estr);
+                        param, func_type, dim, queue, dev_type, estr);
 }

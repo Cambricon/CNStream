@@ -9,8 +9,8 @@
 #include "test_base.h"
 
 std::mutex mut;
-std::condition_variable cond_main, cond_sub;
-bool main_rec = false, sub_rec = false;
+std::condition_variable cond;
+bool rec = false;
 const char* jpeg_file = "../../tests/data/1080p.jpg";
 const char* h264_file = "../../tests/data/1080p.h264";
 char* test_file = NULL;
@@ -24,67 +24,6 @@ static uint8_t* g_data_buffer;
 #define MAX_INPUT_DATA_SIZE (25 << 20)
 #endif
 
-void smallstream_callback(bool* condv, std::condition_variable* cond, const edk::CnFrame& frame) {
-  std::cout << "smallstream_callback(" << frame.frame_size << ")" << std::endl;
-  EXPECT_EQ(static_cast<uint32_t>(300), frame.height);
-  EXPECT_EQ(static_cast<uint32_t>(320), frame.width);
-
-  try {
-    edk::MluContext context;
-    context.SetDeviceId(0);
-    context.SetChannelId(0);
-    context.ConfigureForThisThread();
-  } catch (edk::MluContextError& err) {
-    std::cout << "set mlu env failed" << std::endl;
-    g_decode->ReleaseBuffer(frame.buf_id);
-    return;
-  }
-
-  if (p_small_stream == NULL) {
-    p_small_stream = fopen("small.yuv", "wb");
-    if (p_small_stream == NULL) {
-      std::cout << "open small.yuv failed" << std::endl;
-      g_decode->ReleaseBuffer(frame.buf_id);
-      return;
-    }
-  }
-
-  uint8_t* buffer = NULL;
-  uint32_t length = frame.frame_size;
-  size_t written;
-
-  if (length == 0) {
-    g_decode->ReleaseBuffer(frame.buf_id);
-    return;
-  }
-
-  buffer = reinterpret_cast<uint8_t*>(malloc(length));
-  if (buffer == NULL) {
-    std::cout << ("ERROR: malloc for small buffer failed\n");
-    g_decode->ReleaseBuffer(frame.buf_id);
-    return;
-  }
-
-  g_decode->CopyFrame(buffer, frame);
-
-  written = fwrite(buffer, 1, length, p_small_stream);
-  if (written != length) {
-    printf("ERROR: small written size(%u) != data length(%u)\n", (unsigned int)written, length);
-  }
-
-  free(buffer);
-
-  g_decode->ReleaseBuffer(frame.buf_id);
-
-#if 0
-  if (*condv == false) {
-    std::unique_lock<std::mutex> lk(mut);
-    *condv = true;
-    cond->notify_one();
-  }
-#endif
-}
-
 void bigstream_callback(bool* condv, std::condition_variable* cond, const edk::CnFrame& frame) {
   std::cout << "bigstream_callback(" << frame.frame_size << ")" << std::endl;
   EXPECT_EQ(static_cast<uint32_t>(1080), frame.height);
@@ -93,7 +32,6 @@ void bigstream_callback(bool* condv, std::condition_variable* cond, const edk::C
   try {
     edk::MluContext context;
     context.SetDeviceId(0);
-    context.SetChannelId(0);
     context.ConfigureForThisThread();
   } catch (edk::MluContextError& err) {
     std::cout << "set mlu env failed" << std::endl;
@@ -126,7 +64,7 @@ void bigstream_callback(bool* condv, std::condition_variable* cond, const edk::C
     return;
   }
 
-  g_decode->CopyFrame(buffer, frame);
+  g_decode->CopyFrameD2H(buffer, frame);
 
   written = fwrite(buffer, 1, length, p_big_stream);
   if (written != length) {
@@ -165,15 +103,15 @@ void eos_callback(bool* condv, std::condition_variable* cond) {
   cond->notify_one();
 }
 
-void perf_callback(const edk::DecodePerfInfo& perf) {
 #if 0
+void perf_callback(const edk::DecodePerfInfo& perf) {
   std::cout << "----------- Decode Performance Info -----------" << std::endl;
   std::cout << "total us: " << perf.total_us << "us" << std::endl;
   std::cout << "decode us: " << perf.decode_us << "us" << std::endl;
   std::cout << "transfer us: " << perf.transfer_us << "us" << std::endl;
   std::cout << "----------- END ------------" << std::endl;
-#endif
 }
+#endif
 
 bool SendData(edk::EasyDecode* decode) {
   edk::CnPacket packet;
@@ -204,13 +142,11 @@ bool SendData(edk::EasyDecode* decode) {
   return decode->SendData(packet, true);
 }
 
-bool test_decode(edk::CodecType ctype, edk::PixelFmt pf, uint32_t mainstream_w, uint32_t mainstream_h,
-                 uint32_t substream_w, uint32_t substream_h, std::function<void(const edk::CnFrame&)> m_cb,
-                 std::function<void(const edk::CnFrame&)> s_cb) {
+bool test_decode(edk::CodecType ctype, edk::PixelFmt pf, uint32_t frame_w, uint32_t frame_h,
+                 std::function<void(const edk::CnFrame&)> frame_cb) {
   try {
     edk::MluContext context;
     context.SetDeviceId(0);
-    context.SetChannelId(0);
     context.ConfigureForThisThread();
   } catch (edk::MluContextError& err) {
     std::cout << "set mlu env failed" << std::endl;
@@ -226,24 +162,17 @@ bool test_decode(edk::CodecType ctype, edk::PixelFmt pf, uint32_t mainstream_w, 
     return false;
   }
 
-  main_rec = false;
-  sub_rec = false;
+  rec = false;
   edk::EasyDecode::Attr attr;
-  attr.drop_rate = 0;
-  attr.maximum_geometry.w = 1920;
-  attr.maximum_geometry.h = 1080;
-  attr.output_geometry.w = mainstream_w;
-  attr.output_geometry.h = mainstream_h;
-  attr.substream_geometry.w = substream_w;
-  attr.substream_geometry.h = substream_h;
+  attr.frame_geometry.w = 1920;
+  attr.frame_geometry.h = 1080;
   attr.codec_type = ctype;
-  attr.video_mode = edk::VideoMode::FRAME_MODE;
+  attr.buf_strategy = edk::BufferStrategy::CNCODEC;
+  /* attr.video_mode = edk::VideoMode::FRAME_MODE; */
   attr.pixel_format = pf;
-  attr.frame_callback = m_cb;
-  attr.substream_callback = s_cb;
-  attr.perf_callback = perf_callback;
+  attr.frame_callback = frame_cb;
   attr.eos_callback =
-      std::bind(eos_callback, (NULL != s_cb) ? (&sub_rec) : (&main_rec), (NULL != s_cb) ? (&cond_sub) : (&cond_main));
+      std::bind(eos_callback, &rec, &cond);
   attr.silent = false;
   edk::EasyDecode* decode = nullptr;
   try {
@@ -259,13 +188,10 @@ bool test_decode(edk::CodecType ctype, edk::PixelFmt pf, uint32_t mainstream_w, 
       return false;
     }
     std::unique_lock<std::mutex> lk(mut);
-    if (NULL != s_cb) {
-      // substream is opened, wait for substream receive is ok.
-      cond_sub.wait(lk, []() -> bool { return sub_rec; });
-    } else if (NULL != m_cb) {
+    if (NULL != frame_cb) {
       // substream is not open but main stream callback is set,
       // wait for main stream receive is ok.
-      cond_main.wait(lk, []() -> bool { return main_rec; });
+      cond.wait(lk, []() -> bool { return rec; });
     }
     delete decode;
     decode = nullptr;
@@ -281,39 +207,33 @@ bool test_decode(edk::CodecType ctype, edk::PixelFmt pf, uint32_t mainstream_w, 
   return true;
 }
 
-TEST(Codec, Decode) {
+TEST(Codec, DecodeH264) {
   bool ret = false;
   g_data_buffer = new uint8_t[MAX_INPUT_DATA_SIZE];
-#ifdef CNSTK_MLU100
-  ret = test_decode(edk::CodecType::H264, edk::PixelFmt::BGR24, 320, 300, 0, 0,
-                    std::bind(smallstream_callback, &main_rec, &cond_main, std::placeholders::_1), NULL);
+
+  ret = test_decode(edk::CodecType::H264, edk::PixelFmt::NV21, 1920, 1080,
+                    std::bind(bigstream_callback, &rec, &cond, std::placeholders::_1));
   EXPECT_TRUE(ret);
-  ret = test_decode(edk::CodecType::H264, edk::PixelFmt::RGB24, 320, 300, 0, 0,
-                    std::bind(smallstream_callback, &main_rec, &cond_main, std::placeholders::_1), NULL);
+
+  ret = test_decode(edk::CodecType::H264, edk::PixelFmt::NV12, 1920, 1080,
+                    std::bind(bigstream_callback, &rec, &cond, std::placeholders::_1));
   EXPECT_TRUE(ret);
-  ret = test_decode(edk::CodecType::H264, edk::PixelFmt::YUV420SP_NV21, 1920, 1080, 320, 300,
-                    std::bind(bigstream_callback, &main_rec, &cond_main, std::placeholders::_1),
-                    std::bind(smallstream_callback, &sub_rec, &cond_sub, std::placeholders::_1));
+
+  ret = test_decode(edk::CodecType::H264, edk::PixelFmt::I420, 1920, 1080,
+                    std::bind(bigstream_callback, &rec, &cond, std::placeholders::_1));
   EXPECT_TRUE(ret);
-  ret = test_decode(edk::CodecType::H264, edk::PixelFmt::YUV420SP_NV21, 1920, 1080, 320, 300, NULL,
-                    std::bind(smallstream_callback, &sub_rec, &cond_sub, std::placeholders::_1));
+  delete[] g_data_buffer;
+}
+
+TEST(Codec, DecodeJpeg) {
+  bool ret = false;
+  g_data_buffer = new uint8_t[MAX_INPUT_DATA_SIZE];
+
+  ret = test_decode(edk::CodecType::JPEG, edk::PixelFmt::NV21, 1920, 1080,
+                    std::bind(bigstream_callback, &rec, &cond, std::placeholders::_1));
   EXPECT_TRUE(ret);
-  ret = test_decode(edk::CodecType::H264, edk::PixelFmt::YUV420SP_NV21, 1920, 1080, 3840, 2160,
-                    std::bind(bigstream_callback, &main_rec, &cond_main, std::placeholders::_1),
-                    std::bind(smallstream_callback, &sub_rec, &cond_sub, std::placeholders::_1));
-  EXPECT_FALSE(ret);
-#endif  // CNSTK_MLU100
-  ret = test_decode(edk::CodecType::H264, edk::PixelFmt::YUV420SP_NV21, 320, 300, 0, 0,
-                    std::bind(smallstream_callback, &main_rec, &cond_main, std::placeholders::_1), NULL);
-  EXPECT_TRUE(ret);
-  ret = test_decode(edk::CodecType::H264, edk::PixelFmt::NON_FORMAT, 320, 300, 0, 0,
-                    std::bind(smallstream_callback, &main_rec, &cond_main, std::placeholders::_1), NULL);
-  EXPECT_FALSE(ret);
-  ret = test_decode(edk::CodecType::H264, edk::PixelFmt::YUV420SP_NV21, 1920, 1080, 0, 0,
-                    std::bind(bigstream_callback, &main_rec, &cond_main, std::placeholders::_1), NULL);
-  EXPECT_TRUE(ret);
-  ret = test_decode(edk::CodecType::JPEG, edk::PixelFmt::YUV420SP_NV21, 1920, 1080, 0, 0,
-                    std::bind(bigstream_callback, &main_rec, &cond_main, std::placeholders::_1), NULL);
+  ret = test_decode(edk::CodecType::JPEG, edk::PixelFmt::NV12, 1920, 1080,
+                    std::bind(bigstream_callback, &rec, &cond, std::placeholders::_1));
   EXPECT_TRUE(ret);
   delete[] g_data_buffer;
 }

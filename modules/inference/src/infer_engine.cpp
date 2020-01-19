@@ -38,14 +38,15 @@ void InferEngine::ResultWaitingCard::WaitForCall() { promise_->get_future().shar
 
 InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, std::shared_ptr<Preproc> preprocessor,
                          std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, float batching_timeout,
-                         const std::function<void(const std::string& err_msg)>& error_func)
+                         bool use_scaler, const std::function<void(const std::string& err_msg)>& error_func)
     : model_(model),
       preprocessor_(preprocessor),
       postprocessor_(postprocessor),
       batchsize_(batchsize),
       batching_timeout_(batching_timeout),
       error_func_(error_func),
-      dev_id_(dev_id) {
+      dev_id_(dev_id),
+      use_scaler_(use_scaler) {
   try {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id);
@@ -57,7 +58,11 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
     cpu_output_res_ = std::make_shared<CpuOutputResource>(model, batchsize);
     mlu_input_res_ = std::make_shared<MluInputResource>(model, batchsize);
     mlu_output_res_ = std::make_shared<MluOutputResource>(model, batchsize);
-    rcop_res_ = std::make_shared<RCOpResource>(model, batchsize);
+    if (mlu_ctx.GetCoreVersion() == edk::CoreVersion::MLU270) {
+      use_scaler_ = false;
+    }
+    if (!use_scaler_)
+      rcop_res_ = std::make_shared<RCOpResource>(model, batchsize);
     cpu_input_res_->Init();
     cpu_output_res_->Init();
     mlu_input_res_->Init();
@@ -92,8 +97,9 @@ InferEngine::~InferEngine() {
     cpu_output_res_->Destroy();
     mlu_input_res_->Destroy();
     mlu_output_res_->Destroy();
-    rcop_res_->Destroy();
-    LOG(INFO) << "Destroied resources";
+    if (rcop_res_.get())
+      rcop_res_->Destroy();
+    DLOG(INFO) << "Destroied resources";
   } catch (CnstreamError& e) {
     if (error_func_) {
       error_func_(e.what());
@@ -156,17 +162,24 @@ void InferEngine::StageAssemble() {
       // 2.2 y and uv packed, use d2d
       batching_stage_ = std::make_shared<YUVPackedBatchingStage>(model_, batchsize_, mlu_input_res_);
     } else {
-      // 2.3 rgb0 input, use resize convert
-      batching_stage_ = std::make_shared<ResizeConvertBatchingStage>(model_, batchsize_, rcop_res_);
-      std::shared_ptr<BatchingDoneStage> h2d_stage =
-          std::make_shared<ResizeConvertBatchingDoneStage>(model_, batchsize_, dev_id_, rcop_res_, mlu_input_res_);
-      batching_done_stages_.push_back(h2d_stage);
+      // 2.3 rgb0 input.
+      if (use_scaler_) {
+        // 2.3.1 use scaler (MLU220)
+        batching_stage_ = std::make_shared<ScalerBatchingStage>(model_, batchsize_, mlu_input_res_);
+      } else {
+        // 2.3.2 use resize convert
+        batching_stage_ = std::make_shared<ResizeConvertBatchingStage>(model_, batchsize_, rcop_res_);
+        std::shared_ptr<BatchingDoneStage> rc_done_stage =
+            std::make_shared<ResizeConvertBatchingDoneStage>(model_, batchsize_, dev_id_, rcop_res_, mlu_input_res_);
+        batching_done_stages_.push_back(rc_done_stage);
+      }
     }
   }
   std::shared_ptr<BatchingDoneStage> infer_stage =
       std::make_shared<InferBatchingDoneStage>(model_, batchsize_, dev_id_, mlu_input_res_, mlu_output_res_);
   auto mlu_queue = dynamic_cast<InferBatchingDoneStage*>(infer_stage.get())->SharedMluQueue();
-  rcop_res_->SetMluQueue(mlu_queue);  // multiplexing cnrtQueue from EasyInfer.
+  if (rcop_res_.get())
+    rcop_res_->SetMluQueue(mlu_queue);  // multiplexing cnrtQueue from EasyInfer.
   std::shared_ptr<BatchingDoneStage> d2h_stage =
       std::make_shared<D2HBatchingDoneStage>(model_, batchsize_, dev_id_, mlu_output_res_, cpu_output_res_);
   std::shared_ptr<BatchingDoneStage> postproc_stage =

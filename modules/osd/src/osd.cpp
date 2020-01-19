@@ -262,12 +262,21 @@ void Osd::Close() {
 }
 
 #define CLIP(x) x < 0 ? 0 : (x > 1 ? 1 : x)
-static thread_local auto font_ = static_cast<std::shared_ptr<CnFont>>(new CnFont("/usr/include/wqy-zenhei.ttc"));
+static thread_local auto font_ =
+    static_cast<std::shared_ptr<CnFont>>(new (std::nothrow) CnFont("/usr/include/wqy-zenhei.ttc"));
 
 int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
   OsdContext* ctx = GetOsdContext(data);
   if (ctx == nullptr) {
     LOG(ERROR) << "Get Osd Context Failed.";
+    return -1;
+  }
+  if (data->frame.width < 0 || data->frame.height < 0) {
+    LOG(ERROR) << "OSD module processed illegal frame: width or height may < 0.";
+    return -1;
+  }
+  if (data->frame.ptr_cpu[0] == nullptr && data->frame.ptr_mlu[0] == nullptr) {
+    LOG(ERROR) << "OSD module processed illegal frame: data ptr point to nullptr.";
     return -1;
   }
 
@@ -293,6 +302,7 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
     obj.track_id = it->track_id.empty() ? -1 : std::stoi(it->track_id);
     objs.push_back(obj);
   }
+
   if (!chinese_label_flag_) {
     ctx->processer_->DrawLabel(*data->frame.ImageBGR(), objs);
   } else {

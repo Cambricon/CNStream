@@ -114,17 +114,11 @@ class RawMluDecoder : public RawDecoder {
     fps_calculators[2].PrintFps("send data to codec: ");
     fps_calculators[3].PrintFps("output :");
   }
-  void PerfCallback(const edk::DecodePerfInfo &info) {
-    fps_calculators[0].Dot(1.0f * info.transfer_us / 1000, 1);
-    fps_calculators[1].Dot(1.0f * info.decode_us / 1000, 1);
-    fps_calculators[2].Dot(1.0f * info.total_us / 1000, 1);
-    fps_calculators[3].Dot(1);
-  }
 
  private:
   class CNDeallocator : public cnstream::IDataDeallocator {
    public:
-    explicit CNDeallocator(RawMluDecoder *decoder, uint32_t buf_id) : decoder_(decoder), buf_id_(buf_id) {
+    explicit CNDeallocator(RawMluDecoder *decoder, uint64_t buf_id) : decoder_(decoder), buf_id_(buf_id) {
       ++decoder_->cndec_buf_ref_count_;
     }
     ~CNDeallocator() {
@@ -136,7 +130,7 @@ class RawMluDecoder : public RawDecoder {
 
    private:
     RawMluDecoder *decoder_;
-    uint32_t buf_id_;
+    uint64_t buf_id_;
   };
 };
 

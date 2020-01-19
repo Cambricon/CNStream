@@ -12,11 +12,8 @@
 #include "test_base.h"
 
 bool err_occured = false;
-#ifdef CNSTK_MLU100
-constexpr const char *gmodel_path = "../../samples/data/models/MLU100/resnet34_ssd.cambricon";
-#elif CNSTK_MLU270
-constexpr const char *gmodel_path = "../../samples/data/models/MLU270/resnet50_offline.cambricon";
-#endif
+constexpr const char *gmodel_path_220 = "../../samples/data/models/MLU220/inceptionv3/inception-v3_int8_scale_dense_4batch_4core.cambricon";
+constexpr const char *gmodel_path_270 = "../../samples/data/models/MLU270/resnet50_offline.cambricon";
 
 bool test_context(int channel_id, bool multi_thread) {
   try {
@@ -48,7 +45,7 @@ TEST(Easyinfer, MluContext) {
   ASSERT_FALSE(test_context(100, false));
   std::vector<std::thread> threads;
   for (int i = 0; i < 100; ++i) {
-    threads.push_back(std::move(std::thread(&test_context, i % 4, true)));
+    threads.push_back(std::thread(&test_context, i % 4, true));
   }
   for (auto &it : threads) {
     it.join();
@@ -87,8 +84,21 @@ TEST(Easyinfer, Shape) {
 }
 
 TEST(Easyinfer, ModelLoader) {
-  std::string model_path = GetExePath() + gmodel_path;
   std::string function_name = "subnet0";
+  edk::MluContext context;
+  context.SetDeviceId(0);
+  context.ConfigureForThisThread();
+  auto version = context.GetCoreVersion();
+  std::string model_path = GetExePath();
+  if (version == edk::CoreVersion::MLU220) {
+      std::cout << "220 model" << std::endl;
+    model_path += gmodel_path_220;
+  } else if (version == edk::CoreVersion::MLU270) {
+      std::cout << "270 model" << std::endl;
+    model_path += gmodel_path_270;
+  } else {
+    ASSERT_TRUE(false) << "Unsupport core version" << static_cast<int>(version);
+  }
   auto model_loader = std::make_shared<edk::ModelLoader>(model_path, function_name);
   model_loader->InitLayout();
   edk::DataLayout layout;
@@ -128,13 +138,23 @@ TEST(Easyinfer, MluMemoryOp) {
 }
 
 TEST(Easyinfer, Infer) {
-  std::string model_path = GetExePath() + gmodel_path;
   std::string function_name = "subnet0";
   int batch_size = 1;
   try {
     edk::MluContext context;
     context.SetDeviceId(0);
     context.ConfigureForThisThread();
+    auto version = context.GetCoreVersion();
+    std::string model_path = GetExePath();
+    if (version == edk::CoreVersion::MLU220) {
+      model_path += gmodel_path_220;
+      std::cout << "220 model" << std::endl;
+    } else if (version == edk::CoreVersion::MLU270) {
+      model_path += gmodel_path_270;
+      std::cout << "270 model" << std::endl;
+    } else {
+      ASSERT_TRUE(false) << "Unsupport core version" << static_cast<int>(version);
+    }
     auto model_loader = std::make_shared<edk::ModelLoader>(model_path, function_name);
     model_loader->InitLayout();
 

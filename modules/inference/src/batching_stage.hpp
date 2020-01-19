@@ -108,6 +108,15 @@ class ResizeConvertBatchingStage : public BatchingStage {
   std::shared_ptr<RCOpResource> rcop_res_;
 };  // class ResizeConvertBatchingStage
 
+class ScalerBatchingStage : public IOBatchingStage {
+ public:
+  ScalerBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
+                      std::shared_ptr<MluInputResource> mlu_input_res);
+  ~ScalerBatchingStage();
+ private:
+  void ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx, const IOResValue& value) override;
+};  // class ScalerBatchingStage
+
 }  // namespace cnstream
 
 #endif  // MODULES_INFERENCE_SRC_BATCHING_STAGE_HPP_

@@ -124,12 +124,8 @@ class ModelLoaderPrivate {
   explicit ModelLoaderPrivate(ModelLoader* q) : q_ptr_(q) {}
   void LoadFunction(const char* function_name);
 
-#ifdef CNSTK_MLU100
-  cnrtDataDescArray_t i_desc_array_, o_desc_array_;
-#elif CNSTK_MLU270
   std::vector<int64_t> i_data_sizes_, o_data_sizes_;
   std::vector<DataLayout> i_mlu_layouts_, o_mlu_layouts_;
-#endif
   int o_num_;
   int i_num_;
   int model_parallelism_;
@@ -150,6 +146,7 @@ ModelLoader::ModelLoader(const char* model_path, const char* function_name) : d_
     throw ModelLoaderError("Model file not exist. Please check model path");
   }
 
+  LOG(INFO, "Load model from file: %s", model_path);
   // 1. get cnrtModel and cnrtFunction
   cnrtRet_t error_code = cnrtLoadModel(&d_ptr_->model_, model_path);
   if (CNRT_RET_SUCCESS != error_code) {
@@ -161,6 +158,7 @@ ModelLoader::ModelLoader(const char* model_path, const char* function_name) : d_
 
 ModelLoader::ModelLoader(void* mem_ptr, const char* function_name) : d_ptr_(new ModelLoaderPrivate(this)) {
   // 1. get cnrtModel and cnrtFunction
+  LOG(INFO, "Load model from memory, %p", mem_ptr);
   cnrtRet_t error_code = cnrtLoadModelFromMem(&d_ptr_->model_, reinterpret_cast<char*>(mem_ptr));
   if (CNRT_RET_SUCCESS != error_code) {
     throw ModelLoaderError("Load model from memory failed, error code : " + std::to_string(error_code));
@@ -185,52 +183,9 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
     throw ModelLoaderError("Query Model Parallelism failed, error code : " + std::to_string(error_code));
   }
 
-  LOG(INFO, "Load offline model succeeded");
+  LOG(INFO, "Load function from offline model succeeded");
 
-// 2. get IO messages
-
-// 2.1 get io number
-#ifdef CNSTK_MLU100
-  error_code = cnrtGetInputDataDesc(&i_desc_array_, &i_num_, function_);
-  if (error_code != CNRT_RET_SUCCESS) {
-    throw ModelLoaderError("Get input data desc failed, error code : " + std::to_string(error_code));
-  }
-  error_code = cnrtGetOutputDataDesc(&o_desc_array_, &o_num_, function_);
-  if (error_code != CNRT_RET_SUCCESS) {
-    throw ModelLoaderError("Get output data desc failed, error code : " + std::to_string(error_code));
-  }
-
-  // 2.2 get io shapes
-  input_shapes_.resize(i_num_);
-  for (int i = 0; i < i_num_; ++i) {
-    cnrtDataDesc_t desc = i_desc_array_[i];
-    Shape& sp = input_shapes_[i];
-    unsigned int n, c, h, w;
-    error_code = cnrtGetDataShape(desc, &n, &c, &h, &w);
-    if (CNRT_RET_SUCCESS != error_code) {
-      throw ModelLoaderError("Get data shape failed, error code : " + std::to_string(error_code));
-    }
-    sp.n = n;
-    sp.c = c;
-    sp.h = h;
-    sp.w = w;
-  }
-
-  output_shapes_.resize(o_num_);
-  for (int i = 0; i < o_num_; ++i) {
-    cnrtDataDesc_t desc = o_desc_array_[i];
-    Shape& sp = output_shapes_[i];
-    unsigned int n, c, h, w;
-    error_code = cnrtGetDataShape(desc, &n, &c, &h, &w);
-    if (CNRT_RET_SUCCESS != error_code) {
-      throw ModelLoaderError("Get data shape failed, error code : " + std::to_string(error_code));
-    }
-    sp.n = n;
-    sp.c = c;
-    sp.h = h;
-    sp.w = w;
-  }
-#elif CNSTK_MLU270
+  // 2. get IO messages
   // 2.1 get io number and data size
   int64_t* input_sizes = nullptr;
   int input_num = 0;
@@ -268,6 +223,7 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
     sp.h = input_dim_values[1];
     sp.w = input_dim_values[2];
     sp.c = input_dim_values[3];
+    free(input_dim_values);
     input_shapes_.push_back(sp);
   }
 
@@ -287,6 +243,7 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
     sp.h = output_dim_values[1];
     sp.w = output_dim_values[2];
     sp.c = output_dim_values[3];
+    free(output_dim_values);
     output_shapes_.push_back(sp);
   }
 
@@ -318,7 +275,6 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
     o_mlu_layouts_[i].dtype = CastDataType(output_dtypes[i]);
     o_mlu_layouts_[i].order = DimOrder::NHWC;  // mlu data order is always NHWC
   }
-#endif  // CNSTK_MLU
 
   // set default cpu layouts
   // this decided by network framework(eg. cambricon caffe)
@@ -344,11 +300,6 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
   }
 }
 
-#ifdef CNSTK_MLU100
-cnrtDataDescArray_t ModelLoaderInternalInterface::InputDescArray() const { return model_->d_ptr_->i_desc_array_; }
-
-cnrtDataDescArray_t ModelLoaderInternalInterface::OutputDescArray() const { return model_->d_ptr_->o_desc_array_; }
-#elif CNSTK_MLU270
 int64_t ModelLoaderInternalInterface::InputDataSize(int data_index) const {
   if (data_index < 0 || data_index >= static_cast<int>(model_->InputNum())) return 0;
   return model_->d_ptr_->i_data_sizes_[data_index];
@@ -368,7 +319,6 @@ DataLayout ModelLoaderInternalInterface::GetMluOutputLayout(int data_index) cons
   if (data_index < 0 || data_index >= static_cast<int>(model_->OutputNum())) return {};
   return model_->d_ptr_->o_mlu_layouts_[data_index];
 }
-#endif
 
 cnrtFunction_t ModelLoaderInternalInterface::Function() const { return model_->d_ptr_->function_; }
 
@@ -399,27 +349,6 @@ bool ModelLoader::WithYUVInput() const {
 }
 
 void ModelLoader::InitLayout() {
-#ifdef CNSTK_MLU100
-  // 1. set input host data layout
-  LOG(INFO, "Set input layout");
-  for (int i = 0; i < d_ptr_->i_num_; ++i) {
-    cnrtDataDesc_t desc = d_ptr_->i_desc_array_[i];
-    const DataLayout& layout = d_ptr_->i_cpu_layouts_[i];
-    cnrtSetHostDataLayout(desc, CastDataType(layout.dtype), CastDimOrder(layout.order));
-    LOG(INFO, std::to_string(i) + ": " + DataTypeStr(layout.dtype) + "\t" + DimOrderStr(layout.order));
-  }
-
-  // 2. set output host data layout
-  LOG(INFO, "Set output layout");
-  for (int i = 0; i < d_ptr_->o_num_; ++i) {
-    cnrtDataDesc_t desc = d_ptr_->o_desc_array_[i];
-    const DataLayout& layout = d_ptr_->o_cpu_layouts_[i];
-    cnrtSetHostDataLayout(desc, CastDataType(layout.dtype), CastDimOrder(layout.order));
-    LOG(INFO, std::to_string(i) + ": " + DataTypeStr(layout.dtype) + "\t" + DimOrderStr(layout.order));
-  }
-
-  LOG(INFO, "Offline model init layout succeeded");
-#endif
 }
 
 void ModelLoader::SetCpuInputLayout(DataLayout layout, int data_index) {
@@ -432,10 +361,6 @@ void ModelLoader::SetCpuInputLayout(DataLayout layout, int data_index) {
 
   LOG(INFO, "Set CPU input data layout");
   LOG(INFO, "%s\t%s", DataTypeStr(layout.dtype), DimOrderStr(layout.order));
-#ifdef CNSTK_MLU100
-  cnrtDataDesc_t desc = d_ptr_->i_desc_array_[data_index];
-  cnrtSetHostDataLayout(desc, CastDataType(layout.dtype), CastDimOrder(layout.order));
-#endif
 }
 
 void ModelLoader::SetCpuOutputLayout(DataLayout layout, int data_index) {
@@ -448,10 +373,6 @@ void ModelLoader::SetCpuOutputLayout(DataLayout layout, int data_index) {
 
   LOG(INFO, "Set CPU output data layout");
   LOG(INFO, "%s\t%s", DataTypeStr(layout.dtype), DimOrderStr(layout.order));
-#ifdef CNSTK_MLU100
-  cnrtDataDesc_t desc = d_ptr_->o_desc_array_[data_index];
-  cnrtSetHostDataLayout(desc, CastDataType(layout.dtype), CastDimOrder(layout.order));
-#endif
 }
 
 DataLayout ModelLoader::GetCpuInputLayout(int data_index) const {
@@ -470,27 +391,20 @@ bool ModelLoader::AdjustStackMemory() {
 
   cnrtRet_t error_code = cnrtQueryModelStackSize(d_ptr_->model_, &stack_size);
   if (error_code != CNRT_RET_SUCCESS) {
-    throw ModelLoaderError(
-        "Query model stack size failed."
-        "error_code : " +
-        std::to_string(error_code));
+    throw ModelLoaderError("Query model stack size failed. error_code : " + std::to_string(error_code));
   }
+  LOG(INFO, "Model stack size is %u MB", stack_size);
 
   error_code = cnrtGetStackMem(&current_device_size);
   if (error_code != CNRT_RET_SUCCESS) {
-    throw ModelLoaderError(
-        "Get current device stack size failed."
-        "error_code : " +
-        std::to_string(error_code));
+    throw ModelLoaderError("Get current device stack size failed. error_code : " + std::to_string(error_code));
   }
+  LOG(INFO, "Current MLU stack size is %u MB", current_device_size);
 
   if (stack_size > current_device_size) {
     error_code = cnrtSetStackMem(stack_size + 50);
     if (error_code != CNRT_RET_SUCCESS) {
-      throw ModelLoaderError(
-          "Set stack size failed."
-          "error_code : " +
-          std::to_string(error_code));
+      throw ModelLoaderError("Set stack size failed.error_code : " + std::to_string(error_code));
     }
     LOG(INFO, "Adjust stack memory to %d MB", stack_size + 50);
     return true;
@@ -511,43 +425,29 @@ int ModelLoader::ModelParallelism() const { return d_ptr_->model_parallelism_; }
 int64_t ModelLoader::GetInputDataBatchAlignSize(int data_index) const {
   if (data_index < 0 || data_index >= static_cast<int>(InputNum())) return 0;
   int64_t size = 0;
-#ifdef CNSTK_MLU100
-  auto desc = d_ptr_->i_desc_array_[data_index];
-  cnrtGetMemcpyBatchAlignment(desc, reinterpret_cast<unsigned int*>(&size));
-#elif CNSTK_MLU270
   ModelLoaderInternalInterface model_loader_internal(const_cast<ModelLoader*>(this));
   size = model_loader_internal.InputDataSize(data_index) / d_ptr_->input_shapes_[data_index].n;
-#endif
   return size;
 }
 
 int64_t ModelLoader::GetOutputDataBatchAlignSize(int data_index) const {
   if (data_index < 0 || data_index >= static_cast<int>(OutputNum())) return 0;
   int64_t size = 0;
-#ifdef CNSTK_MLU100
-  auto desc = d_ptr_->o_desc_array_[data_index];
-  cnrtGetMemcpyBatchAlignment(desc, reinterpret_cast<unsigned int*>(&size));
-#elif CNSTK_MLU270
   ModelLoaderInternalInterface model_loader_internal(const_cast<ModelLoader*>(this));
   size = model_loader_internal.OutputDataSize(data_index) / d_ptr_->output_shapes_[data_index].n;
-#endif
   return size;
 }
 
 void ModelLoader::ReleaseModel() {
+  LOG(INFO, "Destroy neural network function");
   cnrtRet_t error_code = cnrtDestroyFunction(d_ptr_->function_);
   if (error_code != CNRT_RET_SUCCESS) {
-    throw ModelLoaderError(
-        "Destroy function failed:"
-        " error code : " +
-        std::to_string(error_code));
+    throw ModelLoaderError("Destroy function failed: error code : " + std::to_string(error_code));
   }
+  LOG(INFO, "Unload offline model");
   error_code = cnrtUnloadModel(d_ptr_->model_);
   if (error_code != CNRT_RET_SUCCESS) {
-    throw ModelLoaderError(
-        "Unload model failed:"
-        " error code : " +
-        std::to_string(error_code));
+    throw ModelLoaderError("Unload model failed: error code : " + std::to_string(error_code));
   }
 }
 

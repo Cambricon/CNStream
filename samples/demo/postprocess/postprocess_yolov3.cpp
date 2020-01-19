@@ -32,18 +32,21 @@ class PostprocYolov3 : public cnstream::Postproc {
     CHECK_EQ(model->OutputNum(), 1);
     CHECK_EQ(net_outputs.size(), 1);
     const auto input_sp = model->InputShapes()[0];
-    const int img_w = package->frame.width;
-    const int img_h = package->frame.height;
+    // const int img_w = package->frame.width;
+    // const int img_h = package->frame.height;
     const int model_input_w = static_cast<int>(input_sp.w);
     const int model_input_h = static_cast<int>(input_sp.h);
     const float* net_output = net_outputs[0];
 
     // scaling factors
-    const float scaling_factors = std::min(1.0 * model_input_w / img_w, 1.0 * model_input_h / img_h);
+    // const float scaling_factors = std::min(1.0 * model_input_w / img_w, 1.0 * model_input_h / img_h);
 
     // scaled size
-    const int scaled_w = scaling_factors * img_w;
-    const int scaled_h = scaling_factors * img_h;
+    // const int scaled_w = scaling_factors * img_w;
+    // const int scaled_h = scaling_factors * img_h;
+
+    const int scaled_w = model_input_w;
+    const int scaled_h = model_input_h;
 
     // bboxes
     const int box_num = static_cast<int>(net_output[0]);
@@ -74,7 +77,7 @@ class PostprocYolov3 : public cnstream::Postproc {
       obj->bbox.w = std::min(1.0f - obj->bbox.x, right - left);
       obj->bbox.h = std::min(1.0f - obj->bbox.y, bottom - top);
 
-      if (obj->bbox.h <= 0 || obj->bbox.w <= 0) continue;
+      if (obj->bbox.h <= 0 || obj->bbox.w <= 0 || (obj->score < threshold_ && threshold_ > 0)) continue;
 
       package->objs.push_back(obj);
     }
@@ -86,3 +89,4 @@ class PostprocYolov3 : public cnstream::Postproc {
 };  // class PostprocessYolov3
 
 IMPLEMENT_REFLEX_OBJECT_EX(PostprocYolov3, cnstream::Postproc);
+

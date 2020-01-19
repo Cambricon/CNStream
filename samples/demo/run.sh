@@ -15,6 +15,17 @@
 #
 # @notice: other flags see ./../bin/demo --help
 #*************************************************************************#
+CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
+MODEL_PATH=$CURRENT_DIR/../../data/models/MLU270/Primary_Detector/ssd/
+ mkdir -p $MODEL_PATH
+
+ pushd $MODEL_PATH
+     if [ ! -f "resnet34_ssd.cambricon" ]; then
+       wget -O resnet50_offline.cambricon https://github.com/Cambricon/models/raw/master/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon
+     else
+       echo "resnet34_ssd.cambricon offline model exists."
+     fi
+ popd
 source env.sh
 mkdir -p output
 ./../bin/demo  \

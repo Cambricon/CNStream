@@ -20,10 +20,12 @@
 
 #include <easyinfer/mlu_context.h>
 #include <easyinfer/model_loader.h>
+
 #include <map>
 #include <memory>
 #include <string>
 #include <utility>
+
 #include "infer_engine.hpp"
 #include "infer_trans_data_helper.hpp"
 #include "postproc.hpp"
@@ -53,6 +55,7 @@ class InferencerPrivate {
   float batching_timeout_ = 3000.0;  // ms
   std::map<std::thread::id, InferContextSptr> ctxs_;
   std::mutex ctx_mtx_;
+  bool use_scaler_ = false;
 
   void InferEngineErrorHnadleFunc(const std::string& err_msg) {
     LOG(FATAL) << err_msg;
@@ -68,7 +71,7 @@ class InferencerPrivate {
     } else {
       ctx = std::make_shared<InferContext>();
       ctx->engine = std::make_shared<InferEngine>(
-          device_id_, model_loader_, pre_proc_, post_proc_, bsize_, batching_timeout_,
+          device_id_, model_loader_, pre_proc_, post_proc_, bsize_, batching_timeout_, use_scaler_,
           std::bind(&InferencerPrivate::InferEngineErrorHnadleFunc, this, std::placeholders::_1));
       ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_);
       ctxs_[tid] = ctx;
@@ -98,6 +101,8 @@ Inferencer::Inferencer(const std::string& name) : Module(name) {
   param_register_.Register("batch_size", "How many frames will be fed to model in one inference.");
   param_register_.Register("infer_interval", "How many frames will be discarded between two frames"
                            " which will be fed to model for inference.");
+  param_register_.Register("use_scaler", "Use scaler to do preprocess.");
+  param_register_.Register("threshold", "The threshold of the results.");
 }
 
 Inferencer::~Inferencer() {}
@@ -123,6 +128,7 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
   if (paramSet.find("data_order") != paramSet.end()) {
     Data_Order = paramSet["data_order"];
   }
+
   try {
     d_ptr_->model_loader_ = std::make_shared<edk::ModelLoader>(model_path, func_name);
     if (d_ptr_->model_loader_.get() == nullptr) {
@@ -144,6 +150,15 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
       LOG(ERROR) << "[Inferencer] Can not find Postproc implemention by name: " << postproc_name;
       return false;
     }
+
+    if (paramSet.find("threshold") != paramSet.end()) {
+      float threshold;
+      std::stringstream ss;
+      ss << paramSet["threshold"];
+      ss >> threshold;
+      d_ptr_->post_proc_->SetThreshold(threshold);
+      LOG(INFO) << GetName() << " threshold: " << threshold;
+    }
   } catch (edk::Exception& e) {
     LOG(ERROR) << "model path:" << model_path << ". " << e.what();
     return false;
@@ -158,6 +173,12 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
       return false;
     }
     LOG(INFO) << "[Inferencer] With CPU preproc set";
+  }
+
+  d_ptr_->use_scaler_ = false;
+  auto scaler_str = paramSet.find("use_scaler");
+  if (scaler_str != paramSet.end() && scaler_str->second == "true") {
+    d_ptr_->use_scaler_ = true;
   }
 
   d_ptr_->device_id_ = 0;
@@ -257,7 +278,7 @@ bool Inferencer::CheckParamSet(ModuleParamSet paramSet) {
     return false;
   }
   std::string err_msg;
-  if (!checker.IsNum({"batching_timeout", "device_id"}, paramSet, err_msg)) {
+  if (!checker.IsNum({"batching_timeout", "device_id", "threshold"}, paramSet, err_msg)) {
     LOG(ERROR) << "[Inferencer] " << err_msg;
     return false;
   }

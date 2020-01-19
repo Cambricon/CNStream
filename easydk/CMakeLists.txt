@@ -2,7 +2,7 @@
 # -- Build Flags
 
 option(BUILD_TESTS "Build all of modules' unit-tests" ON)
-option(BUILD_SAMPLES "Build samples" ON)
+option(BUILD_SAMPLES "Build samples" OFF)
 option(RELEASE "Build type" ON)
 option(CODE_COVERAGE_TEST "Build code coverage test" OFF)
 
@@ -20,22 +20,13 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib/)
 list(APPEND CNRT_LIBS "${MLU_LIBS_PATH}/libcnrt.so")
 
 # ---[ cncodec & kcf
-if(MLU_PLATFORM STREQUAL MLU100)
-  if(WITH_CODEC)
-    list(APPEND CNCODEC_LIBS "${MLU_LIBS_PATH}/libcncodec.so")
-  endif()
-  if(WITH_TRACKER)
-    list(APPEND KCF_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/src/easytrack/kcf/libkcf_mlu100.a")
-  endif()
-elseif(MLU_PLATFORM STREQUAL MLU270)
-  if(WITH_CODEC)
-    list(APPEND CNCODEC_LIBS "${MLU_LIBS_PATH}/libcncodec.so")
-    list(APPEND CNCODEC_LIBS "${MLU_LIBS_PATH}/libmsgq.so")
-    list(APPEND CNCODEC_LIBS "${MLU_LIBS_PATH}/librpc.so")
-  endif()
-  if(WITH_TRACKER)
-    list(APPEND KCF_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/src/easytrack/kcf/libkcf_mlu270.a")
-  endif()
+if(WITH_CODEC)
+  list(APPEND CNCODEC_LIBS "${MLU_LIBS_PATH}/libcncodec.so")
+  list(APPEND CNCODEC_LIBS "${MLU_LIBS_PATH}/libmsgq.so")
+  list(APPEND CNCODEC_LIBS "${MLU_LIBS_PATH}/librpc.so")
+endif()
+if(WITH_TRACKER)
+  list(APPEND KCF_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/src/easytrack/kcf/libkcf_mlu270.a")
 endif()
 
 # ---[ Includes
@@ -55,11 +46,7 @@ if(WITH_TRACKER)
 endif()
 
 if(WITH_BANG)
-  if(MLU_PLATFORM STREQUAL MLU100)
-    file(GLOB_RECURSE bang_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/kernel_c10.o ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/*.cpp)
-  elseif(MLU_PLATFORM STREQUAL MLU270)
-    file(GLOB_RECURSE bang_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/kernel_c20.o ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/*.cpp)
-  endif()
+  file(GLOB_RECURSE bang_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/kernel_*.o ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/*.cpp)
 endif()
 
 message("target : cnstream-toolkit")

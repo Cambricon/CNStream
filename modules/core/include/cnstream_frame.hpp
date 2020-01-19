@@ -65,7 +65,8 @@ typedef struct {
   enum DevType {
     INVALID = -1,        ///< Invalid device type
     CPU = 0,             ///< The data is allocated by CPU.
-    MLU = 1              ///< The data is allocated by MLU.
+    MLU = 1,             ///< The data is allocated by MLU
+    MLU_CPU = 2         ///< MLU & CPU, added for M220_SOC
   } dev_type = INVALID;  ///< Device type
   int dev_id = 0;        ///< Ordinal device id.
   int ddr_channel = 0;   ///< Ordinal channel id for MLU. [0, 4).
@@ -110,6 +111,15 @@ class IDataDeallocator {
   virtual ~IDataDeallocator() {}
 };
 
+class ICNMediaImageMapper {
+ public:
+  virtual void *GetMediaImage() = 0;
+  virtual int GetPitch(int index) = 0;
+  virtual void *GetCpuAddress(int index) = 0;
+  virtual void *GetDevAddress(int index) = 0;
+  virtual ~ICNMediaImageMapper(){ }
+};
+
 class Module;
 class Pipeline;
 /**
@@ -129,8 +139,10 @@ struct CNDataFrame {
   int height;                                                ///< The height of the frame.
   int stride[CN_MAX_PLANES];                                 ///< The strides of the frame.
   DevContext ctx;                                            ///< The device context of this frame.
-  void* ptr[CN_MAX_PLANES];                                  ///< The CPU or MLU data addresses for planes.
+  void* ptr_mlu[CN_MAX_PLANES];                              ///< The MLU data addresses for planes.
+  void *ptr_cpu[CN_MAX_PLANES];                              ///< The CPU data addresses for planes.
   std::shared_ptr<IDataDeallocator> deAllocator_ = nullptr;  ///< The dedicated deallocator for CNDecoder Buffer.
+  std::shared_ptr<ICNMediaImageMapper> mapper_ = nullptr;    ///< The dedicated Mapper for M220 CNDecoder.
 
   CNDataFrame() {}
 

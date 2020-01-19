@@ -19,11 +19,13 @@
  *************************************************************************/
 
 #include "infer_thread_pool.hpp"
+
 #include <easyinfer/mlu_context.h>
 #include <glog/logging.h>
 #include <cassert>
 #include <string>
 #include <vector>
+
 #include "cnstream_error.hpp"
 
 namespace cnstream {

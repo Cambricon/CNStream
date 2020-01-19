@@ -133,8 +133,8 @@ TEST(Inferencer, Process) {
       frame.timestamp = 1000;
       frame.width = width;
       frame.height = height;
-      frame.ptr[0] = planes[0];
-      frame.ptr[1] = planes[1];
+      frame.ptr_mlu[0] = planes[0];
+      frame.ptr_mlu[1] = planes[1];
       frame.stride[0] = frame.stride[1] = width;
       frame.ctx.ddr_channel = g_channel_id;
       frame.ctx.dev_id = g_dev_id;
@@ -158,8 +158,8 @@ TEST(Inferencer, Process) {
       frame.timestamp = 1000;
       frame.width = width;
       frame.height = height;
-      frame.ptr[0] = planes[0];
-      frame.ptr[1] = planes[1];
+      frame.ptr_mlu[0] = planes[0];
+      frame.ptr_mlu[1] = planes[1];
       frame.stride[0] = frame.stride[1] = width;
       frame.ctx.ddr_channel = g_channel_id;
       frame.ctx.dev_id = g_dev_id;
@@ -198,8 +198,8 @@ TEST(Inferencer, Process) {
     frame.timestamp = 1000;
     frame.width = width;
     frame.height = height;
-    frame.ptr[0] = frame_data;
-    frame.ptr[1] = frame_data + nbytes * 2 / 3;
+    frame.ptr_cpu[0] = frame_data;
+    frame.ptr_cpu[1] = frame_data + nbytes * 2 / 3;
     frame.stride[0] = frame.stride[1] = width;
     frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
     frame.ctx.dev_type = DevContext::DevType::CPU;
@@ -219,7 +219,7 @@ TEST(Inferencer, Postproc_set_threshold) {
   auto postproc = Postproc::Create(std::string(g_postproc_name));
   ASSERT_NE(postproc, nullptr);
 
-  postproc->set_threshold(0.6);
+  postproc->SetThreshold(0.6);
 }
 
 }  // namespace cnstream

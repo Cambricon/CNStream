@@ -173,6 +173,10 @@ class CNSyncedMemory {
    */
   size_t GetSize() const { return size_; }
 
+#ifdef CNS_MLU220_SOC
+  void SetMluCpuData(void *mlu_data, void *cpu_data);
+#endif
+
  private:
   /**
    * Synchronizes the memory data to CPU.

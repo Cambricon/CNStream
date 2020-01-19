@@ -33,6 +33,12 @@ namespace edk {
 
 TOOLKIT_REGISTER_EXCEPTION(MluContext);
 
+enum class CoreVersion {
+  MLU100 = 0,
+  MLU220,
+  MLU270,
+};
+
 /**
  * @brief MLU environment helper class
  */
@@ -70,11 +76,16 @@ class MluContext {
    * @brief Bind MLU environment for this thread
    * @note Each thread processing MLU memory or task need to set MLU environment
    */
-  void ConfigureForThisThread() const;
+  void ConfigureForThisThread();
+
+  inline CoreVersion GetCoreVersion() const {
+    return version_;
+  }
 
  private:
   int dev_id_ = 0;
   int channel_id_ = -1;
+  CoreVersion version_ = CoreVersion::MLU270;
 };  // class MluContext
 
 }  // namespace edk

@@ -19,8 +19,12 @@
  *************************************************************************/
 
 #include <cnrt.h>
+#include <cn_codec_common.h>
+#include <cn_jpeg_enc.h>
+#include <cn_video_enc.h>
 #include <algorithm>
 #include <cassert>
+#include <condition_variable>
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -29,644 +33,649 @@
 #include "cxxutil/logger.h"
 #include "easycodec/easy_encode.h"
 #include "easyinfer/mlu_context.h"
-
-#ifdef CNSTK_MLU100
-
-#include <cncodec.h>
-#include "init_tools.h"
-
-#ifndef ALIGN
-#define ALIGN(addr, boundary) (((u32_t)(addr) + (boundary)-1) & ~((boundary)-1))
-#endif  // ALIGN
-
-#elif CNSTK_MLU270
-
-#include <cn_video_enc.h>
-
-#endif  // CNSTK_MLU100
+#include "easyinfer/mlu_memory_op.h"
+#include "format_info.h"
 
 using std::to_string;
 using std::string;
+#define ALIGN(size, alignment) (((uint32_t)(size) + (alignment)-1) & ~((alignment)-1))
 
 namespace edk {
 
-#ifdef CNSTK_MLU100
+// static constexpr uint32_t g_buffer_size = 1 << 22;
+static constexpr uint32_t g_buffer_size = 0x800000;
 
-static CN_PIXEL_FORMAT_E to_PF_E(PixelFmt format) {
-  switch (format) {
-    case PixelFmt::YUV420SP_NV21:
-      return CN_PIXEL_FORMAT_YUV420SP;
-    case PixelFmt::BGR24:
-      return CN_PIXEL_FORMAT_BGR24;
-    case PixelFmt::RGB24:
-      return CN_PIXEL_FORMAT_RGB24;
-    default:
-      throw EasyEncodeError("Unsupport M100 pixel format");
+static cnvideoEncProfile ProfileCast(VideoProfile prof) {
+  switch (prof) {
+    case VideoProfile::H264_BASELINE:   return CNVIDEOENC_PROFILE_H264_BASELINE;
+    case VideoProfile::H264_MAIN:       return CNVIDEOENC_PROFILE_H264_MAIN;
+    case VideoProfile::H264_HIGH:       return CNVIDEOENC_PROFILE_H264_HIGH;
+    case VideoProfile::H264_HIGH_10:    return CNVIDEOENC_PROFILE_H264_HIGH_10;
+    case VideoProfile::H265_MAIN:       return CNVIDEOENC_PROFILE_H265_MAIN;
+    case VideoProfile::H265_MAIN_STILL: return CNVIDEOENC_PROFILE_H265_MAIN_STILL;
+    case VideoProfile::H265_MAIN_INTRA: return CNVIDEOENC_PROFILE_H265_MAIN_INTRA;
+    case VideoProfile::H265_MAIN_10:    return CNVIDEOENC_PROFILE_H265_MAIN_10;
+    default: return CNVIDEOENC_PROFILE_MAX;
   }
-  return CN_PIXEL_FORMAT_YUV420SP;
 }
 
-static CN_VIDEO_CODEC_TYPE_E to_CT_E(CodecType type) {
-  switch (type) {
-    case CodecType::MPEG4:
-      return CN_VIDEO_CODEC_MPEG4;
-    case CodecType::H264:
-      return CN_VIDEO_CODEC_H264;
-    case CodecType::H265:
-      return CN_VIDEO_CODEC_HEVC;
-    case CodecType::JPEG:
-      return CN_VIDEO_CODEC_JPEG;
-    case CodecType::MJPEG:
-      return CN_VIDEO_CODEC_MJPEG;
-    default:
-      throw EasyEncodeError("Unsupport M100 video codec");
-  }
-  return CN_VIDEO_CODEC_H264;
-}
-
-static CN_VENC_H264_PROFILE_E to_Profile_E(VideoProfile profile) {
-  switch (profile) {
-    case VideoProfile::BASELINE:
-      return CN_PROFILE_BASELINE;
-    case VideoProfile::MAIN:
-      return CN_PROFILE_MAIN;
-    case VideoProfile::HIGH:
-      return CN_PROFILE_HIGH;
-    default:
-      throw EasyEncodeError("Unsupport M100 video profile");
-  }
-  return CN_PROFILE_MAIN;
-}
-
-static void VencPrintAttr(CN_VENC_CREATE_ATTR_S* p_attr) {
+static void PrintCreateAttr(cnvideoEncCreateInfo* p_attr) {
   printf("%-32s%s\n", "param", "value");
   printf("-------------------------------------\n");
-  printf("%-32s%u\n", "u32VdecDeviceID", p_attr->u32VencDeviceID);
-  printf("%-32s%d\n", "VideoCodecType", p_attr->VideoCodecType);
-  printf("%-32s%d\n", "pixel_format", p_attr->pixel_format);
-  printf("%-32s%u\n", "u32MaxWidth", p_attr->u32MaxWidth);
-  printf("%-32s%u\n", "u32MaxHeight", p_attr->u32MaxHeight);
-  printf("%-32s%u\n", "u32TargetWidth", p_attr->u32TargetWidth);
-  printf("%-32s%u\n", "u32TargetHeight", p_attr->u32TargetHeight);
-  printf("%-32s%u\n", "h264_profile", p_attr->h264_profile);
-  printf("%-32s%u\n", "jpeg_qfactor", p_attr->jpeg_qfactor);
-  printf("%-32s%s\n", "rate_control_mode", p_attr->rate_control_mode == CBR ? "CBR" : "VBR");
-  printf("%-32s%s\n", "bcolor2gray", p_attr->bcolor2gray ? "true" : "false");
-  printf("%-32s%s(%u,%u,%u,%u)\n", "encode_crop", p_attr->encode_crop.bEnable ? "enable" : "disable",
-         p_attr->encode_crop.crop_rect.u32X, p_attr->encode_crop.crop_rect.u32Y, p_attr->encode_crop.crop_rect.u32Width,
-         p_attr->encode_crop.crop_rect.u32Height);
-}
-
-#elif CNSTK_MLU270
-static CNVideoSurfaceFormat to_M200_PF_E(PixelFmt format) {
-  switch (format) {
-    case PixelFmt::YUV420SP_NV21:
-      return CNVideoSurfaceFormat_NV21;
-    case PixelFmt::YUV420SP_NV12:
-      return CNVideoSurfaceFormat_NV12;
-    default:
-      throw EasyEncodeError("Unsupport M200 pixel format");
-  }
-  return CNVideoSurfaceFormat_NV12;
-}
-
-static CNVideoCodec to_M200_CT_E(CodecType type) {
-  switch (type) {
-    case CodecType::H264:
-      return CNVideoCodec_H264;
-    case CodecType::H265:
-      return CNVideoCodec_HEVC;
-    case CodecType::JPEG:
-      return CNVideoCodec_JPEG;
-    default:
-      throw EasyEncodeError("Unsupport M200 video codec");
-  }
-  return CNVideoCodec_H264;
-}
-
-static void VencPrintCreateAttr(CNVideoEncode_Create_Params* p_attr) {
-  printf("%-32s%s\n", "param", "value");
-  printf("-------------------------------------\n");
-  printf("%-32s%u\n", "Codectype", p_attr->codecType);
+  printf("%-32s%u\n", "Codectype", p_attr->codec);
+  printf("%-32s%u\n", "PixelFormat", p_attr->pixelFmt);
   printf("%-32s%u\n", "Instance", p_attr->instance);
-  printf("%-32s%u\n", "CardID", p_attr->cardid);
-  printf("%-32s%u\n", "MemoryType", p_attr->memoryType);
-  printf("%-32s%u\n", "Width", p_attr->Width);
-  printf("%-32s%u\n", "Height", p_attr->Height);
-  printf("%-32s%u\n", "FrameRateNum", p_attr->frameRateNum);
-  printf("%-32s%u\n", "FrameRateDen", p_attr->frameRateDen);
-  printf("%-32s%u\n", "BufferFormat", p_attr->bufferFmt);
-  printf("%-32s%u\n", "RCMode", p_attr->RCParams.rcMode);
-  printf("%-32s%u\n", "NumInputBuffers", p_attr->numInputBuf);
-  printf("%-32s%u\n", "NumOfBitFrameBuffers", p_attr->numBitFrameBuf);
+  printf("%-32s%u\n", "DeviceID", p_attr->deviceId);
+  printf("%-32s%u\n", "MemoryAllocType", p_attr->allocType);
+  printf("%-32s%u\n", "Width", p_attr->width);
+  printf("%-32s%u\n", "Height", p_attr->height);
+  printf("%-32s%u\n", "FrameRateNum", p_attr->fpsNumerator);
+  printf("%-32s%u\n", "FrameRateDen", p_attr->fpsDenominator);
+  printf("%-32s%u\n", "ColorSpaceStandard", p_attr->colorSpace);
+  printf("%-32s%u\n", "RateCtrlMode", p_attr->rateCtrl.rcMode);
+  printf("%-32s%u\n", "InputBufferNumber", p_attr->inputBufNum);
+  printf("%-32s%u\n", "OutputBufferNumber", p_attr->outputBufNum);
+
 }
 
-#endif  // CNSTK_MLU100
+static void PrintCreateAttr(cnjpegEncCreateInfo* p_attr) {
+  printf("%-32s%s\n", "param", "value");
+  printf("-------------------------------------\n");
+  printf("%-32s%u\n", "PixelFormat", p_attr->pixelFmt);
+  printf("%-32s%u\n", "Instance", p_attr->instance);
+  printf("%-32s%u\n", "DeviceID", p_attr->deviceId);
+  printf("%-32s%u\n", "MemoryAllocType", p_attr->allocType);
+  printf("%-32s%u\n", "Width", p_attr->width);
+  printf("%-32s%u\n", "Height", p_attr->height);
+  printf("%-32s%u\n", "ColorSpaceStandard", p_attr->colorSpace);
+  printf("%-32s%u\n", "InputBufferNumber", p_attr->inputBufNum);
+  printf("%-32s%u\n", "OutputBufferNumber", p_attr->outputBufNum);
+  printf("%-32s%u\n", "SuggestedOutputBufferSize", p_attr->suggestedLibAllocBitStrmBufSize);
+}
 
 class EncodeHandler {
  public:
-#ifdef CNSTK_MLU100
-  void ReceivePacket(CN_VENC_FRAME_DATA_S* packet) {
-    // performance infomation callback
-    if (NULL != encoder_->attr_.perf_callback) {
-      EncodePerfInfo perf_info;
-      perf_info.transfer_us = packet->output_transfer_delay;
-      perf_info.encode_us = packet->encode_delay;
-      perf_info.input_transfer_us = packet->input_transfer_delay;
-      encoder_->attr_.perf_callback(perf_info);
-    }
+  EncodeHandler(EasyEncode *encoder, const EasyEncode::Attr &attr);
+  ~EncodeHandler();
+  void ReceivePacket(void* packet);
+  void ReceiveEOS();
+  void AbortEncoder();
+  void InitJpegEncode();
+  void InitVideoEncode();
+  bool SendJpegData(const CnFrame& frame, bool eos);
+  bool SendVideoData(const CnFrame& frame, bool eos);
+  void CopyFrame(cncodecFrame *dst, const CnFrame& input);
 
-    // eos callback
-    if (0 == packet->frame_size) {
-      LOG(INFO, "ReceiveEos()");
-      if (NULL != encoder_->attr_.eos_callback) encoder_->attr_.eos_callback();
-      return;
-    }
+#ifdef APP_ALLOC_BUFFER
+  void AllocInputBuffer(cnvideoEncCreateInfo *params);
+  void AllocOutputBuffer(cnvideoEncCreateInfo *params);
+  void FreeInputBuffer(const cnvideoEncCreateInfo &params);
+  void FreeOutputBuffer(const cnvideoEncCreateInfo &params);
+#endif
 
-    // packet callback
-    if (NULL != encoder_->attr_.packet_callback) {
-      CnPacket cn_packet;
-      cn_packet.data = reinterpret_cast<void*>(packet->vir_addr);
-      cn_packet.length = packet->frame_size;
-      cn_packet.buf_id = packet->buf_index;
-      cn_packet.pts = packet->pts;
-      cn_packet.codec_type = encoder_->attr_.codec_type;
-      encoder_->attr_.packet_callback(cn_packet);
-    }
-  }
-
-#elif CNSTK_MLU270
-  void ReceivePacket(CNVideoEncode_BitStreamInfo* packet) {
-    // packet callback
-    if (NULL != encoder_->attr_.packet_callback) {
-      CnPacket cn_packet;
-      cn_packet.data = reinterpret_cast<void*>(packet->MemoryPtr);
-      cn_packet.length = packet->bytesUsed;
-      cn_packet.buf_id = packet->Index;
-      cn_packet.pts = packet->Pts;
-      cn_packet.codec_type = encoder_->attr_.codec_type;
-      encoder_->attr_.packet_callback(cn_packet);
-    }
-  }
-
-  void ReceiveEos() {
-    // eos callback
-    LOG(INFO, "ReceiveEos()");
-    if (NULL != encoder_->attr_.eos_callback) {
-      encoder_->attr_.eos_callback();
-    }
-  }
-
-  void ReceiveEvent(CNVideo_EventType EventType) {
-    // event callback
-    LOG(INFO, "ReceiveEvent(type:" + std::to_string(EventType) + ")");
-  }
-
-#endif  // CNSTK_MLU100
-
+  cnvideoEncCreateInfo vcreate_params_;
+  cnjpegEncCreateInfo jcreate_params_;
+  EasyEncode::Attr attr_;
   EasyEncode* encoder_ = nullptr;
 
-  int64_t handle_ = -1;
+  void* handle_ = nullptr;
+  uint64_t packet_cnt_ = 0;
+  bool jpeg_encode_ = false;
+  bool send_eos_ = false;
+  bool got_eos_ = false;
+  std::mutex eos_mutex_;
+  std::condition_variable eos_cond_;
+};  // class EncodeHandler
 
-#ifdef CNSTK_MLU100
-  void* packet_ptr_ = nullptr;
-#endif  // CNSTK_MLU100
-};      // class EncodeHandler
+static int32_t EventHandler(cncodecCbEventType type, void *user_data, void *package);
 
-#ifdef CNSTK_MLU100
-
-static void ReceivePacket(CN_VENC_FRAME_DATA_S* packet, void* udata) {
-  auto handler = reinterpret_cast<EncodeHandler*>(udata);
-  handler->ReceivePacket(packet);
+EncodeHandler::EncodeHandler(EasyEncode *encoder, const EasyEncode::Attr &attr)
+                             : attr_(attr), encoder_(encoder) {
+  jpeg_encode_ = CodecType::JPEG == attr.codec_type;
+  if (jpeg_encode_) {
+    InitJpegEncode();
+  } else {
+    InitVideoEncode();
+  }
 }
 
-#elif CNSTK_MLU270
-
-static int PacketHandler(void* udata, CNVideoEncode_BitStreamInfo* packet) {
-  auto handler = reinterpret_cast<EncodeHandler*>(udata);
-  handler->ReceivePacket(packet);
-  return 0;
-}
-
-static int32_t EventHandler(CNVideo_EventType type, void* udata) {
-  auto handler = reinterpret_cast<EncodeHandler*>(udata);
-  if (type == CNVideo_Event_EOS) {
-    handler->ReceiveEos();
-  } else {
-    handler->ReceiveEvent(type);
-  }
-
-  return 0;
-}
-
-#endif  // CNSTK_MLU100
-
-EasyEncode* EasyEncode::Create(const Attr& attr) {
-#ifdef CNSTK_MLU100
-  // init cncodec
-  CncodecInitTool* init_tools = CncodecInitTool::instance();
-  try {
-    init_tools->init();
-  } catch (CncodecInitToolError& err) {
-    throw EasyEncodeError(err.what());
-  }
-
-  // 1. encoder create parameters
-  CN_VENC_CREATE_ATTR_S create_params;
-  memset(&create_params, 0, sizeof(CN_VENC_CREATE_ATTR_S));
-
-  // 1.1 codec type. only support h264 and JPEG
-  if (attr.codec_type != CodecType::H264 && attr.codec_type != CodecType::JPEG) {
-    throw EasyEncodeError("Encoder only support codec type h264 and jpeg");
-  }
-  create_params.VideoCodecType = to_CT_E(attr.codec_type);
-
-  // 1.2 rate control parameters for h264
-  const RateControl& rate_params = attr.rate_control;
-  if (CodecType::H264 == attr.codec_type) {
-    if (rate_params.gop == 0) throw EasyEncodeError("Encoder gop must > 0");
-    create_params.H264CBR.u32Gop = rate_params.gop;
-    create_params.H264CBR.u32StatTime = rate_params.stat_time;
-    if (!rate_params.vbr) {
-      create_params.rate_control_mode = CBR;
-      if (rate_params.bit_rate == 0) throw EasyEncodeError("Encoder stream bitrate number must > 0");
-      create_params.H264CBR.u32BitRate = rate_params.bit_rate;
-      if (rate_params.src_frame_rate_num == 0) throw EasyEncodeError("Encoder src frame rate numerator must > 0");
-      if (rate_params.src_frame_rate_den == 0) throw EasyEncodeError("Encoder src frame rate denominator must > 0");
-      create_params.H264CBR.u32SrcFrmRate = rate_params.src_frame_rate_num / rate_params.src_frame_rate_den;
-      if (rate_params.dst_frame_rate_num == 0) throw EasyEncodeError("Encoder dst frame rate numerator must > 0");
-      if (rate_params.dst_frame_rate_den == 0) throw EasyEncodeError("Encoder dst frame rate denominator must > 0");
-      create_params.H264CBR.fr32DstFrmRate = rate_params.dst_frame_rate_num / rate_params.dst_frame_rate_den;
-      create_params.H264CBR.u32FluctuateLevel = rate_params.fluctuate_level;
-    } else {
-      create_params.rate_control_mode = VBR;
-      create_params.H264VBR.u32SrcFrmRate = rate_params.src_frame_rate_num / rate_params.src_frame_rate_den;
-      create_params.H264VBR.fr32DstFrmRate = rate_params.dst_frame_rate_num / rate_params.dst_frame_rate_den;
-      create_params.H264VBR.u32MaxBitRate = rate_params.max_bit_rate;
-      create_params.H264VBR.u32MaxQp = rate_params.max_qp;
-      create_params.H264VBR.u32MinQp = rate_params.min_qp;
-    }
-  }
-
-  // 1.3 geometrys
-  create_params.u32MaxWidth = attr.maximum_geometry.w;
-  create_params.u32MaxHeight = attr.maximum_geometry.h;
-
-  create_params.u32TargetWidth = attr.output_geometry.w;
-  create_params.u32TargetHeight = attr.output_geometry.h;
-  if (CodecType::H264 == attr.codec_type) {
-    if (create_params.u32MaxWidth != create_params.u32TargetWidth ||
-        create_params.u32MaxHeight != create_params.u32TargetHeight)
-      throw EasyEncodeError("H264 max w/h must equal output w/h");
-  }
-
-  // 1.4 input pixel format and profile/qulity
-  create_params.pixel_format = to_PF_E(attr.pixel_format);
-  if (CodecType::H264 == attr.codec_type) {
-    create_params.h264_profile = to_Profile_E(attr.profile);
-  } else {
-    if (attr.jpeg_qfactor < 1 || attr.jpeg_qfactor > 99) throw EasyEncodeError("Invalid jpeg_qfactor");
-    create_params.jpeg_qfactor = attr.jpeg_qfactor;
-  }
-  create_params.bcolor2gray = static_cast<CN_BOOL>(attr.color2gray);
-
-  // 1.5 crop params
-  create_params.encode_crop.bEnable = static_cast<CN_BOOL>(attr.crop_config.enable);
-  create_params.encode_crop.crop_rect.u32X = attr.crop_config.x;
-  create_params.encode_crop.crop_rect.u32Y = attr.crop_config.y;
-  create_params.encode_crop.crop_rect.u32Width = attr.crop_config.w;
-  create_params.encode_crop.crop_rect.u32Height = attr.crop_config.h;
-
-  // 1.6 output buffers
-  if (attr.packet_buffer_num == 0) throw EasyEncodeError("Encoder output buffers number must > 0");
-  create_params.mluP2pAttr.p_buffers = new CN_MLU_P2P_BUFFER_S[attr.packet_buffer_num];
-  create_params.mluP2pAttr.buffer_num = attr.packet_buffer_num;
-
-  int frame_size = attr.output_geometry.w * attr.output_geometry.h * 3;
-  void* packet_ptr = nullptr;
-
-  // 1.6.1 alloc contiguous memory
-  if (attr.output_on_cpu) {
-    // output on cpu
-    create_params.mluP2pAttr.buffer_type = CN_CPU_BUFFER;
-    packet_ptr = static_cast<void*>(new uint8_t[frame_size * attr.packet_buffer_num]);
-  } else {
-    // output on mlu
-    create_params.mluP2pAttr.buffer_type = CN_MLU_BUFFER;
-    frame_size = ALIGN(frame_size, 64 * 1024);
-
-    int type = CNRT_MALLOC_EX_PARALLEL_FRAMEBUFFER;
-    int dp = 1;
-    int frame_num = attr.packet_buffer_num;
-    void* cnrt_param = nullptr;
-    cnrtRet_t ecode = cnrtAllocParam(&cnrt_param);
-    if (nullptr == cnrt_param) {
-      delete[] create_params.mluP2pAttr.p_buffers;
-      throw EasyEncodeError("Alloc p2p param failed. Error code: " + to_string(ecode));
-    }
-    string attr_name = "type";
-    cnrtAddParam(cnrt_param, const_cast<char*>(attr_name.c_str()), sizeof(type), &type);
-    attr_name = "data_parallelism";
-    cnrtAddParam(cnrt_param, const_cast<char*>(attr_name.c_str()), sizeof(dp), &dp);
-    attr_name = "frame_num";
-    cnrtAddParam(cnrt_param, const_cast<char*>(attr_name.c_str()), sizeof(frame_num), &frame_num);
-    attr_name = "frame_size";
-    cnrtAddParam(cnrt_param, const_cast<char*>(attr_name.c_str()), sizeof(frame_size), &frame_size);
-    ecode = cnrtMallocBufferEx(&packet_ptr, cnrt_param);
-    if (CNRT_RET_SUCCESS != ecode) {
-      delete[] create_params.mluP2pAttr.p_buffers;
-      throw EasyEncodeError("Malloc MLU p2p buffer failed. Error code: " + to_string(ecode));
-    }
-    cnrtDestoryParam(cnrt_param);
-  }
-
-  /******************
-   * dangerous when there is no enough memory on cpu
-   ******************/
-  assert(packet_ptr != nullptr);
-
-  // 1.6.2 divide contiguous memory into chunks.
-  for (uint32_t bi = 0; bi < attr.packet_buffer_num; ++bi) {
-    create_params.mluP2pAttr.p_buffers[bi].addr = reinterpret_cast<CN_U64>(packet_ptr) + bi * frame_size;
-    create_params.mluP2pAttr.p_buffers[bi].len = frame_size;
-  }
-
-  // 1.7 callback
-  auto handler = new EncodeHandler;
-  create_params.pu64UserData = reinterpret_cast<void*>(handler);
-  create_params.pEncodeCallBack = &ReceivePacket;
-
-  // 1.8 choose device
-  create_params.u32VencDeviceID = init_tools->CncodecDeviceId(attr.dev_id);
-
-  // 2. create
-  if (!attr.silent) {
-    VencPrintAttr(&create_params);
-  }
-
-  CNResult ecode = CN_MPI_VENC_Create(reinterpret_cast<CN_U64*>(&handler->handle_), &create_params);
-  if (CN_SUCCESS != ecode) {
-    delete handler;
-    delete[] create_params.mluP2pAttr.p_buffers;
-    if (attr.output_on_cpu) {
-      auto ptr = static_cast<uint8_t*>(packet_ptr);
-      delete[] ptr;
-    } else {
-      cnrtRet_t ecode = cnrtFree(packet_ptr);
-      if (CNRT_RET_SUCCESS != ecode) {
-        LOG(ERROR, "cnrtFree failed. Error code: %d", ecode);
-      }
-    }
-    throw EasyEncodeError("Create Encoder failed, Error code: " + to_string(ecode));
-  }
-
-  // 3. free useless resources
-  delete[] create_params.mluP2pAttr.p_buffers;
-
-  // 4. create EasyEncode
-  auto encoder = new EasyEncode(attr, handler);
-  handler->packet_ptr_ = packet_ptr;
-  encoder->handler_->encoder_ = encoder;
-
-  return encoder;
-
-#elif CNSTK_MLU270
+void EncodeHandler::InitVideoEncode() {
   // 1. create params
-  CNVideoEncode_Create_Params create_params;
-  memset(&create_params, 0, sizeof(CNVideoEncode_Create_Params));
+  vcreate_params_.width = attr_.frame_geometry.w;
+  vcreate_params_.height = attr_.frame_geometry.h;
+  vcreate_params_.deviceId = attr_.dev_id;
+  vcreate_params_.pixelFmt = PixelFormatCast(attr_.pixel_format);
+  vcreate_params_.colorSpace = ColorStdCast(attr_.color_std);
+  vcreate_params_.codec = CodecTypeCast(attr_.codec_type);
+  vcreate_params_.instance = CNVIDEOENC_INSTANCE_AUTO;
+  vcreate_params_.userContext = reinterpret_cast<void*>(this);
+  vcreate_params_.inputBuf = nullptr;
+  vcreate_params_.outputBuf = nullptr;
+  vcreate_params_.inputBufNum = attr_.input_buffer_num; // 6
+  vcreate_params_.outputBufNum = attr_.output_buffer_num; // 6
+  vcreate_params_.allocType = CNCODEC_BUF_ALLOC_LIB;
+  vcreate_params_.suggestedLibAllocBitStrmBufSize = g_buffer_size;
 
-  // 1.1 codec type. support H264/H265/JPEG
-  create_params.codecType = to_M200_CT_E(attr.codec_type);
-  if (CodecType::H264 != attr.codec_type && CodecType::H265 != attr.codec_type && CodecType::JPEG != attr.codec_type) {
+#ifdef APP_ALLOC_BUFFER
+  if (attr_.buf_strategy == BufferStrategy::EDK) {
+    vcreate_params_.allocType = CNCODEC_BUF_ALLOC_APP;
+    vcreate_params_.inputBuf = new cncodecDevMemory[vcreate_params_.inputBufNum];
+    vcreate_params_.outputBuf = new cncodecFrame[vcreate_params_.outputBufNum];
+    AllocInputBuffer(&vcreate_params_);
+    AllocOutputBuffer(&vcreate_params_);
+  }
+#endif
+  memset(&vcreate_params_.rateCtrl, 0x0, sizeof(vcreate_params_.rateCtrl));
+  if (attr_.rate_control.vbr) {
+    vcreate_params_.rateCtrl.rcMode = CNVIDEOENC_RATE_CTRL_VBR;
+  } else {
+    vcreate_params_.rateCtrl.rcMode = CNVIDEOENC_RATE_CTRL_CBR;
+  }
+  vcreate_params_.fpsNumerator = attr_.rate_control.src_frame_rate_num;
+  vcreate_params_.fpsDenominator = attr_.rate_control.src_frame_rate_den;
+  vcreate_params_.rateCtrl.targetBitrate = attr_.rate_control.bit_rate;
+  vcreate_params_.rateCtrl.peakBitrate = attr_.rate_control.max_bit_rate;
+  vcreate_params_.rateCtrl.gopLength = attr_.rate_control.gop;
+  vcreate_params_.rateCtrl.maxIQP = attr_.rate_control.max_qp;
+  vcreate_params_.rateCtrl.maxPQP = attr_.rate_control.max_qp;
+  vcreate_params_.rateCtrl.maxBQP = attr_.rate_control.max_qp;
+  vcreate_params_.rateCtrl.minIQP = attr_.rate_control.min_qp;
+  vcreate_params_.rateCtrl.minPQP = attr_.rate_control.min_qp;
+  vcreate_params_.rateCtrl.minBQP = attr_.rate_control.min_qp;
+
+  if (vcreate_params_.codec == CNCODEC_H264) {
+    memset(&vcreate_params_.uCfg.h264, 0x0, sizeof(vcreate_params_.uCfg.h264));
+    if (static_cast<int>(attr_.profile) > 9) {
+      LOG(WARNING, "Invalid H264 profile, using H264_MAIN as default");
+      vcreate_params_.uCfg.h264.profile       = CNVIDEOENC_PROFILE_H264_MAIN;
+    } else {
+      vcreate_params_.uCfg.h264.profile       = ProfileCast(attr_.profile);
+    }
+    vcreate_params_.uCfg.h264.level           = CNVIDEOENC_LEVEL_H264_41;
+    vcreate_params_.uCfg.h264.IframeInterval  = attr_.p_frame_num;
+    vcreate_params_.uCfg.h264.BFramesNum      = attr_.b_frame_num;
+    // vcreate_params_.uCfg.h264.IRCount         = attr_.ir_count;
+    if (attr_.max_mb_per_slice != 0) {
+      vcreate_params_.uCfg.h264.maxMBPerSlice = attr_.max_mb_per_slice;
+      vcreate_params_.uCfg.h264.sliceMode = CNVIDEOENC_SLICE_MODE_MAX_MB;
+    } else {
+      vcreate_params_.uCfg.h264.sliceMode = CNVIDEOENC_SLICE_MODE_SINGLE;
+    }
+    vcreate_params_.uCfg.h264.cabacInitIDC    = attr_.cabac_init_idc;
+  } else if (vcreate_params_.codec == CNCODEC_HEVC) {
+    memset(&vcreate_params_.uCfg.h265, 0x0, sizeof(vcreate_params_.uCfg.h265));
+    if (static_cast<int>(attr_.profile) < 10) {
+      LOG(WARNING, "Invalid H265 profile, using H265_MAIN as default");
+      vcreate_params_.uCfg.h265.profile       = CNVIDEOENC_PROFILE_H265_MAIN;
+    } else {
+      vcreate_params_.uCfg.h265.profile       = ProfileCast(attr_.profile);
+    }
+    vcreate_params_.uCfg.h265.level           = CNVIDEOENC_LEVEL_H265_MAIN_41;
+    vcreate_params_.uCfg.h265.IframeInterval  = attr_.p_frame_num;
+    vcreate_params_.uCfg.h265.BFramesNum      = attr_.b_frame_num;
+    // vcreate_params_.uCfg.h265.IRCount         = attr_.ir_count;
+    if (attr_.max_mb_per_slice != 0) {
+      vcreate_params_.uCfg.h265.maxMBPerSlice = attr_.max_mb_per_slice;
+      vcreate_params_.uCfg.h265.sliceMode = CNVIDEOENC_SLICE_MODE_MAX_MB;
+    } else {
+      vcreate_params_.uCfg.h265.sliceMode = CNVIDEOENC_SLICE_MODE_SINGLE;
+    }
+    vcreate_params_.uCfg.h265.cabacInitIDC    = attr_.cabac_init_idc;
+  } else {
     throw EasyEncodeError("Encoder only support format H264/H265/JPEG");
   }
 
-  // 1.2 rate control params
-  if (CodecType::H264 == attr.codec_type || CodecType::H265 == attr.codec_type) {
-    create_params.RCParams.gopLength = attr.rate_control.gop;
-    if (!attr.rate_control.vbr) {
-      create_params.RCParams.rcMode = CNVideoEncode_RC_Mode_CBR;
-    } else {
-      create_params.RCParams.rcMode = CNVideoEncode_RC_Mode_VBR;
-    }
-    create_params.RCParams.targetBitrate = attr.rate_control.bit_rate;
-    create_params.RCParams.peakBitrate = attr.rate_control.max_bit_rate;
+  if (!attr_.silent) {
+    PrintCreateAttr(&vcreate_params_);
   }
 
-  create_params.frameRateNum = attr.rate_control.dst_frame_rate_num;
-  create_params.frameRateDen = attr.rate_control.dst_frame_rate_den;
-
-  // 1.3 geometrys
-  create_params.Width = attr.maximum_geometry.w;
-  create_params.Height = attr.maximum_geometry.h;
-
-  // 1.4 pixel format
-  create_params.bufferFmt = to_M200_PF_E(attr.pixel_format);
-
-  // 1.5 buffers
-  create_params.memoryType = CNVideoMemory_Allocate;
-  create_params.numInputBuf = 5;
-  create_params.numBitFrameBuf = 5;
-
-  // 2. new handler
-  auto handler = new EncodeHandler;
-
-  // 3. create
-  if (!attr.silent) {
-    VencPrintCreateAttr(&create_params);
+  int ecode = cnvideoEncCreate(reinterpret_cast<cnvideoEncoder*>(&handle_), EventHandler, &vcreate_params_);
+  if (CNCODEC_SUCCESS != ecode) {
+    handle_ = nullptr;
+    throw EasyEncodeError("Initialize video encoder failed. Error code: " + to_string(ecode));
   }
-
-  CNVideoCodec codec_type = to_M200_CT_E(attr.codec_type);
-  int ecode = CN_Encode_Create(reinterpret_cast<void**>(&handler->handle_), codec_type, &PacketHandler, &EventHandler,
-                               reinterpret_cast<void*>(handler));
-  if (CNVideoCodec_Success != ecode) {
-    delete handler;
-    throw EasyEncodeError("Create encoder failed. Error code: " + to_string(ecode));
-  }
-  ecode = CN_Encode_Initialize(reinterpret_cast<CNVideo_Encode>(handler->handle_), &create_params);
-  if (CNVideoCodec_Success != ecode) {
-    delete handler;
-    throw EasyEncodeError("Initialize encoder failed. Error code: " + to_string(ecode));
-  }
-
-  // 4. create EasyEncode
-  auto encoder = new EasyEncode(attr, handler);
-  encoder->handler_->encoder_ = encoder;
-
-  return encoder;
-#endif  // CNSTK_MLU100
+  LOG(INFO, "Init video encoder succeeded");
 }
 
-EasyEncode::EasyEncode(const Attr& attr, EncodeHandler* handler) {
-  attr_ = attr;
-  handler_ = handler;
+void EncodeHandler::InitJpegEncode() {
+  // 1. create params
+  jcreate_params_.deviceId = attr_.dev_id;
+  jcreate_params_.instance = CNVIDEOENC_INSTANCE_AUTO;
+  jcreate_params_.pixelFmt = PixelFormatCast(attr_.pixel_format);
+  jcreate_params_.colorSpace = ColorStdCast(attr_.color_std);
+  jcreate_params_.width = attr_.frame_geometry.w;
+  jcreate_params_.height = attr_.frame_geometry.h;
+  jcreate_params_.inputBuf = nullptr;
+  jcreate_params_.outputBuf = nullptr;
+  jcreate_params_.inputBufNum = attr_.input_buffer_num; // 6
+  jcreate_params_.outputBufNum = attr_.output_buffer_num; // 6
+  jcreate_params_.allocType = CNCODEC_BUF_ALLOC_LIB;
+  jcreate_params_.userContext = reinterpret_cast<void*>(this);
+  jcreate_params_.suggestedLibAllocBitStrmBufSize = g_buffer_size;
+
+#ifdef APP_ALLOC_BUFFER
+  if (attr_.buf_strategy == BufferStrategy::EDK) {
+    jcreate_params_.allocType = CNCODEC_BUF_ALLOC_APP;
+    jcreate_params_.inputBuf = new cncodecDevMemory[jcreate_params_.inputBufNum];
+    jcreate_params_.outputBuf = new cncodecFrame[jcreate_params_.outputBufNum];
+    AllocInputBuffer(&jcreate_params_);
+    AllocOutputBuffer(&jcreate_params_);
+  }
+#endif
+
+  if (!attr_.silent) {
+    PrintCreateAttr(&jcreate_params_);
+  }
+
+  int ecode = cnjpegEncCreate(reinterpret_cast<cnjpegEncoder*>(&handle_), CNJPEGENC_RUN_MODE_ASYNC, EventHandler, &jcreate_params_);
+  if (CNCODEC_SUCCESS != ecode) {
+    handle_ = nullptr;
+    throw EasyEncodeError("Initialize jpeg encoder failed. Error code: " + to_string(ecode));
+  }
+  LOG(INFO, "Init JPEG encoder succeeded");
 }
-EasyEncode::~EasyEncode() {
-#ifdef CNSTK_MLU100
-  // 1. destroy encoder
-  if (-1 != handler_->handle_) {
-    CNResult ecode = CN_MPI_VENC_Destroy(handler_->handle_);
-    if (CN_SUCCESS != ecode) {
-      LOG(ERROR, "Encoder destroy failed. Error code: %d", ecode);
+
+EncodeHandler::~EncodeHandler() {
+  if (!got_eos_) {
+    std::unique_lock<std::mutex> eos_lk(eos_mutex_);
+    if (!send_eos_ && handle_) {
+      eos_lk.unlock();
+      LOG(INFO, "Send EOS in destruct");
+      CnFrame frame;
+      memset(&frame, 0, sizeof(CnFrame));
+      encoder_->SendDataCPU(frame, true);
+    } else {
+      got_eos_ = true;
+      eos_lk.unlock();
     }
   }
 
-  // 2. free packet buffers
-  if (nullptr != handler_->packet_ptr_) {
-    if (attr_.output_on_cpu) {
-      auto ptr = static_cast<uint8_t*>(handler_->packet_ptr_);
-      delete[] ptr;
-    } else {
-      cnrtRet_t ecode = cnrtFree(handler_->packet_ptr_);
-      if (CNRT_RET_SUCCESS != ecode) {
-        LOG(ERROR, "cnrtFree failed. Error code: %d", ecode);
-      }
-    }
-    handler_->packet_ptr_ = nullptr;
+  std::unique_lock<std::mutex> eos_lk(eos_mutex_);
+  if (!got_eos_) {
+    eos_cond_.wait(eos_lk, [this]() -> bool { return got_eos_; });
+    LOG(INFO, "Received EOS in destruct");
   }
-#elif CNSTK_MLU270
-  // 1. destroy encoder
-  if (handler_->handle_ != -1) {
-    int ecode = CN_Encode_Destroy(reinterpret_cast<CNVideo_Encode>(handler_->handle_));
-    if (CNVideoCodec_Success != ecode) {
+
+  // destroy encoder
+  if (handle_) {
+    int ecode;
+    if (jpeg_encode_) {
+      ecode = cnjpegEncDestroy(reinterpret_cast<cnjpegEncoder>(handle_));
+    } else {
+      ecode = cnvideoEncDestroy(reinterpret_cast<cnvideoEncoder>(handle_));
+    }
+    if (CNCODEC_SUCCESS != ecode) {
       LOG(ERROR, "Destroy encoder failed. Error code: %d", ecode);
     }
   }
-#endif  // CNSTK_MLU100
 
-  // 2. free members
-  delete handler_;
+#ifdef APP_ALLOC_BUFFER
+  if (attr_.buf_strategy == BufferStrategy::EDK) {
+    if (jpeg_encode_) {
+      FreeInputBuffer(jcreate_params_);
+      FreeOutputBuffer(jcreate_params_);
+      delete[] jcreate_params_.inputBuf;
+      delete[] jcreate_params_.outputBuf;
+    } else {
+      FreeInputBuffer(vcreate_params_);
+      FreeOutputBuffer(vcreate_params_);
+      delete[] vcreate_params_.inputBuf;
+      delete[] vcreate_params_.outputBuf;
+    }
+  }
+#endif
 }
 
-bool EasyEncode::SendData(const CnFrame& frame, bool eos) {
-#ifdef CNSTK_MLU100
-  CN_VIDEO_PIC_PARAM_S params;
-  memset(&params, 0, sizeof(CN_VIDEO_PIC_PARAM_S));
-  if (frame.frame_size > 0) {
-    params.pBitstreamData = reinterpret_cast<CN_U64>(frame.ptrs[0]);
-    params.nBitstreamDataLen = frame.frame_size;
-    params.u64Pts = frame.pts;
-    params.u32Width = frame.width;
-    params.u32Height = frame.height;
-
-    CNResult ecode = CN_MPI_VENC_Send(handler_->handle_, &params);
-    if (CN_SUCCESS != ecode) {
-      throw EasyEncodeError("Send packet failed, Error code: " + to_string(ecode));
+void EncodeHandler::ReceivePacket(void* _packet) {
+  LOG(TRACE, "Encode receive packet, %p", _packet);
+  // packet callback
+  if (NULL != attr_.packet_callback) {
+    CnPacket cn_packet;
+    if (jpeg_encode_) {
+      auto packet = reinterpret_cast<cnjpegEncOutput*>(_packet);
+      cn_packet.data = new uint8_t[packet->streamLength];
+      auto ret = cnrtMemcpy(cn_packet.data, reinterpret_cast<void*>(packet->streamBuffer.addr),
+                            packet->streamLength, CNRT_MEM_TRANS_DIR_DEV2HOST);
+      if (ret != CNRT_RET_SUCCESS) {
+        LOG(ERROR, "Copy bitstream failed, DEV2HOST");
+        AbortEncoder();
+        return;
+      }
+      cn_packet.length = packet->streamLength;
+      cn_packet.pts = packet->pts;
+      cn_packet.codec_type = attr_.codec_type;
+      cn_packet.buf_id = reinterpret_cast<uint64_t>(cn_packet.data);
+      cn_packet.slice_type = BitStreamSliceType::FRAME;
+      ++packet_cnt_;
+    } else {
+      auto packet = reinterpret_cast<cnvideoEncOutput*>(_packet);
+      cn_packet.data = new uint8_t[packet->streamLength];
+      auto ret = cnrtMemcpy(cn_packet.data, reinterpret_cast<void*>(packet->streamBuffer.addr),
+                            packet->streamLength, CNRT_MEM_TRANS_DIR_DEV2HOST);
+      if (ret != CNRT_RET_SUCCESS) {
+        LOG(ERROR, "Copy bitstream failed, DEV2HOST");
+        AbortEncoder();
+        return;
+      }
+      cn_packet.length = packet->streamLength;
+      cn_packet.pts = packet->pts;
+      cn_packet.codec_type = attr_.codec_type;
+      cn_packet.buf_id = reinterpret_cast<uint64_t>(cn_packet.data);
+      if (packet_cnt_++) {
+        cn_packet.slice_type = BitStreamSliceType::FRAME;
+      } else {
+        cn_packet.slice_type = BitStreamSliceType::SPS_PPS;
+      }
     }
+
+    attr_.packet_callback(cn_packet);
+    delete []reinterpret_cast<uint8_t*>(cn_packet.buf_id);
   }
-  if (eos) {
-    memset(&params, 0, sizeof(CN_VIDEO_PIC_PARAM_S));
-    CNResult ecode = CN_MPI_VENC_Send(handler_->handle_, &params);
-    if (CN_SUCCESS != ecode) {
-      throw EasyEncodeError("Send packet failed, Error code: " + to_string(ecode));
-    }
-  }
-#elif CNSTK_MLU270
-  // 1. alloc input buffer
-  CNVideoEncode_Input_Buffer input_buffer;
-  int buf_id;
-  int ecode =
-      CN_Encode_Available_InputBuffer(reinterpret_cast<CNVideo_Encode>(handler_->handle_), &buf_id, &input_buffer);
-  if (CNVideoCodec_Success != ecode) {
-    throw EasyEncodeError("Avaliable input buffer failed. Error code: " + to_string(ecode));
+}
+
+void EncodeHandler::ReceiveEOS() {
+  // eos callback
+  LOG(INFO, "Encode receive EOS");
+
+  if (NULL != attr_.eos_callback) {
+    attr_.eos_callback();
   }
 
-  // 2. copy data to codec
-  uint32_t frame_size = frame.width * frame.height;
-  if (frame.frame_size > 0) {
-    cnrtRet_t cnrt_ecode = CNRT_RET_SUCCESS;
+  std::lock_guard<std::mutex> lk(eos_mutex_);
+  got_eos_ = true;
+  eos_cond_.notify_one();
+}
+
+void EncodeHandler::CopyFrame(cncodecFrame *dst, const CnFrame& input) {
+  uint32_t frame_size = input.width * input.height;
+  if (input.frame_size > 0) {
+    MluMemoryOp mem_op;
+    // cnrtRet_t cnrt_ecode = CNRT_RET_SUCCESS;
     switch (attr_.pixel_format) {
-      case PixelFmt::YUV420SP_NV12:
-      case PixelFmt::YUV420SP_NV21:
-        cnrt_ecode = cnrtMemcpy(reinterpret_cast<void*>(input_buffer.inputBuffer[0]), frame.ptrs[0],
-                                frame.width * frame.height, CNRT_MEM_TRANS_DIR_HOST2DEV);
-        if (CNRT_RET_SUCCESS != cnrt_ecode) {
-          throw EasyEncodeError("copy luminance failed. Error code: " + to_string(cnrt_ecode));
-        }
-        cnrt_ecode = cnrtMemcpy(reinterpret_cast<void*>(input_buffer.inputBuffer[1]),
-                                reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(frame.ptrs[0]) + frame_size),
-                                frame_size / 2, CNRT_MEM_TRANS_DIR_HOST2DEV);
-        if (CNRT_RET_SUCCESS != cnrt_ecode) {
-          throw EasyEncodeError("copy chroma failed. Error code: " + to_string(cnrt_ecode));
+      case PixelFmt::NV12:
+      case PixelFmt::NV21:
+      {
+        constexpr int align = 64;
+        if (input.width == ALIGN(input.width, align)) {
+          LOG(TRACE, "Copy frame luminance");
+          mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[0].addr), input.ptrs[0], frame_size, 1);
+          LOG(TRACE, "Copy frame chroma");
+          mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[1].addr), input.ptrs[1], frame_size / 2, 1);
+        } else {
+          uint32_t tmp_stride = ALIGN(input.width, align);
+          LOG(TRACE, "Alignment %d copy, width %u, stride %u", align, input.width, tmp_stride);
+          auto y_ptr = reinterpret_cast<uint8_t*>(input.ptrs[0]);
+          auto uv_ptr = reinterpret_cast<uint8_t*>(input.ptrs[1]);
+          for (uint32_t i = 0; i < input.height; i++) {
+            LOG(TRACE, "Copy frame luminance at %u row", i);
+            mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[0].addr + i * tmp_stride),
+                             reinterpret_cast<void*>(y_ptr + (i * input.width)), input.width, 1);
+            if (i < input.height / 2) {
+              LOG(TRACE, "Copy frame chroma at %u row", i);
+              mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[1].addr + i * tmp_stride),
+                             reinterpret_cast<void*>(uv_ptr + (i * input.width)), input.width, 1);
+            }
+          }
         }
         break;
-      /*
-            case PixelFmt::YUV420SP_I420:
-              cnrt_ecode = cnrtMemcpy(
-                  reinterpret_cast<void *>(input_buffer.inputBuffer[0]),
-                  frame.ptrs[0],
-                  frame.width * frame.height,
-                  CNRT_MEM_TRANS_DIR_HOST2DEV);
-              if (CNRT_RET_SUCCESS != cnrt_ecode) {
-                throw EasyEncodeError("copy luminance failed. Error code: "
-                    + to_string(cnrt_ecode));
-              }
-              cnrt_ecode = cnrtMemcpy(
-                  reinterpret_cast<void *>(input_buffer.inputBuffer[1]),
-                  reinterpret_cast<void *>(reinterpret_cast<uint8_t*>(frame.ptrs[0]) + frame_size),
-                  frame_size / 4, CNRT_MEM_TRANS_DIR_HOST2DEV);
-              if (CNRT_RET_SUCCESS != cnrt_ecode) {
-                throw EasyEncodeError("copy chroma 0 failed. Error code: "
-                    + to_string(ecode));
-              }
-              cnrt_ecode = cnrtMemcpy(
-                  reinterpret_cast<void *>(input_buffer.inputBuffer[2]),
-                  reinterpret_cast<void *>(reinterpret_cast<uint8_t*>(frame.ptrs[0]) + frame_size * 5 / 4),
-                  frame_size / 4, CNRT_MEM_TRANS_DIR_HOST2DEV);
-              if (CNRT_RET_SUCCESS != cnrt_ecode) {
-                throw EasyEncodeError("copy chroma 1 failed. Error code: "
-                    + to_string(cnrt_ecode));
-              }
-              break;
-      */
+      }
+      case PixelFmt::I420:
+      {
+        constexpr int align = 64;
+        if (input.width == ALIGN(input.width, align)) {
+          LOG(TRACE, "Copy frame luminance");
+          mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[0].addr), input.ptrs[0], frame_size, 1);
+          LOG(TRACE, "Copy frame chroma 0");
+          mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[1].addr), input.ptrs[1], frame_size / 4, 1);
+          LOG(TRACE, "Copy frame chroma 1");
+          mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[2].addr), input.ptrs[2], frame_size / 4, 1);
+        } else {
+          uint32_t tmp_stride = ALIGN(input.width, align);
+          LOG(TRACE, "Alignment %d copy, width %u, stride %u", align, input.width, tmp_stride);
+          auto y_ptr = reinterpret_cast<uint8_t*>(input.ptrs[0]);
+          auto u_ptr = reinterpret_cast<uint8_t*>(input.ptrs[1]);
+          auto v_ptr = reinterpret_cast<uint8_t*>(input.ptrs[2]);
+          for (uint32_t i = 0; i < input.height; i++) {
+            LOG(TRACE, "Copy frame luminance at %u row", i);
+            mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[0].addr + i * tmp_stride),
+                             reinterpret_cast<void*>(y_ptr + (i * input.width)), input.width, 1);
+            if (i < input.height / 2) {
+              LOG(TRACE, "Copy frame chroma 0 at %u row", i);
+              mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[1].addr + i * tmp_stride / 2),
+                               reinterpret_cast<void*>(u_ptr + (i * input.width / 2)), input.width / 2, 1);
+              LOG(TRACE, "Copy frame chroma 1 at %u row", i);
+              mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[2].addr + i * tmp_stride / 2),
+                               reinterpret_cast<void*>(v_ptr + (i * input.width / 2)), input.width / 2, 1);
+            }
+          }
+        }
+        break;
+      }
       default:
         throw EasyEncodeError("Unsupported pixel format");
         break;
     }
   }
+}
 
-  // 3. params
-  CNVideoEncode_PIC_Params params;
-  memset(&params, 0, sizeof(CNVideoEncode_PIC_Params));
-  if (eos) {
-    params.Flags |= CNVideoEncode_PIC_Flag_EOS;
+bool EncodeHandler::SendJpegData(const CnFrame& frame, bool eos) {
+  cnjpegEncInput input;
+  cnjpegEncParameters params;
+  memset(&input, 0, sizeof(cnjpegEncInput));
+  int ecode = cnjpegEncWaitAvailInputBuf(reinterpret_cast<cnjpegEncoder>(handle_), &input.frame, -1);
+  if (CNCODEC_SUCCESS != ecode) {
+    throw EasyEncodeError("Avaliable input buffer failed. Error code: " + to_string(ecode));
   }
-  params.frameIdx = buf_id;
-  params.TimeStamp = frame.pts;
-  params.Duration = 33;
-  params.inputPtr = input_buffer;
 
-  // 4. send
-  ecode = CN_Encode_Feed_Frame(reinterpret_cast<CNVideo_Encode>(handler_->handle_), &params);
-  if (CNVideoCodec_Success != ecode) {
-    throw EasyEncodeError("CN_Encode_Feed_Frame failed. Error code: " + to_string(ecode));
+  // 2. copy data to codec
+  CopyFrame(&input.frame, frame);
+
+  // 3. set params for codec
+  if (send_eos_) {
+    LOG(WARNING, "EOS had been sent, won't feed data or EOS");
+    return false;
+  } else {
+    if (eos) {
+      input.flags |= CNJPEGENC_FLAG_EOS;
+      send_eos_ = true;
+    } else {
+      input.flags &= (~CNJPEGENC_FLAG_EOS);
+    }
   }
-#endif  // CNSTK_MLU100
+  LOG(TRACE, "Feed jpeg frame info) data: %p, length: %lu", frame.ptrs[0], frame.frame_size);
+
+  input.frame.pixelFmt = jcreate_params_.pixelFmt;
+  input.frame.colorSpace = jcreate_params_.colorSpace;
+  input.frame.width = frame.width;
+  input.frame.height = frame.height;
+  input.pts = frame.pts;
+  params.quality = attr_.jpeg_qfactor;
+  params.restartInterval = 0;
+  // 4. send data to codec
+  ecode = cnjpegEncFeedFrame(reinterpret_cast<cnjpegEncoder>(handle_), &input, &params, -1);
+  if (CNCODEC_SUCCESS != ecode) {
+    throw EasyEncodeError("cnvideoEncFeedFrame failed. Error code: " + to_string(ecode));
+  }
+
   return true;
 }
 
-void EasyEncode::ReleaseBuffer(uint32_t buf_id) {
-#ifdef CNSTK_MLU100
-  CNResult ecode = CN_MPI_MLU_P2P_ReleaseBuffer(handler_->handle_, buf_id);
-  if (CN_SUCCESS != ecode) {
-    throw EasyEncodeError("Release buffer failed. Error code: " + to_string(ecode));
+bool EncodeHandler::SendVideoData(const CnFrame& frame, bool eos) {
+  cnvideoEncInput input;
+  memset(&input, 0, sizeof(cnvideoEncInput));
+  int ecode = cnvideoEncWaitAvailInputBuf(reinterpret_cast<cnvideoEncoder>(handle_), &input.frame, -1);
+  if (CNCODEC_SUCCESS != ecode) {
+    throw EasyEncodeError("Avaliable input buffer failed. Error code: " + to_string(ecode));
   }
-#elif CNSTK_MLU270
-#endif  // CNSTK_MLU100
+
+  // 2. copy data to codec
+  CopyFrame(&input.frame, frame);
+
+  // 3. set params for codec
+  if (send_eos_) {
+    LOG(WARNING, "EOS had been sent, won't feed data or EOS");
+    return false;
+  } else {
+    if (eos) {
+      input.flags |= CNVIDEOENC_FLAG_EOS;
+      send_eos_ = true;
+    } else {
+      input.flags &= (~CNVIDEOENC_FLAG_EOS);
+    }
+  }
+  LOG(TRACE, "Feed video frame info) data: %p, length: %lu, pts: %lu", frame.ptrs[0], frame.frame_size, frame.pts);
+
+  input.frame.pixelFmt = vcreate_params_.pixelFmt;
+  input.frame.colorSpace = vcreate_params_.colorSpace;
+  input.frame.width = frame.width;
+  input.frame.height = frame.height;
+  input.pts = frame.pts;
+  for (uint32_t i = 0; i < frame.n_planes; ++i) {
+    input.frame.stride[i] = frame.strides[i];
+  }
+  // 4. send data to codec
+  ecode = cnvideoEncFeedFrame(reinterpret_cast<cnvideoEncoder>(handle_), &input, -1);
+  if (CNCODEC_SUCCESS != ecode) {
+    throw EasyEncodeError("cnvideoEncFeedFrame failed. Error code: " + to_string(ecode));
+  }
+
+  return true;
 }
 
-bool EasyEncode::CopyPacket(void* dst, const CnPacket& packet) {
-  if (attr_.output_on_cpu) {
-    memcpy(dst, packet.data, packet.length);
-    return true;
+void EncodeHandler::AbortEncoder() {
+  LOG(INFO, "Abort encoder");
+  if (handle_) {
+    if (jpeg_encode_) {
+      cnjpegEncAbort(handle_);
+    } else {
+      cnvideoEncAbort(handle_);
+    }
+  } else {
+    LOG(WARNING, "Won't do abort, since cnencode handler has not been initialized");
+  }
+}
+
+#ifdef APP_ALLOC_BUFFER
+void EncodeHandler::AllocInputBuffer(cnvideoEncCreateInfo *params) {
+  LOG(INFO, "Alloc Input Buffer");
+  for (unsigned int i = 0; i < params->inputBufNum; i++) {
+    CALL_CNRT_FUNC(cnrtMalloc(reinterpret_cast<void**>(&params->inputBuf[i].addr), params.width * params.height),
+                   "Malloc encode input buffer failed");
+    params->inputBuf[i].size = params.width * params.height;
+  }
+}
+
+void EncodeHandler::AllocOutputBuffer(cnvideoEncCreateInfo *params) {
+  LOG(INFO, "Alloc Output Buffer");
+  uint64_t size = 0;
+  const unsigned int width = params->width;
+  const unsigned int stride = ALIGN(width, 128);
+  const unsigned int height = params->height;
+  const unsigned int plane_num = pixel_fmt_info_->GetPlanesNum();
+
+  for (unsigned int i = 0; i < params->outputBufNum; ++i) {
+    for (unsigned int j = 0; j < plane_num; ++j) {
+      // I420 Y plane align to 256
+      if (params->pixelFmt == CNCODEC_PIX_FMT_I420 && plane_num == 0) {
+        size = pixel_fmt_info_->GetPlaneSize(ALIGN(width, 256), height, j);
+        params->outputBuf[i].stride[j] = ALIGN(width, 256);
+      } else {
+        size = pixel_fmt_info_->GetPlaneSize(stride, height, j);
+        params->outputBuf[i].stride[j] = stride;
+      }
+      CALL_CNRT_FUNC(cnrtMalloc(reinterpret_cast<void**>(&params->outputBuf[i].plane[j].addr), size),
+          "Malloc decode output buffer failed");
+      params->outputBuf[i].plane[j].size = size;
+    }
+
+    params->outputBuf[i].height = height;
+    params->outputBuf[i].width = width;
+    params->outputBuf[i].pixelFmt = params->pixelFmt;
+    params->outputBuf[i].planeNum = plane_num;
+    params->colorSpace = params->colorSpace;
+  }
+}
+
+void EncodeHandler::FreeInputBuffer(const cnvideoEncCreateInfo &params) {
+  LOG(INFO, "Free Input Buffer");
+  for (unsigned int i = 0; i < params.inputBufNum; ++i) {
+    CALL_CNRT_FUNC(cnrtFree(reinterpret_cast<void*>(params.inputBuf[i].addr)), "Free encode input buffer failed");
+  }
+}
+
+void EncodeHandler::FreeOutputBuffer(const cnvideoEncCreateInfo &params) {
+  LOG(INFO, "Free Output Buffer");
+  for (unsigned int i = 0; i < params.outputBufNum; ++i) {
+    for (unsigned int j = 0; j < params.outputBuf[i].planeNum; ++j) {
+      CALL_CNRT_FUNC(cnrtFree(reinterpret_cast<void*>(params.outputBuf[i].plane[j].addr)),
+          "Free ecnode output buffer failed");
+    }
+  }
+}
+#endif
+
+static int32_t EventHandler(cncodecCbEventType type, void *user_data, void *package) {
+  auto handler = reinterpret_cast<EncodeHandler*>(user_data);
+  switch (type) {
+    case CNCODEC_CB_EVENT_NEW_FRAME:
+      handler->ReceivePacket(package);
+      break;
+    case CNCODEC_CB_EVENT_EOS:
+      handler->ReceiveEOS();
+      break;
+    case CNCODEC_CB_EVENT_SW_RESET:
+    case CNCODEC_CB_EVENT_HW_RESET:
+      LOG(ERROR, "Get cncodec event: %d", type);
+      handler->AbortEncoder();
+      break;
+    default:
+      LOG(ERROR, "Unknown event type");
+      handler->AbortEncoder();
+      break;
+  }
+  return 0;
+}
+
+EasyEncode* EasyEncode::Create(const Attr& attr) {
+  LOG(INFO, "Create EasyEncode");
+  auto encoder = new EasyEncode();
+  try {
+    encoder->handler_ = new EncodeHandler(encoder, attr);
+  } catch(EasyEncodeError &e) {
+    LOG(ERROR, "Create encode failed, error message: %s", e.what());
+    delete encoder;
+    return nullptr;
+  }
+  return encoder;
+}
+
+EasyEncode::EasyEncode() {}
+
+EasyEncode::~EasyEncode() {
+  // free members
+  if (handler_) {
+    delete handler_;
+    handler_ = nullptr;
+  }
+}
+
+EasyEncode::Attr EasyEncode::GetAttr() const { return handler_->attr_; }
+
+void EasyEncode::ReleaseBuffer(uint64_t buf_id) {
+  LOG(TRACE, "Release buffer, %p", reinterpret_cast<uint8_t*>(buf_id));
+  delete []reinterpret_cast<uint8_t*>(buf_id);
+}
+
+bool EasyEncode::SendDataCPU(const CnFrame& frame, bool eos) {
+  bool ret = false;
+
+  if (handler_->jpeg_encode_) {
+    ret = handler_->SendJpegData(frame, eos);
+  } else {
+    ret = handler_->SendVideoData(frame, eos);
   }
 
-  // output on mlu
-  cnrtRet_t ecode = cnrtMemcpy(dst, packet.data, packet.length, CNRT_MEM_TRANS_DIR_DEV2HOST);
-  if (CNRT_RET_SUCCESS != ecode) {
-    throw EasyEncodeError("Copy output packet failed. Error code: " + to_string(ecode));
-  }
-  return true;
+  return ret;
 }
 
 }  // namespace edk
