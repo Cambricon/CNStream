@@ -20,7 +20,7 @@ CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 
 pushd $CURRENT_DIR
     if [ ! -f "$CURRENT_DIR/Dehaze.cambricon" ]; then
-      wget -O Dehaze.cambricon https://github.com/Cambricon/models/raw/master/MLU100/Dehaze/Dehaze.cambricon 
+      wget -O Dehaze.cambricon http://video.cambricon.com/models/MLU100/Dehaze/Dehaze.cambricon
     else
       echo "cambricom file exists."
     fi

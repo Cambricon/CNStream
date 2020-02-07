@@ -11,7 +11,7 @@ pushd $CURRENT_DIR
     fi
 
     if [ ! -f "$CURRENT_DIR/model/Dehaze.cambricon" ]; then
-      wget -P $CURRENT_DIR/model https://github.com/Cambricon/models/raw/master/MLU100/Dehaze/Dehaze.cambricon
+      wget -P $CURRENT_DIR/model http://video.cambricon.com/models/MLU100/Dehaze/Dehaze.cambricon
     fi
 
     if [ ! -f "$CURRENT_DIR/model/SuperResolution.cambricon" ]; then
