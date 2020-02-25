@@ -21,9 +21,14 @@ MODEL_PATH=$CURRENT_DIR/../../data/models/MLU270/Primary_Detector/ssd/
 
  pushd $MODEL_PATH
      if [ ! -f "resnet34_ssd.cambricon" ]; then
-       wget -O resnet50_offline.cambricon https://github.com/Cambricon/models/raw/master/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon
+       wget -O resnet34_ssd.cambricon http://video.cambricon.com/models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon
      else
        echo "resnet34_ssd.cambricon offline model exists."
+     fi
+     if [ ! -f "label_voc.txt" ]; then
+       wget -O label_voc.txt http://video.cambricon.com/models/MLU270/Primary_Detector/ssd/label_voc.txt
+     else
+       echo "label_voc.txt exists."
      fi
  popd
 source env.sh
