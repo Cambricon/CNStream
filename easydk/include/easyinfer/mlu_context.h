@@ -49,28 +49,36 @@ class MluContext {
    *
    * @return Device id
    */
-  int DeviceId() const;
+  inline int DeviceId() const { return dev_id_; }
 
   /**
    * @brief Set the device id
    *
    * @param id[in] Device id
    */
-  void SetDeviceId(int id);
+  inline void SetDeviceId(int id) { dev_id_ = id; };
+
+  /**
+   * @brief Check whether device exists
+   *
+   * @param id[in] Device id
+   * @return true if device exists, otherwise false returned
+   */
+  bool CheckDeviceId(int id);
 
   /**
    * @brief Get the MLU channel id
    *
    * @return MLU Channel id
    */
-  int ChannelId() const;
+  inline int ChannelId() const { return channel_id_; }
 
   /**
    * @brief Set the MLU channel id in range [0, 3]
    *
    * @param id[in] MLU channel id
    */
-  void SetChannelId(int id);
+  inline void SetChannelId(int id) { channel_id_ = id; };
 
   /**
    * @brief Bind MLU environment for this thread

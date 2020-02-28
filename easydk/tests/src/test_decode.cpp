@@ -86,7 +86,14 @@ void bigstream_callback(bool* condv, std::condition_variable* cond, const edk::C
 
 void eos_callback(bool* condv, std::condition_variable* cond) {
   std::cout << "eos_callback" << std::endl;
-
+  try {
+    edk::MluContext context;
+    context.SetDeviceId(0);
+    context.ConfigureForThisThread();
+  } catch (edk::MluContextError &err) {
+    printf("set mlu env failed\n");
+    return;
+  }
   if (p_big_stream) {
     fflush(p_big_stream);
     fclose(p_big_stream);

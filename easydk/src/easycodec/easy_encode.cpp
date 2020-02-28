@@ -187,13 +187,15 @@ void EncodeHandler::InitVideoEncode() {
     memset(&vcreate_params_.uCfg.h264, 0x0, sizeof(vcreate_params_.uCfg.h264));
     if (static_cast<int>(attr_.profile) > 9) {
       LOG(WARNING, "Invalid H264 profile, using H264_MAIN as default");
-      vcreate_params_.uCfg.h264.profile       = CNVIDEOENC_PROFILE_H264_MAIN;
+      // vcreate_params_.uCfg.h264.profile       = CNVIDEOENC_PROFILE_H264_MAIN;
+      vcreate_params_.uCfg.h264.profile       = CNVIDEOENC_PROFILE_H264_HIGH;
     } else {
       vcreate_params_.uCfg.h264.profile       = ProfileCast(attr_.profile);
     }
     vcreate_params_.uCfg.h264.level           = CNVIDEOENC_LEVEL_H264_41;
     vcreate_params_.uCfg.h264.IframeInterval  = attr_.p_frame_num;
     vcreate_params_.uCfg.h264.BFramesNum      = attr_.b_frame_num;
+    vcreate_params_.uCfg.h264.insertSpsPpsWhenIDR = attr_.insertSpsPpsWhenIDR;
     // vcreate_params_.uCfg.h264.IRCount         = attr_.ir_count;
     if (attr_.max_mb_per_slice != 0) {
       vcreate_params_.uCfg.h264.maxMBPerSlice = attr_.max_mb_per_slice;
@@ -213,6 +215,7 @@ void EncodeHandler::InitVideoEncode() {
     vcreate_params_.uCfg.h265.level           = CNVIDEOENC_LEVEL_H265_MAIN_41;
     vcreate_params_.uCfg.h265.IframeInterval  = attr_.p_frame_num;
     vcreate_params_.uCfg.h265.BFramesNum      = attr_.b_frame_num;
+    vcreate_params_.uCfg.h265.insertSpsPpsWhenIDR = attr_.insertSpsPpsWhenIDR;
     // vcreate_params_.uCfg.h265.IRCount         = attr_.ir_count;
     if (attr_.max_mb_per_slice != 0) {
       vcreate_params_.uCfg.h265.maxMBPerSlice = attr_.max_mb_per_slice;
@@ -285,15 +288,15 @@ EncodeHandler::~EncodeHandler() {
       memset(&frame, 0, sizeof(CnFrame));
       encoder_->SendDataCPU(frame, true);
     } else {
-      got_eos_ = true;
+      if (!handle_) got_eos_ = true;
       eos_lk.unlock();
     }
   }
 
   std::unique_lock<std::mutex> eos_lk(eos_mutex_);
   if (!got_eos_) {
+    LOG(INFO, "Wait EOS in destruct");
     eos_cond_.wait(eos_lk, [this]() -> bool { return got_eos_; });
-    LOG(INFO, "Received EOS in destruct");
   }
 
   // destroy encoder
@@ -395,60 +398,20 @@ void EncodeHandler::CopyFrame(cncodecFrame *dst, const CnFrame& input) {
       case PixelFmt::NV12:
       case PixelFmt::NV21:
       {
-        constexpr int align = 64;
-        if (input.width == ALIGN(input.width, align)) {
-          LOG(TRACE, "Copy frame luminance");
-          mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[0].addr), input.ptrs[0], frame_size, 1);
-          LOG(TRACE, "Copy frame chroma");
-          mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[1].addr), input.ptrs[1], frame_size / 2, 1);
-        } else {
-          uint32_t tmp_stride = ALIGN(input.width, align);
-          LOG(TRACE, "Alignment %d copy, width %u, stride %u", align, input.width, tmp_stride);
-          auto y_ptr = reinterpret_cast<uint8_t*>(input.ptrs[0]);
-          auto uv_ptr = reinterpret_cast<uint8_t*>(input.ptrs[1]);
-          for (uint32_t i = 0; i < input.height; i++) {
-            LOG(TRACE, "Copy frame luminance at %u row", i);
-            mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[0].addr + i * tmp_stride),
-                             reinterpret_cast<void*>(y_ptr + (i * input.width)), input.width, 1);
-            if (i < input.height / 2) {
-              LOG(TRACE, "Copy frame chroma at %u row", i);
-              mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[1].addr + i * tmp_stride),
-                             reinterpret_cast<void*>(uv_ptr + (i * input.width)), input.width, 1);
-            }
-          }
-        }
+        LOG(TRACE, "Copy frame luminance");
+        mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[0].addr), input.ptrs[0], frame_size, 1);
+        LOG(TRACE, "Copy frame chroma");
+        mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[1].addr), input.ptrs[1], frame_size / 2, 1);
         break;
       }
       case PixelFmt::I420:
       {
-        constexpr int align = 64;
-        if (input.width == ALIGN(input.width, align)) {
-          LOG(TRACE, "Copy frame luminance");
-          mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[0].addr), input.ptrs[0], frame_size, 1);
-          LOG(TRACE, "Copy frame chroma 0");
-          mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[1].addr), input.ptrs[1], frame_size / 4, 1);
-          LOG(TRACE, "Copy frame chroma 1");
-          mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[2].addr), input.ptrs[2], frame_size / 4, 1);
-        } else {
-          uint32_t tmp_stride = ALIGN(input.width, align);
-          LOG(TRACE, "Alignment %d copy, width %u, stride %u", align, input.width, tmp_stride);
-          auto y_ptr = reinterpret_cast<uint8_t*>(input.ptrs[0]);
-          auto u_ptr = reinterpret_cast<uint8_t*>(input.ptrs[1]);
-          auto v_ptr = reinterpret_cast<uint8_t*>(input.ptrs[2]);
-          for (uint32_t i = 0; i < input.height; i++) {
-            LOG(TRACE, "Copy frame luminance at %u row", i);
-            mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[0].addr + i * tmp_stride),
-                             reinterpret_cast<void*>(y_ptr + (i * input.width)), input.width, 1);
-            if (i < input.height / 2) {
-              LOG(TRACE, "Copy frame chroma 0 at %u row", i);
-              mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[1].addr + i * tmp_stride / 2),
-                               reinterpret_cast<void*>(u_ptr + (i * input.width / 2)), input.width / 2, 1);
-              LOG(TRACE, "Copy frame chroma 1 at %u row", i);
-              mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[2].addr + i * tmp_stride / 2),
-                               reinterpret_cast<void*>(v_ptr + (i * input.width / 2)), input.width / 2, 1);
-            }
-          }
-        }
+        LOG(TRACE, "Copy frame luminance");
+        mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[0].addr), input.ptrs[0], frame_size, 1);
+        LOG(TRACE, "Copy frame chroma 0");
+        mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[1].addr), input.ptrs[1], frame_size / 4, 1);
+        LOG(TRACE, "Copy frame chroma 1");
+        mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[2].addr), input.ptrs[2], frame_size / 4, 1);
         break;
       }
       default:
@@ -471,16 +434,11 @@ bool EncodeHandler::SendJpegData(const CnFrame& frame, bool eos) {
   CopyFrame(&input.frame, frame);
 
   // 3. set params for codec
-  if (send_eos_) {
-    LOG(WARNING, "EOS had been sent, won't feed data or EOS");
-    return false;
+  if (eos) {
+    input.flags |= CNJPEGENC_FLAG_EOS;
+    send_eos_ = true;
   } else {
-    if (eos) {
-      input.flags |= CNJPEGENC_FLAG_EOS;
-      send_eos_ = true;
-    } else {
-      input.flags &= (~CNJPEGENC_FLAG_EOS);
-    }
+    input.flags &= (~CNJPEGENC_FLAG_EOS);
   }
   LOG(TRACE, "Feed jpeg frame info) data: %p, length: %lu", frame.ptrs[0], frame.frame_size);
 
@@ -512,16 +470,11 @@ bool EncodeHandler::SendVideoData(const CnFrame& frame, bool eos) {
   CopyFrame(&input.frame, frame);
 
   // 3. set params for codec
-  if (send_eos_) {
-    LOG(WARNING, "EOS had been sent, won't feed data or EOS");
-    return false;
+  if (eos) {
+    input.flags |= CNVIDEOENC_FLAG_EOS;
+    send_eos_ = true;
   } else {
-    if (eos) {
-      input.flags |= CNVIDEOENC_FLAG_EOS;
-      send_eos_ = true;
-    } else {
-      input.flags &= (~CNVIDEOENC_FLAG_EOS);
-    }
+    input.flags &= (~CNVIDEOENC_FLAG_EOS);
   }
   LOG(TRACE, "Feed video frame info) data: %p, length: %lu, pts: %lu", frame.ptrs[0], frame.frame_size, frame.pts);
 
@@ -538,7 +491,6 @@ bool EncodeHandler::SendVideoData(const CnFrame& frame, bool eos) {
   if (CNCODEC_SUCCESS != ecode) {
     throw EasyEncodeError("cnvideoEncFeedFrame failed. Error code: " + to_string(ecode));
   }
-
   return true;
 }
 
@@ -668,6 +620,14 @@ void EasyEncode::ReleaseBuffer(uint64_t buf_id) {
 
 bool EasyEncode::SendDataCPU(const CnFrame& frame, bool eos) {
   bool ret = false;
+  if (!handler_) {
+    LOG(ERROR, "Encoder has not been init");
+    return false;
+  }
+  if (handler_->send_eos_) {
+    LOG(WARNING, "EOS had been sent, won't feed data or EOS");
+    return false;
+  }
 
   if (handler_->jpeg_encode_) {
     ret = handler_->SendJpegData(frame, eos);

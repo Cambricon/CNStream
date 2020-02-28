@@ -6,7 +6,7 @@ namespace RTSPStreaming {
 LiveRTSPServer::LiveRTSPServer(VideoEncoder* encoder, int port, int httpPort)
     : fVideoEncoder_(encoder), fPortNumber_(port), fHttpTunnelingPort_(httpPort) {
   fQuit_ = 0;
-  fBitrate_ = -1;
+  fBitrate_ = 0;
   fEnablePassword_ = false;
 }
 
@@ -31,7 +31,7 @@ void LiveRTSPServer::Run() {
     authDB = new UserAuthenticationDatabase;
     authDB->addUserRecord(UserN, PassW);
   }
-  OutPacketBuffer::increaseMaxSizeTo(2 * 1024 * 1024);  // 2M
+  OutPacketBuffer::increaseMaxSizeTo(1920 * 1080 * 3 / 2);  // 2M
   RTSPServer* rtspServer = RTSPServer::createNew(*env, fPortNumber_, authDB);
   if (rtspServer == nullptr) {
     *env << "LIVE555: Failed to create RTSP server:" << env->getResultMsg() << "\n";

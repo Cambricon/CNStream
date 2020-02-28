@@ -36,10 +36,10 @@ void CNTimer::Dot(uint32_t cnt_step) {
   std::unique_lock<std::mutex> lock(mutex_);
   if (first_dot_) {
     // first dot
-    last_t_ = std::chrono::high_resolution_clock::now();
+    last_t_ = std::chrono::steady_clock::now();
     first_dot_ = false;
   } else {
-    auto now_t = std::chrono::high_resolution_clock::now();
+    auto now_t = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> diff = now_t - last_t_;
     last_t_ = now_t;
     avg_ = avg_ * cnt_ + diff.count();

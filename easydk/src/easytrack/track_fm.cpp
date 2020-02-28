@@ -130,8 +130,8 @@ MatchResult &FeatureMatchPrivate::MatchCascade() {
 #ifdef TRACE_RESULT
     LOG(TRACE, "Cascade: Number of remained detections ----- %u", remained_detections.size());
 #endif
-    // no remained detections, end match
-    if (remained_detections.empty()) break;
+    // no remained detections or no confirmed tracks, end match
+    if (remained_detections.empty() || confirmed_track_.empty()) break;
 
     // get all confirmed tracks with same age
     for (size_t t = 0; t < confirmed_track_.size(); ++t) {
@@ -235,7 +235,7 @@ MatchResult &FeatureMatchPrivate::MatchIou(std::vector<int> detect_indices, std:
 }
 
 void FeatureMatchPrivate::InitNewTrack(const DetectObject &det) {
-  LOG(INFO, "new track: %lu", next_id_);
+  LOG(TRACE, "new track: %lu", next_id_);
   FeatureMatchTrackObject obj;
   obj.age = 1;
   obj.class_id = det.label;
@@ -369,7 +369,7 @@ void FeatureMatchTrack::UpdateFrame(const TrackFrame &frame, const Objects &dete
     // erase dead track object
     for (auto iter = fm_p_->tracks_.begin(); iter != fm_p_->tracks_.end();) {
       if (iter->state == TrackState::DELETED || iter->time_since_last_update > max_age_) {
-        LOG(INFO, "delete track: %d", iter->track_id);
+        LOG(TRACE, "delete track: %d", iter->track_id);
         delete iter->kf;
         iter = fm_p_->tracks_.erase(iter);
       } else {

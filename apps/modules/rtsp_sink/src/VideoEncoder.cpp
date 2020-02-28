@@ -19,7 +19,7 @@ size_t VideoEncoder::CircularBuffer::write(const unsigned char *data, size_t byt
   if (bytes_to_write <= capacity - end_index_) {
     memcpy(data_ + end_index_, data, bytes_to_write);
     end_index_ += bytes_to_write;
-    if (end_index_ == capacity) end_index_ = 0;
+    if (end_index_ >= capacity) end_index_ = 0;
   } else {  // Write in two steps
     size_t size_1 = capacity - end_index_;
     memcpy(data_ + end_index_, data, size_1);
@@ -61,7 +61,7 @@ size_t VideoEncoder::CircularBuffer::read(unsigned char *data, size_t bytes) {
   if (bytes_to_read <= capacity - beg_index_) {
     if (data != nullptr) memcpy(data, data_ + beg_index_, bytes_to_read);
     beg_index_ += bytes_to_read;
-    if (beg_index_ == capacity) beg_index_ = 0;
+    if (beg_index_ >= capacity) beg_index_ = 0;
   } else {  // Read in two steps
     size_t size_1 = capacity - beg_index_;
     if (data != nullptr) memcpy(data, data_ + beg_index_, size_1);
@@ -210,7 +210,7 @@ bool VideoEncoder::PushOutputBuffer(uint8_t *data, size_t size, uint32_t frame_i
 
     if (free_size < write_size) {
       output_frames_dropped++;
-      // std::cout << "$$$ drop output frame 1" << std::endl;
+      // std::cout << "$$$ free_size < write_size drop output frame 1" << std::endl;
       return false;
     }
     output_circular_buffer_->write(reinterpret_cast<uint8_t *>(&efh), sizeof(EncodedFrameHeader));

@@ -151,6 +151,9 @@ class EasyEncode {
     /// Init table for CABAC, 0,1,2 for H264 and 0,1 for HEVC, default 0
     uint32_t cabac_init_idc = 0;
 
+    /// insert SPS/PPS before IDR,1, insert, 0 not
+    uint32_t insertSpsPpsWhenIDR = 1;
+
     /// Whether to print encoder attribute
     bool silent = false;
 

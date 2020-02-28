@@ -145,7 +145,7 @@ TEST_P(ResizeConvertParam, Execute) {
   edk::MluMemoryOp mem_op;
   void *mlu_input, *mlu_output;
   edk::MluResizeConvertOp *rc_op = NULL;
-  cnrtQueue_t rc_queue;
+  // cnrtQueue_t rc_queue;
 
   ASSERT_TRUE(color_mode_map.find(cmode) != color_mode_map.end()) << "invalid color mode";
 
@@ -171,17 +171,7 @@ TEST_P(ResizeConvertParam, Execute) {
   context.SetDeviceId(0);
   context.ConfigureForThisThread();
 
-  if (CNRT_RET_SUCCESS != cnrtCreateQueue(&rc_queue)) {
-    delete[] cpu_input;
-    delete[] cpu_output;
-    ASSERT_TRUE(false) << "cnrtCreateStream failed";
-  }
-
-  auto mlu_queue = std::make_shared<edk::MluTaskQueue>();
-  mlu_queue->queue = rc_queue;
-
   rc_op = new edk::MluResizeConvertOp();
-  rc_op->SetMluQueue(mlu_queue);
 
   edk::MluResizeConvertOp::Attr attr;
   attr.src_h = height;
@@ -200,6 +190,7 @@ TEST_P(ResizeConvertParam, Execute) {
     delete rc_op;
     ASSERT_TRUE(false) << "rc_op->Init() failed";
   }
+  EXPECT_FALSE(rc_op->IsSharedQueue());
 
   mlu_input = mem_op.AllocMlu(input_size, 1);
   mlu_output = mem_op.AllocMlu(output_size, 1);
@@ -208,8 +199,8 @@ TEST_P(ResizeConvertParam, Execute) {
 
   void *src_y = mlu_input;
   auto src_uv = reinterpret_cast<uint8_t *>(mlu_input) + stride * height;
-  rc_op->InvokeOp(mlu_output, src_y, src_uv);
-  cnrtSyncQueue(rc_queue);
+  ASSERT_EQ(rc_op->InvokeOp(mlu_output, src_y, src_uv), 0);
+  EXPECT_FALSE(rc_op->IsSharedQueue());
 
   mem_op.MemcpyD2H(cpu_output, mlu_output, output_size, 1);
 

@@ -124,11 +124,24 @@ class EventBus {
    * @note Block until an event or a bus is stopped.
    */
   Event PollEvent();
+
+  /**
+   * @brief Get all bus watchers from the event bus.
+   *
+   * @return A list with pairs of bus_watcher and module.
+   */
   const std::list<std::pair<BusWatcher, Module *>> &GetBusWatchers() const;
+
   /**
    * @brief Removes all bus watchers.
    */
   void ClearAllWatchers();
+
+  /**
+   * @brief Check the event bus is running or not.
+   *
+   * @return Return true if the event bus is running, false if it's not.
+   */
   inline bool IsRunning() const { return running_.load(); }
   std::atomic<bool> running_{false};
 

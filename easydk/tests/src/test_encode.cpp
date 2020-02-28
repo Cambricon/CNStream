@@ -107,6 +107,14 @@ static bool cvt_bgr_to_yuv420sp(const cv::Mat &bgr_image, uint32_t alignment, ed
 }
 
 void eos_callback() {
+  try {
+    edk::MluContext context;
+    context.SetDeviceId(0);
+    context.ConfigureForThisThread();
+  } catch (edk::MluContextError &err) {
+    printf("set mlu env failed\n");
+    return;
+  }
   printf("eos_callback()\n");
   if (p_output_file) {
     fflush(p_output_file);
@@ -120,7 +128,7 @@ void eos_callback() {
     printf("encode jpeg pass\n");
   }
   std::unique_lock<std::mutex> lk(enc_mutex);
-  enc_cond.notify_one();
+  enc_cond.notify_all();
 }
 
 void packet_callback(const edk::CnPacket &packet) {
@@ -141,10 +149,10 @@ void packet_callback(const edk::CnPacket &packet) {
     snprintf(str, sizeof(str), "./encoded_%s_%02d.jpg", pf_str(input_pixel_format), frames_output);
     output_file = str;
   } else if (packet.codec_type == CodecType::H264) {
-    snprintf(str, sizeof(str), "./encoded_%s.h264", pf_str(input_pixel_format));
+    snprintf(str, sizeof(str), "./encoded_%s_%lu.h264", pf_str(input_pixel_format), packet.length);
     output_file = str;
   } else if (packet.codec_type == CodecType::H265) {
-    snprintf(str, sizeof(str), "./encoded_%s.h265", pf_str(input_pixel_format));
+    snprintf(str, sizeof(str), "./encoded_%s_%lu.h265", pf_str(input_pixel_format), packet.length);
     output_file = str;
   } else {
     printf("ERROR: unknown output codec type <%d>\n", static_cast<int>(packet.codec_type));
@@ -187,7 +195,7 @@ bool SendData(edk::EasyEncode *encoder, PixelFmt pixel_format, CodecType codec_t
 
   if (pixel_format == PixelFmt::NV21 || pixel_format == PixelFmt::NV12 || pixel_format == PixelFmt::I420) {
     input_length = width * height * 3 / 2;
-    p_data_buffer = new uint8_t[input_length];
+    p_data_buffer = new(std::nothrow) uint8_t[input_length];
     if (p_data_buffer == NULL) {
       printf("ERROR: malloc buffer for input file failed\n");
       return false;
@@ -317,17 +325,18 @@ TEST(Codec, EncodeVideo) {
   EXPECT_TRUE(ret);
   ret = test_EasyEncode(TEST_1080P_JPG, 1920, 1080, PixelFmt::NV21, CodecType::H264);
   EXPECT_TRUE(ret);
-  ret = test_EasyEncode(TEST_1080P_JPG, 1920, 1080, PixelFmt::I420, CodecType::H264);
-  EXPECT_TRUE(ret);
 
   ret = test_EasyEncode(TEST_1080P_JPG, 1920, 1080, PixelFmt::NV12, CodecType::H265);
   EXPECT_TRUE(ret);
   ret = test_EasyEncode(TEST_1080P_JPG, 1920, 1080, PixelFmt::NV21, CodecType::H265);
   EXPECT_TRUE(ret);
-  ret = test_EasyEncode(TEST_1080P_JPG, 1920, 1080, PixelFmt::I420, CodecType::H265);
+
+  ret = test_EasyEncode(TEST_500x500_JPG, 500, 500, PixelFmt::I420, CodecType::H264);
   EXPECT_TRUE(ret);
-
-
+  ret = test_EasyEncode(TEST_500x500_JPG, 500, 500, PixelFmt::I420, CodecType::H265);
+  EXPECT_TRUE(ret);
+  ret = test_EasyEncode(TEST_500x500_JPG, 500, 500, PixelFmt::NV12, CodecType::H264);
+  EXPECT_TRUE(ret);
   ret = test_EasyEncode(TEST_500x500_JPG, 500, 500, PixelFmt::NV21, CodecType::H264);
   EXPECT_TRUE(ret);
 }

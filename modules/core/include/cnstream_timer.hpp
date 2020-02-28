@@ -71,7 +71,7 @@ class CNTimer {
 
  private:
   mutable std::mutex mutex_;
-  std::chrono::time_point<std::chrono::high_resolution_clock> last_t_;
+  std::chrono::time_point<std::chrono::steady_clock> last_t_;
   uint64_t cnt_ = 0;
   double avg_ = 0;
   bool first_dot_ = true;

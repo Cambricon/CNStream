@@ -87,8 +87,12 @@ class EasyDecode {
     /// whether to print useful messages.
     bool silent = false;
 
-    /// create decoder on which device
+    /// Create decoder on which device
     int dev_id = 0;
+
+    /// Set align value (2^n = 1,4,8...), MLU270: 1 -- MLU220 scalar: 128
+    int stride_align = 1;
+
   };  // struct Attr
 
   /**

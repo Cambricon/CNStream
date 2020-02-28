@@ -48,9 +48,10 @@ class RTSPSinkJoinStream {
     MLU,
   }CodecHWType;
   bool Open(int width, int height, PictureFormat format, float refresh_rate, int udp_port, int http_port,
-            int rows, int cols, CodecHWType hw);
+            int rows, int cols, int device_id, CodecHWType hw);
   void Close();
   bool Update(cv::Mat image, int64_t timestamp, int channel_id = -1);
+  void Bgr2YUV420NV(const cv::Mat &bgr, bool isnv21, uint8_t *nv_data);
 
  private:
   void RefreshLoop();
@@ -65,6 +66,7 @@ class RTSPSinkJoinStream {
   int mosaic_win_height_;
   int cols_;
   int rows_;
+  int device_id_;
   float refresh_rate_ = 0;
   StreamPipeCtx *ctx_ = nullptr;
   bool running_ = false;

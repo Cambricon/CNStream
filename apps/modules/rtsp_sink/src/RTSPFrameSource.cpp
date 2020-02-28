@@ -35,6 +35,7 @@ void RTSPFrameSource::deliverFrame() {
 
   /* get data frame from the Encoding thread.. */
   if (fEncoder_->GetFrame(fTo, fMaxSize, &frameSize, &FramePTS)) {
+    std::cout << "$$$ frameSize: " << frameSize << " -- fMaxSize: " << fMaxSize << std::endl;
     if (frameSize > 0) {
       /* This should never happen, but check anyway.. */
       if (frameSize > fMaxSize) {
@@ -63,13 +64,24 @@ void RTSPFrameSource::deliverFrame() {
       fFrameSize = 0;
       fTo = nullptr;
       handleClosure(this);
+      return;
     }
   } else {
     fFrameSize = 0;
   }
 
+#define USE_MLU
+// #define USE_FFMPEG
+
+#ifdef USE_MLU
+  nextTask() = envir().taskScheduler().scheduleDelayedTask(0,
+               (TaskFunc*)FramedSource::afterGetting, this);
+#endif
+#ifdef USE_FFMPEG
   if (fFrameSize > 0) {
     FramedSource::afterGetting(this);
   }
+#endif
 }
+
 }  // namespace RTSPStreaming

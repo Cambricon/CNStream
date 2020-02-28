@@ -19,6 +19,7 @@
  *************************************************************************/
 
 #include <cnrt.h>
+#include <atomic>
 #include <iostream>
 #include <string>
 
@@ -70,7 +71,7 @@ class CnrtInitTool {
   ~CnrtInitTool() {
     if (is_initialized_) cnrtDestroy();
   }
-  volatile bool is_initialized_;
+  std::atomic<bool> is_initialized_;
   SpinLock lock_;
 
   // disable copy and assign
@@ -78,13 +79,11 @@ class CnrtInitTool {
   CnrtInitTool& operator=(const CnrtInitTool&) = delete;
 };  // class CnrtInitTool
 
-int MluContext::DeviceId() const { return dev_id_; }
-
-void MluContext::SetDeviceId(int id) { dev_id_ = id; }
-
-int MluContext::ChannelId() const { return channel_id_; }
-
-void MluContext::SetChannelId(int id) { channel_id_ = id; }
+bool MluContext::CheckDeviceId(int id) {
+  CnrtInitTool::instance()->init();
+  cnrtDev_t dev;
+  return CNRT_RET_SUCCESS == cnrtGetDeviceHandle(&dev, id);
+}
 
 void MluContext::ConfigureForThisThread() {
   // static thread_local bool init = false;

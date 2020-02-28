@@ -30,7 +30,7 @@ using std::cout;
 using std::endl;
 
 namespace mtcnn {
-void nms(std::vector<std::shared_ptr<cnstream::CNInferObject>> *ptrInBBoxes,
+void nms(cnstream::ThreadSafeVector<std::shared_ptr<cnstream::CNInferObject>> *ptrInBBoxes,
          std::vector<std::shared_ptr<cnstream::CNInferObject>> *ptrOutBBoxs, float threshold, NMS_MODE mode) {
   // sort the boundingBox
   if (!ptrInBBoxes->empty()) {
@@ -83,7 +83,7 @@ void nms(std::vector<std::shared_ptr<cnstream::CNInferObject>> *ptrInBBoxes,
 
 void generateBoundingBox(const std::vector<float *> nn_outputs, const std::pair<int, int> &shape,
                          const std::pair<float, float> &scale, const float threshold,
-                         std::vector<std::shared_ptr<cnstream::CNInferObject>> *ptrOutBoxs) {
+                         cnstream::ThreadSafeVector<std::shared_ptr<cnstream::CNInferObject>> *ptrOutBoxs) {
   auto regsOutput = nn_outputs[0];
   auto scoresOutput = nn_outputs[1];
   const int stride = 2;

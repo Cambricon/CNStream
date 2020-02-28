@@ -114,6 +114,9 @@ class RtspSink : public Module, public ModuleCreator<RtspSink> {
   int udp_port_;
   int rows_;
   int cols_;
+  int device_id_;
+  uint32_t get_channel = 0;
+  bool is_get_channel = false;
   bool is_mosaic_style_ = false;
   float frame_rate_ = 0;
   std::string enc_type;

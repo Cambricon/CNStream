@@ -5,18 +5,13 @@
 #include "easycodec/vformat.h"
 #include "VideoEncoder.h"
 
-#include "FFmpegSws.h"
-
-
 class CNVideoEncoder : public VideoEncoder {
  public:
   explicit CNVideoEncoder(uint32_t width, uint32_t height, PictureFormat format, CodecType type, float frame_rate,
-                          uint32_t gop_size, uint32_t bit_rate);
+                          uint32_t gop_size, uint32_t bit_rate, uint32_t device_id);
   ~CNVideoEncoder();
-
-  uint32_t GetBitrate() { return bit_rate_; };
-
   friend class CNVideoFrame;
+  uint32_t GetBitrate() { return bit_rate_; }
 
  private:
   class CNVideoFrame : public VideoFrame {
@@ -29,16 +24,15 @@ class CNVideoEncoder : public VideoEncoder {
    private:
     CNVideoEncoder *encoder_ = nullptr;
     edk::CnFrame *frame_ = nullptr;
-    FFSws ffsws_;
   };
 
   virtual VideoFrame *NewFrame();
   virtual void EncodeFrame(VideoFrame *frame);
 
-  void PacketCallback(const edk::CnPacket &packet);
-  void EosCallback();
-  void PerfCallback(const edk::EncodePerfInfo &info);
   void Destroy();
+  void EosCallback();
+  void PacketCallback(const edk::CnPacket &packet);
+  uint32_t GetOffSet(const uint8_t* data);
 
   uint32_t picture_width_;
   uint32_t picture_height_;
@@ -48,6 +42,7 @@ class CNVideoEncoder : public VideoEncoder {
   uint32_t frame_rate_den_;
   uint32_t gop_size_;
   uint32_t bit_rate_;
+  uint32_t device_id_;
   uint32_t frame_count_ = 0;
   edk::EasyEncode *encoder_ = nullptr;
 };  // CNVideoEncoder

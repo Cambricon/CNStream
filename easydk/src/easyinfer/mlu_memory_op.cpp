@@ -146,7 +146,7 @@ void **MluMemoryOp::AllocCpuInput(uint32_t batch_size) const {
   for (uint32_t i = 0; i < num; ++i) {
     uint64_t data_size = shapes[i].DataCount() * batch_size;
     LOG(TRACE, "Alloc CPU input memory (%u) on CPU in %u bytes", i, data_size);
-    ret[i] = static_cast<void *>(new float[data_size]);
+    ret[i] = reinterpret_cast<void *>(new float[data_size]);
   }
   return ret;
 }
@@ -163,7 +163,7 @@ void **MluMemoryOp::AllocCpuOutput(uint32_t batch_size) const {
   for (uint32_t i = 0; i < num; ++i) {
     uint64_t data_size = shapes[i].DataCount() * batch_size;
     LOG(TRACE, "Alloc output memory (%u) on CPU in %u bytes", i, data_size);
-    ret[i] = static_cast<void *>(new float[data_size]);
+    ret[i] = reinterpret_cast<void *>(new float[data_size]);
   }
   return ret;
 }
@@ -224,7 +224,7 @@ void MluMemoryOp::FreeCpuInput(void **ptr) const {
   LOG(TRACE, "Free input memory on CPU");
   uint32_t num = ploader_->InputNum();
   for (uint32_t i = 0; i < num; ++i) {
-    delete[] static_cast<float *>(ptr[i]);
+    delete[] reinterpret_cast<float *>(ptr[i]);
   }
   delete[] ptr;
 }
@@ -234,7 +234,7 @@ void MluMemoryOp::FreeCpuOutput(void **ptr) const {
   LOG(TRACE, "Free output memory on CPU");
   uint32_t num = ploader_->OutputNum();
   for (uint32_t i = 0; i < num; ++i) {
-    delete[] static_cast<float *>(ptr[i]);
+    delete[] reinterpret_cast<float *>(ptr[i]);
   }
   delete[] ptr;
 }

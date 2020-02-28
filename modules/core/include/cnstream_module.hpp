@@ -49,8 +49,20 @@
 
 namespace cnstream {
 
+/// Module parameter set
 using ModuleParamSet = std::unordered_map<std::string, std::string>;
 
+  /**
+   * @brief Get the complete path.
+   *
+   * If the parameter path is the absolute path, the complete path is the path.
+   * However, if it is a relative path, the complete path is appending the path
+   * after the json file path given by user.
+   * 
+   * @param path The path related to the json file or the absolute path.
+   *
+   * @return Returns the complete path.
+   */
 __attribute__((unused)) inline std::string GetPathRelativeToTheJSONFile(const std::string &path,
                                                                         const ModuleParamSet &param_set) {
   std::string jsf_dir = "./";
@@ -92,12 +104,36 @@ class Module {
     std::string module_desc_;
 
    public:
+    /**
+    * @brief Register the paramter and its description.
+    *
+    * This is for inspect tool.
+    * 
+    * @param key The parameter name.
+    * @param desc The description of the paramter.
+    *
+    * @return Void
+    */
     void Register(const std::string &key, const std::string &desc) {
       module_params_.push_back(std::make_pair(key, desc));
     }
-
+    /**
+    * @brief Get the registered paramters and their descriptions.
+    *
+    * This is for inspect tool.
+    *
+    * @return Returns the registered paramters and their descriptions.
+    */
     std::vector<std::pair<std::string, std::string>> GetParams() { return module_params_; }
-
+    /**
+    * @brief Check if the paramter is registered.
+    *
+    * This is for inspect tool.
+    * 
+    * @param key The parameter name.
+    *
+    * @return Returns true if the parameter has been registered, otherwise returns false.
+    */
     bool IsRegisted(const std::string &key) {
       if (strcmp(key.c_str(), CNS_JSON_DIR_PARAM_NAME) == 0) {
         return true;
@@ -109,9 +145,23 @@ class Module {
       }
       return false;
     }
-
+    /**
+    * @brief Set the description of the module.
+    *
+    * This is for inspect tool.
+    * 
+    * @param desc The description of the module.
+    *
+    * @return Void
+    */
     void SetModuleDesc(const std::string &desc) { module_desc_ = desc; }
-
+    /**
+    * @brief Get the description of the module.
+    *
+    * This is for inspect tool.
+    *
+    * @return Returns the description of the module
+    */
     std::string GetModuleDesc() { return module_desc_; }
   };
 
@@ -188,8 +238,14 @@ class Module {
    */
   virtual void PrintPerfInfo();
 
-  /* Transmits data to next stages
-   *   valid when the module has permitssion to transmit data by itself.
+  /**
+   * @brief Transmits data to next stages
+   * 
+   * Valid when the module has permitssion to transmit data by itself.
+   * 
+   * @param data The pointer to the information of the frame.
+   * 
+   * @return Returns true if the data is transmitted successfully, otherwise returns false.
    */
   bool TransmitData(std::shared_ptr<CNFrameInfo> data);
 
@@ -241,11 +297,33 @@ class Module {
   bool hasTranmit() const { return hasTransmit_.load(); }
 
   /**
-   * called by pipeline
+   * @brief Processes the data
+   * 
+   * This function will be called by pipeline.
+   * 
+   * @param data The pointer to the information of the frame.
+   * 
+   * @return
+   * @retval 0 : OK, but framework needs to transmit data.
+   * @retval >0: OK, the data has been handled by this module. The hasTransmit_ must be set.
+   *            Module has to call Pipeline::ProvideData to tell pipeline to transmit data
+   *            to next modules.
+   * @retval <0: Pipeline will post an event with the EVENT_ERROR event type with return
+   *             number.
    */
   int DoProcess(std::shared_ptr<CNFrameInfo> data);
 
+  /**
+   * @return Returns true if the performance info will be shown, otherwise returns false.
+   */
   bool ShowPerfInfo() { return showPerfInfo_.load(); }
+  /**
+   * @brief Change the status of whether showing the performance info.
+   * 
+   * @param enable the newest status
+   * 
+   * @return Voids
+   */
   void ShowPerfInfo(bool enable) { showPerfInfo_.store(enable); }
 
  protected:
@@ -287,6 +365,11 @@ class ModuleEx : public Module {
  */
 class ModuleFactory {
  public:
+   /**
+   * @brief Create or get the instance of class ModuleFactory.
+   *
+   * @return Returns the instance of class ModuleFactory.
+   */
   static ModuleFactory *Instance() {
     if (nullptr == factory_) {
       factory_ = new(std::nothrow) ModuleFactory();
@@ -376,6 +459,15 @@ class ModuleCreator {
   };
   ModuleCreator() { register_.do_nothing(); }
   virtual ~ModuleCreator() { register_.do_nothing(); }
+  /**
+   * @brief Create an instance of T with "name".
+   *
+   * This is a template function.
+   * 
+   * @param name The name.
+   * 
+   * @return Returns the instance of T.
+   */
   static T *CreateObject(const std::string &name) { return new(std::nothrow) T(name); }
   static Register register_;
 };
@@ -388,6 +480,15 @@ typename ModuleCreator<T>::Register ModuleCreator<T>::register_;
  */
 class ModuleCreatorWorker {
  public:
+   /**
+   * @brief Creates a module instance with  "ModuleClassName" and "moduleName".
+   *
+   * @param strTypeName, The module class name (TypeName).
+   * @param name, The module name.
+   *
+   * @return Returns the module instance if create successfully. Returns nullptr if failed.
+   * @see ModuleFactory::Create
+   */
   Module *Create(const std::string &strTypeName, const std::string &name) {
     Module *p = ModuleFactory::Instance()->Create(strTypeName, name);
     return (p);
@@ -399,7 +500,14 @@ class ModuleCreatorWorker {
  */
 class ParametersChecker {
  public:
-  // check path is existence
+  /**
+   * @brief Check if the path exists.
+   *
+   * @param path, The path relative to json file or the absolute path.
+   * @param paramSet, The module parameters. The json file path is one of the parameters.
+   *
+   * @return Returns true if exists, otherwise false.
+   */
   bool CheckPath(const std::string &path, const ModuleParamSet &paramSet) {
     std::string relative_path = GetPathRelativeToTheJSONFile(path, paramSet);
     if ((access(relative_path.c_str(), R_OK)) == -1) {
@@ -407,7 +515,17 @@ class ParametersChecker {
     }
     return true;
   }
-  // check str is number
+  /**
+   * @brief Check if the parameters are number and the value is in the correct range.
+   *
+   * @param check_list, A list of parameter name
+   * @param paramSet, The module parameters
+   * @param err_msg, The error message
+   * @param greater_than_zero, If it is "true" presents the parameter should be
+   * greater or equal than zero, otherwise less than zero.
+   *
+   * @return Returns true if the parameters are number and the value is in the correct range, otherwise false.
+   */
   bool IsNum(const std::list<std::string> &check_list, const ModuleParamSet &paramSet, std::string &err_msg, // NOLINT
              bool greater_than_zero = false) {
     for (auto &it : check_list) {
