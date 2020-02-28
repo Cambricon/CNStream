@@ -120,10 +120,10 @@ TEST(Inferencer, QueuingServer_DeallingDone) {
   std::atomic<bool> DeallingDoneCall(false);
   std::function<double()> wait_Dealling([&] () -> double {
     DeallingDoneCall.store(true);
-    auto stime = std::chrono::high_resolution_clock::now();
+    auto stime = std::chrono::steady_clock::now();
     std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));
     qserver->DeallingDone();
-    auto etime = std::chrono::high_resolution_clock::now();
+    auto etime = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> diff = etime - stime;
     return diff.count();
   });
@@ -153,9 +153,9 @@ TEST(Inferencer, QueuingServer_WaitByTicket) {
   std::atomic<bool> task_run(false);
   std::function<double()> wait_task([&]() -> double {
     task_run.store(true);
-    auto stime = std::chrono::high_resolution_clock::now();
+    auto stime = std::chrono::steady_clock::now();
     qserver.WaitByTicket(&ticket);
-    auto etime = std::chrono::high_resolution_clock::now();
+    auto etime = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> diff = etime - stime;
     return diff.count();
   });

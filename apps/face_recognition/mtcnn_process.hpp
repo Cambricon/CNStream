@@ -51,13 +51,13 @@ struct CmpBoundingBox {
 enum NMS_MODE { UNION, MIN };
 
 // Non-maximum suppression to reduce overlapping boundary boxes that may be the same face
-void nms(std::vector<std::shared_ptr<cnstream::CNInferObject>> *ptrInBBoxes,
+void nms(cnstream::ThreadSafeVector<std::shared_ptr<cnstream::CNInferObject>> *ptrInBBoxes,
          std::vector<std::shared_ptr<cnstream::CNInferObject>> *ptrOutBBoxs, float threshold, NMS_MODE mode);
 
 // Convert mtcnn::pNet's output feature map to bounding box structure
 void generateBoundingBox(const std::vector<float *> nn_outputs, const std::pair<int, int> &shape,
                          const std::pair<float, float> &scale, const float threshold,
-                         std::vector<std::shared_ptr<cnstream::CNInferObject>> *pOutBBoxs);
+                         cnstream::ThreadSafeVector<std::shared_ptr<cnstream::CNInferObject>> *pOutBBoxs);
 
 // Convert bouding box to a standard square
 void convertToSquare(std::vector<std::shared_ptr<cnstream::CNInferObject>> *ptrBBox);

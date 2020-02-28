@@ -23,26 +23,27 @@
 
 #include <limits.h>
 #include <unistd.h>
-
-#include <atomic>
-#include <string>
-
 #include <pthread.h>
 #include <sys/prctl.h>
+
+#include <atomic>
+#include <mutex>
+#include <string>
+#include <vector>
 
 #include "glog/logging.h"
 
 #define DISABLE_COPY_AND_ASSIGN(TypeName) \
-  TypeName(const TypeName &) = delete;    \
-  const TypeName &operator=(const TypeName &) = delete;
+  TypeName(const TypeName&) = delete;     \
+  const TypeName& operator=(const TypeName&) = delete;
 
 #define DECLARE_PRIVATE(d_ptr, Class) \
   friend class Class##Private;        \
-  Class##Private *d_ptr = nullptr;
+  Class##Private* d_ptr = nullptr;
 
 #define DECLARE_PUBLIC(q_ptr, Class) \
   friend class Class;                \
-  Class *q_ptr = nullptr;
+  Class* q_ptr = nullptr;
 
 #define UNSUPPORTED LOG(FATAL) << "Not supported";
 
@@ -81,16 +82,196 @@ class CNSpinLock {
 
 class CNSpinLockGuard {
  public:
-  explicit CNSpinLockGuard(CNSpinLock &lock) : lock_(lock) { lock_.lock(); }
+  explicit CNSpinLockGuard(CNSpinLock& lock) : lock_(lock) { lock_.lock(); }
   ~CNSpinLockGuard() { lock_.unlock(); }
 
  private:
-  CNSpinLock &lock_;
+  CNSpinLock& lock_;
 };
+
+/**
+ * @brief thread safe vector
+ */
+template <typename T>
+class ThreadSafeVector {
+ public:
+  ThreadSafeVector() = default;
+  ThreadSafeVector(const ThreadSafeVector& other) = delete;
+  ThreadSafeVector& operator=(const ThreadSafeVector& other) = delete;
+  /**
+   * @brief Appends the given element value to the end of the container.
+   *
+   * @param new_value The value of the element to append.
+   *
+   */
+  void push_back(const T& new_value);
+
+  /**
+   * @brief Removes the last element of the container.
+   *        Calling pop_back on an empty container is undefined.
+   *        Iterators and references to the last element, as well as the end() iterator, are invalidated
+   */
+  void pop_back();
+
+  /**
+   * @brief Returns a reference to the element at specified location pos. No bounds checking is performed.
+   *
+   * @param pos position of the element to return.
+   *
+   * @return T  Reference to the requested element
+   */
+  T& operator[](typename std::vector<T>::size_type pos);
+
+  /**
+   * @brief Erases all elements from the container. After this call, size() returns zero.
+   */
+  void clear();
+
+  /**
+   * @brief Checks if the container has no elements, i.e. whether begin() == end()
+   *
+   * @return Flag true if the container is empty, false otherwise
+   */
+  bool empty() const {
+    CNSpinLockGuard lk(data_m_);
+    return v_.empty();
+  }
+
+  /**
+   * @brief Returns the number of elements in the container, i.e. std::distance(begin(), end())
+   *
+   * @return The number of elements in the container
+   */
+  typename std::vector<T>::size_type size() const {
+    CNSpinLockGuard lk(data_m_);
+    return v_.size();
+  }
+
+  /**
+   * @brief Returns an iterator to the first element of the vector.
+   *        If the vector is empty, the returned iterator will be equal to end().
+   * @return Iterator to the first element
+   */
+  typename std::vector<T>::iterator begin() {
+    CNSpinLockGuard lk(data_m_);
+    return v_.begin();
+  }
+
+  /**
+   * @brief Returns an iterator to the element following the last element of the vector.
+   *
+   * @return Iterator to the element following the last element.
+   */
+  typename std::vector<T>::iterator end() {
+    CNSpinLockGuard lk(data_m_);
+    return v_.end();
+  }
+
+  /**
+   *  @brief Returns pointer to the underlying array serving as element storage.
+   *  The pointer is such that range [data(); data() + size()) is always a valid range,
+   *  even if the container is empty (data() is not dereferenceable in that case).
+   *
+   *  @return Pointer to the underlying element storage.
+   *
+   */
+  T* data() noexcept {
+    CNSpinLockGuard lk(data_m_);
+    return v_.data();
+  }
+
+  /**
+   * @brief Erases the specified elements from the container
+   * @param pos Iterator to the element to remove
+   * @param begin Range of elements to remove
+   * @param end Range of elements to remove
+   *
+   */
+  typename std::vector<T>::iterator erase(typename std::vector<T>::iterator pos);
+  typename std::vector<T>::iterator erase(typename std::vector<T>::iterator begin,
+                                          typename std::vector<T>::iterator end);
+  /**
+   *  @brief Inserts elements at the specified location in the container.
+   *
+   *  @param pos Iterator before which the content will be inserted. pos may be the end() iterator
+   *  @param value Element value to insert.
+   *  @param first  The range of elements to insert, can't be iterators into container for which insert is Called.
+   *  @param last The range of elements to insert, can't be iterators into container for which insert is Called.
+   *
+   *  @return Iterator pointing to the inserted value.
+   *
+   */
+  typename std::vector<T>::iterator insert(const typename std::vector<T>::iterator& pos, const T& value);
+  typename std::vector<T>::iterator insert(typename std::vector<T>::iterator pos, const T& value);
+  template <class InputIt>
+  typename std::vector<T>::iterator insert(const typename std::vector<T>::iterator& pos, InputIt first, InputIt last);
+
+ private:
+  mutable CNSpinLock data_m_;
+  std::vector<T> v_;
+};
+
+template <typename T>
+typename std::vector<T>::iterator ThreadSafeVector<T>::erase(typename std::vector<T>::iterator pos) {
+  CNSpinLockGuard lk(data_m_);
+  return v_.erase(pos);
+}
+
+template <typename T>
+typename std::vector<T>::iterator ThreadSafeVector<T>::erase(typename std::vector<T>::iterator begin,
+                                                             typename std::vector<T>::iterator end) {
+  CNSpinLockGuard lk(data_m_);
+  return v_.erase(begin, end);
+}
+
+template <typename T>
+template <class InputIt>
+typename std::vector<T>::iterator ThreadSafeVector<T>::insert(const typename std::vector<T>::iterator& pos,
+                                                              InputIt first, InputIt last) {
+  CNSpinLockGuard lk(data_m_);
+  return v_.insert(pos, first, last);
+}
+
+template <typename T>
+typename std::vector<T>::iterator ThreadSafeVector<T>::insert(const typename std::vector<T>::iterator& pos,
+                                                              const T& value) {
+  CNSpinLockGuard lk(data_m_);
+  return v_.insert(pos, value);
+}
+
+template <typename T>
+typename std::vector<T>::iterator ThreadSafeVector<T>::insert(typename std::vector<T>::iterator pos, const T& value) {
+  CNSpinLockGuard lk(data_m_);
+  return v_.insert(pos, value);
+}
+
+template <typename T>
+T& ThreadSafeVector<T>::operator[](typename std::vector<T>::size_type pos) {
+  CNSpinLockGuard lk(data_m_);
+  return v_[pos];
+}
+
+template <typename T>
+void ThreadSafeVector<T>::pop_back() {
+  CNSpinLockGuard lk(data_m_);
+  v_.pop_back();
+}
+
+template <typename T>
+void ThreadSafeVector<T>::clear() {
+  CNSpinLockGuard lk(data_m_);
+  v_.clear();
+}
+
+template <typename T>
+void ThreadSafeVector<T>::push_back(const T& new_value) {
+  CNSpinLockGuard lk(data_m_);
+  v_.push_back(new_value);
+}
 
 /*helper functions
  */
-inline std::string GetFullPath(const std::string &path) {
+inline std::string GetFullPath(const std::string& path) {
   if (path.empty() || path.front() == '/') {  // absolute path
     return path;
   } else {
@@ -105,7 +286,7 @@ inline std::string GetFullPath(const std::string &path) {
 
 static const pthread_t invalid_pthread_tid = static_cast<pthread_t>(-1);
 
-inline void SetThreadName(const std::string &name, pthread_t thread = invalid_pthread_tid) {
+inline void SetThreadName(const std::string& name, pthread_t thread = invalid_pthread_tid) {
   /*name length should be less than 16 bytes */
   if (name.empty() || name.size() >= 16) {
     return;

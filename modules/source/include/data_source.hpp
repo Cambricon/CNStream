@@ -38,15 +38,15 @@
 namespace cnstream {
 
 /**
- *  @brief SourceType
+ *  @brief type of added stream or source to process.
  */
 enum SourceType { SOURCE_RAW, SOURCE_FFMPEG };
 /**
- * @brief OutputType
+ * @brief storage type of output frame data for modules, storage on cpu or mlu.
  */
 enum OutputType { OUTPUT_CPU, OUTPUT_MLU };
 /**
- * @brief DecoderType
+ * @brief decoder type used in source module.
  */
 enum DecoderType { DECODER_CPU, DECODER_MLU };
 /**

@@ -19,17 +19,15 @@
  *************************************************************************/
 
 #include "cxxutil/logger.h"
-#include <cstdlib>
-#include <ctime>
+#include "sys/time.h"
 #include <iostream>
 #include <string>
 
 namespace edk {
 
-bool Logger::out_to_file_ = false;
-bool Logger::out_to_screen_ = true;
+bool Logger::to_file_ = false;
+bool Logger::to_screen_ = true;
 
-char Logger::time_string_[128];
 char Logger::log_string_[2048];
 
 const char *Logger::log_level_str_[] = { "ERROR", "WARNING", "INFO", "TRACE" };
@@ -41,22 +39,29 @@ class LogPrivate {
 };
 
 void Logger::WriteLog(int level, const char *log) {
+  static char time_string[128];
+  tm t;
+  timeval curtime;
+  gettimeofday(&curtime, NULL);
+  localtime_r(&curtime.tv_sec, &t);
+  snprintf(time_string, 128, "%02d.%02d %02d:%02d:%02d.%06ld",
+           t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, curtime.tv_usec);
   static std::ostream *print_stream;
   if (level < 2) {
     // warning and error
-    if (out_to_file_) d_ptr_->error_logfile_ << log_string_ << std::endl;
+    if (to_file_) d_ptr_->error_logfile_ << time_string << log << std::endl;
     print_stream = &std::cerr;
   } else {
     // info and debug
     print_stream = &std::cout;
   }
-  if (out_to_file_) d_ptr_->logfile_ << log_string_ << std::endl;
-  if (out_to_screen_) *print_stream << log_string_ << std::endl;
+  if (to_file_) d_ptr_->logfile_ << time_string << log << std::endl;
+  if (to_screen_) *print_stream << time_string << log << std::endl;
 }
 
 void Logger::SetLogPattern(const bool &to_screen, const bool &to_file) {
-  Logger::out_to_screen_ = to_screen;
-  Logger::out_to_file_ = to_file;
+  Logger::to_screen_ = to_screen;
+  Logger::to_file_ = to_file;
 }
 
 Logger *Logger::GetInstance() {
@@ -66,22 +71,22 @@ Logger *Logger::GetInstance() {
 
 Logger::Logger() {
   d_ptr_ = new LogPrivate;
-  char *level = getenv("TOOLKIT_DEBUG");
+  char *level = getenv("EDK_DEBUG");
   if (level == nullptr) {
     level_ = 1;
   } else {
     level_ = level[0] - '0';
     if (level_ < 0 || level_ > 3) {
-      std::cerr << "TOOLKIT_DEBUG must have a value between 0 and 3" << std::endl;
+      std::cerr << "EDK_DEBUG must have a value between 0 and 3" << std::endl;
       level_ = 1;
     }
   }
   time_t tm;
   time(&tm);
   char time_string[128];
-  strftime(time_string, 128, "Tookit_%Y-%m.%d-%T", localtime(&tm));
+  strftime(time_string, 128, "EDK_%Y-%m.%d-%T", localtime(&tm));
   std::string str_name(time_string);
-  if (out_to_file_) {
+  if (to_file_) {
     d_ptr_->logfile_.open((str_name + ".log").c_str());
     d_ptr_->error_logfile_.open((str_name + "_error.log").c_str());
   }

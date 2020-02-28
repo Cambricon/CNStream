@@ -22,12 +22,12 @@
 
 #include <thread>
 
-void FrController::Start() { start_ = std::chrono::high_resolution_clock::now(); }
+void FrController::Start() { start_ = std::chrono::steady_clock::now(); }
 
 void FrController::Control() {
   if (0 == frame_rate_) return;
   double delay = 1000.0 / frame_rate_;
-  end_ = std::chrono::high_resolution_clock::now();
+  end_ = std::chrono::steady_clock::now();
   std::chrono::duration<double, std::milli> diff = end_ - start_;
   auto gap = delay - diff.count() - time_gap_;
   if (gap > 0) {

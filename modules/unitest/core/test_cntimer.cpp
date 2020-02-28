@@ -27,7 +27,7 @@
 
 #include "cnstream_timer.hpp"
 
-using time_point = std::chrono::time_point<std::chrono::high_resolution_clock>;
+using time_point = std::chrono::time_point<std::chrono::steady_clock>;
 
 namespace cnstream {
 
@@ -41,9 +41,9 @@ class TestCoreCNTimer : public testing::Test {
   uint32_t seed_ = (uint32_t)time(0);
 };
 
-inline void TestCoreCNTimer::Start() { start_ = std::chrono::high_resolution_clock::now(); }
+inline void TestCoreCNTimer::Start() { start_ = std::chrono::steady_clock::now(); }
 
-inline void TestCoreCNTimer::End() { end_ = std::chrono::high_resolution_clock::now(); }
+inline void TestCoreCNTimer::End() { end_ = std::chrono::steady_clock::now(); }
 
 double TestCoreCNTimer::Interval() {
   std::chrono::duration<double, std::milli> diff;

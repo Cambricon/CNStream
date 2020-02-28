@@ -37,6 +37,7 @@
  */
 
 #include <cstddef>
+#include <mutex>
 
 namespace cnstream {
 
@@ -174,7 +175,15 @@ class CNSyncedMemory {
   size_t GetSize() const { return size_; }
 
 #ifdef CNS_MLU220_SOC
-  void SetMluCpuData(void *mlu_data, void *cpu_data);
+  /**
+   * Sets the MLU data and the CPU data
+   *
+   * @param mlu_data The data pointer on MLU
+   * @param cpu_data The data pointer on CPUs
+   * 
+   * @return Returns Void
+   */
+  void SetMluCpuData(void* mlu_data, void* cpu_data);
 #endif
 
  private:
@@ -211,6 +220,7 @@ class CNSyncedMemory {
   int ddr_chn_ = 0;  ///< Ordinal MLU DDR channel id. The value should be [0, 4).
 
   DISABLE_COPY_AND_ASSIGN(CNSyncedMemory);
+  mutable std::mutex mutex_;
 };  // class CNSyncedMemory
 
 }  // namespace cnstream

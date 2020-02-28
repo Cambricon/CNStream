@@ -43,7 +43,7 @@ IMPLEMENT_REFLEX_OBJECT_EX(PostprocMtcnnPnet, cnstream::Postproc)
 
 int PostprocMtcnnPnet::Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
                                const cnstream::CNFrameInfoPtr& package) {
-  std::vector<std::shared_ptr<cnstream::CNInferObject>> getBox;
+  cnstream::ThreadSafeVector<std::shared_ptr<cnstream::CNInferObject>> getBox;
   std::vector<std::shared_ptr<cnstream::CNInferObject>> outBbox;
 
   // generate box based on pNet output

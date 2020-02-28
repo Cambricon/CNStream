@@ -89,8 +89,9 @@ bool FFmpegMluDecoder::Create(AVStream *st) {
   }
   instance_attr.dev_id = dev_ctx_.dev_id;
   instance_attr.silent = false;
-
+  instance_attr.stride_align = 1;
   // callbacks
+
   instance_attr.frame_callback = std::bind(&FFmpegMluDecoder::FrameCallback, this, std::placeholders::_1);
   instance_attr.eos_callback = std::bind(&FFmpegMluDecoder::EOSCallback, this);
 

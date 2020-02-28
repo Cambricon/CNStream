@@ -40,7 +40,7 @@ option(RELEASE "build type" ON)
 option(WITH_FFMPEG "with ffmpeg" ON)
 option(WITH_OPENCV "with opencv" ON)
 option(WITH_CHINESE "with chinese" OFF)
-option(WITH_RTSP "with rtsp" OFF)
+option(WITH_RTSP "with rtsp" ON)
 
 # To use sanitizers, the version of GCC is required to be no less than 4.9
 option(SANITIZE_MEMORY "Enable MemorySanitizer for sanitized targets." OFF)
@@ -282,9 +282,9 @@ endif()
 
 # ---[ Subdirectories
 add_subdirectory(3rdparty)
+add_subdirectory(easydk)
 add_subdirectory(modules)
 add_subdirectory(tools)
-add_subdirectory(easydk)
 if(build_samples)
   add_subdirectory(samples)
 endif()

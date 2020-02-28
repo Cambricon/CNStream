@@ -405,6 +405,15 @@ class Pipeline : public Module {
   StreamMsgObserver* GetStreamMsgObserver() const { return smsg_observer_; }
 
   /* called by pipeline */
+  /**
+   * Pass the stream message to the observer of this pipeline.
+   * 
+   * @param smsg The stream message.
+   *
+   * @return Void.
+   *
+   * @see StreamMsg.
+   */
   void NotifyStreamMsg(const StreamMsg& smsg);
 
  private:

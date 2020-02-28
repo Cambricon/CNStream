@@ -64,15 +64,10 @@ class CNEncoderStream {
 
   CNEncoderStream(int src_width, int src_height, int width, int height, float frame_rate, PictureFormat format,
           int bit_rate, int gop_size, CodecType type, uint8_t channelIdx, uint32_t device_id, std::string pre_type);
-  ~CNEncoderStream() {}
+  virtual ~CNEncoderStream();
 
-  void Open();
-  void Close();
-  void Loop();
-  bool Update(const cv::Mat &image, int64_t timestamp, int channel_id = -1);
-  bool Update(uint8_t * image, int64_t timestamp, int channel_id = -1);
-  bool SendFrame(uint8_t *data, int64_t timestamp);
-  void RefreshEOS(bool eos);
+  bool Update(const cv::Mat &image, int64_t timestamp, bool eos);
+  bool Update(uint8_t *image, int64_t timestamp, bool eos);
   void ResizeYUV(const uint8_t *src, uint8_t *dst);
   void Bgr2YUV420NV(const cv::Mat &bgr, PictureFormat ToFormat, uint8_t *nv_data);
   void Convert(const uint8_t* src_buffer, const size_t src_buffer_size,
@@ -80,17 +75,13 @@ class CNEncoderStream {
 
   void EosCallback();
   void PacketCallback(const edk::CnPacket &packet);
-  void PerfCallback(const edk::EncodePerfInfo &info);
 
  private:
-  bool running_ = false;
   bool copy_frame_buffer_ = false;
 
   std::string pre_type_;
   std::mutex update_lock_;
-  std::mutex input_mutex_;
-  std::thread *encode_thread_ = nullptr;
-  std::queue<edk::CnFrame *> input_data_q_;
+  uint8_t *output_data = nullptr;
 
   uint32_t src_width_ = 0;
   uint32_t src_height_ = 0;
@@ -102,7 +93,6 @@ class CNEncoderStream {
   uint32_t gop_size_;
   uint32_t bit_rate_;
   uint32_t device_id_;
-  uint32_t input_queue_size_ = 20;
 
   uint8_t channelIdx_;
   char output_file[256] = {0};
@@ -113,7 +103,6 @@ class CNEncoderStream {
   PictureFormat format_;
 
   cv::Mat canvas_;
-  edk::CnFrame *frame_;
   edk::PixelFmt picture_format_;
   edk::CodecType codec_type_;
   edk::EasyEncode *encoder_ = nullptr;
@@ -123,9 +112,6 @@ class CNEncoderStream {
   AVFrame* dst_pic_ = nullptr;
   AVPixelFormat src_pix_fmt_ = AV_PIX_FMT_NONE;  // AV_PIX_FMT_BGR24
   AVPixelFormat dst_pix_fmt_ = AV_PIX_FMT_NONE;
-
-  std::chrono::time_point<std::chrono::high_resolution_clock> start_time_;
-  std::chrono::time_point<std::chrono::high_resolution_clock> end_time_;
 };
 
 #endif  // CNEncoder_STREAM_HPP_

@@ -12,10 +12,10 @@ class RTSPFrameSource : public FramedSource {
  public:
   static RTSPFrameSource* createNew(UsageEnvironment& env, VideoEncoder* encoder);
   RTSPFrameSource(UsageEnvironment& env, VideoEncoder* encoder);
-  ~RTSPFrameSource();
+  virtual ~RTSPFrameSource();
 
  private:
-  static void deliverFrameStub(void* clientData) { ((RTSPFrameSource*)clientData)->deliverFrame(); };
+  static void deliverFrameStub(void* clientData) { ((RTSPFrameSource*)clientData)->deliverFrame(); }
   virtual void doGetNextFrame();
   void deliverFrame();
   virtual void doStopGettingFrames();

@@ -696,6 +696,7 @@ CNModuleConfig Pipeline::GetModuleConfig(const std::string& module_name) {
 
 int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
   /*TODO,check configs*/
+  uint64_t linked_id_mask = 0;
   ModuleCreatorWorker creator;
   std::map<std::string, int> queues_size;
   for (auto& v : configs) {
@@ -717,6 +718,14 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
         LOG(ERROR) << "Link [" << v.first << "] with [" << name << "] failed.";
         return -1;
       }
+      linked_id_mask |= (uint64_t)1 << d_ptr_->modules_map_[name]->GetId();
+    }
+  }
+  for (auto& v : configs) {
+    if (v.className != "cnstream::DataSource"
+        && !(((uint64_t)1 << d_ptr_->modules_map_[v.name]->GetId()) & linked_id_mask)) {
+      LOG(ERROR) << v.name << " not linked to any module.";
+      return -1;
     }
   }
   return 0;

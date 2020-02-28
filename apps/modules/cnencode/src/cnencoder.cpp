@@ -69,9 +69,7 @@ CNEncoderContext *CNEncoder::GetCNEncoderContext(CNFrameInfoPtr data) {
     // build cnencoder
     ctx->stream_ = new CNEncoderStream(data->frame.width, data->frame.height, dst_width_, dst_height_,
                  frame_rate_, cn_format_, bit_rate_, gop_size_, cn_type_, data->channel_idx, device_id_, pre_type_);
-    // open cnencoder
-    ctx->stream_->Open();
-    // add into map
+    /* add into map */
     ctxs_[data->channel_idx] = ctx;
   }
   return ctx;
@@ -130,7 +128,6 @@ void CNEncoder::Close() {
     return;
   }
   for (auto &pair : ctxs_) {
-    pair.second->stream_->Close();
     delete pair.second->stream_;
     delete pair.second;
   }
@@ -140,26 +137,27 @@ void CNEncoder::Close() {
 int CNEncoder::Process(CNFrameInfoPtr data) {
   bool eos = data->frame.flags & CNFrameFlag::CN_FRAME_FLAG_EOS;
   CNEncoderContext *ctx = GetCNEncoderContext(data);
-  if (!eos) {
-    if (pre_type_ == "opencv" || pre_type_ == "ffmpeg") {
-      cv::Mat image = *data->frame.ImageBGR();
-      ctx->stream_->Update(image, data->frame.timestamp, data->channel_idx);
-    } else if (pre_type_ == "mlu") {
-      uint8_t *image_data = new uint8_t[data->frame.GetBytes()];
+
+  if (pre_type_ == "opencv" || pre_type_ == "ffmpeg") {
+    cv::Mat image;
+    if (!eos) image = *data->frame.ImageBGR();
+    ctx->stream_->Update(image, data->frame.timestamp, eos);
+  } else if (pre_type_ == "mlu") {
+    uint8_t *image_data = nullptr;
+    if (!eos) {
+      image_data = new uint8_t[data->frame.GetBytes()];
       uint8_t *plane_0 = reinterpret_cast<uint8_t *>(data->frame.data[0]->GetMutableCpuData());
       uint8_t *plane_1 = reinterpret_cast<uint8_t *>(data->frame.data[1]->GetMutableCpuData());
-      memcpy(image_data, plane_0, data->frame.GetPlaneBytes(0));
-      memcpy(image_data + data->frame.GetPlaneBytes(0), plane_1, data->frame.GetPlaneBytes(1));
-      ctx->stream_->Update(image_data, data->frame.timestamp, data->channel_idx);
-      delete []image_data;
-      image_data = nullptr;
-    } else {
-      std::cout << "pre_type err !!!" << std::endl;
-      return 0;
+      memcpy(image_data, plane_0, data->frame.GetPlaneBytes(0)*sizeof(uint8_t));
+      memcpy(image_data + data->frame.GetPlaneBytes(0), plane_1, data->frame.GetPlaneBytes(1)*sizeof(uint8_t));
+      data->frame.deAllocator_.reset();
     }
-
+    ctx->stream_->Update(image_data, data->frame.timestamp, eos);
+    delete []image_data;
+    image_data = nullptr;
   } else {
-      ctx->stream_->RefreshEOS(eos);
+    LOG(WARNING) << "pre_type err !!!" << pre_type_;
+    return 0;
   }
   // TransmitData(data);
   return 0;

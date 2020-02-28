@@ -9,6 +9,8 @@
 #include <StreamReplicator.hh>
 #include <UsageEnvironment.hh>
 
+#include "RTSPFrameSource.h"
+
 namespace RTSPStreaming {
 class RTSPMediaSubsession : public OnDemandServerMediaSubsession {
  public:
@@ -16,20 +18,21 @@ class RTSPMediaSubsession : public OnDemandServerMediaSubsession {
 
   void SetBitrate(uint64_t br) {
     if (br > 500 * 1000) {
-      fBitRate_ = static_cast<unsigned long>(br / 1024);
+      fBitRate_ = static_cast<uint32_t>(br / 1000);
     } else {
       fBitRate_ = 500;  // 500k
     }
-  };
+  }
 
  protected:
   RTSPMediaSubsession(UsageEnvironment& env, StreamReplicator* replicator)
-      : OnDemandServerMediaSubsession(env, False), m_replicator_(replicator), fBitRate_(1024){};
+      : OnDemandServerMediaSubsession(env, False), m_replicator_(replicator), fBitRate_(1000) {}
+  virtual ~RTSPMediaSubsession() {}
   virtual FramedSource* createNewStreamSource(unsigned clientSessionId, unsigned& estBitrate);
   virtual RTPSink* createNewRTPSink(Groupsock* rtpGroupsock, unsigned char rtpPayloadTypeIfDynamic,
                                     FramedSource* inputSource);
   StreamReplicator* m_replicator_;
-  unsigned long fBitRate_;
+  uint32_t fBitRate_;
 };
 }  // namespace RTSPStreaming
 

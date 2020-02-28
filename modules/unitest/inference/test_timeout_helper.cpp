@@ -121,7 +121,7 @@ TEST(Inferencer, TimeoutHelper_HandleFunc) {
   std::function<double()> wait_for_time(
     [&] () -> double {
       // HandleCall.store(true);
-      auto stime = std::chrono::high_resolution_clock::now();
+      auto stime = std::chrono::steady_clock::now();
       th_test.ConditionNotify();  // unlock the last wait
       th_test.setState(1);
       HandleCall.store(true);
@@ -129,7 +129,7 @@ TEST(Inferencer, TimeoutHelper_HandleFunc) {
       while (static_cast<int>(th_test.getState()) != 2)
         std::this_thread::sleep_for(std::chrono::nanoseconds(1));
       th->Reset(Func);  // for the next test
-      auto etime = std::chrono::high_resolution_clock::now();
+      auto etime = std::chrono::steady_clock::now();
       std::chrono::duration<double, std::nano> diff = etime - stime;
       return diff.count();
     });

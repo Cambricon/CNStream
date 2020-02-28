@@ -138,11 +138,11 @@ TEST(Inferencer, InferThreadPool_TaskSequence) {
   constexpr int ktask_num = 5;
   InferThreadPool tp;
   tp.Init(0, ktask_num);
-  std::chrono::high_resolution_clock::time_point ts[ktask_num];  // NOLINT
+  std::chrono::steady_clock::time_point ts[ktask_num];  // NOLINT
   InferTaskSptr tasks[ktask_num];                                // NOLINT
-  std::function<int(std::chrono::high_resolution_clock::time_point * t)> func =
-      [](std::chrono::high_resolution_clock::time_point* t) -> int {
-    *t = std::chrono::high_resolution_clock::now();
+  std::function<int(std::chrono::steady_clock::time_point * t)> func =
+      [](std::chrono::steady_clock::time_point* t) -> int {
+    *t = std::chrono::steady_clock::now();
     return 0;
   };
   for (int i = 0; i < ktask_num; ++i) {

@@ -49,6 +49,7 @@ CNSyncedMemory::CNSyncedMemory(size_t size, int mlu_dev_id, int mlu_ddr_chn)
     : size_(size), dev_id_(mlu_dev_id), ddr_chn_(mlu_ddr_chn) {}
 
 CNSyncedMemory::~CNSyncedMemory() {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (0 == size_) return;
   if (cpu_ptr_ && own_cpu_data_) {
     free(cpu_ptr_);
@@ -105,12 +106,14 @@ inline void CNSyncedMemory::ToMlu() {
 }
 
 const void* CNSyncedMemory::GetCpuData() {
+  std::lock_guard<std::mutex> lock(mutex_);
   ToCpu();
   return const_cast<const void*>(cpu_ptr_);
 }
 
 #ifdef CNS_MLU220_SOC
-void CNSyncedMemory::SetMluCpuData(void *mlu_data, void *cpu_data) {
+void CNSyncedMemory::SetMluCpuData(void* mlu_data, void* cpu_data) {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (0 == size_) return;
   LOG_IF(FATAL, NULL == mlu_data) << "mlu_data is NULL.";
   LOG_IF(FATAL, NULL == cpu_data) << "cpu_data is NULL.";
@@ -132,6 +135,7 @@ void CNSyncedMemory::SetMluCpuData(void *mlu_data, void *cpu_data) {
 #endif
 
 void CNSyncedMemory::SetCpuData(void* data) {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (0 == size_) return;
   LOG_IF(FATAL, NULL == data) << "data is NULL.";
   if (own_cpu_data_) {
@@ -143,11 +147,13 @@ void CNSyncedMemory::SetCpuData(void* data) {
 }
 
 const void* CNSyncedMemory::GetMluData() {
+  std::lock_guard<std::mutex> lock(mutex_);
   ToMlu();
   return const_cast<const void*>(mlu_ptr_);
 }
 
 void CNSyncedMemory::SetMluData(void* data) {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (0 == size_) return;
   LOG_IF(FATAL, nullptr == data) << "data is NULL.";
   if (own_mlu_data_) {
@@ -159,6 +165,7 @@ void CNSyncedMemory::SetMluData(void* data) {
 }
 
 void CNSyncedMemory::SetMluDevContext(int dev_id, int ddr_chn) {
+  std::lock_guard<std::mutex> lock(mutex_);
   /*
     check device
    */
@@ -170,16 +177,24 @@ void CNSyncedMemory::SetMluDevContext(int dev_id, int ddr_chn) {
   ddr_chn_ = ddr_chn;
 }
 
-int CNSyncedMemory::GetMluDevId() const { return dev_id_; }
+int CNSyncedMemory::GetMluDevId() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return dev_id_;
+}
 
-int CNSyncedMemory::GetMluDdrChnId() const { return ddr_chn_; }
+int CNSyncedMemory::GetMluDdrChnId() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return ddr_chn_;
+}
 
 void* CNSyncedMemory::GetMutableCpuData() {
+  std::lock_guard<std::mutex> lock(mutex_);
   ToCpu();
   return cpu_ptr_;
 }
 
 void* CNSyncedMemory::GetMutableMluData() {
+  std::lock_guard<std::mutex> lock(mutex_);
   ToMlu();
   return mlu_ptr_;
 }

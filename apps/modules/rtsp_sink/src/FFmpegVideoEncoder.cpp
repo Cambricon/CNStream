@@ -135,6 +135,7 @@ FFmpegVideoEncoder::FFmpegVideoEncoder(uint32_t width, uint32_t height, PictureF
   avcodec_ctx_->gop_size = gop_size_;
   avcodec_ctx_->pix_fmt = AV_PIX_FMT_YUV420P;
   avcodec_ctx_->max_b_frames = 1;
+  // avcodec_ctx_->thread_count = 1;
 
   av_dict_set(&avcodec_opts_, "preset", "veryfast", 0);
   av_dict_set(&avcodec_opts_, "tune", "zerolatency", 0);
@@ -213,12 +214,22 @@ void FFmpegVideoEncoder::Destroy() {
 
 VideoEncoder::VideoFrame *FFmpegVideoEncoder::NewFrame() { return new FFmpegVideoFrame(this); }
 
+uint32_t FFmpegVideoEncoder::GetOffSet(const uint8_t* data) {
+  uint32_t offset = 0;
+  const uint8_t *p = data;
+  if (p[0] == 0x00 && p[1] == 0x00) {
+    if (p[2] == 0x01) {
+      offset = 3;
+    } else if ((p[2] == 0x00) && (p[3] == 0x01)) {
+      offset = 4;
+    }
+  }
+  return offset;
+}
+
 void FFmpegVideoEncoder::EncodeFrame(VideoFrame *frame) {
   FFmpegVideoFrame *ffpic = dynamic_cast<FFmpegVideoFrame *>(frame);
-
   AVFrame *picture = ffpic->Get();
-
-  // std::cout << "input frame pts: " << picture->pts << std::endl;
 
   if (sws_ctx_) {
     sws_scale(sws_ctx_, picture->data, picture->linesize, 0, picture->height, avframe_->data, avframe_->linesize);
@@ -234,25 +245,16 @@ void FFmpegVideoEncoder::EncodeFrame(VideoFrame *frame) {
   }
 
   if (!ret && got_packet && avpacket_->size) {
+    // std::cout << "===got packet: size=" << avpacket_->size << ", pts=" << avpacket_->pts << std::endl;
     int offset = 0;
-    if (avpacket_->data[0] == 0x00 && avpacket_->data[1] == 0x00) {
-      if (avpacket_->data[2] == 0x01) {
-        offset = 3;
-      } else if ((avpacket_->data[2] == 0x00) && (avpacket_->data[3] == 0x01)) {
-        offset = 4;
-      }
-    }
-    int length = avpacket_->size - offset;
+    uint8_t *packet_data = nullptr;
+    packet_data = reinterpret_cast<uint8_t *>(avpacket_->data);
+    offset = GetOffSet(packet_data);
+    size_t length = avpacket_->size - offset;
     uint8_t *data = avpacket_->data + offset;
-
-    // std::cout << "got packet: size=" << avpacket_->size << ", pts=" << avpacket_->pts << std::endl;
-
     PushOutputBuffer(data, length, frame_count_, avpacket_->pts);
-
     frame_count_++;
-
     Callback(NEW_FRAME);
   }
-
   av_packet_unref(avpacket_);
 }

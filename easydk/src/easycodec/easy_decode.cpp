@@ -183,18 +183,18 @@ DecodeHandler::~DecodeHandler() {
       memset(&packet, 0, sizeof(CnPacket));
       decoder_->SendData(packet, true);
     } else {
-      got_eos_ = true;
+      if (!handle_) got_eos_ = true;
       eos_mtx_.unlock();
     }
   }
 
   unique_lock<mutex> eos_lk(eos_mtx_);
   if (!got_eos_) {
+    LOG(INFO, "Wait EOS in destruct");
     eos_cond_.wait(eos_lk, [this]() -> bool { return got_eos_; });
-    LOG(INFO, "Received EOS in destruct");
   }
 
-  if (!handle_) {
+  if (handle_) {
     if (jpeg_decode_) {
       // Destroy jpu decoder
       LOG(INFO, "Destroy jpeg decoder channel");
@@ -330,6 +330,11 @@ std::pair<bool, std::string> DecodeHandler::Init(const EasyDecode::Attr& attr) {
     int ecode = cnvideoDecCreate(&handle_, &EventHandler, &vparams_);
     if (0 != ecode) {
       return std::make_pair(false, "Create video decode failed: " + to_string(ecode));
+    }
+
+    int ret = cnvideoDecSetAttributes(handle_, CNVIDEO_DEC_ATTR_OUT_BUF_ALIGNMENT, &(attr_.stride_align));
+    if (CNCODEC_SUCCESS != ret) {
+      return std::make_pair(false, "cnvideo decode set attributes faild: " + to_string(ret));
     }
   }
 
@@ -467,25 +472,21 @@ bool DecodeHandler::SendJpegData(const CnPacket &packet, bool eos) {
     packets_count_++;
   }
 
-  if (send_eos_) {
-    return false;
-  } else {
-    if (eos) {
-      unique_lock<mutex> eos_lk(eos_mtx_);
-      input.streamBuffer = nullptr;
-      input.streamLength = 0;
-      input.pts = 0;
-      input.flags = CNJPEGDEC_FLAG_EOS;
-      std::ostringstream ss;
-      ss << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
-      LOG(INFO, ss.str());
-      auto ecode = cnjpegDecFeedData(handle_, &input, -1);
-      if (CNCODEC_SUCCESS != ecode) {
-        throw EasyDecodeError("Send EOS failed. Error code: " + to_string(ecode));
-      }
-
-      send_eos_ = true;
+  if (eos) {
+    unique_lock<mutex> eos_lk(eos_mtx_);
+    input.streamBuffer = nullptr;
+    input.streamLength = 0;
+    input.pts = 0;
+    input.flags = CNJPEGDEC_FLAG_EOS;
+    std::ostringstream ss;
+    ss << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
+    LOG(INFO, ss.str());
+    auto ecode = cnjpegDecFeedData(handle_, &input, -1);
+    if (CNCODEC_SUCCESS != ecode) {
+      throw EasyDecodeError("Send EOS failed. Error code: " + to_string(ecode));
     }
+
+    send_eos_ = true;
   }
 
   return true;
@@ -509,25 +510,21 @@ bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos) {
     packets_count_++;
   }
 
-  if (send_eos_) {
-    return false;
-  } else {
-    if (eos) {
-      unique_lock<mutex> eos_lk(eos_mtx_);
-      input.streamBuf = nullptr;
-      input.streamLength = 0;
-      input.pts = 0;
-      input.flags = CNVIDEODEC_FLAG_EOS;
-      std::ostringstream ss;
-      ss << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
-      LOG(INFO, ss.str());
-      auto ecode = cnvideoDecFeedData(handle_, &input, -1);
-      if (CNCODEC_SUCCESS != ecode) {
-        throw EasyDecodeError("Send EOS failed. Error code: " + to_string(ecode));
-      }
-
-      send_eos_ = true;
+  if (eos) {
+    unique_lock<mutex> eos_lk(eos_mtx_);
+    input.streamBuf = nullptr;
+    input.streamLength = 0;
+    input.pts = 0;
+    input.flags = CNVIDEODEC_FLAG_EOS;
+    std::ostringstream ss;
+    ss << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
+    LOG(INFO, ss.str());
+    auto ecode = cnvideoDecFeedData(handle_, &input, -1);
+    if (CNCODEC_SUCCESS != ecode) {
+      throw EasyDecodeError("Send EOS failed. Error code: " + to_string(ecode));
     }
+
+    send_eos_ = true;
   }
 
   return true;
@@ -647,7 +644,14 @@ EasyDecode::Status EasyDecode::GetStatus() const {
 }
 
 bool EasyDecode::SendData(const CnPacket& packet, bool eos) {
-  if (!handler_->handle_) return false;
+  if (!handler_->handle_) {
+    LOG(ERROR, "Decoder has not been init");
+    return false;
+  }
+  if (handler_->send_eos_) {
+    LOG(WARNING, "EOS had been sent, won't feed data or EOS");
+    return false;
+  }
   // check status
   unique_lock<mutex> lock(handler_->status_mtx_);
 
@@ -711,8 +715,8 @@ bool EasyDecode::CopyFrameD2H(void* dst, const CnFrame& frame) {
     }
     case CNCODEC_PIX_FMT_I420: {
       size_t len_y = frame.strides[0] * frame.height;
-      size_t len_u = frame.strides[1] * frame.height / 4;
-      size_t len_v = frame.strides[2] * frame.height / 4;
+      size_t len_u = frame.strides[1] * frame.height / 2;
+      size_t len_v = frame.strides[2] * frame.height / 2;
       CALL_CNRT_FUNC(cnrtMemcpy(reinterpret_cast<void*>(odata), frame.ptrs[0], len_y, CNRT_MEM_TRANS_DIR_DEV2HOST),
                      "Decode copy frame plane y failed.");
       CALL_CNRT_FUNC(

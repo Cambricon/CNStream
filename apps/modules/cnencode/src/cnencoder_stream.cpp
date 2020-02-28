@@ -32,6 +32,8 @@
 #include "easycodec/vformat.h"
 #include "easyinfer/mlu_context.h"
 
+#define ALIGN(size, alignment) (((uint32_t)(size) + (alignment)-1) & ~((alignment)-1))
+
 CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, int dst_height, float frame_rate,
                                 PictureFormat format, int bit_rate, int gop_size, CodecType type, uint8_t channelIdx,
                                 uint32_t device_id, std::string pre_type) {
@@ -47,15 +49,16 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
   dst_width_ = dst_width;
   dst_height_ = dst_height;
   output_frame_size_ = dst_width_ * dst_height_ * 3 / 2;
+  output_data = new uint8_t[output_frame_size_];
 
   copy_frame_buffer_ = false;
   gop_size_ = gop_size;
   bit_rate_ = bit_rate;
   frame_rate_den_ = 1;
   frame_rate_num_ = frame_rate;
-  uint32_t bps = bit_rate_/1024;
+  uint32_t bps = bit_rate_ / 1000;
 
-  LOG(INFO) << "bps:　" << bps;
+  LOG(INFO) << "kbps:　" << bps;
   LOG(INFO) << "fps: " << frame_rate;
   LOG(INFO) << "gop: " << gop_size_;
   LOG(INFO) << "format: " << format_;
@@ -69,15 +72,15 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
     src_pix_fmt_ = AV_PIX_FMT_BGR24;
     switch (format_) {
       case NV21:
-        std::cout << "AV_PIX_FMT_NV21" << std::endl;
+        LOG(INFO) << "AV_PIX_FMT_NV21";
         dst_pix_fmt_ = AV_PIX_FMT_NV21;
         break;
       case NV12:
-        std::cout << "AV_PIX_FMT_NV12" << std::endl;
+        LOG(INFO) << "AV_PIX_FMT_NV12";
         dst_pix_fmt_ = AV_PIX_FMT_NV12;
         break;
       default:
-        std::cout << "CNEncoder does not support other formate" << std::endl;
+        LOG(INFO) << "CNEncoder does not support other formate";
         break;
     }
 
@@ -97,38 +100,38 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
 
   switch (format_) {
     case YUV420P:
-      std::cout << "CNEncoder does not support YUV420P" << std::endl;
+      LOG(ERROR) << "CNEncoder does not support YUV420P";
       return;
     case RGB24:
-      std::cout << "CNEncoder does not support RGB24" << std::endl;
+      LOG(ERROR) << "CNEncoder does not support RGB24";
       return;
     case BGR24:
-      std::cout << "CNEncoder does not support BGR24" << std::endl;
+      LOG(ERROR) << "CNEncoder does not support BGR24";
       return;
     case NV21:
-      std::cout << "PixelFmt::YUV420SP_NV21" << std::endl;
-      picture_format_ = edk::PixelFmt::YUV420SP_NV21;
+      LOG(INFO) << "PixelFmt::NV21";
+      picture_format_ = edk::PixelFmt::NV21;
       break;
     case NV12:
-      std::cout << "PixelFmt::YUV420SP_NV12" << std::endl;
-      picture_format_ = edk::PixelFmt::YUV420SP_NV12;
+      LOG(INFO) << "PixelFmt::NV12";
+      picture_format_ = edk::PixelFmt::NV12;
       break;
     default:
-      std::cout << "default: YUV420SP_NV12" << std::endl;
-      picture_format_ = edk::PixelFmt::YUV420SP_NV12;
+      LOG(INFO) << "default: NV21";
+      picture_format_ = edk::PixelFmt::NV21;
       break;
   }
   switch (type_) {
     case H264:
-      std::cout << "CodecType::H264" << std::endl;
+      LOG(INFO) << "CodecType::H264";
       codec_type_ = edk::CodecType::H264;
       break;
     case HEVC:
-      std::cout << "CodecType::HEVC" << std::endl;
+      LOG(INFO) << "CodecType::HEVC";
       codec_type_ = edk::CodecType::H265;
       break;
     case MPEG4:
-      std::cout << "CodecType::MPEG4" << std::endl;
+      LOG(INFO) << "CodecType::MPEG4";
       codec_type_ = edk::CodecType::MPEG4;
       break;
     default:
@@ -141,40 +144,37 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
     context.SetDeviceId(device_id_);
     context.ConfigureForThisThread();
   } catch (edk::MluContextError &err) {
-    std::cout << "CNEncoderStream: set mlu env failed" << std::endl;
+    LOG(ERROR) << "CNEncoderStream: set mlu env failed";
     return;
   }
 
   edk::EasyEncode::Attr attr;
-  attr.maximum_geometry.w = dst_width_;
-  attr.maximum_geometry.h = dst_height_;
-  attr.output_geometry.w = dst_width_;
-  attr.output_geometry.h = dst_height_;
+  attr.dev_id = device_id_;
+  attr.frame_geometry.w = dst_width_;
+  attr.frame_geometry.h = dst_height_;
   attr.pixel_format = picture_format_;
   attr.codec_type = codec_type_;
+  attr.b_frame_num = 0;
+  attr.input_buffer_num = 2;
+  attr.output_buffer_num = 3;
   memset(&attr.rate_control, 0, sizeof(edk::RateControl));
   attr.rate_control.vbr = false;
   attr.rate_control.gop = gop_size_;
-  attr.rate_control.stat_time = 1;
   attr.rate_control.src_frame_rate_num = frame_rate_num_;
   attr.rate_control.src_frame_rate_den = frame_rate_den_;
-  attr.rate_control.dst_frame_rate_num = frame_rate_num_;
-  attr.rate_control.dst_frame_rate_den = frame_rate_den_;
-  attr.rate_control.bit_rate = bit_rate_;  // in kbps
-  attr.profile = edk::VideoProfile::MAIN;  // HIGH
+  attr.rate_control.bit_rate = bit_rate_;
+  attr.rate_control.max_bit_rate = bit_rate_;
   memset(&attr.crop_config, 0, sizeof(edk::CropConfig));
-  attr.color2gray = false;
-  attr.packet_buffer_num = 4;
-  attr.output_on_cpu = false;
+  attr.crop_config.enable = false;
   attr.silent = false;
+  attr.jpeg_qfactor = 50;
   attr.eos_callback = std::bind(&CNEncoderStream::EosCallback, this);
-  attr.perf_callback = std::bind(&CNEncoderStream::PerfCallback, this, std::placeholders::_1);
   attr.packet_callback = std::bind(&CNEncoderStream::PacketCallback, this, std::placeholders::_1);
 
   try {
     encoder_ = edk::EasyEncode::Create(attr);
   } catch (edk::EasyEncodeError &err) {
-    std::cout << "EncodeError: " << err.what() << std::endl;
+    LOG(ERROR) << "EncodeError: " << err.what();
     if (encoder_) {
       delete encoder_;
       encoder_ = nullptr;
@@ -183,20 +183,13 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
   }
 }
 
-void CNEncoderStream::Open() {
-  running_ = true;
-  if (encode_thread_ == nullptr) {
-    encode_thread_ = new std::thread(std::bind(&CNEncoderStream::Loop, this));
-  }
-}
-
-void CNEncoderStream::Close() {
+CNEncoderStream::~CNEncoderStream() {
   edk::MluContext context;
   try {
     context.SetDeviceId(device_id_);
     context.ConfigureForThisThread();
   } catch (edk::MluContextError &err) {
-    std::cout << "Close(): set mlu env failed" << std::endl;
+    LOG(ERROR) << "Close(): set mlu env failed";
     return;
   }
 
@@ -209,114 +202,103 @@ void CNEncoderStream::Close() {
       av_frame_free(&dst_pic_);
       dst_pic_ = nullptr;
     }
-
     if (swsctx_ != nullptr) {
       sws_freeContext(swsctx_);
       swsctx_ = nullptr;
     }
   }
 
-  running_ = false;
   if (encoder_) {
     delete encoder_;
     encoder_ = nullptr;
   }
-
-  if (encode_thread_ && encode_thread_->joinable()) {
-    encode_thread_->join();
-    delete encode_thread_;
-    encode_thread_ = nullptr;
-  }
-
-  edk::CnFrame *release_frame_;
-  while (input_data_q_.size()) {
-    release_frame_ = input_data_q_.front();
-    if (release_frame_->ptrs[0] != nullptr && copy_frame_buffer_) {
-      uint8_t *ptr = reinterpret_cast<uint8_t *>(release_frame_->ptrs[0]);
-      delete[] ptr;
-    }
-    delete release_frame_;
-    release_frame_ = nullptr;
-    input_data_q_.pop();
-  }
-
   canvas_.release();
+  if (output_data != nullptr) delete []output_data;
 }
 
-void CNEncoderStream::Loop() {
-  edk::CnFrame *frame = nullptr;
-  while (running_) {
-    input_mutex_.lock();
-    if (!input_data_q_.empty()) {
-      frame = input_data_q_.front();
-      input_mutex_.unlock();
-    } else {
-      input_mutex_.unlock();
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
-      continue;
-    }
-    if (frame != nullptr) {
-      edk::MluContext context;
-      context.SetDeviceId(device_id_);
-      context.ConfigureForThisThread();
-      try {
-        encoder_->SendData(*frame, false);
-      } catch (edk::EasyEncodeError &err) {
-        std::cout << "EncoderError: send data to cnencoder" << err.what() << std::endl;
-        return;
-      }
-      delete frame;
-    }
-    input_mutex_.lock();
-    input_data_q_.pop();
-    input_mutex_.unlock();
-  }
-}
-
-bool CNEncoderStream::Update(const cv::Mat &image, int64_t timestamp, int channel_id) {
+bool CNEncoderStream::Update(const cv::Mat &image, int64_t timestamp, bool eos) {
   update_lock_.lock();
-  uint8_t *nv_data_buf = new uint8_t[output_frame_size_];
-  // start_time_ = std::chrono::high_resolution_clock::now();
-  if ("opencv" == pre_type_) {
-    cv::Mat tmp;
-    canvas_ = image.clone();
-    cv::resize(canvas_, tmp, cv::Size(dst_width_, dst_height_), 0, 0, cv::INTER_LINEAR);
-    Bgr2YUV420NV(tmp, format_, nv_data_buf);
-  } else if ("ffmpeg" == pre_type_) {
-    uint32_t input_buf_size_ = src_width_ * src_height_ * 3;
-    uint32_t output_buf_size_ = dst_width_ * dst_height_ * 3 / 2;
-    Convert(image.data, input_buf_size_, nv_data_buf, output_buf_size_);
-  }
-  // end_time_ = std::chrono::high_resolution_clock::now();
-  // std::chrono::duration<double, std::milli> diff = end_time_ - start_time_;
-  // std::cout << "colorsapce convert and resize run time: " << diff.count() << " ms" << std::endl;
+  edk::CnFrame *cnframe = new edk::CnFrame;
+  memset(cnframe, 0, sizeof(edk::CnFrame));
+  if (!eos) {
+    if ("opencv" == pre_type_) {
+      cv::Mat tmp;
+      canvas_ = image.clone();
+      cv::resize(canvas_, tmp, cv::Size(dst_width_, dst_height_), 0, 0, cv::INTER_LINEAR);
+      Bgr2YUV420NV(tmp, format_, output_data);
+    } else if ("ffmpeg" == pre_type_) {
+      uint32_t input_buf_size_ = src_width_ * src_height_ * 3;
+      uint32_t output_buf_size_ = dst_width_ * dst_height_ * 3 / 2;
+      Convert(image.data, input_buf_size_, output_data, output_buf_size_);
+    }
 
-  SendFrame(nv_data_buf, timestamp);
-  delete[] nv_data_buf;
-  nv_data_buf = nullptr;
+    cnframe->pts = timestamp;
+    cnframe->width = dst_width_;
+    cnframe->height = dst_height_;
+    cnframe->pformat = picture_format_;
+    cnframe->frame_size = output_frame_size_;
+    cnframe->n_planes = 2;
+    cnframe->strides[0] = dst_width_;
+    cnframe->strides[1] = dst_width_;
+    if (copy_frame_buffer_) {
+      uint8_t *ptr = new uint8_t[output_frame_size_];
+      cnframe->ptrs[0] = reinterpret_cast<void *>(ptr);
+      cnframe->ptrs[1] = reinterpret_cast<void *>(ptr + dst_width_ * dst_height_);
+      memcpy(cnframe->ptrs[0], output_data, cnframe->frame_size);
+    } else {
+      cnframe->ptrs[0] = reinterpret_cast<void *>(output_data);
+      cnframe->ptrs[1] = reinterpret_cast<void *>(output_data + dst_width_ * dst_height_);
+    }
+  }
+  try {
+    encoder_->SendDataCPU(*cnframe, eos);
+  } catch (edk::EasyEncodeError &err) {
+    LOG(ERROR) << "EncoderError: send data to cnencoder" << err.what();
+    return false;
+  }
+  delete cnframe;
   update_lock_.unlock();
   return true;
 }
 
-bool CNEncoderStream::Update(uint8_t *image, int64_t timestamp, int channel_id) {
+bool CNEncoderStream::Update(uint8_t *image, int64_t timestamp, bool eos) {
   update_lock_.lock();
-  uint8_t *output_data = new uint8_t[output_frame_size_];
-  // start_time_ = std::chrono::high_resolution_clock::now();
-  ResizeYUV(image, output_data);
-  // end_time_ = std::chrono::high_resolution_clock::now();
-  // std::chrono::duration<double, std::milli> diff = end_time_ - start_time_;
-  // std::cout << "mlu resize run time: " << diff.count() << " ms" << std::endl;
-
-  SendFrame(output_data, timestamp);
-  delete[] output_data;
-  output_data = nullptr;
+  edk::CnFrame *cnframe = new edk::CnFrame;
+  memset(cnframe, 0, sizeof(edk::CnFrame));
+  if (!eos) {
+    ResizeYUV(image, output_data);
+    cnframe->pts = timestamp;
+    cnframe->width = dst_width_;
+    cnframe->height = dst_height_;
+    cnframe->pformat = picture_format_;
+    cnframe->frame_size = output_frame_size_;
+    cnframe->n_planes = 2;
+    cnframe->strides[0] = dst_width_;
+    cnframe->strides[1] = dst_width_;
+    if (copy_frame_buffer_) {
+      uint8_t *ptr = new uint8_t[output_frame_size_];
+      cnframe->ptrs[0] = reinterpret_cast<void *>(ptr);
+      cnframe->ptrs[1] = reinterpret_cast<void *>(ptr + dst_width_ * dst_height_);
+      memcpy(cnframe->ptrs[0], output_data, cnframe->frame_size);
+    } else {
+      cnframe->ptrs[0] = reinterpret_cast<void *>(output_data);
+      cnframe->ptrs[1] = reinterpret_cast<void *>(output_data + dst_width_ * dst_height_);
+    }
+  }
+  try {
+    encoder_->SendDataCPU(*cnframe, eos);
+  } catch (edk::EasyEncodeError &err) {
+    LOG(ERROR) << "EncoderError: send data to cnencoder" << err.what();
+    return false;
+  }
+  delete cnframe;
   update_lock_.unlock();
   return true;
 }
 
 void CNEncoderStream::ResizeYUV(const uint8_t *src, uint8_t *dst) {
   if (src_width_ == dst_width_ && src_height_ == dst_height_) {
-    memcpy(dst, src, src_width_*src_height_*sizeof(uint8_t));
+    memcpy(dst, src, output_frame_size_ * sizeof(uint8_t));
     return;
   }
   const uint8_t *src_plane_y = src;
@@ -409,44 +391,6 @@ void CNEncoderStream::Bgr2YUV420NV(const cv::Mat &bgr, PictureFormat ToFormat, u
   yuvI420.release();
 }
 
-bool CNEncoderStream::SendFrame(uint8_t *data, int64_t timestamp) {
-  if (!running_) return false;
-  edk::CnFrame *cnframe = new edk::CnFrame;
-  memset(cnframe, 0, sizeof(edk::CnFrame));
-  while (input_data_q_.size() >= input_queue_size_) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(2));
-  }
-
-  input_mutex_.lock();
-  if (input_data_q_.size() <= input_queue_size_) {
-    cnframe->pts = timestamp;
-    cnframe->width = dst_width_;
-    cnframe->height = dst_height_;
-    cnframe->pformat = picture_format_;
-    cnframe->frame_size = output_frame_size_;
-    cnframe->n_planes = 2;
-    cnframe->strides[0] = dst_width_;
-    cnframe->strides[1] = dst_width_;
-    if (copy_frame_buffer_) {
-      uint8_t *ptr = new uint8_t[output_frame_size_];
-      cnframe->ptrs[0] = reinterpret_cast<void *>(ptr);
-      cnframe->ptrs[1] = reinterpret_cast<void *>(ptr + dst_width_ * dst_height_);
-      memcpy(cnframe->ptrs[0], data, cnframe->frame_size);
-    } else {
-      cnframe->ptrs[0] = reinterpret_cast<void *>(data);
-      cnframe->ptrs[1] = reinterpret_cast<void *>(data + dst_width_ * dst_height_);
-    }
-    input_data_q_.push(cnframe);
-  } else {
-    delete cnframe;
-    std::cout << "input queue full, frame drop out!" <<std::endl;
-    input_mutex_.unlock();
-    return false;
-  }
-  input_mutex_.unlock();
-  return true;
-}
-
 void CNEncoderStream::Convert(const uint8_t* src_buffer, const size_t src_buffer_size,
             uint8_t* dst_buffer, const size_t dst_buffer_size) {
   size_t insize = av_image_get_buffer_size(src_pix_fmt_, src_width_, src_height_, 1);
@@ -479,20 +423,6 @@ void CNEncoderStream::Convert(const uint8_t* src_buffer, const size_t src_buffer
   sws_scale(swsctx_, src_pic_->data, src_pic_->linesize, 0, src_height_, dst_pic_->data, dst_pic_->linesize);
 }
 
-void CNEncoderStream::RefreshEOS(bool eos) {
-  edk::MluContext context;
-  context.SetDeviceId(device_id_);
-  context.ConfigureForThisThread();
-  while (input_data_q_.size() != 0) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-  }
-  edk::CnFrame *eosframe = new edk::CnFrame;
-  memset(eosframe, 0, sizeof(edk::CnFrame));
-  encoder_->SendData(*eosframe, eos);
-  delete eosframe;
-  eosframe = nullptr;
-}
-
 void CNEncoderStream::PacketCallback(const edk::CnPacket &packet) {
   if (packet.length == 0 || packet.data == 0) return;
   try {
@@ -500,7 +430,7 @@ void CNEncoderStream::PacketCallback(const edk::CnPacket &packet) {
     context.SetDeviceId(device_id_);
     context.ConfigureForThisThread();
   } catch(edk::MluContextError & err) {
-    std::cout << "PacketCallback: set mlu env faild" << std::endl;
+    LOG(ERROR) << "PacketCallback: set mlu env faild";
     return;
   }
 
@@ -509,24 +439,17 @@ void CNEncoderStream::PacketCallback(const edk::CnPacket &packet) {
   } else if (packet.codec_type == edk::CodecType::H265) {
     snprintf(output_file, sizeof(output_file), "./output/cnencode_%d.h265", channelIdx_);
   } else {
-    std::cout << "ERROR::unknown output codec type !!!" << static_cast<int>(packet.codec_type)<< std::endl;
+    LOG(ERROR) << "ERROR::unknown output codec type !!!" << static_cast<int>(packet.codec_type);
   }
 
   if (p_file == nullptr) p_file = fopen(output_file, "wb");
-  if ( p_file == nullptr) { std::cout << "open output file failed !!!" <<std::endl;}
+  if (p_file == nullptr) { LOG(ERROR) << "open output file failed !!!";}
 
   uint32_t length = packet.length;
-  uint8_t *buffer = new uint8_t[length];
-  if (buffer == nullptr) {
-    printf("ERROR: new for output buffer failed!\n");
-    return;
-  }
-  encoder_ -> CopyPacket(buffer, packet);
-  written = fwrite(buffer, 1, length, p_file);
+  written = fwrite(packet.data, 1, length, p_file);
   if (written != length) {
-    std::cout << "ERROR: written size: " << (uint)written << "!=" << "data length: " << length <<std::endl;
+    LOG(ERROR) << "ERROR: written size: " << (uint)written << "!=" << "data length: " << length;
   }
-  delete[] buffer; buffer = nullptr;
 }
 
 void CNEncoderStream::EosCallback() {
@@ -535,19 +458,8 @@ void CNEncoderStream::EosCallback() {
     context.SetDeviceId(device_id_);
     context.ConfigureForThisThread();
   } catch(edk::MluContextError & err) {
-    std::cout << "set mlu env faild" << std::endl;
+    LOG(ERROR) << "set mlu env faild";
     return;
   }
-  // std::cout << " EosCallback ... " << std::endl;
-}
-
-void CNEncoderStream::PerfCallback(const edk::EncodePerfInfo &info) {
-  try {
-    edk::MluContext context;
-    context.SetDeviceId(device_id_);
-    context.ConfigureForThisThread();
-  } catch(edk::MluContextError & err) {
-    std::cout << "set mlu env faild" << std::endl;
-    return;
-  }
+  LOG(INFO) << " EosCallback ... ";
 }

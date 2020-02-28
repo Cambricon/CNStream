@@ -111,12 +111,35 @@ class IDataDeallocator {
   virtual ~IDataDeallocator() {}
 };
 
+/**
+ * ICNMediaImageMapper is an abstract class
+ */
 class ICNMediaImageMapper {
  public:
+  /**
+  * Get image
+  * @return Return image address
+  */
   virtual void *GetMediaImage() = 0;
+  /**
+  * Get pitch
+  * @param index
+  * @return Return pitch
+  */
   virtual int GetPitch(int index) = 0;
+  /**
+  * Get CPU address
+  * @param index
+  * @return Return CPU address
+  */
   virtual void *GetCpuAddress(int index) = 0;
+ /**
+  * Get device address
+  * @param index
+  * @return Return device address
+  */
   virtual void *GetDevAddress(int index) = 0;
+  /// Destructor
   virtual ~ICNMediaImageMapper(){ }
 };
 
@@ -361,7 +384,7 @@ struct CNFrameInfo {
   static std::shared_ptr<CNFrameInfo> Create(const std::string& stream_id, bool eos = false);
   uint32_t channel_idx = INVALID_STREAM_IDX;         ///< The index of the channel, stream_index
   CNDataFrame frame;                                 ///< The data of the frame.
-  std::vector<std::shared_ptr<CNInferObject>> objs;  ///< Structured information of the objects for this frame.
+  ThreadSafeVector<std::shared_ptr<CNInferObject>> objs;  ///< Structured information of the objects for this frame.
   ~CNFrameInfo();
 
  private:

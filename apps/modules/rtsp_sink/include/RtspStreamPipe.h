@@ -55,7 +55,7 @@ typedef struct {
   int height_out = 1080;  // target height,prefered size same with input
   int gop = 20;           // target gop,default is 10
   int kbps = 2 * 1024;    // target Kbps,default is 2*1024(2M)
-  ColorFormat format = ColorFormat_NV12;
+  ColorFormat format = ColorFormat_NV21;
   VideoCodecType codec = VideoCodec_H264;
   VideoCodecHWType hw = FFMPEG;  // FFMPEG
 } StreamContext;
@@ -66,7 +66,7 @@ typedef void* RTSPStreamHandle;
 extern "C" {
 #endif
 
-StreamPipeCtx* StreamPipeCreate(StreamContext* ctx);
+StreamPipeCtx* StreamPipeCreate(StreamContext* ctx, uint32_t device_id);
 int StreamPipePutPacket(StreamPipeCtx* ctx, uint8_t* data, int64_t timestamp = 0);
 int StreamPipeClose(StreamPipeCtx* ctx);
 

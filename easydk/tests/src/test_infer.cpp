@@ -39,6 +39,8 @@ bool test_context(int channel_id, bool multi_thread) {
 }
 
 TEST(Easyinfer, MluContext) {
+  edk::MluContext ctx;
+  ASSERT_TRUE(ctx.CheckDeviceId(0)) << "Cannot find device 0";
   ASSERT_TRUE(test_context(0, false));
   ASSERT_TRUE(test_context(3, false));
   ASSERT_FALSE(test_context(4, false));

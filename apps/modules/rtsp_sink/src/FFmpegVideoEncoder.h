@@ -37,6 +37,7 @@ class FFmpegVideoEncoder : public VideoEncoder {
   };
 
   virtual VideoFrame *NewFrame();
+  uint32_t GetOffSet(const uint8_t* data);
   virtual void EncodeFrame(VideoFrame *frame);
   void Destroy();
 

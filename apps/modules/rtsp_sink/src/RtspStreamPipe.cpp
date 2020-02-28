@@ -17,7 +17,7 @@ struct StreamPipeCtx {
 
 static void RunServer(void *server) { ((RTSPStreaming::LiveRTSPServer *)server)->Run(); }
 
-StreamPipeCtx *StreamPipeCreate(StreamContext *ctx) {
+StreamPipeCtx *StreamPipeCreate(StreamContext *ctx, uint32_t device_id) {
   StreamPipeCtx *pipeCtx = new StreamPipeCtx;
   int width = ctx->width_out;
   int height = ctx->height_out;
@@ -62,7 +62,7 @@ StreamPipeCtx *StreamPipeCreate(StreamContext *ctx) {
     pipeCtx->video_encoder_ = new FFmpegVideoEncoder(width, height, format, codec, fps, gop, bps);
   } else {
     std::cout << "Use MLU encoder" << std::endl;
-    pipeCtx->video_encoder_ = new CNVideoEncoder(width, height, format, codec, fps, gop, bps);
+    pipeCtx->video_encoder_ = new CNVideoEncoder(width, height, format, codec, fps, gop, bps, device_id);
   }
   int udp_port = ctx->udp_port;
   int http_port = ctx->http_port;
@@ -92,19 +92,21 @@ int StreamPipeClose(StreamPipeCtx *ctx) {
     ctx->live_server_->SignalExit();
   }
 
-  // std::cout<<"live server release"<<std::endl;
+  if (ctx->server_thread_ && ctx->server_thread_->joinable()) {
+    ctx->server_thread_->join();
+    delete ctx->server_thread_;
+    ctx->server_thread_ = nullptr;
+  }
+
+  std::cout << "live server release" << std::endl;
   if (ctx->video_encoder_) {
     ctx->video_encoder_->Stop();
     delete ctx->video_encoder_;
     ctx->video_encoder_ = nullptr;
   }
 
-  if (ctx->server_thread_ && ctx->server_thread_->joinable()) {
-    ctx->server_thread_->join();
-    delete ctx->server_thread_;
-    ctx->server_thread_ = nullptr;
-  }
   std::cout << "Stream Pipe close" << std::endl;
   delete ctx;
   return 0;
 }
+
