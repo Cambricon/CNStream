@@ -204,7 +204,7 @@ class ThreadSafeVector {
   typename std::vector<T>::iterator insert(const typename std::vector<T>::iterator& pos, const T& value);
   typename std::vector<T>::iterator insert(typename std::vector<T>::iterator pos, const T& value);
   template <class InputIt>
-  typename std::vector<T>::iterator insert(const typename std::vector<T>::iterator& pos, InputIt first, InputIt last);
+  void insert(const typename std::vector<T>::iterator& pos, InputIt first, InputIt last);
 
  private:
   mutable CNSpinLock data_m_;
@@ -226,10 +226,10 @@ typename std::vector<T>::iterator ThreadSafeVector<T>::erase(typename std::vecto
 
 template <typename T>
 template <class InputIt>
-typename std::vector<T>::iterator ThreadSafeVector<T>::insert(const typename std::vector<T>::iterator& pos,
+void  ThreadSafeVector<T>::insert(const typename std::vector<T>::iterator& pos,
                                                               InputIt first, InputIt last) {
   CNSpinLockGuard lk(data_m_);
-  return v_.insert(pos, first, last);
+  v_.insert(pos, first, last);
 }
 
 template <typename T>

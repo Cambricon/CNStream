@@ -19,7 +19,7 @@
 # *************************************************************************/
 
 # 1. copy your neuware package into the directory of CNStream
-# 2. docker build -f Dockerfile --build-arg mlu_platform=${board_series} --build-arg neuware_package=${neuware_package_name} -t ubuntu_cnstream:v1 .
+# 2. docker build -f Dockerfile.16.04 --build-arg mlu_platform=${board_series} --build-arg neuware_package=${neuware_package_name} -t ubuntu_cnstream:v1 .
 # 3. docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
 
 FROM ubuntu:16.04
@@ -28,8 +28,7 @@ MAINTAINER <Cambricon, Inc.>
 
 WORKDIR /root/CNStream/
 
-ARG neuware_version=neuware-mlu270-1.2.4
-ARG neuware_package=${neuware_version}-1_Ubuntu16.04_amd64.deb
+ARG neuware_package=neuware-mlu270-1.2.4-1_Ubuntu16.04_amd64.deb
 ARG mlu_platform=MLU270
 
 RUN echo -e 'nameserver 114.114.114.114' > /etc/resolv.conf
