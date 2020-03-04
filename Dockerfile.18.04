@@ -27,8 +27,7 @@ FROM ubuntu:18.04
 MAINTAINER <Cambricon, Inc.>
 
 WORKDIR /root/CNStream
-ARG neuware_version=neuware-mlu270-1.2.5
-ARG neuware_package=${neuware_version}-1_Ubuntu18.04_amd64.deb
+ARG neuware_package=neuware-mlu270-1.2.5-1_Ubuntu18.04_amd64.deb
 ARG mlu_platform=MLU270
 
 ENV DEBIAN_FRONTEND=noninteractive
