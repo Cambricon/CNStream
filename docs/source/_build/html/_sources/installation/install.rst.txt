@@ -1,0 +1,134 @@
+环境配置
+================
+
+本文档提供Debian/Ubuntu、CentOS、Docker环境配置指导。
+
+Debian或者Ubuntu环境配置
+++++++++++++++++++++++++++
+
+1.  从github仓库检出CNStream源码。
+
+    ::
+
+      git clone https://github.com/Cambricon/CNStream.git
+
+
+#.  安装Neuware包。Neuware包是寒武纪公司发布的基于寒武纪硬件产品的神经网络开发工具包。
+
+    ::
+
+      dpkg -i neuware-standard-8.1.1.deb(neuware package name)
+
+
+#.  安装依赖库。
+    
+    CNStream依赖OpenCV2.4.9+, GFlags2.1.2, GLog0.3.4, Cmake2.8.7+
+    
+    ::
+
+       sudo apt-get install libopencv-dev  libgflags-dev libgoogle-glog-dev cmake
+
+#.  编译CNStream。CNStream使用CMake编译系统进行编译。
+
+    - 针对MLU100平台：
+
+      ::
+
+        mkdir -p build; cd build
+        cmake ${CNSTREAM_DIR} -DMLU=MLU100
+        make
+
+    - 针对MLU270平台：
+
+      ::
+
+        mkdir -p build; cd build
+        cmake ${CNSTREAM_DIR} -DMLU=MLU270
+        make
+
+    **注：** ${CNSTREAM_DIR}指的是CNStream源码目录。
+
+#.  运行Demo程序。
+
+    ::
+    
+      cd ${CNSTREAM_DIR}/samples/demo
+      ./run.sh
+
+CentOS环境配置
+++++++++++++++++++++++
+
+
+1.  从github仓库检出CNStream源码。
+
+    ::
+
+      git clone https://github.com/Cambricon/CNStream.git
+
+
+#.  安装Neuware包。Neuware包是寒武纪公司发布的基于寒武纪硬件产品的神经网络开发工具包。
+
+    ::
+
+      sudo yum -y install neuware-package-name.rpm
+
+
+#.  安装依赖库。CNStream依赖OpenCV2.4.9+、GFlags2.1.2、GLog0.3.4和Cmake2.8.7+。
+    
+    ::
+
+        sudo yum install opencv-devel.x86_64 gflags.x86_64 glog.x86_64 cmake3.x86_64
+
+#.  编译CNStream。CNStream使用CMake编译系统进行编译。
+
+    - 针对MLU100平台：
+
+      ::
+
+        mkdir -p build; cd build
+        cmake ${CNSTREAM_DIR} -DMLU=MLU100
+        make
+
+    - 针对MLU270平台：
+
+      ::
+
+        mkdir -p build; cd build
+        cmake ${CNSTREAM_DIR} -DMLU=MLU270
+        make
+
+    **注：** ${CNSTREAM_DIR}指的是CNStream源码目录。
+
+#.  运行Demo程序。
+
+    ::
+    
+      cd ${CNSTREAM_DIR}/samples/demo
+      ./run.sh
+
+Docker环境配置
+++++++++++++++++++++++
+
+使用Docker镜像配置独立于宿主机的开发环境。
+
+1.  安装docker。宿主机需要预先安装docker，请查看docker官网主页：*https://docs.docker.com/*
+    
+
+2.  制作docker镜像。
+
+    ::
+
+      git clone https://github.com/Cambricon/CNStream.git
+
+      cp ${neuware_package} CNStream   #copy your neuware package into CNStream 
+      
+      docker build -f Dockerfile --build-arg mlu_platform=${board_series} --build-arg neuware_package=${neuware_package_name} -t ubuntu_cnstream:v1 .
+
+
+3.  运行Demo程序。
+
+
+    ::
+      
+      docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --device /dev/cambricon_c10Dev0 --net=host --pid=host -v $HOME/.Xauthority -it --privileged --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
+      ./run.sh

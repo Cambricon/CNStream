@@ -1,0 +1,347 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="zh-CN" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="zh-CN" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>创建应用程序 &mdash; CNStream 用户手册 2020-02-24 文档</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+        <script type="text/javascript" src="../_static/translations.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="next" title="Inspect工具" href="../tool/Inspect_tool.html" />
+    <link rel="prev" title="创建自定义模块" href="../customize_module/how_to_implement_module.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> CNStream 用户手册
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                2020-02-24
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">目录</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../copyright/Copyright.html">版权声明</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/Overview.html">概述</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../framework/Framework.html">框架介绍</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/Module.html">内置模块</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../programming_mode/ProgrammingModel.html">编程模型</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configure/Configure.html">环境配置</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../customize_module/how_to_implement_module.html">创建自定义模块</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">创建应用程序</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id2">概述</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id3">应用程序的创建</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id4">配置文件方式</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#json">JSON配置文件的编写</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pipeline">Pipeline基本骨架的构建</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#id5">非配置文件方式</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../tool/Inspect_tool.html">Inspect工具</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../FAQ/FAQ.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../release_notes/release_notes.html">Release Notes</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CNStream 用户手册</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>创建应用程序</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/application/how_to_build_apps.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="id1">
+<h1>创建应用程序<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h1>
+<div class="section" id="id2">
+<h2>概述<a class="headerlink" href="#id2" title="永久链接至标题">¶</a></h2>
+<p>基于CNStream创建应用程序，实际上是基于CNStream自有模块和用户自定义模块搭建业务流水线。用户可以选择使用配置文件方式或非配置文件方式创建应用程序。</p>
+<p>配置文件方式与非配置文件方式的主要区别在于，配置文件使用JSON文件格式声明pipeline结构、模块上下游关系和模块参数等，而非配置文件则需要开发者创建模块对象，设置模块参数和模块上下游关系等。  相对而言，配置文件方式更加灵活，推荐使用。开发者编写pipeline基本骨架后，仍可以灵活地调整配置文件中的模块参数甚至结构，而无需重新编译。</p>
+</div>
+<div class="section" id="id3">
+<h2>应用程序的创建<a class="headerlink" href="#id3" title="永久链接至标题">¶</a></h2>
+<div class="section" id="id4">
+<h3>配置文件方式<a class="headerlink" href="#id4" title="永久链接至标题">¶</a></h3>
+<p>在配置文件方式下，用户开发应用时需要关注两部分：JSON配置文件的编写和pipeline基本骨架的构建。</p>
+<div class="section" id="json">
+<h4>JSON配置文件的编写<a class="headerlink" href="#json" title="永久链接至标题">¶</a></h4>
+<p>JSON配置文件主要用于声明pipeline中各个模块的上下游关系及其每个模块内部的参数配置。</p>
+<p>下面示例展示了如何使用CNStream提供的自有模块DataSource、Inferencer、Tracker、Osd、Encoder，以及ssd和track离线模型，实现一个典型的pipeline操作，并在pipeline中加入了fps统计模块统计pipeline的整体性能。</p>
+<p>典型的pipeline操作为：</p>
+<ol class="arabic simple">
+<li><p>视频源解析和解码。</p></li>
+<li><p>物体检测。</p></li>
+<li><p>追踪。</p></li>
+<li><p>在视频帧上，叠加绘制的物体检测信息框。</p></li>
+<li><p>编码输出视频。</p></li>
+</ol>
+<p>配置文件示例如下：</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span> {
+ &quot;source&quot; : {
+   // 数据源模块。设置使用ffmpeg进行demux，使用MUL解码，不单独启动线程。
+   &quot;class_name&quot; : &quot;cnstream::DataSource&quot;,
+   &quot;parallelism&quot; : 0,
+   &quot;next_modules&quot; : [&quot;detector&quot;],
+   &quot;custom_params&quot; : {
+     &quot;source_type&quot; : &quot;ffmpeg&quot;,
+     &quot;output_type&quot; : &quot;mlu&quot;,
+     &quot;decoder_type&quot; : &quot;mlu&quot;,
+     &quot;device_id&quot; : 0
+   }
+ },
+
+ &quot;detector&quot; : {
+   // Inferencer模块。设置使用resnet34ssd离线模型，使用PostprocSsd进行网络输出数据后处理，并行度为4，模块输入队列的max_size为20。
+   &quot;class_name&quot; : &quot;cnstream::Inferencer&quot;,
+   &quot;parallelism&quot; : 4,
+   &quot;max_input_queue_size&quot; : 20,
+   &quot;next_modules&quot; : [&quot;tracker&quot;],
+   &quot;custom_params&quot; : {
+     &quot;model_path&quot; : &quot;../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon&quot;,
+     &quot;func_name&quot; : &quot;subnet0&quot;,
+     &quot;postproc_name&quot; : &quot;PostprocSsd&quot;,
+     &quot;device_id&quot; : 0
+   }
+ },
+
+ &quot;tracker&quot; : {
+   // Tracker模块。设置使用track离线模型，并行度为4，模块输入队列的max_size为20。
+    &quot;class_name&quot; : &quot;cnstream::Tracker&quot;,
+   &quot;parallelism&quot; : 4,
+   &quot;max_input_queue_size&quot; : 20,
+   &quot;next_modules&quot; : [&quot;osd&quot;],
+   &quot;custom_params&quot; : {
+     &quot;model_path&quot; : &quot;../data/models/MLU100/Track/track.cambricon&quot;,
+     &quot;func_name&quot; : &quot;subnet0&quot;
+   }
+ },
+
+ &quot;osd&quot; : {
+   // Osd模块。配置解析label路径，设置并行度为4，模块输入队列的max_size为20。
+   &quot;class_name&quot; : &quot;cnstream::Osd&quot;,
+   &quot;parallelism&quot; : 4,
+   &quot;max_input_queue_size&quot; : 20,
+   &quot;next_modules&quot; : [&quot;encoder&quot;],
+   &quot;custom_params&quot; : {
+     &quot;chinese_label_flag&quot; : &quot;false&quot;,
+     &quot;label_path&quot; : &quot;../data/models/MLU100/Primary_Detector/resnet34ssd/label_voc.txt&quot;
+   }
+ },
+
+ &quot;encoder&quot; : {
+   // Encoder模块。配置输出视频的dump路径，设置并行度为4，模块输入队列的max_size为20。
+   &quot;class_name&quot; : &quot;cnstream::Encoder&quot;,
+   &quot;parallelism&quot; : 4,
+   &quot;max_input_queue_size&quot; : 20,
+   &quot;next_modules&quot; : [&quot;fps_stats&quot;],
+   &quot;custom_params&quot; : {
+     &quot;dump_dir&quot; : &quot;output&quot;
+   }
+ },
+
+ &quot;fps_stats&quot; : {
+   // FpsStats模块。设置并行度为4，模块输入队列的max_size为20。
+   &quot;class_name&quot; : &quot;cnstream::FpsStats&quot;,
+   &quot;parallelism&quot; : 2,
+   &quot;max_input_queue_size&quot; : 20
+ }
+}
+</pre></div>
+</div>
+<p>用户可以参考以上JSON的配置构建自己的配置文件。另外，CNStream提供了inspect工具来查询每个模块支持的自定义参数以及检查JSON配置文件的正确性。详情查看 <a class="reference internal" href="../tool/Inspect_tool.html#inspect"><span class="std std-ref">Inspect工具</span></a> 。</p>
+</div>
+<div class="section" id="pipeline">
+<h4>Pipeline基本骨架的构建<a class="headerlink" href="#pipeline" title="永久链接至标题">¶</a></h4>
+<p>构建pipeline核心骨架包括：搭建整体业务流水线和设置事件监听处理机制。</p>
+<p>在配置文件方式下，搭建整体的业务流水线实际是从预准备的JSON文件中获取pipeline结构、module上下游关系和各个module的参数，并初始化各个任务执行环节，即模块。另外，用户可以通过设置事件监听获取pipeline的处理状态，添加对应的状态处理机制，如eos处理、错误处理等。</p>
+<p>整个过程主要包括下面步骤：</p>
+<ol class="arabic simple">
+<li><p>创建pipeline对象。</p></li>
+<li><p>调用 <code class="docutils literal notranslate"><span class="pre">Pipeline(pipeline.BuildPipelineByJSONFile</span></code> ，使用预准备的JSON配置文件构建。</p></li>
+<li><p>调用 <code class="docutils literal notranslate"><span class="pre">pipeline.SetStreamMsgObserver</span></code> ，设置事件监听处理机制。</p></li>
+<li><p>调用 <code class="docutils literal notranslate"><span class="pre">pipeline.Start()</span></code> ，启动pipeline。</p></li>
+<li><p>调用 <code class="docutils literal notranslate"><span class="pre">pipeline.AddVideoSource()</span></code> 或 <code class="docutils literal notranslate"><span class="pre">RemoveSource()</span></code> ，动态添加或删除视频和图片源。</p></li>
+</ol>
+<p>源代码示例，可参考CNStream源码中 <code class="docutils literal notranslate"><span class="pre">samples/demo/demo.cpp</span></code> 。</p>
+</div>
+</div>
+<div class="section" id="id5">
+<h3>非配置文件方式<a class="headerlink" href="#id5" title="永久链接至标题">¶</a></h3>
+<p>CNStream针对非配置文件方式提供了一些完整的、独立的应用程序开发示例。参见CNStream源代码中 <code class="docutils literal notranslate"><span class="pre">samples/example/example.cpp</span></code>。</p>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../tool/Inspect_tool.html" class="btn btn-neutral float-right" title="Inspect工具" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../customize_module/how_to_implement_module.html" class="btn btn-neutral float-left" title="创建自定义模块" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2020, Cambricon
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

@@ -1,0 +1,322 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="zh-CN" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="zh-CN" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>CNStream用户手册 &mdash; CNStream 用户手册 2020-02-24 文档</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script type="text/javascript" src="_static/jquery.js"></script>
+        <script type="text/javascript" src="_static/underscore.js"></script>
+        <script type="text/javascript" src="_static/doctools.js"></script>
+        <script type="text/javascript" src="_static/language_data.js"></script>
+        <script type="text/javascript" src="_static/translations.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="index" title="索引" href="genindex.html" />
+    <link rel="search" title="搜索" href="search.html" />
+    <link rel="next" title="版权声明" href="copyright/Copyright.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="#" class="icon icon-home"> CNStream 用户手册
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                2020-02-24
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">目录</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="copyright/Copyright.html">版权声明</a></li>
+<li class="toctree-l1"><a class="reference internal" href="overview/Overview.html">概述</a></li>
+<li class="toctree-l1"><a class="reference internal" href="framework/Framework.html">框架介绍</a></li>
+<li class="toctree-l1"><a class="reference internal" href="modules/Module.html">内置模块</a></li>
+<li class="toctree-l1"><a class="reference internal" href="programming_mode/ProgrammingModel.html">编程模型</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configure/Configure.html">环境配置</a></li>
+<li class="toctree-l1"><a class="reference internal" href="customize_module/how_to_implement_module.html">创建自定义模块</a></li>
+<li class="toctree-l1"><a class="reference internal" href="application/how_to_build_apps.html">创建应用程序</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tool/Inspect_tool.html">Inspect工具</a></li>
+<li class="toctree-l1"><a class="reference internal" href="FAQ/FAQ.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="release_notes/release_notes.html">Release Notes</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">CNStream 用户手册</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="#">Docs</a> &raquo;</li>
+        
+      <li>CNStream用户手册</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="cnstream">
+<h1>CNStream用户手册<a class="headerlink" href="#cnstream" title="永久链接至标题">¶</a></h1>
+<div class="toctree-wrapper compound">
+<p class="caption"><span class="caption-text">目录</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="copyright/Copyright.html">版权声明</a></li>
+<li class="toctree-l1"><a class="reference internal" href="overview/Overview.html">概述</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="overview/Overview.html#id2">简介</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview/Overview.html#cnstream">CNStream特点</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview/Overview.html#id3">CNStream应用框架</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="framework/Framework.html">框架介绍</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="framework/Framework.html#id2">核心框架</a></li>
+<li class="toctree-l2"><a class="reference internal" href="framework/Framework.html#cnstream-pipeline">cnstream::Pipeline类</a></li>
+<li class="toctree-l2"><a class="reference internal" href="framework/Framework.html#cnstream-module">cnstream::Module类</a></li>
+<li class="toctree-l2"><a class="reference internal" href="framework/Framework.html#cnstream-cnframeinfo">cnstream::CNFrameInfo类</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="modules/Module.html">内置模块</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="modules/Module.html#id2">简介</a></li>
+<li class="toctree-l2"><a class="reference internal" href="modules/Module.html#id3">数据源模块</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="modules/Module.html#id4">使用说明</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="modules/Module.html#id5">神经网络推理模块</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="modules/Module.html#id6">使用说明</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="modules/Module.html#id7">追踪模块</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="modules/Module.html#id8">使用说明</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="programming_mode/ProgrammingModel.html">编程模型</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="programming_mode/ProgrammingModel.html#id2">寒武纪软件栈</a></li>
+<li class="toctree-l2"><a class="reference internal" href="programming_mode/ProgrammingModel.html#id3">文件目录</a></li>
+<li class="toctree-l2"><a class="reference internal" href="programming_mode/ProgrammingModel.html#id4">编程指南</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="configure/Configure.html">环境配置</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="configure/Configure.html#id2">依赖库</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="configure/Configure.html#id3">环境依赖</a></li>
+<li class="toctree-l3"><a class="reference internal" href="configure/Configure.html#id5">寒武纪安装包</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="configure/Configure.html#debianubuntu">Debian或Ubuntu环境配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configure/Configure.html#centos">CentOS环境配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configure/Configure.html#docker">Docker环境配置</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="customize_module/how_to_implement_module.html">创建自定义模块</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="customize_module/how_to_implement_module.html#id2">概述</a></li>
+<li class="toctree-l2"><a class="reference internal" href="customize_module/how_to_implement_module.html#id3">自定义普通模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="customize_module/how_to_implement_module.html#id4">自定义数据源模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="customize_module/how_to_implement_module.html#id5">自定义扩展模块</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="application/how_to_build_apps.html">创建应用程序</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="application/how_to_build_apps.html#id2">概述</a></li>
+<li class="toctree-l2"><a class="reference internal" href="application/how_to_build_apps.html#id3">应用程序的创建</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="application/how_to_build_apps.html#id4">配置文件方式</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="application/how_to_build_apps.html#json">JSON配置文件的编写</a></li>
+<li class="toctree-l4"><a class="reference internal" href="application/how_to_build_apps.html#pipeline">Pipeline基本骨架的构建</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="application/how_to_build_apps.html#id5">非配置文件方式</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="tool/Inspect_tool.html">Inspect工具</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="tool/Inspect_tool.html#id2">工具命令的使用</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="tool/Inspect_tool.html#id3">打印工具帮助信息</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tool/Inspect_tool.html#id4">查看框架支持的所有模块</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tool/Inspect_tool.html#id5">查看某个模块的参数</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tool/Inspect_tool.html#id6">检查配置文件的合法性</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tool/Inspect_tool.html#cnstream">打印CNStream的版本信息</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tool/Inspect_tool.html#id7">配置Inspect工具</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="FAQ/FAQ.html">FAQ</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="FAQ/FAQ.html#file-list">什么是file list？</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="release_notes/release_notes.html">Release Notes</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="release_notes/release_notes.html#cnstream-2019-02-20">CNStream 2019-02-20</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release_notes/release_notes.html#id1">新增功能及功能变更</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release_notes/release_notes.html#id2">版本限制</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release_notes/release_notes.html#cnstream-2019-12-31">CNStream 2019-12-31</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release_notes/release_notes.html#id3">新增功能及功能变更</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release_notes/release_notes.html#cnstream-2019-11-31">CNStream 2019-11-31</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release_notes/release_notes.html#id4">新增功能及功能变更</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release_notes/release_notes.html#id5">废用功能</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release_notes/release_notes.html#id6">版本兼容</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release_notes/release_notes.html#id7">版本限制</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="copyright/Copyright.html" class="btn btn-neutral float-right" title="版权声明" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2020, Cambricon
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

@@ -1,0 +1,387 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="zh-CN" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="zh-CN" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>创建自定义模块 &mdash; CNStream 用户手册 2020-02-24 文档</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+        <script type="text/javascript" src="../_static/translations.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="next" title="创建应用程序" href="../application/how_to_build_apps.html" />
+    <link rel="prev" title="环境配置" href="../configure/Configure.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> CNStream 用户手册
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                2020-02-24
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">目录</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../copyright/Copyright.html">版权声明</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/Overview.html">概述</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../framework/Framework.html">框架介绍</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/Module.html">内置模块</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../programming_mode/ProgrammingModel.html">编程模型</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configure/Configure.html">环境配置</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">创建自定义模块</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id2">概述</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id3">自定义普通模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id4">自定义数据源模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id5">自定义扩展模块</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../application/how_to_build_apps.html">创建应用程序</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tool/Inspect_tool.html">Inspect工具</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../FAQ/FAQ.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../release_notes/release_notes.html">Release Notes</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CNStream 用户手册</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>创建自定义模块</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/customize_module/how_to_implement_module.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="id1">
+<h1>创建自定义模块<a class="headerlink" href="#id1" title="永久链接至标题">¶</a></h1>
+<div class="section" id="id2">
+<h2>概述<a class="headerlink" href="#id2" title="永久链接至标题">¶</a></h2>
+<p>CNStream支持用户创建自定义模块。使用CNStream框架创建自定义模块非常简单，用户
+只需根据 <code class="docutils literal notranslate"><span class="pre">samples/example</span></code> 目录下的 <code class="docutils literal notranslate"><span class="pre">example.cpp</span></code> 文件里给出的例子，即可方便快捷地实现自定义模块的轮廓。自定义模块需要
+多重继承 <strong>cnstream::Module</strong> 和 <strong>cnstream::ModuleCreator</strong> 两个基类。其中 <strong>cnstream::Module</strong> 是
+所有模块的基类。<strong>cnstream::ModuleCreator</strong> 实现了反射机制，提供了 <code class="docutils literal notranslate"><span class="pre">CreateFunction</span></code>， 并注册 <code class="docutils literal notranslate"><span class="pre">ModuleClassName</span></code> 和 <code class="docutils literal notranslate"><span class="pre">CreateFunction</span></code> 至 <code class="docutils literal notranslate"><span class="pre">ModuleFactory</span></code> 中。</p>
+</div>
+<div class="section" id="id3">
+<h2>自定义普通模块<a class="headerlink" href="#id3" title="永久链接至标题">¶</a></h2>
+<p>这类模块支持多输入和多输出，数据由pipeline发送，并在模块的成员函数 <code class="docutils literal notranslate"><span class="pre">Process</span></code> 中处理。</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">ExampleModule</span> <span class="p">:</span> <span class="n">public</span> <span class="n">cnstream</span><span class="p">::</span><span class="n">Module</span><span class="p">,</span> <span class="n">public</span> <span class="n">cnstream</span><span class="p">::</span><span class="n">ModuleCreator</span><span class="o">&lt;</span><span class="n">ExampleModule</span><span class="o">&gt;</span> <span class="p">{</span>
+  <span class="n">using</span> <span class="nb">super</span> <span class="o">=</span> <span class="n">cnstream</span><span class="p">::</span><span class="n">Module</span><span class="p">;</span>
+
+ <span class="n">public</span><span class="p">:</span>
+  <span class="n">explicit</span> <span class="n">ExampleModule</span><span class="p">(</span><span class="n">const</span> <span class="n">std</span><span class="p">::</span><span class="n">string</span> <span class="o">&amp;</span><span class="n">name</span><span class="p">)</span> <span class="p">:</span> <span class="nb">super</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="p">{}</span>
+  <span class="nb">bool</span> <span class="n">Open</span><span class="p">(</span><span class="n">cnstream</span><span class="p">::</span><span class="n">ModuleParamSet</span> <span class="n">paramSet</span><span class="p">)</span> <span class="n">override</span> <span class="p">{</span>
+    <span class="n">std</span><span class="p">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">this</span><span class="o">-&gt;</span><span class="n">GetName</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot; Open called&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="p">::</span><span class="n">endl</span><span class="p">;</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">auto</span> <span class="o">&amp;</span><span class="n">v</span> <span class="p">:</span> <span class="n">paramSet</span><span class="p">)</span> <span class="p">{</span>
+      <span class="n">std</span><span class="p">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">v</span><span class="o">.</span><span class="n">first</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot; : &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">v</span><span class="o">.</span><span class="n">second</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="p">::</span><span class="n">endl</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">true</span><span class="p">;</span>
+  <span class="p">}</span>
+  <span class="n">void</span> <span class="n">Close</span><span class="p">()</span> <span class="n">override</span> <span class="p">{</span> <span class="n">std</span><span class="p">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">this</span><span class="o">-&gt;</span><span class="n">GetName</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot; Close called&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="p">::</span><span class="n">endl</span><span class="p">;</span> <span class="p">}</span>
+  <span class="nb">int</span> <span class="n">Process</span><span class="p">(</span><span class="n">std</span><span class="p">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">cnstream</span><span class="p">::</span><span class="n">CNFrameInfo</span><span class="o">&gt;</span> <span class="n">data</span><span class="p">)</span> <span class="n">override</span> <span class="p">{</span>
+    <span class="o">//</span> <span class="n">do</span> <span class="n">something</span> <span class="o">...</span>
+    <span class="n">std</span><span class="p">::</span><span class="n">unique_lock</span><span class="o">&lt;</span><span class="n">std</span><span class="p">::</span><span class="n">mutex</span><span class="o">&gt;</span> <span class="n">lock</span><span class="p">(</span><span class="n">print_mutex</span><span class="p">);</span>
+    <span class="n">std</span><span class="p">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">this</span><span class="o">-&gt;</span><span class="n">GetName</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot; process: &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">data</span><span class="o">-&gt;</span><span class="n">frame</span><span class="o">.</span><span class="n">stream_id</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot;--&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">data</span><span class="o">-&gt;</span><span class="n">frame</span><span class="o">.</span><span class="n">frame_id</span><span class="p">;</span>
+    <span class="n">std</span><span class="p">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot; : &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="p">::</span><span class="n">this_thread</span><span class="p">::</span><span class="n">get_id</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="p">::</span><span class="n">endl</span><span class="p">;</span>
+    <span class="o">/*</span><span class="k">continue</span> <span class="n">by</span> <span class="n">the</span> <span class="n">framework</span><span class="o">*/</span>
+    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+  <span class="p">}</span>
+
+ <span class="n">private</span><span class="p">:</span>
+  <span class="n">ExampleModule</span><span class="p">(</span><span class="n">const</span> <span class="n">ExampleModule</span> <span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="n">delete</span><span class="p">;</span>
+  <span class="n">ExampleModule</span> <span class="o">&amp;</span><span class="n">operator</span><span class="o">=</span><span class="p">(</span><span class="n">ExampleModule</span> <span class="n">const</span> <span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="n">delete</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id4">
+<h2>自定义数据源模块<a class="headerlink" href="#id4" title="永久链接至标题">¶</a></h2>
+<p>数据源模块与普通模块基本类似，唯一不同的是这类模块没有输入只有输出，所以模块的成员函数 <code class="docutils literal notranslate"><span class="pre">Process</span></code> 不会被框架所调用。</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">ExampleModuleSource</span> <span class="p">:</span> <span class="n">public</span> <span class="n">cnstream</span><span class="p">::</span><span class="n">Module</span><span class="p">,</span> <span class="n">public</span> <span class="n">cnstream</span><span class="p">::</span><span class="n">ModuleCreator</span><span class="o">&lt;</span><span class="n">ExampleModuleSource</span><span class="o">&gt;</span> <span class="p">{</span>
+  <span class="n">using</span> <span class="nb">super</span> <span class="o">=</span> <span class="n">cnstream</span><span class="p">::</span><span class="n">Module</span><span class="p">;</span>
+
+ <span class="n">public</span><span class="p">:</span>
+  <span class="n">explicit</span> <span class="n">ExampleModuleSource</span><span class="p">(</span><span class="n">const</span> <span class="n">std</span><span class="p">::</span><span class="n">string</span> <span class="o">&amp;</span><span class="n">name</span><span class="p">)</span> <span class="p">:</span> <span class="nb">super</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="p">{}</span>
+  <span class="nb">bool</span> <span class="n">Open</span><span class="p">(</span><span class="n">cnstream</span><span class="p">::</span><span class="n">ModuleParamSet</span> <span class="n">paramSet</span><span class="p">)</span> <span class="n">override</span> <span class="p">{</span>
+    <span class="n">std</span><span class="p">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">this</span><span class="o">-&gt;</span><span class="n">GetName</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot; Open called&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="p">::</span><span class="n">endl</span><span class="p">;</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">auto</span> <span class="o">&amp;</span><span class="n">v</span> <span class="p">:</span> <span class="n">paramSet</span><span class="p">)</span> <span class="p">{</span>
+      <span class="n">std</span><span class="p">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">v</span><span class="o">.</span><span class="n">first</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot; : &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">v</span><span class="o">.</span><span class="n">second</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="p">::</span><span class="n">endl</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">true</span><span class="p">;</span>
+  <span class="p">}</span>
+  <span class="n">void</span> <span class="n">Close</span><span class="p">()</span> <span class="n">override</span> <span class="p">{</span> <span class="n">std</span><span class="p">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">this</span><span class="o">-&gt;</span><span class="n">GetName</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot; Close called&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="p">::</span><span class="n">endl</span><span class="p">;</span> <span class="p">}</span>
+  <span class="nb">int</span> <span class="n">Process</span><span class="p">(</span><span class="n">std</span><span class="p">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">cnstream</span><span class="p">::</span><span class="n">CNFrameInfo</span><span class="o">&gt;</span> <span class="n">data</span><span class="p">)</span> <span class="n">override</span> <span class="p">{</span>
+    <span class="n">std</span><span class="p">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s2">&quot;For a source module, Process() will not be invoked</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">;</span>
+    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+  <span class="p">}</span>
+
+ <span class="n">private</span><span class="p">:</span>
+  <span class="n">ExampleModuleSource</span><span class="p">(</span><span class="n">const</span> <span class="n">ExampleModuleSource</span> <span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="n">delete</span><span class="p">;</span>
+  <span class="n">ExampleModuleSource</span> <span class="o">&amp;</span><span class="n">operator</span><span class="o">=</span><span class="p">(</span><span class="n">ExampleModuleSource</span> <span class="n">const</span> <span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="n">delete</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id5">
+<h2>自定义扩展模块<a class="headerlink" href="#id5" title="永久链接至标题">¶</a></h2>
+<p>这类模块支持多输入和多输出。继承自 <strong>cnstream::ModuleEx</strong> 和 <strong>cnstream::ModuleCreator</strong> 类。与普通模块不同，处理过的数据由模块自行送入下一级模块。此类模块的一个典型应用是在模块内部攒batch，然后再进行批量处理。</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>class ExampleModuleEx : public cnstream::ModuleEx, public cnstream::ModuleCreator&lt;ExampleModuleEx&gt; {
+  using super = cnstream::ModuleEx;
+  using FrameInfoPtr = std::shared_ptr&lt;cnstream::CNFrameInfo&gt;;
+
+ public:
+  explicit ExampleModuleEx(const std::string &amp;name) : super(name) {}
+  bool Open(cnstream::ModuleParamSet paramSet) override {
+    std::cout &lt;&lt; this-&gt;GetName() &lt;&lt; &quot; Open called&quot; &lt;&lt; std::endl;
+    for (auto &amp;v : paramSet) {
+      std::cout &lt;&lt; &quot;\t&quot; &lt;&lt; v.first &lt;&lt; &quot; : &quot; &lt;&lt; v.second &lt;&lt; std::endl;
+    }
+    running_.store(1);
+    threads_.push_back(std::thread(&amp;ExampleModuleEx::BackgroundProcess, this));
+    return true;
+  }
+  void Close() override {
+    running_.store(0);
+    for (auto &amp;thread : threads_) {
+      thread.join();
+    }
+    std::cout &lt;&lt; this-&gt;GetName() &lt;&lt; &quot; Close called&quot; &lt;&lt; std::endl;
+  }
+  int Process(FrameInfoPtr data) override {
+    {
+      std::unique_lock&lt;std::mutex&gt; lock(print_mutex);
+      if (data-&gt;frame.flags &amp; cnstream::CN_FRAME_FLAG_EOS) {
+        std::cout &lt;&lt; this-&gt;GetName() &lt;&lt; &quot; process: &quot; &lt;&lt; data-&gt;frame.stream_id &lt;&lt; &quot;--EOS&quot;;
+      } else {
+        std::cout &lt;&lt; this-&gt;GetName() &lt;&lt; &quot; process: &quot; &lt;&lt; data-&gt;frame.stream_id &lt;&lt; &quot;--&quot; &lt;&lt; data-&gt;frame.frame_id;
+      }
+      std::cout &lt;&lt; &quot; : &quot; &lt;&lt; std::this_thread::get_id() &lt;&lt; std::endl;
+    }
+    // handle data in background threads...
+    q_.enqueue(data);
+
+    /*notify that data handle by the module*/
+    return 1;
+  }
+
+ private:
+  void BackgroundProcess() {
+    /*NOTE: EOS data has no invalid context,
+     *    All data recevied including EOS must be forwarded.
+     */
+    std::vector&lt;FrameInfoPtr&gt; eos_datas;
+    std::vector&lt;FrameInfoPtr&gt; datas;
+    FrameInfoPtr data;
+    while (running_.load()) {
+      bool value = q_.wait_dequeue_timed(data, 1000 * 100);
+      if (!value) continue;
+
+      /*gather data*/
+      if (!(data-&gt;frame.flags &amp; cnstream::CN_FRAME_FLAG_EOS)) {
+        datas.push_back(data);
+      } else {
+        eos_datas.push_back(data);
+      }
+
+      if (datas.size() == 4 || (data-&gt;frame.flags &amp; cnstream::CN_FRAME_FLAG_EOS)) {
+        /*process data...and then forward
+         */
+        for (auto &amp;v : datas) {
+          this-&gt;container_-&gt;ProvideData(this, v);
+          std::unique_lock&lt;std::mutex&gt; lock(print_mutex);
+          std::cout &lt;&lt; this-&gt;GetName() &lt;&lt; &quot; forward: &quot; &lt;&lt; v-&gt;frame.stream_id &lt;&lt; &quot;--&quot; &lt;&lt; v-&gt;frame.frame_id;
+          std::cout &lt;&lt; &quot; : &quot; &lt;&lt; std::this_thread::get_id() &lt;&lt; std::endl;
+        }
+        datas.clear();
+      }
+
+      /*forward EOS*/
+      for (auto &amp;v : eos_datas) {
+        this-&gt;container_-&gt;ProvideData(this, v);
+        std::unique_lock&lt;std::mutex&gt; lock(print_mutex);
+        std::cout &lt;&lt; this-&gt;GetName() &lt;&lt; &quot; forward: &quot; &lt;&lt; v-&gt;frame.stream_id &lt;&lt; &quot;--EOS &quot;;
+        std::cout &lt;&lt; &quot; : &quot; &lt;&lt; std::this_thread::get_id() &lt;&lt; std::endl;
+      }
+      eos_datas.clear();
+    }  // while
+  }
+
+ private:
+  moodycamel::BlockingConcurrentQueue&lt;FrameInfoPtr&gt; q_;
+  std::vector&lt;std::thread&gt; threads_;
+  std::atomic&lt;int&gt; running_{0};
+
+ private:
+  ExampleModuleEx(const ExampleModuleEx &amp;) = delete;
+  ExampleModuleEx &amp;operator=(ExampleModuleEx const &amp;) = delete;
+};
+</pre></div>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../application/how_to_build_apps.html" class="btn btn-neutral float-right" title="创建应用程序" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../configure/Configure.html" class="btn btn-neutral float-left" title="环境配置" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2020, Cambricon
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
