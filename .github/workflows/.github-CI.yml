@@ -2,7 +2,7 @@ name: C/C++ CI
 
 on:
   pull_request:
-    branchs:
+    branches:
       - master
 
 jobs:
