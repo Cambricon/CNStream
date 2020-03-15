@@ -7,8 +7,10 @@ on:
 
 jobs:
   job_lintgit_check:
-    runs-on: self-hosted
+    runs-on: x86
     steps:
+    - name: output
+      run: echo $123
     - uses: actions/checkout@v2
     - name: Run lintgit
       run: ./tools/lintgit master $PWD
