@@ -114,7 +114,7 @@ int CnFont::ToWchar(char*& src, wchar_t*& dest, const char* locale) {
     return -1;
   }
 
-  dest = new(std::nothrow) wchar_t[w_size];
+  dest = new (std::nothrow) wchar_t[w_size];
   if (!dest) {
     return -1;
   }
@@ -203,7 +203,7 @@ OsdContext* Osd::GetOsdContext(CNFrameInfoPtr data) {
   if (it != osd_ctxs_.end()) {
     ctx = it->second;
   } else {
-    ctx = new(std::nothrow) OsdContext;
+    ctx = new (std::nothrow) OsdContext;
     if (!ctx) {
       LOG(ERROR) << "Osd::GetOsdContext() new OsdContext Failed";
       return nullptr;
@@ -281,7 +281,7 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
   }
 
   if (!ctx->processer_) {
-    ctx->processer_ = new(std::nothrow) CnOsd(1, 1, labels_);
+    ctx->processer_ = new (std::nothrow) CnOsd(1, 1, labels_);
     if (!ctx->processer_) {
       LOG(ERROR) << "Osd::Process() new CnOsd failed";
       return -1;
@@ -311,7 +311,7 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
   return 0;
 }
 
-bool Osd::CheckParamSet(ModuleParamSet paramSet) {
+bool Osd::CheckParamSet(const ModuleParamSet& paramSet) const {
   ParametersChecker checker;
   for (auto& it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
@@ -319,13 +319,13 @@ bool Osd::CheckParamSet(ModuleParamSet paramSet) {
     }
   }
   if (paramSet.find("label_path") != paramSet.end()) {
-    if (!checker.CheckPath(paramSet["label_path"], paramSet)) {
-      LOG(ERROR) << "[Osd] [label_path] : " << paramSet["label_path"] << " non-existence.";
+    if (!checker.CheckPath(paramSet.at("label_path"), paramSet)) {
+      LOG(ERROR) << "[Osd] [label_path] : " << paramSet.at("label_path") << " non-existence.";
       return false;
     }
   }
   if (paramSet.find("chinese_label_flag") != paramSet.end()) {
-    if (paramSet["chinese_label_flag"] != "true" && paramSet["chinese_label_flag"] != "false") {
+    if (paramSet.at("chinese_label_flag") != "true" && paramSet.at("chinese_label_flag") != "false") {
       LOG(ERROR) << "[Osd] [chinese_label_flag] must be true or false.";
       return false;
     }

@@ -42,7 +42,7 @@ CNSTREAM_REGISTER_EXCEPTION(Inferencer);
 class InferencerPrivate;
 
 /**
- * @brief construct a pointer to CNFrameInfo
+ * @brief Constructs a pointer to CNFrameInfo.
  */
 using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 
@@ -50,71 +50,69 @@ using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
  * @brief Inferencer is a module for running offline model inference.
  *
  * @detail
- * The input could come from Decoder or other plugins, in MLU memory,
- * or CPU memory. Also, if the data shape does not match the model input shape,
- * before inference it will be resized and converted color space on mlu
- * for MLU memory, and on CPU for CPU memory if CPU preproc set.
- * Afterwards, run infer with offline model loading from model path.
+ * The input could come from Decoder or other plugins, in MLU memory
+ * or CPU memory. Also, If the ``preproc_name`` parameter is set to ``PreprocCpu`` 
+ * in the Open function or configuration file,
+ * CPU is used for image preprocessing. Otherwise, if the ``preproc_name`` parameter is not 
+ * set, MLU is used for image preprocessing. The image preprocessing includes
+ * data shape resizing and color space convertion.
+ * Afterwards, you can infer with offline model loading from the model path.
  */
 class Inferencer : public Module, public ModuleCreator<Inferencer> {
  public:
   /**
-   * @brief Create Inferencer module
+   * @brief Creates Inferencer module.
    *
-   * @param name the Inferencer module's name
+   * @param name The name of the Inferencer module.
    *
    * @return None
    */
   explicit Inferencer(const std::string& name);
   /**
-   * @brief virtual function do nothing
+   * @brief Virtual function that does nothing.
    */
   virtual ~Inferencer();
 
   /**
-   * @brief Called by pipeline when pipeline start.
+   * @brief Called by pipeline when the pipeline is started.
    *
    * @param paramSet:
-   @verbaim
-      model_path: Offline model path
-      func_name: Function name is defined in offline model.
-                 It could be found in cambricon_twins file.
-                 For most case, it is "subnet0".
-      postproc_name: Class name for postprocess. See cnstream::Postproc.
-      preproc_name: Class name for preprocess on CPU. See cnstream::Preproc.
-      device_id: MLU device oridinal.
-      batch_size:  maximum 32, default 1. Only active on MLU100.
-      batching_timeout: batching timeout. default 3000.0[ms]. type[float]. unit[ms].
-   @endverbaim
+   * @verbatim
+   * model_path: The path of the offline model.
+   * func_name: The function name that is defined in the offline model. It could be found in Cambricon twins file. For most cases, it is "subnet0".
+   * postproc_name: The class name for postprocessing. See cnstream::Postproc.
+   * preproc_name: The class name for preprocessing on CPU. See cnstream::Preproc.
+   * device_id: MLU device ordinal number.
+   * batch_size: The batch size. The maximum value is 32. The default value if 1. Only active on MLU100.
+   * batching_timeout: The batching timeout. The default value is 3000.0[ms]. type[float]. unit[ms].
+   *@endverbatim
    *
-   * @return return ture if inferencer open succeed
+   * @return Returns ture if the inferencer has been opened successfully.
    */
   bool Open(ModuleParamSet paramSet) override;
   /**
-   * @brief Called by pipeline when pipeline stop.
+   * @brief Called by pipeline when the pipeline is stopped.
    *
-   * @param None
-   *
-   * @return void
+   * @return Void.
    */
   void Close() override;
   /**
-   * @brief do inference for each frame
+   * @brief Performs inference for each frame.
    *
-   * @param data the information and data of frames
+   * @param data The information and data of frames.
    *
-   * @retval 1: the process success
-   * @retval -1: the process fail
+   * @retval 1: The process has run successfully.
+   * @retval -1: The process is failed.
    */
   int Process(CNFrameInfoPtr data) final;
   /**
-   * @brief Check ParamSet for a module.
+   * @brief Checks parameters for a module.
    *
-   * @param paramSet Parameters for this module.
+   * @param paramSet Parameters of this module.
    *
-   * @return Returns true if this API run successfully. Otherwise, returns false.
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
-  bool CheckParamSet(ModuleParamSet paramSet) override;
+  bool CheckParamSet(const ModuleParamSet& paramSet) const override;
 
  protected:
   DECLARE_PRIVATE(d_ptr_, Inferencer);

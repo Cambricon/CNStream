@@ -81,7 +81,7 @@ class FpsStats : public Module, public ModuleCreator<FpsStats> {
    *
    * @return Returns true if this API run successfully. Otherwise, returns false.
    */
-  bool CheckParamSet(ModuleParamSet paramSet) override;
+  bool CheckParamSet(const ModuleParamSet& paramSet) const override;
 
  public:
   void ShowStatistics();

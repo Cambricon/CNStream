@@ -18,22 +18,26 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include "half.hpp"
+#include <stdint.h>
+
+#ifdef __cplusplus
 extern "C" {
+#endif
 
-void ResizeAndConvertKernelMlu270(half* dst, half* srcY, half* srcUV, half* yuvFilter, half* yuvBias, int s_row, int s_col,
-                            int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h, int channelIn,
-                            int channelOut, int layerIn, int layerOut, int input2half, int output2uint, int scaleXInt,
-                            int scaleYInt, int batchNum, int pad, uint32_t* cycleNum);
+typedef uint16_t half;
 
-void ResizeAndConvertKernelMlu220(half* dst, half* srcY, half* srcUV, half* yuvFilter, half* yuvBias, int s_row, int s_col,
-                            int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h, int channelIn,
-                            int channelOut, int layerIn, int layerOut, int input2half, int output2uint, int scaleXInt,
-                            int scaleYInt, int batchNum, int pad, uint32_t* cycleNum);
+void ResizeAndConvertKernelMlu270(half* dst, half* srcY, half* srcUV, half* yuvFilter, half* yuvBias, int s_row,
+                                  int s_col, int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h,
+                                  int channelIn, int channelOut, int layerIn, int layerOut, int input2half,
+                                  int output2uint, int scaleXInt, int scaleYInt, int batchNum, int pad,
+                                  uint32_t* cycleNum);
 
-void ResizeAndConvertKernel(half* dst, half* srcY, half* srcUV, half* yuvFilter, half* yuvBias, int s_row, int s_col,
-                            int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h, int channelIn,
-                            int channelOut, int layerIn, int layerOut, int input2half, int output2uint, int scaleXInt,
-                            int scaleYInt, int batchNum, int pad);
+void ResizeAndConvertKernelMlu220(half* dst, half* srcY, half* srcUV, half* yuvFilter, half* yuvBias, int s_row,
+                                  int s_col, int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h,
+                                  int channelIn, int channelOut, int layerIn, int layerOut, int input2half,
+                                  int output2uint, int scaleXInt, int scaleYInt, int batchNum, int pad,
+                                  uint32_t* cycleNum);
 
+#ifdef __cplusplus
 }
+#endif

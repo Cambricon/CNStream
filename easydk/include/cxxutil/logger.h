@@ -45,6 +45,17 @@
     edk::Logger::GetInstance()->Record(edk::LogLevel::level, __LINE__, __FILE__, __VA_ARGS__); \
   } while (0)
 
+#define FAIL_UNLESS(cond)                                                      \
+  do {                                                                         \
+    if (!(cond)) {                                                             \
+      LOG(ERROR, "check condition %s failed in function %s", #cond, __func__); \
+      edk::Logger::GetInstance()->Flush();                                     \
+      abort();                                                                 \
+    }                                                                          \
+  } while (0)
+
+#define MAX_LOG_LENGTH 2048
+
 namespace edk {
 
 /**
@@ -98,12 +109,20 @@ class Logger {
       // generate log string
       std::string file = filename.substr(filename.find_last_of('/') + 1);
       std::string format_str = std::string(" %s:%d [%s] ") + info;
-      string_size = snprintf(log_string_, 2048, format_str.c_str(), file.c_str(), line, log_level_str_[level_int], args...);
-      if (string_size > 2048) std::cerr << "[WARNING] Logger: The excessive log beyond 2048 bytes will be cut off";
+      string_size = snprintf(log_string_, MAX_LOG_LENGTH, format_str.c_str(), file.c_str(), line,
+                             log_level_str_[level_int], args...);
+      if (string_size > MAX_LOG_LENGTH)
+        std::cerr << "[WARNING] Logger: The excessive log beyond " << MAX_LOG_LENGTH << " bytes will be cut off"
+                  << std::endl;
 
       WriteLog(level_int, log_string_);
     }
   }
+
+  /**
+   *  @brief write all cached log to file if to_file flag is set true
+   */
+  void Flush();
 
  public:
   ~Logger();
@@ -120,7 +139,7 @@ class Logger {
   static bool to_file_;
   static bool to_screen_;
 
-  SpinLock lock_;
+  static SpinLock lock_;
   int level_;
   LogPrivate *d_ptr_ = nullptr;
 };  // class Logger

@@ -81,7 +81,6 @@ class FFmpegMluDecoder : public FFmpegDecoder {
     edk::MluContext env;
     env.SetDeviceId(dev_ctx_.dev_id);
     env.ConfigureForThisThread();
-    // PrintPerformanceInfomation();
   }
   bool Create(AVStream *st) override;
   void Destroy() override;
@@ -100,20 +99,6 @@ class FFmpegMluDecoder : public FFmpegDecoder {
   int ProcessFrame(const edk::CnFrame &frame, bool *reused);
 #ifdef UNIT_TEST
  private:  // NOLINT
-#endif
-
-/*
- * useless
- */
-#if 0
-  CNTimer fps_calculators[4];
-  void PrintPerformanceInfomation() const {
-    printf("stream_id: %s:\n", stream_id_.c_str());
-    fps_calculators[0].PrintFps("transfer memory: ");
-    fps_calculators[1].PrintFps("decode delay: ");
-    fps_calculators[2].PrintFps("send data to codec: ");
-    fps_calculators[3].PrintFps("output :");
-  }
 #endif
 
  private:

@@ -116,8 +116,8 @@ void YUVPackedBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo,
 }
 
 ResizeConvertBatchingStage::ResizeConvertBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-                                                       std::shared_ptr<RCOpResource> rcop_res)
-    : BatchingStage(model, batchsize), rcop_res_(rcop_res) {}
+                                                       int dev_id, std::shared_ptr<RCOpResource> rcop_res)
+    : BatchingStage(model, batchsize), rcop_res_(rcop_res), dev_id_(dev_id) {}
 
 ResizeConvertBatchingStage::~ResizeConvertBatchingStage() {}
 
@@ -141,7 +141,7 @@ std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<
     uint32_t dst_w = model_->InputShapes()[0].w;
     uint32_t dst_h = model_->InputShapes()[0].h;
     edk::MluContext mlu_ctx;
-    mlu_ctx.SetDeviceId(0);  // FIXME
+    mlu_ctx.SetDeviceId(dev_id_);
     mlu_ctx.ConfigureForThisThread();
     edk::CoreVersion core_ver = mlu_ctx.GetCoreVersion();
     rcop_res_->Init(src_w, src_h, src_stride, dst_w, dst_h, cmode, core_ver);
@@ -162,7 +162,8 @@ std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<
 }
 
 ScalerBatchingStage::ScalerBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-  std::shared_ptr<MluInputResource> mlu_input_res) : IOBatchingStage(model, batchsize, mlu_input_res) {}
+                                         std::shared_ptr<MluInputResource> mlu_input_res)
+    : IOBatchingStage(model, batchsize, mlu_input_res) {}
 
 ScalerBatchingStage::~ScalerBatchingStage() {}
 
@@ -193,9 +194,7 @@ void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, ui
   src_frame.deviceId = 0;  // FIXME
 
   const auto sp = value.datas[0].shape;  // model input shape
-  auto align_to_128 = [] (uint32_t x) {
-    return (x + 127) & ~127;
-  };
+  auto align_to_128 = [](uint32_t x) { return (x + 127) & ~127; };
   auto row_align = align_to_128(sp.w * 4);
   dst_frame.width = sp.w;
   dst_frame.height = sp.h;
@@ -207,8 +206,7 @@ void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, ui
 
   work_info.inMsg.instance = 0;
 
-  auto ret = cncodecImageTransform(&dst_frame, nullptr, &src_frame, nullptr,
-    CNCODEC_Filter_BiLinear, &work_info);
+  auto ret = cncodecImageTransform(&dst_frame, nullptr, &src_frame, nullptr, CNCODEC_Filter_BiLinear, &work_info);
 
   if (CNCODEC_SUCCESS != ret) {
     throw CnstreamError("scaler failed, error code:" + std::to_string(ret));

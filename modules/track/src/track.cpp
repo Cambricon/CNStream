@@ -46,7 +46,8 @@ struct TrackerContext {
 
 Tracker::Tracker(const std::string &name) : Module(name) {
   param_register_.SetModuleDesc("Tracker is a module for realtime tracking.");
-  param_register_.Register("model_path", "The offline model path. Normally offline model is a file"
+  param_register_.Register("model_path",
+                           "The offline model path. Normally offline model is a file"
                            " with cambricon extension.");
   param_register_.Register("func_name", "The offline model function name, usually is 'subnet0'.");
   param_register_.Register("track_name", "Track algorithm name. Choose from FeatureMatch and KCF.");
@@ -65,18 +66,18 @@ inline TrackerContext *Tracker::GetTrackerContext(CNFrameInfoPtr data) {
     edk::MluContext m_ctx;
     m_ctx.SetDeviceId(0);
     m_ctx.ConfigureForThisThread();
-    ctx = new(std::nothrow) TrackerContext;
+    ctx = new (std::nothrow) TrackerContext;
     LOG_IF(FATAL, nullptr == ctx) << "Tracker::GetTrackerContext() new TrackerContext failed";
     ctx_map_[tid] = ctx;
     if ("FeatureMatch" == track_name_) {
-      FeatureExtractor* FeatureExtractor_ptr = new(std::nothrow) FeatureExtractor;
+      FeatureExtractor *FeatureExtractor_ptr = new (std::nothrow) FeatureExtractor;
       LOG_IF(FATAL, nullptr == FeatureExtractor_ptr) << "Tracker::GetTrackerContext() new FeatureExtractor failed";
       ctx->feature_extractor_.reset(FeatureExtractor_ptr);
-      #ifdef CNS_MLU100
+#ifdef CNS_MLU100
       if (!ctx->feature_extractor_->Init(model_path_, func_name_)) {
         LOG(ERROR) << "FeatureMatchTrack Feature Extractor initial failed.";
       }
-      #endif
+#endif
     }
   }
   if (tracker_map_.find(data_chn) != tracker_map_.end()) {
@@ -84,14 +85,14 @@ inline TrackerContext *Tracker::GetTrackerContext(CNFrameInfoPtr data) {
   } else {
     if ("KCF" == track_name_) {
       assert(nullptr != pKCFloader_);
-      auto pKcfTrack = new(std::nothrow) edk::KcfTrack;
+      auto pKcfTrack = new (std::nothrow) edk::KcfTrack;
       LOG_IF(FATAL, nullptr == pKcfTrack) << "Tracker::GetTrackerContext() new edk::KcfTrack failed";
       pKcfTrack->SetModel(pKCFloader_);
       ctx->processer_.reset(pKcfTrack);
       if (!ctx->processer_) return nullptr;
       tracker_map_[data_chn] = ctx->processer_;
     } else {  // "FeatureMatch by default"
-      auto pFeatureMatchTrack = new(std::nothrow) edk::FeatureMatchTrack;
+      auto pFeatureMatchTrack = new (std::nothrow) edk::FeatureMatchTrack;
       LOG_IF(FATAL, nullptr == pFeatureMatchTrack) << "Tracker::GetTrackerContext() new edk::FeatureMatchTrack failed";
       ctx->processer_.reset(pFeatureMatchTrack);
       if (!ctx->processer_) return nullptr;
@@ -124,8 +125,6 @@ bool Tracker::Open(cnstream::ModuleParamSet paramSet) {
         LOG(ERROR) << e.what();
         return false;
       }
-    } else {
-      track_name_ = "FeatureMatch";
     }
   } else {
     track_name_ = "FeatureMatch";
@@ -146,7 +145,6 @@ void Tracker::Close() {
 int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
   TrackerContext *ctx = GetTrackerContext(data);
   if (nullptr == ctx || nullptr == ctx->processer_) {
-    LOG(ERROR) << "Get Tracker Context Failed.";
     return -1;
   }
 
@@ -156,10 +154,12 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
       edk::DetectObject obj;
       obj.label = std::stoi(data->objs[i]->id);
       obj.score = data->objs[i]->score;
-      obj.bbox.x = data->objs[i]->bbox.x;
-      obj.bbox.y = data->objs[i]->bbox.y;
-      obj.bbox.width = data->objs[i]->bbox.w;
-      obj.bbox.height = data->objs[i]->bbox.h;
+      obj.bbox.x = (data->objs[i]->bbox.x < 0) ? 0 : (data->objs[i]->bbox.x > 1) ? 1 : data->objs[i]->bbox.x;
+      obj.bbox.y = (data->objs[i]->bbox.y < 0) ? 0 : (data->objs[i]->bbox.y > 1) ? 1 : data->objs[i]->bbox.y;
+      if (data->objs[i]->bbox.w <= 0 || data->objs[i]->bbox.h <= 0)
+        continue;
+      obj.bbox.width = ((obj.bbox.x + data->objs[i]->bbox.w) > 1.0) ? (1.0 - obj.bbox.x) : data->objs[i]->bbox.w;
+      obj.bbox.height = ((obj.bbox.y + data->objs[i]->bbox.h) > 1.0) ? (1.0 - obj.bbox.y) : data->objs[i]->bbox.h;
       in.push_back(obj);
     }
 
@@ -200,10 +200,10 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
       edk::DetectObject obj;
       obj.label = std::stoi(data->objs[i]->id);
       obj.score = data->objs[i]->score;
-      obj.bbox.x = data->objs[i]->bbox.x;
-      obj.bbox.y = data->objs[i]->bbox.y;
-      obj.bbox.width = data->objs[i]->bbox.w;
-      obj.bbox.height = data->objs[i]->bbox.h;
+      obj.bbox.x = (data->objs[i]->bbox.x < 0) ? 0 : (data->objs[i]->bbox.x > 1) ? 1 : data->objs[i]->bbox.x;
+      obj.bbox.y = (data->objs[i]->bbox.y < 0) ? 0 : (data->objs[i]->bbox.y > 1) ? 1 : data->objs[i]->bbox.y;
+      obj.bbox.width = ((obj.bbox.x + data->objs[i]->bbox.w) > 1.0) ? (1.0 - obj.bbox.x) : data->objs[i]->bbox.w;
+      obj.bbox.height = ((obj.bbox.y + data->objs[i]->bbox.h) > 1.0) ? (1.0 - obj.bbox.y) : data->objs[i]->bbox.h;
       in.push_back(obj);
     }
 
@@ -235,7 +235,7 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
   return 0;
 }
 
-bool Tracker::CheckParamSet(ModuleParamSet paramSet) {
+bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
@@ -248,13 +248,13 @@ bool Tracker::CheckParamSet(ModuleParamSet paramSet) {
     return false;
   }
 
-  if (!checker.CheckPath(paramSet["model_path"], paramSet)) {
-    LOG(ERROR) << "[Tracker] [model_path] : " << paramSet["model_path"] << " non-existence.";
+  if (!checker.CheckPath(paramSet.at("model_path"), paramSet)) {
+    LOG(ERROR) << "[Tracker] [model_path] : " << paramSet.at("model_path") << " non-existence.";
     return false;
   }
 
   if (paramSet.find("track_name") != paramSet.end()) {
-    std::string track_name = paramSet["track_name"];
+    std::string track_name = paramSet.at("track_name");
     if (track_name != "FeatureMatch" && track_name != "KCF") {
       LOG(ERROR) << "[Tracker] [track_name] Unsupported tracker type " << track_name;
       return false;

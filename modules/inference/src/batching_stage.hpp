@@ -98,7 +98,7 @@ class YUVPackedBatchingStage : public IOBatchingStage {
 
 class ResizeConvertBatchingStage : public BatchingStage {
  public:
-  ResizeConvertBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
+  ResizeConvertBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, int dev_id,
                              std::shared_ptr<RCOpResource> rcop_res);
   ~ResizeConvertBatchingStage();
 
@@ -106,6 +106,7 @@ class ResizeConvertBatchingStage : public BatchingStage {
 
  private:
   std::shared_ptr<RCOpResource> rcop_res_;
+  int dev_id_;
 };  // class ResizeConvertBatchingStage
 
 class ScalerBatchingStage : public IOBatchingStage {
@@ -113,6 +114,7 @@ class ScalerBatchingStage : public IOBatchingStage {
   ScalerBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
                       std::shared_ptr<MluInputResource> mlu_input_res);
   ~ScalerBatchingStage();
+
  private:
   void ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx, const IOResValue& value) override;
 };  // class ScalerBatchingStage

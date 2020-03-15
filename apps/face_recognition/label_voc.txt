@@ -1,7 +1,0 @@
-unknow 0
-baizhantang 1
-lvxiucai 2
-tongxiangyv 3
-guofurong 4
-lidazui 5
-moxiaobei 6

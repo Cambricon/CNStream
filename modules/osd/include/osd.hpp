@@ -184,7 +184,7 @@ class Osd : public Module, public ModuleCreator<Osd> {
    *
    * @return Returns true if this API run successfully. Otherwise, returns false.
    */
-  bool CheckParamSet(ModuleParamSet paramSet) override;
+  bool CheckParamSet(const ModuleParamSet& paramSet) const override;
 
  private:
   OsdContext* GetOsdContext(CNFrameInfoPtr data);

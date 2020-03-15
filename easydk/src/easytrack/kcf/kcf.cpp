@@ -18,6 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#ifdef ENABLE_KCF
+
 #include <dirent.h>
 #include <string.h>
 #include <sys/time.h>
@@ -366,3 +368,6 @@ void kcf_updateKernel(KCFHandle* handle, half* frame, __Rect* out_roi, int roi_n
   STORE_USEC_TIME_OF_DAY_TO_INT64(time_b);
   printf("kcf function run time (update)= %ld.%ldms\n", (time_b - time_a) / 1000, (time_b - time_a) % 1000);
 }
+
+#endif  // ENABLE_KCF
+

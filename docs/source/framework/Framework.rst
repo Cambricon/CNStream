@@ -44,7 +44,7 @@ CNStream既支持构造线性模式的pipeline，也支持搭建非线性形状�
 cnstream::Pipeline类
 ---------------------
 
-**cnstream::Pipeline** 类实现了pipeline的搭建、module管理、以及module的调度执行。在module自身不传递数据时，负责module之间的数据传递。此外，该类集成事件总线，提供注册事件监听器的机制，使用户能够接收事件。例如stream EOS等。Pipeline通过隐含的深度可控的队列来连接module，使用module的输入队列连接上游的module。CNStream也提供了根据JSON配置文件来搭建pipeline的接口。在不重新编译源码的情况下，通过修改配置文件搭建不同的pipeline。
+**cnstream::Pipeline** 类实现了pipeline的搭建、module管理、以及module的调度执行。在module自身不传递数据时，负责module之间的数据传递。此外，该类集成事件总线，提供注册事件监听器的机制，使用户能够接收事件。例如stream EOS（End of Stream）等。Pipeline通过隐含的深度可控的队列来连接module，使用module的输入队列连接上游的module。CNStream也提供了根据JSON配置文件来搭建pipeline的接口。在不重新编译源码的情况下，通过修改配置文件搭建不同的pipeline。
 
 .. attention::
   |  Pipeline的source module是没有输入队列，pipeline中不会为source module启动线程，也就是说pipeline不会调度source module。source module通过pipeline的 ``ProvideData`` 接口向下游模块发送数据和启动内部线程。

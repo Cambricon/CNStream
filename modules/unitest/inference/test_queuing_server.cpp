@@ -39,21 +39,11 @@ class QueuingServerTest {
     std::lock_guard<std::mutex> lk(server_->mtx_);
     return static_cast<int>(server_->tickets_q_.size());
   }
-  void SetReserved_(bool reserve) {
-    server_->reserved_ = reserve;
-  }
-  bool GetReserved_() {
-    return server_->reserved_;
-  }
-  int GetTickets_reserved_time() {
-    return static_cast<int>(server_->tickets_q_.back().reserved_time);
-  }
-  int GetPreviousTickets_reserved_time(QueuingTicketRoot* qtr) {
-    return static_cast<int>(qtr->reserved_time);
-  }
-  QueuingTicketRoot& GetCurrentQueueBack() {
-    return server_->tickets_q_.back();
-  }
+  void SetReserved_(bool reserve) { server_->reserved_ = reserve; }
+  bool GetReserved_() { return server_->reserved_; }
+  int GetTickets_reserved_time() { return static_cast<int>(server_->tickets_q_.back().reserved_time); }
+  int GetPreviousTickets_reserved_time(QueuingTicketRoot* qtr) { return static_cast<int>(qtr->reserved_time); }
+  QueuingTicketRoot& GetCurrentQueueBack() { return server_->tickets_q_.back(); }
   int Get_shared_with_no_wait(QueuingTicket* pticket) {
     std::future_status status = pticket->wait_for(std::chrono::seconds(1));
     // if has not set_value
@@ -113,12 +103,12 @@ TEST(Inferencer, QueuingServer_DeallingDone) {
   ASSERT_EQ(1, qserver_test.GetTicketSize());
 
   QueuingTicket ticket2 = qserver->PickUpTicket(false);  // a new ticket
-  QueuingTicket ticket3 = qserver->PickUpTicket(true);  // a new ticket
-  QueuingTicket ticket4 = qserver->PickUpTicket(true);  // an old ticket
+  QueuingTicket ticket3 = qserver->PickUpTicket(true);   // a new ticket
+  QueuingTicket ticket4 = qserver->PickUpTicket(true);   // an old ticket
   QueuingTicket ticket5 = qserver->PickUpTicket(false);  // still an old ticket
   int wait_time = 100;
   std::atomic<bool> DeallingDoneCall(false);
-  std::function<double()> wait_Dealling([&] () -> double {
+  std::function<double()> wait_Dealling([&]() -> double {
     DeallingDoneCall.store(true);
     auto stime = std::chrono::steady_clock::now();
     std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));

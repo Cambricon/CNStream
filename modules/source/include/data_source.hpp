@@ -23,7 +23,7 @@
 /**
  *  \file data_source.hpp
  *
- *  This file contains a declaration of struct DataSource and DataSourceParam
+ *  This file contains a declaration of struct DataSource and DataSourceParam.
  */
 
 #include <map>
@@ -38,105 +38,116 @@
 namespace cnstream {
 
 /**
- *  @brief type of added stream or source to process.
+ *  @brief The type of stream or source to be processed.
  */
-enum SourceType { SOURCE_RAW, SOURCE_FFMPEG };
+enum SourceType {
+  SOURCE_RAW,     ///< raw stream, send to decode directly
+  SOURCE_FFMPEG   ///< normal stream, will demux with ffmpeg before send to decode
+};
 /**
- * @brief storage type of output frame data for modules, storage on cpu or mlu.
+ * @brief The storage type of the output frame data that are stored for modules on CPU or MLU.
  */
-enum OutputType { OUTPUT_CPU, OUTPUT_MLU };
+enum OutputType {
+  OUTPUT_CPU,   ///< output to cpu
+  OUTPUT_MLU    ///< output to mlu
+};
 /**
- * @brief decoder type used in source module.
+ * @brief The decoder type used in the source module.
  */
-enum DecoderType { DECODER_CPU, DECODER_MLU };
+enum DecoderType {
+  DECODER_CPU,   ///< cpu decoder with ffmpeg
+  DECODER_MLU    ///< mlu decoder with cncodec
+};
 /**
- * @brief a structure for private usage
+ * @brief A structure for private usage.
  */
 struct DataSourceParam {
-  SourceType source_type_ = SOURCE_RAW;     ///< demuxer type, SOURCE_RAW is for debug purpose
-  OutputType output_type_ = OUTPUT_CPU;     ///< output data to cpu/mlu
-  size_t interval_ = 1;                     ///< output image every "interval" frames
-  DecoderType decoder_type_ = DECODER_CPU;  ///< decoder type
-  bool reuse_cndec_buf = false;             ///< valid when DECODER_MLU used
-  int device_id_ = -1;                      ///< mlu device id, -1 :disable mlu
-  size_t chunk_size_ = 0;                   ///< valid when SOURCE_RAW used, for H264,H265 only
-  size_t width_ = 0;                        ///< valid when SOURCE_RAW used, for H264,H265 only
-  size_t height_ = 0;                       ///< valid when SOURCE_RAW used, for H264,H265 only
-  bool interlaced_ = false;                 ///< valid when SOURCE_RAW used, for H264,H265 only
-  size_t output_w = 0;                      ///< valid when MLU100
-  size_t output_h = 0;                      ///< valid when MLU100
-  uint32_t input_buf_number_ = 2;           ///< valid when decoder_type = DECODER_MLU
-  uint32_t output_buf_number_ = 3;          ///< valid when decoder_type = DECODER_MLU
+  SourceType source_type_ = SOURCE_RAW;     ///< The demuxer type. The ``SOURCE_RAW`` value is set for debugging.
+  OutputType output_type_ = OUTPUT_CPU;     ///< Outputs data to CPU or MLU.
+  size_t interval_ = 1;                     ///< Outputs image every ``interval`` frames.
+  DecoderType decoder_type_ = DECODER_CPU;  ///< The decoder type.
+  bool reuse_cndec_buf = false;             ///< Valid when ``DECODER_MLU`` is used.
+  int device_id_ = -1;                      ///< The MLU device ID. To disable MLU, set the value to ``-1`` .
+  size_t chunk_size_ = 0;                   ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
+  size_t width_ = 0;                        ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
+  size_t height_ = 0;                       ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
+  bool interlaced_ = false;                 ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
+  size_t output_w = 0;                      ///< Valid for MLU100.
+  size_t output_h = 0;                      ///< Valid for MLU100.
+  uint32_t input_buf_number_ = 2;           ///< Valid when ``decoder_type`` is set to ``DECODER_MLU``.
+  uint32_t output_buf_number_ = 3;          ///< Valid when ``decoder_type`` is set to ``DECODER_MLU``.
 };
 
 /**
- * @brief Class for handling input data
+ * @brief The class for handling input data.
  */
 class DataSource : public SourceModule, public ModuleCreator<DataSource> {
  public:
   /**
-   * @brief Construct DataSource object with a given moduleName
+   * @brief Construct DataSource object with a given module name.
    * @param
-   * 	moduleName[in]:defined module name
+   * 	moduleName[in]: A defined module name.
    */
   explicit DataSource(const std::string &moduleName);
   /**
-   * @brief Deconstruct DataSource object
+   * @brief Deconstruct DataSource object.
    *
    */
   ~DataSource();
 
   /**
-   * @brief Called by pipeline when pipeline start.
-   * @param
-   *   paramSet[in]:  prameterSet set by user, supported paramSet as below,
-   *      "source_type": demuxer type, required, "raw", "ffmpeg",...
-   *      "output_type": required, "mlu","cpu"...
-   *      "interval": optional, handle data every "interval"
-   *      "decoder_type" : required, "mlu","cpu"
-   *      "reuse_cndec_buf": optional when mlu decoder used,"true" or "false".
-   *      "device_id": required when "mlu" used, -1 for cpu, 0..N for mlu
-   *      "chunk_size": required when source_type is raw"
-   *      "width": required when source_type is raw"
-   *      "height": required when source_type is raw"
-   *      "interlaced": required when source_type is raw"
-   *      "input_buf_number": optional, input buffer number
-   *      "output_buf_number": optional, output buffer number
+   * @brief Called by pipeline when the pipeline is started.
+   
+   * @param paramSet：
+   * @verbatim
+   * source_type: Required. The demuxer type. Supported values are ``raw`` and ``ffmpeg``.
+   * output_type: Required. The output type. Supported values are ``mlu`` and ``cpu``.
+   * interval: Optional. The interval during which the data is handled.
+   * decoder_type : Required. The decoder type. Supported values are ``mlu`` and ``cpu``.
+   * reuse_cndec_buf: Optional. This parameter should be set when MLU decoder is used. Supported values are ``true`` and ``false``.
+   * device_id: Required when MLU is used. Set the value to -1 for CPU. Set the value for MLU in the range 0 - N.
+   * chunk_size: Required when ``source_type`` is set to ``raw``.
+   * width: Required when ``source_type`` is set to ``raw``.
+   * height: Required when ``source_type`` is set to ``raw``.
+   * interlaced: Required when ``source_type`` is set to ``raw``.
+   * input_buf_number: Optional. The input buffer number.
+   * output_buf_number: Optional. The output buffer number.
+   *@endverbatim
+   *
    * @return
-   *    true if paramSet are supported and valid, othersize false
+   *    Returns true if ``paramSet`` are supported and valid. Othersize, returns false.
    */
   bool Open(ModuleParamSet paramSet) override;
   /**
-   * @brief Called by pipeline when pipeline stop.
+   * @brief Called by pipeline when the pipeline is stopped.
    */
   void Close() override;
 
   /**
-   * @brief Check ParamSet for a module.
+   * @brief Checks parameters for a module.
    *
    * @param paramSet Parameters for this module.
    *
-   * @return Returns true if this API run successfully. Otherwise, returns false.
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
-  bool CheckParamSet(ModuleParamSet paramSet) override;
+  bool CheckParamSet(const ModuleParamSet &paramSet) const override;
 
  public:
   /**
-   * @brief Add one stream to DataSource module, should be called after pipeline starts.
-   * @param
-   *   stream_id[in]: unique stream identifier.
-   *   filename[in]: source path, local-file-path/rtsp-url/jpg-sequences, etc.
-   *   framerate[in]: source data input frequency
-   *   loop[in]: whether to reload source when EOF is reached or not
+   * @brief Adds one stream to DataSource module. This function should be called after the pipeline has been started.
+   * @param stream_id[in]: The unique stream identifier.
+   * @param filename[in]: The source path that supports local-file-path, rtsp-url, jpg-sequences, and so on.
+   * @param framerate[in]: The input frequency of the source data.
+   * @param loop[in]: Whether to reload source when EOF is reached.
    * @return
-   *    source handler instance
+   *    Returns the source handler instance.
    */
   std::shared_ptr<cnstream::SourceHandler> CreateSource(const std::string &stream_id, const std::string &filename,
                                                         int framerate, bool loop = false);
 
  public:
   /**
-   * @brief Get module parameters, should be called after Open() invoked.
+   * @brief Gets module parameters. This function should be called after ``Open()`` has been invoked.
    */
   DataSourceParam GetSourceParam() const { return param_; }
 

@@ -48,7 +48,7 @@
       "window-height" : 1080,
       "refresh-rate" : 25,
       "max-channels" : 32,
-      "show" : "false",
+      "show" : "false",  // Please confirm build_display is ON before setting true
       "full-screen" : "false"
     }
   },

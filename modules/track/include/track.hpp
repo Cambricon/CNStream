@@ -23,7 +23,7 @@
 /**
  *  \file track.hpp
  *
- *  This file contains a declaration of struct Tracker
+ *  This file contains a declaration of struct Tracker.
  */
 
 #include <memory>
@@ -43,80 +43,78 @@ CNSTREAM_REGISTER_EXCEPTION(Tracker);
 
 struct TrackerContext;
 
-/// Pointer for frame info
+/// Pointer for frame information.
 using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
 using TrackPtr = std::shared_ptr<edk::EasyTrack>;
 
 /**
- *  @brief Tracker is a module for realtime tracking
- *   It would be MLU feature extracting if the model_path provided,
- *   otherwise it would be done on CPU.
+ *  @brief Tracker is a module for realtime tracking.
+ *   It would be MLU feature extracting if the model path provided.
+ *   Otherwise, it would be done on CPU.
  */
 class Tracker : public Module, public ModuleCreator<Tracker> {
  public:
   /**
-   *  @brief  Generate tracker
+   *  @brief  Generates tracker.
    *
-   *  @param  Name : Module name
+   *  @param  Name : Module name.
    *
-   *  @return None
+   *  @return None.
    */
   explicit Tracker(const std::string &name);
   /**
-   *  @brief  Release tracker
+   *  @brief  Releases tracker.
    *
-   *  @param  None
+   *  @param  None.
    *
-   *  @return None
+   *  @return None.
    */
   ~Tracker();
   /**
-   *  @brief Called by pipeline when pipeline start
+   *  @brief Called by pipeline when pipeline is started.
    *
    *  @param paramSet :
    * @verbatim
-   * track_name: Class name for track, "FeatureMatch" provided
-   * model_path: Offline model path
-   * func_name:  Function name defined in the offline model, could be found in the cambricon_twins description file
-               It is "subnet0" for the most case
+   * track_name: The class name for track. The "FeatureMatch" is provided.
+   * model_path: The path of the offline model.
+   * func_name:  Function name defined in the offline model. This can be found in the Cambricon twins description file.
+                 It is "subnet0" for the most cases.
    * @endverbatim
-   *  @return if module open succeed
+   *  @return Returns if the module has been opened successfully.
    */
   bool Open(cnstream::ModuleParamSet paramSet) override;
 
   /**
-   * @brief  Called by pipeline when pipeline stop
+   * @brief  Called by pipeline when pipeline is stopped.
    *
-   * @param  None
-   *
-   * @return  None
+   * @return  None.
    */
   void Close() override;
 
   /**
-   * @brief Do for each frame
+   * @brief Processes each frame.
    *
-   * @param data : Pointer to the frame info
+   * @param data : Pointer to the frame information.
    *
-   * @return whether process succeed
-   * @retval 0: succeed and do no intercept data
-   * @retval <0: faile
+   * @return Whether the process succeed.
+   * @retval 0: The process has run successfully and does no intercept data.
+   * @retval <0: The process is failed.
    */
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
   /**
-   * @brief Check ParamSet for a module.
+   * @brief Checks parameters for a module.
    *
    * @param paramSet Parameters for this module.
    *
-   * @return Returns true if this API run successfully. Otherwise, returns false.
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
-  bool CheckParamSet(ModuleParamSet paramSet) override;
+  bool CheckParamSet(const ModuleParamSet &paramSet) const override;
 
  private:
   inline TrackerContext *GetTrackerContext(CNFrameInfoPtr data);
   std::unordered_map<std::string, TrackPtr> tracker_map_;
-  std::unordered_map<std::thread::id, TrackerContext*> ctx_map_;
+  std::unordered_map<std::thread::id, TrackerContext *> ctx_map_;
   std::mutex tracker_mutex_;
   std::string model_path_ = "";
   std::string func_name_ = "";

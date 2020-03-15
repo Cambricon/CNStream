@@ -135,6 +135,7 @@ In the script run.sh, we set detection_config.json as the config file. If we che
 
 In addition, see the comments in cnstream/samples/demo/run.sh for details.)
 
+Another script run_yolov3_mlu270.sh, is an example of running Yolov3. The output will be encoded to AVI file(s), as an encoder plugin is added. The output directory can be specified by the [dump_dir] parameter, in this case, dump_dir is set to 'output', therefore AVI file(s) will be found in cnstream/samples/demo/output directory.
 
 ### **Run samples** ###
 
@@ -207,7 +208,7 @@ Modify the `files.list_video` file, which is under the cnstream/samples/demo dir
 . Modify the `postproc_name` parameter in `cnstream/samples/demo/detection_config.json` to the post-processing class name (MyPostproc).
 
 ## Documentation ##
-[CNStream User Docs](http://forum.cambricon.com/index.php?m=content&c=index&a=lists&catid=85)
+[CNStream Read-the-Docs](cnstream.readthedocs.io) or [Cambricon Forum Docs](http://forum.cambricon.com/index.php?m=content&c=index&a=lists&catid=85)
 
 Check out the Examples page for tutorials on how to use CNStream. Concepts page for basic definitions
 

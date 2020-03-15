@@ -33,7 +33,7 @@
 
 namespace cnstream {
 
-class ReflexObjectTest : public ReflexObject{
+class ReflexObjectTest : public ReflexObject {
  public:
   DECLARE_REFLEX_OBJECT_EX(ReflexObjectTest, ReflexObject);
 };
@@ -61,8 +61,9 @@ TEST(Inferencer, ReflexObject_CreateObject) {
   EXPECT_NE(ReflexObject::CreateObject("ReflexObjectTest"), nullptr);
 
   EXPECT_EQ(ReflexObject::CreateObject("ReflexObject"), nullptr);
-  ClassInfo<ReflexObject> info(std::string("ReflexObject"), ObjectConstructor<ReflexObject>([]() \
-                              { return reinterpret_cast<ReflexObject*>(new ReflexObjectTest);}));
+  ClassInfo<ReflexObject> info(std::string("ReflexObject"), ObjectConstructor<ReflexObject>([]() {
+                                 return reinterpret_cast<ReflexObject*>(new ReflexObjectTest);
+                               }));
   ObjectConstructor<ReflexObject> base_constructor;
   base_constructor = [info]() { return reinterpret_cast<ReflexObject*>(info.constructor()()); };
   ClassInfo<ReflexObject> base_info(info.name(), base_constructor);
@@ -75,8 +76,9 @@ TEST(Inferencer, ReflexObject_Register) {
   ClassInfo<ReflexObject>& info = ReflexObjectTest::sclass_info;
   EXPECT_EQ(ReflexObject::Register(info), false);
 
-  ClassInfo<ReflexObject> info1(std::string("ReflexObject_test"), \
-          ObjectConstructor<ReflexObject>([]() { return reinterpret_cast<ReflexObject*>(new ReflexObjectTest);}));
+  ClassInfo<ReflexObject> info1(std::string("ReflexObject_test"), ObjectConstructor<ReflexObject>([]() {
+                                  return reinterpret_cast<ReflexObject*>(new ReflexObjectTest);
+                                }));
   ObjectConstructor<ReflexObject> base_constructor;
   base_constructor = [info1]() { return reinterpret_cast<ReflexObject*>(info1.constructor()()); };
   ClassInfo<ReflexObject> base_info(info1.name(), base_constructor);

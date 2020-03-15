@@ -20,8 +20,8 @@
 
 #include <string>
 
-#include "cnrt.h"
 #include "ResizeKernel.h"
+#include "cnrt.h"
 
 using std::string;
 using std::to_string;
@@ -33,8 +33,8 @@ struct ResizeKernelParam {
   uint32_t affinity;
 };
 
-int PrepareKernelParam(
-    int s_row, int s_col, int d_row, int d_col, int batch, uint32_t channel_id, ResizeKernelParam** param) {
+int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int batch, uint32_t channel_id,
+                       ResizeKernelParam** param) {
   *param = new ResizeKernelParam;
   (*param)->s_row = s_row;
   (*param)->s_col = s_col;
@@ -65,13 +65,24 @@ void FreeKernelParam(ResizeKernelParam* param) {
   }
 }
 
+#define CHECK_CNRT_RET(cnrt_ret, _estr, msg, code, ret_value) \
+  do {                                                        \
+    if (cnrt_ret != CNRT_RET_SUCCESS) {                       \
+      if (_estr) {                                            \
+        *_estr = msg;                                         \
+      }                                                       \
+      { code }                                                \
+      return ret_value;                                       \
+    }                                                         \
+  } while (0)
+
 float InvokeResizeKernel(char* dst, char** srcY, char** srcUV, ResizeKernelParam* kparam, cnrtFunctionType_t func_type,
-              cnrtDim3_t dim, cnrtQueue_t queue, string* estr) {
+                         cnrtDim3_t dim, cnrtQueue_t queue, string* estr) {
   cnrtKernelParamsBuffer_t params;
   cnrtGetKernelParamsBuffer(&params);
-  cnrtKernelParamsBufferAddParam(params, &dst, sizeof(char *));
-  cnrtKernelParamsBufferAddParam(params, &srcY, sizeof(char **));
-  cnrtKernelParamsBufferAddParam(params, &srcUV, sizeof(char **));
+  cnrtKernelParamsBufferAddParam(params, &dst, sizeof(char*));
+  cnrtKernelParamsBufferAddParam(params, &srcY, sizeof(char**));
+  cnrtKernelParamsBufferAddParam(params, &srcUV, sizeof(char**));
   cnrtKernelParamsBufferAddParam(params, &kparam->s_row, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &kparam->s_col, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &kparam->d_row, sizeof(int));
@@ -90,28 +101,17 @@ float InvokeResizeKernel(char* dst, char** srcY, char** srcUV, ResizeKernelParam
     ecode = cnrtInvokeKernel_V3(reinterpret_cast<void*>(&resizeKernel), kparam->init_param, dim, params, func_type,
                                 queue, NULL);
   }
+  CHECK_CNRT_RET(ecode, estr, "[Resize] cnrtInvokeKernel FAILED. ERRCODE:" + to_string(ecode),
+                 { cnrtDestroyKernelParamsBuffer(params); }, -1);
 
-  if (CNRT_RET_SUCCESS != ecode) {
-    if (estr) {
-      *estr = "[Resize] cnrtInvokeKernel FAILED. ERRCODE:" + to_string(ecode);
-    }
-    cnrtDestroyKernelParamsBuffer(params);
-    return -1;
-  }
   ecode = cnrtDestroyKernelParamsBuffer(params);
-  if (CNRT_RET_SUCCESS != ecode) {
-    if (estr) {
-      *estr = "[Resize] cnrtDestroyKernelParamsBuffer FAILED." + to_string(ecode);
-    }
-    return -1;
-  }
+  CHECK_CNRT_RET(ecode, estr, "[Resize] cnrtDestroyKernelParamsBuffer FAILED. ERRCODE:" + to_string(ecode), {}, -1);
 
   return 0;
 }
 
 float Resize(void* dst, void** srcY, void** srcUV, ResizeKernelParam* param, cnrtFunctionType_t func_type,
              cnrtDim3_t dim, cnrtQueue_t queue, string* estr) {
-    return InvokeResizeKernel(reinterpret_cast<char*>(dst), reinterpret_cast<char**>(srcY),
-                              reinterpret_cast<char**>(srcUV), param, func_type, dim, queue, estr);
+  return InvokeResizeKernel(reinterpret_cast<char*>(dst), reinterpret_cast<char**>(srcY),
+                            reinterpret_cast<char**>(srcUV), param, func_type, dim, queue, estr);
 }
-

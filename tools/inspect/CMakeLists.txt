@@ -22,6 +22,6 @@ endif()
 add_executable(${name} ${SRC})
 
 target_link_libraries(${name} cnstream dl glog pthread)
-if(WITH_RTSP)
-  target_link_libraries(${name} ${Live555_LIBS} app-modules)
+if(WITH_RTSP AND build_modules_contrib)
+  target_link_libraries(${name} ${Live555_LIBS} cnstream_contrib)
 endif()

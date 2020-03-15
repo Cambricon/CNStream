@@ -46,18 +46,18 @@ namespace cnstream {
  * Data stream message type.
  */
 enum StreamMsgType {
-  EOS_MSG = 0,     ///< The end of a stream message. The stream has received eos in all modules.
+  EOS_MSG = 0,     ///< The end of a stream message. The stream has received EOS message in all modules.
   ERROR_MSG,       ///< An error message. The stream process has failed in one of the modules.
-  USER_MSG0 = 32,  ///< The type of the reserved message. You can use it by yourself.
-  USER_MSG1,
-  USER_MSG2,
-  USER_MSG3,
-  USER_MSG4,
-  USER_MSG5,
-  USER_MSG6,
-  USER_MSG7,
-  USER_MSG8,
-  USER_MSG9
+  USER_MSG0 = 32,  ///< Reserved message. You can define your own messages.
+  USER_MSG1,       ///< Reserved message. You can define your own messages.
+  USER_MSG2,       ///< Reserved message. You can define your own messages.
+  USER_MSG3,       ///< Reserved message. You can define your own messages.
+  USER_MSG4,       ///< Reserved message. You can define your own messages.
+  USER_MSG5,       ///< Reserved message. You can define your own messages.
+  USER_MSG6,       ///< Reserved message. You can define your own messages.
+  USER_MSG7,       ///< Reserved message. You can define your own messages.
+  USER_MSG8,       ///< Reserved message. You can define your own messages.
+  USER_MSG9        ///< Reserved message. You can define your own messages.
 };  // enum StreamMsg
 
 /**
@@ -68,7 +68,7 @@ enum StreamMsgType {
 struct StreamMsg {
   StreamMsgType type;          ///< The type of a message.
   int32_t chn_idx;             ///< The index of a stream channel that incremented from 0.
-  std::string stream_id = "";  ///< Stream id, set by user in CNDataFrame::stream_id
+  std::string stream_id = "";  ///< Stream ID. You can set in CNDataFrame::stream_id.
 };                             // struct StreamMsg
 
 /**
@@ -76,7 +76,7 @@ struct StreamMsg {
  *
  * Receives stream messages from a pipeline.
  * To receive stream messages from the pipeline, you can define a class to inherit the
- * StreamMsgObserver class and call the Update function. The
+ * StreamMsgObserver class and call the ``Update`` function. The
  * observer instance are bounded to the pipeline using the
  * Pipeline::SetStreamMsgObserver function .
  *
@@ -96,17 +96,17 @@ class StreamMsgObserver {
 class PipelinePrivate;
 
 /**
- * THE link status between modules.
+ * The link status between modules.
  */
 struct LinkStatus {
   bool stopped;                      ///< Whether the data transmissions between the modules are stopped.
-  std::vector<uint32_t> cache_size;  ///< Number of data cache data in each data transmission queue between modules.
+  std::vector<uint32_t> cache_size;  ///< The size of each queue that is used to cache data between modules.
 };
 
 /**
  * @brief The configuration parameters of a module.
  *
- * You can use CNModuleConfig to add modules in a pipeline.
+ * You can use ``CNModuleConfig`` to add modules in a pipeline.
  * The module configuration can be in JSON file.
  *
  * @code
@@ -129,23 +129,23 @@ struct CNModuleConfig {
   std::string name;  ///< The name of the module.
   ModuleParamSet
       parameters;   ///< The key-value pairs. The pipeline passes this value to the CNModuleConfig::name module.
-  int parallelism;  ///< Module parallelism. it is equal to module thread number and the data queue for input data.
+  int parallelism;  ///< Module parallelism. It is equal to module thread number and the data queue for input data.
   int maxInputQueueSize;          ///< The maximum size of the input data queues.
   std::string className;          ///< The class name of the module.
   std::vector<std::string> next;  ///< The name of the downstream modules.
-  bool showPerfInfo;              ///< whether to show performance information or not.
+  bool showPerfInfo;              ///< Whether to show performance information or not.
 
   /**
    * Parses members from JSON string except CNModuleConfig::name.
    *
-   * @return Returns true if the JSON file is parsed successfully. Otherwise returns false.
+   * @return Returns true if the JSON file has been parsed successfully. Otherwise, returns false.
    */
   bool ParseByJSONStr(const std::string& jstr);
 
   /**
    * Parses members from JSON file except CNModuleConfig::name.
    *
-   * @return Returns true if the JSON file is parsed successfully. Otherwise returns false.
+   * @return Returns true if the JSON file has been parsed successfully. Otherwise, returns false.
    */
   bool ParseByJSONFile(const std::string& jfname);
 };
@@ -153,7 +153,7 @@ struct CNModuleConfig {
 /**
  * The manager of the modules.
  * Manages data transmission between modules, and
- * controls messages delivery.
+ * controls message delivery.
  */
 class Pipeline : public Module {
  public:
@@ -185,10 +185,10 @@ class Pipeline : public Module {
    * transmission by itself.
    *
    * @param module The module that provides data.
-   * @param data The data transmits to pipeline.
+   * @param data The data that is transmitted to the pipeline.
    *
-   * @return Returns true if this function run successfully. Returns false if the module
-   *         is not added in pipeline or the pipeline has been stopped.
+   * @return Returns true if this function has run successfully. Returns false if the module
+   *         is not added in the pipeline or the pipeline has been stopped.
    *
    * @see Module::Process.
    */
@@ -203,10 +203,10 @@ class Pipeline : public Module {
   /**
    * Starts a pipeline.
    * Starts data transmission in a pipeline.
-   * Calls the Open function for all modules, see Module::Open.
+   * Calls the ``Open`` function for all modules. See Module::Open.
    * Links modules.
    *
-   * @return Returns true if this function run successfully. Returns false if the Open
+   * @return Returns true if this function has run successfully. Returns false if the ``Open``
    *         function did not run successfully in one of the modules, or
    *         the link modules failed.
    */
@@ -214,7 +214,7 @@ class Pipeline : public Module {
   /**
    * Stops data transmissions in a pipeline.
    *
-   * @return Returns true if this function run successfully. Otherwise, returns false.
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
   bool Stop();
   /**
@@ -231,7 +231,7 @@ class Pipeline : public Module {
    *
    * @param The configuration of a module.
    *
-   * @return Returns 0 if this function run successfully. Otherwise, returns -1.
+   * @return Returns 0 if this function has run successfully. Otherwise, returns -1.
    */
   int AddModuleConfig(const CNModuleConfig& config);
   /**
@@ -239,7 +239,7 @@ class Pipeline : public Module {
    *
    * @param configs The configurations of a module.
    *
-   * @return Returns 0 if this function run successfully. Otherwise, returns -1.
+   * @return Returns 0 if this function has run successfully. Otherwise, returns -1.
    */
   int BuildPipeline(const std::vector<CNModuleConfig>& configs);
   /**
@@ -262,7 +262,7 @@ class Pipeline : public Module {
    *
    * @param config_file The configuration file in JSON format.
    *
-   * @return Returns 0 if this function run successfully. Otherwise, returns -1.
+   * @return Returns 0 if this function has run successfully. Otherwise, returns -1.
    *
    */
   int BuildPipelineByJSONFile(const std::string& config_file);
@@ -271,17 +271,17 @@ class Pipeline : public Module {
    *
    * @param moduleName The module name specified in the module constructor.
    *
-   * @return Returns the module pointer if the module named moduleName has been added in
-   *         the pipeline, or nullptr will be returned.
+   * @return Returns the module pointer if the module named ``moduleName`` has been added to
+   *         the pipeline. Otherwise, returns nullptr.
    */
   Module* GetModule(const std::string& moduleName);
   /**
-   * Gets Link-indexs that is used to query link status between modules.
-   * The link-index is the return value for Pipeline::LinkModules.
+   * Gets link-indexs that is used to query link status between modules.
+   * The link-index is the return value of Pipeline::LinkModules.
    *
    * @return Returns all link-indexs in a pipeline.
    *
-   * @see Pipeline::LinkModules Pipeline::QueryLinkStatus.
+   * @see Pipeline::LinkModules and Pipeline::QueryLinkStatus.
    */
   std::vector<std::string> GetLinkIds();
   /**
@@ -291,9 +291,9 @@ class Pipeline : public Module {
    *
    * @param moduleName The module name specified in the module constructor.
    *
-   * @return Returns the  customized parameters of the module. If the module does not
+   * @return Returns the customized parameters of the module. If the module does not
    *         have customized parameters or the module has not been
-   *         added to this pipeline, then the value of size(ModuleParamSet::size) is 0.
+   *         added to this pipeline, then the value of size (ModuleParamSet::size) is 0.
    *
    * @see Module::Open.
    */
@@ -303,8 +303,8 @@ class Pipeline : public Module {
    *
    * @param module_name The module name specified in module constructor.
    *
-   * @return Returns module configuration if this function run successfully.
-   *         Returns NULL if the module specified by module_name has not been
+   * @return Returns module configuration if this function has run successfully.
+   *         Returns NULL if the module specified by ``module_name`` has not been
    *         added to this pipeline.
    */
   CNModuleConfig GetModuleConfig(const std::string& module_name);
@@ -314,31 +314,34 @@ class Pipeline : public Module {
    *
    * @param module The module instance to be added to this pipeline.
    *
-   * @return Returns true if this function run successfully. Returns false if
+   * @return Returns true if this function has run successfully. Returns false if
    *         the module has been added to this pipeline.
    */
   bool AddModule(std::shared_ptr<Module> module);
 
   /**
-   * Sets the parallelism of the module.
+   * Sets the parallelism and conveyor capacity attributes of the module.
+   *
+   * The SetModuleParallelism function is deprecated. Please use the SetModuleAttribute function instead.
    *
    * @param module The module to be configured.
-   * @param parallelism Module parallelism.
+   * @param parallelism Module parallelism, as well as Module's conveyor number of input connector.
+   * @param queue_capacity The queue capacity of the Module input conveyor.
    *
-   * @return Returns true if this function run successfully. Returns false if this module
+   * @return Returns true if this function has run successfully. Returns false if this module
    *         has not been added to this pipeline.
    *
    * @note You must call this function before calling Pipeline::Start.
    *
    * @see CNModuleConfig::parallelism.
    */
-  bool SetModuleParallelism(std::shared_ptr<Module> module, uint32_t parallelism);
+  bool SetModuleAttribute(std::shared_ptr<Module> module, uint32_t parallelism, size_t queue_capacity = 20);
   /**
    * Gets the module parallelism.
    *
-   * @param module The Module you want to query the module parallelism.
+   * @param module The module you want to query.
    *
-   * @return Returns the module parallelism if this function run successfully.
+   * @return Returns the module parallelism if this function has run successfully.
    *         Returns 0 if the module has not been added to this pipeline.
    */
   uint32_t GetModuleParallelism(std::shared_ptr<Module> module);
@@ -350,28 +353,27 @@ class Pipeline : public Module {
    * @param up_node The upstream module.
    * @param down_node The downstream module.
    *
-   * @return Returns the link-index if this function run successfully. The link-index can
-   *         used to query link status between up_node and down_node,
-   *         see Pipeline::QueryStatus for details. Returns NULL if one of the two nodes
+   * @return Returns the link-index if this function has run successfully. The link-index can
+   *         used to query link status between ``up_node`` and ``down_node``.
+   *         See Pipeline::QueryStatus for details. Returns NULL if one of the two nodes
    *         has not been added to this pipeline.
    *
-   * @note Both up_node and down_node should be added to this pipeline before calling
+   * @note Both ``up_node`` and ``down_node`` should be added to this pipeline before calling
    *       this function.
    *
    * @see Pipeline::QueryStatus.
    */
-  std::string LinkModules(std::shared_ptr<Module> up_node, std::shared_ptr<Module> down_node,
-                          size_t queue_capacity = 20);
+  std::string LinkModules(std::shared_ptr<Module> up_node, std::shared_ptr<Module> down_node);
 
  public:
   /**
-   * * Queries the link status by link-index.
+   * Queries the link status by link-index.
    * link-index is returned by Pipeline::LinkModules.
    *
-   * @param status The link status to be query.
-   * @param The link_id Link-index returned by Pipeline::LinkModules.
+   * @param status The link status to query.
+   * @param link_id The Link-index returned by Pipeline::LinkModules.
    *
-   * @return Returns true if this function run successfully. Otherwise, returns false.
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    *
    * @see Pipeline::LinkModules.
    */
@@ -396,9 +398,9 @@ class Pipeline : public Module {
    */
   void SetStreamMsgObserver(StreamMsgObserver* observer) { smsg_observer_ = observer; }
   /**
-   * Gets the stream message observer that has been binded with this pipeline.
+   * Gets the stream message observer that has been bound with this pipeline.
    *
-   * @return Returns the stream message observer that has been binded with this pipeline.
+   * @return Returns the stream message observer that has been bound with this pipeline.
    *
    * @see Pipeline::SetStreamMsgObserver.
    */
@@ -406,8 +408,8 @@ class Pipeline : public Module {
 
   /* called by pipeline */
   /**
-   * Pass the stream message to the observer of this pipeline.
-   * 
+   * Passes the stream message to the observer of this pipeline.
+   *
    * @param smsg The stream message.
    *
    * @return Void.

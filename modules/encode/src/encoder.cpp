@@ -29,7 +29,8 @@ namespace cnstream {
 
 Encoder::Encoder(const std::string &name) : Module(name) {
   param_register_.SetModuleDesc("Encoder is a module for encode video or images.");
-  param_register_.Register("dump_dir", "Where to store the encoded video."
+  param_register_.Register("dump_dir",
+                           "Where to store the encoded video."
                            " For example, '.' means storing to current directory.");
 }
 
@@ -83,7 +84,7 @@ EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {
     // context exists
     ctx = search->second;
   } else {
-    ctx = new(std::nothrow) EncoderContext;
+    ctx = new (std::nothrow) EncoderContext;
     LOG_IF(FATAL, nullptr == ctx) << "Encoder::GetEncoderContext() new EncoderContext failed";
     ctx->size = cv::Size(data->frame.width, data->frame.height);
     std::string filename = std::to_string(data->channel_idx) + ".avi";
@@ -99,7 +100,7 @@ EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {
     }
     ctx->writer = std::move(cv::VideoWriter(video_file, CV_FOURCC('M', 'J', 'P', 'G'), 20, ctx->size));
 #else
-    ctx->writer = std::move(cv::VideoWriter(video_file, CV_FOURCC('D', 'I', 'V', 'X'), 20, ctx->size));
+    ctx->writer = std::move(cv::VideoWriter(video_file, CV_FOURCC('V', 'P', '8', '0'), 20, ctx->size));
 #endif
     if (!ctx->writer.isOpened()) {
       PostEvent(cnstream::EventType::EVENT_ERROR, "Create video file failed");
@@ -154,7 +155,7 @@ int Encoder::Process(CNFrameInfoPtr data) {
   return 0;
 }
 
-bool Encoder::CheckParamSet(ModuleParamSet paramSet) {
+bool Encoder::CheckParamSet(const ModuleParamSet &paramSet) const {
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
       LOG(WARNING) << "[Encoder] Unknown param: " << it.first;

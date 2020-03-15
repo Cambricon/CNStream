@@ -66,21 +66,27 @@ void MluResize::SetMluQueue(MluTaskQueue_t queue) { d_ptr_->queue_ = queue; }
 
 std::string MluResize::GetLastError() const { return d_ptr_->estr_; }
 
+#define CHECK_CONDITION_WITH_CODE(cond, _estr, msg, code, ret_value) \
+  do {                                                               \
+    if (!(cond)) {                                                   \
+      _estr = msg;                                                   \
+      { code }                                                       \
+      return ret_value;                                              \
+    }                                                                \
+  } while (0)
+
+#define CHECK_CNRT_RET(cnrt_ret, _estr, msg, code, ret_value) \
+  CHECK_CONDITION_WITH_CODE((cnrt_ret == CNRT_RET_SUCCESS), _estr, msg, code, ret_value)
+
 bool MluResize::Init(const MluResize::Attr& attr) {
   d_ptr_->attr_ = attr;
 
-  d_ptr_->y_ptrs_cpu_ = reinterpret_cast<void **>(malloc(sizeof(char*) * attr.batch_size));
-  d_ptr_->uv_ptrs_cpu_ = reinterpret_cast<void **>(malloc(sizeof(char*) * attr.batch_size));
+  d_ptr_->y_ptrs_cpu_ = reinterpret_cast<void**>(malloc(sizeof(char*) * attr.batch_size));
+  d_ptr_->uv_ptrs_cpu_ = reinterpret_cast<void**>(malloc(sizeof(char*) * attr.batch_size));
   cnrtRet_t cnret = cnrtMalloc(reinterpret_cast<void**>(&d_ptr_->y_ptrs_mlu_), sizeof(char*) * attr.batch_size);
-  if (cnret != CNRT_RET_SUCCESS) {
-    d_ptr_->estr_ = "Malloc mlu buffer failed. Error code:" + std::to_string(cnret);
-    return false;
-  }
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. Error code:" + std::to_string(cnret), {}, false);
   cnret = cnrtMalloc(reinterpret_cast<void**>(&d_ptr_->uv_ptrs_mlu_), sizeof(char*) * attr.batch_size);
-  if (cnret != CNRT_RET_SUCCESS) {
-    d_ptr_->estr_ = "Malloc mlu buffer failed. Error code:" + std::to_string(cnret);
-    return false;
-  }
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. Error code:" + std::to_string(cnret), {}, false);
 
   switch (attr.core) {
     case 1:
@@ -98,28 +104,10 @@ bool MluResize::Init(const MluResize::Attr& attr) {
   }
 
   d_ptr_->queue_ = std::make_shared<edk::MluTaskQueue>();
-  if (CNRT_RET_SUCCESS != cnrtCreateQueue(&d_ptr_->queue_->queue)) {
-    d_ptr_->estr_ = "cnrtCreateQueue failed";
-    return false;
-  }
-  return 0 == ::PrepareKernelParam(d_ptr_->attr_.src_h, d_ptr_->attr_.src_w, d_ptr_->attr_.dst_h,
-      d_ptr_->attr_.dst_w, d_ptr_->attr_.batch_size, d_ptr_->attr_.channel_id, &d_ptr_->kparam_);
-}
-
-int MluResize::InvokeOp(void* dst, void* srcY, void* srcUV) {
-  if (nullptr == d_ptr_->queue_ || nullptr == d_ptr_->queue_->queue) {
-    throw MluResizeError("cnrt queue is null.");
-  }
-  if (d_ptr_->attr_.batch_size != 1) {
-    throw MluResizeError(
-        "InvokeOp is vaild only if the batchsize is 1. Please Use BatchingUp "
-        "and SyncOneOutput to replase InvokeOp.");
-  }
-  BatchingUp(srcY, srcUV);
-  if (!SyncOneOutput(dst)) {
-    return -1;
-  }
-  return 0;
+  cnret = cnrtCreateQueue(&d_ptr_->queue_->queue);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "cnrtCreateQueue failed. Error code:" + std::to_string(cnret), {}, false);
+  return 0 == ::PrepareKernelParam(d_ptr_->attr_.src_h, d_ptr_->attr_.src_w, d_ptr_->attr_.dst_h, d_ptr_->attr_.dst_w,
+                                   d_ptr_->attr_.batch_size, d_ptr_->attr_.channel_id, &d_ptr_->kparam_);
 }
 
 void MluResize::BatchingUp(void* src_y, void* src_uv) {
@@ -130,9 +118,13 @@ bool MluResize::SyncOneOutput(void* dst) {
   if (nullptr == d_ptr_->queue_ || nullptr == d_ptr_->queue_->queue) {
     throw MluResizeError("cnrt queue is null.");
   }
+  CHECK_CONDITION_WITH_CODE(static_cast<int>(d_ptr_->yuv_ptrs_cache_.size()) >= d_ptr_->attr_.batch_size, d_ptr_->estr_,
+                            "Batchsize is " + std::to_string(d_ptr_->attr_.batch_size) + ", but only has" +
+                                std::to_string(d_ptr_->yuv_ptrs_cache_.size()),
+                            {}, false);
   if (static_cast<int>(d_ptr_->yuv_ptrs_cache_.size()) < d_ptr_->attr_.batch_size) {
     d_ptr_->estr_ = "Batchsize is " + std::to_string(d_ptr_->attr_.batch_size) + ", but only has" +
-      std::to_string(d_ptr_->yuv_ptrs_cache_.size());
+                    std::to_string(d_ptr_->yuv_ptrs_cache_.size());
     return false;
   }
   for (int bi = 0; bi < d_ptr_->attr_.batch_size; ++bi) {
@@ -141,23 +133,17 @@ bool MluResize::SyncOneOutput(void* dst) {
     d_ptr_->yuv_ptrs_cache_.pop_front();
   }
   cnrtRet_t cnret = cnrtMemcpy(d_ptr_->y_ptrs_mlu_, reinterpret_cast<void**>(d_ptr_->y_ptrs_cpu_),
-      sizeof(char*) * d_ptr_->attr_.batch_size, CNRT_MEM_TRANS_DIR_HOST2DEV);
-  if (cnret != CNRT_RET_SUCCESS) {
-    d_ptr_->estr_ = "Memcpy host to device failed. Error code: " + std::to_string(cnret);
-    return false;
-  }
+                               sizeof(char*) * d_ptr_->attr_.batch_size, CNRT_MEM_TRANS_DIR_HOST2DEV);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy host to device failed. Error code:" + std::to_string(cnret), {}, false);
   cnret = cnrtMemcpy(d_ptr_->uv_ptrs_mlu_, reinterpret_cast<void**>(d_ptr_->uv_ptrs_cpu_),
-      sizeof(char*) * d_ptr_->attr_.batch_size, CNRT_MEM_TRANS_DIR_HOST2DEV);
-  if (cnret != CNRT_RET_SUCCESS) {
-    d_ptr_->estr_ = "Memcpy host to device failed. Error code: " + std::to_string(cnret);
-    return false;
-  }
+                     sizeof(char*) * d_ptr_->attr_.batch_size, CNRT_MEM_TRANS_DIR_HOST2DEV);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy host to device failed. Error code:" + std::to_string(cnret), {}, false);
   cnrtDim3_t dim;
   dim.x = d_ptr_->attr_.core;
   dim.y = 1;
   dim.z = 1;
   return -1 != ::Resize(dst, d_ptr_->y_ptrs_mlu_, d_ptr_->uv_ptrs_mlu_, d_ptr_->kparam_, d_ptr_->ftype_, dim,
-      d_ptr_->queue_->queue, &d_ptr_->estr_);
+                        d_ptr_->queue_->queue, &d_ptr_->estr_);
 }
 
 void MluResize::Destroy() {

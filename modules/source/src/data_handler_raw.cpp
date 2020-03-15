@@ -45,7 +45,7 @@ bool DataHandlerRaw::PrepareResources(bool demux_only) {
 
   if (param_.chunk_size_) {
     if (chunk_) delete[] chunk_;
-    chunk_ = new(std::nothrow) uint8_t[param_.chunk_size_];
+    chunk_ = new (std::nothrow) uint8_t[param_.chunk_size_];
     if (nullptr == chunk_) {
       LOG(ERROR) << "Failed to alloc memory";
       return false;

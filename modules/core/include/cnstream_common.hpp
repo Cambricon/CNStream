@@ -22,9 +22,9 @@
 #define CNSTREAM_COMMON_HPP_
 
 #include <limits.h>
-#include <unistd.h>
 #include <pthread.h>
 #include <sys/prctl.h>
+#include <unistd.h>
 
 #include <atomic>
 #include <mutex>
@@ -226,8 +226,7 @@ typename std::vector<T>::iterator ThreadSafeVector<T>::erase(typename std::vecto
 
 template <typename T>
 template <class InputIt>
-void  ThreadSafeVector<T>::insert(const typename std::vector<T>::iterator& pos,
-                                                              InputIt first, InputIt last) {
+void ThreadSafeVector<T>::insert(const typename std::vector<T>::iterator& pos, InputIt first, InputIt last) {
   CNSpinLockGuard lk(data_m_);
   v_.insert(pos, first, last);
 }

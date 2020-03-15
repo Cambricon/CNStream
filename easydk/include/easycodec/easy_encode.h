@@ -41,10 +41,10 @@ struct RateControl {
   bool vbr;
   /// The interval of ISLICE.
   uint32_t gop;
-  /// The numerator of input frame rate of the venc channel
-  uint32_t src_frame_rate_num;
-  /// The denominator of input frame rate of the venc channel
-  uint32_t src_frame_rate_den;
+  /// The numerator of encode frame rate of the venc channel
+  uint32_t frame_rate_num;
+  /// The denominator of encode frame rate of the venc channel
+  uint32_t frame_rate_den;
   /// Average bitrate in unit of kpbs, for cbr only.
   uint32_t bit_rate;
   /// The max bitrate in unit of kbps, for vbr only .
@@ -64,10 +64,70 @@ enum class VideoProfile {
   H264_HIGH,
   H264_HIGH_10,
 
-  H265_MAIN = 10,
+  H265_MAIN,
   H265_MAIN_STILL,
   H265_MAIN_INTRA,
   H265_MAIN_10,
+  PROFILE_MAX
+};
+
+/**
+ * @brief Video codec level
+ */
+enum class VideoLevel {
+  H264_1 = 0,
+  H264_1B,
+  H264_11,
+  H264_12,
+  H264_13,
+  H264_2,
+  H264_21,
+  H264_22,
+  H264_3,
+  H264_31,
+  H264_32,
+  H264_4,
+  H264_41,
+  H264_42,
+  H264_5,
+  H264_51,
+
+  H265_MAIN_1,
+  H265_HIGH_1,
+  H265_MAIN_2,
+  H265_HIGH_2,
+  H265_MAIN_21,
+  H265_HIGH_21,
+  H265_MAIN_3,
+  H265_HIGH_3,
+  H265_MAIN_31,
+  H265_HIGH_31,
+  H265_MAIN_4,
+  H265_HIGH_4,
+  H265_MAIN_41,
+  H265_HIGH_41,
+  H265_MAIN_5,
+  H265_HIGH_5,
+  H265_MAIN_51,
+  H265_HIGH_51,
+  H265_MAIN_52,
+  H265_HIGH_52,
+  H265_MAIN_6,
+  H265_HIGH_6,
+  H265_MAIN_61,
+  H265_HIGH_61,
+  H265_MAIN_62,
+  H265_HIGH_62,
+  LEVEL_MAX
+};
+
+/*
+ * @brief cncodec GOP type, see cncodec developer guide
+ */
+enum class GopType {
+  BIDIRECTIONAL,
+  LOW_DELAY,
+  PYRAMID
 };
 
 /**
@@ -105,17 +165,20 @@ class EasyEncode {
     /// The maximum resolution that this endecoder can handle.
     Geometry frame_geometry;
 
-    /// Input pixel format
+    /**
+     * @brief Input pixel format
+     * @note h264/h265 support NV21/NV12/I420/RGBA/BGRA/ARGB/ABGR
+     *       jpeg support NV21/NV12
+     */
     PixelFmt pixel_format;
 
     /**
      * @brief output codec type
-     * @note support h264/jpeg on mlu100
-     *       support h264/h265/jpeg on mlu200
+     * @note support h264/h265/jpeg
      */
     CodecType codec_type = CodecType::H264;
 
-    ///
+    /// Color standard
     ColorStd color_std = ColorStd::ITU_BT_2020;
 
     /// Qulity factor for jpeg encoder.
@@ -123,6 +186,9 @@ class EasyEncode {
 
     /// Profile for video encoder.
     VideoProfile profile = VideoProfile::H264_MAIN;
+
+    /// Video encode level
+    VideoLevel level = VideoLevel::H264_41;
 
     /// Video rate control parameters.
     RateControl rate_control;
@@ -142,11 +208,14 @@ class EasyEncode {
     /// B frame number in gop when profile is above main, default 0
     uint32_t b_frame_num = 0;
 
-    /// Intra MB refresh, default 0
+    /// MB count of intra refresh, default 0 for not enable intra refresh
     uint32_t ir_count = 0;
 
     /// Slice max MB count, default 0
     uint32_t max_mb_per_slice = 0;
+
+    /// GOP type, @see GopType
+    GopType gop_type = GopType::BIDIRECTIONAL;
 
     /// Init table for CABAC, 0,1,2 for H264 and 0,1 for HEVC, default 0
     uint32_t cabac_init_idc = 0;
@@ -173,6 +242,8 @@ class EasyEncode {
    * @return Pointer to new encoder instance
    */
   static EasyEncode* Create(const Attr& attr);
+
+  void AbortEncoder();
 
   /**
    * @brief Get the encoder instance attribute

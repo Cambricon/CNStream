@@ -33,7 +33,7 @@ namespace edk {
     throw MluMemoryOpError("ModelLoader Not Set"); \
   }
 
-#define CHECK_CNRT_RET(str, err_code)                                                        \
+#define CHECK_CNRT_RET(err_code, str)                                                        \
   if (CNRT_RET_SUCCESS != err_code) {                                                        \
     throw MluMemoryOpError(std::string(str) + " error code: " + std::to_string(error_code)); \
   }
@@ -62,8 +62,6 @@ namespace edk {
 
 extern cnrtDataType CastDataType(const DataType &type);
 extern DataType CastDataType(const cnrtDataType &type);
-extern cnrtDimOrder CastDimOrder(const DimOrder &order);
-extern DimOrder CastDimOrder(const cnrtDimOrder &order);
 
 static size_t TypeSize(const DataType &type) {
   switch (type) {
@@ -110,16 +108,16 @@ static void TransLayout(const DataLayout &src_layout, const DataLayout &dst_layo
     case 1 << 0:
       error_code = cnrtCastDataType(src_data, CastDataType(src_layout.dtype), dst_data, CastDataType(dst_layout.dtype),
                                     size, nullptr);
-      CHECK_CNRT_RET("Cast data type failed.", error_code);
+      CHECK_CNRT_RET(error_code, "Cast data type failed.");
       break;
     case 1 << 1:
       error_code = cnrtTransDataOrder(src_data, CastDataType(src_layout.dtype), dst_data, 4, dim_values, dim_order);
-      CHECK_CNRT_RET("Trans data order failed.", error_code);
+      CHECK_CNRT_RET(error_code, "Trans data order failed.");
       break;
     case 1 << 0 | 1 << 1:
       error_code = cnrtTransOrderAndCast(src_data, CastDataType(src_layout.dtype), dst_data,
                                          CastDataType(dst_layout.dtype), nullptr, 4, dim_values, dim_order);
-      CHECK_CNRT_RET("Trans data order and cast data type failed.", error_code);
+      CHECK_CNRT_RET(error_code, "Trans data order and cast data type failed.");
       break;
     default:
       size_t mem_size = size * TypeSize(src_layout.dtype);
@@ -183,7 +181,7 @@ void **MluMemoryOp::AllocMluInput(uint32_t batch_size) const {
     int64_t size = interface.InputDataSize(i);
     LOG(TRACE, "Alloc input memory (%u) on MLU in %u bytes", i, size);
     error_code = cnrtMalloc(&t, size);
-    CHECK_CNRT_RET("Mlu malloc failed.", error_code);
+    CHECK_CNRT_RET(error_code, "Mlu malloc failed.");
     ret[i] = t;
   }
   return ret;
@@ -204,7 +202,7 @@ void **MluMemoryOp::AllocMluOutput(uint32_t batch_size) const {
     int64_t size = interface.OutputDataSize(i);
     LOG(TRACE, "Alloc output memory (%u) on MLU in %u bytes", i, size);
     error_code = cnrtMalloc(&t, size);
-    CHECK_CNRT_RET("Mlu malloc failed.", error_code);
+    CHECK_CNRT_RET(error_code, "Mlu malloc failed.");
     ret[i] = t;
   }
   return ret;
@@ -215,7 +213,7 @@ void *MluMemoryOp::AllocMlu(size_t nBytes, uint32_t batch_size) const {
   cnrtRet_t error_code;
   LOG(TRACE, "Alloc memory on MLU in %lu bytes", nBytes * batch_size);
   error_code = cnrtMalloc(&ret, nBytes * batch_size);
-  CHECK_CNRT_RET("Mlu malloc failed.", error_code);
+  CHECK_CNRT_RET(error_code, "Mlu malloc failed.");
   return ret;
 }
 
@@ -276,7 +274,7 @@ void MluMemoryOp::MemcpyInputH2D(void **mlu_dst, void **cpu_src, uint32_t batch_
     TransLayout(cpu_layout, mlu_layout, src, temp_data, sp);
     LOG(TRACE, "MemcpyInputH2D in size %u, dst: %p, src: %p, tmp: %p", size, dst, src, temp_data);
     error_code = cnrtMemcpy(dst, temp_data, size, CNRT_MEM_TRANS_DIR_HOST2DEV);
-    CHECK_CNRT_RET("Memcpy host to device failed.", error_code);
+    CHECK_CNRT_RET(error_code, "Memcpy host to device failed.");
     free(temp_data);
   }
 }
@@ -298,7 +296,7 @@ void MluMemoryOp::MemcpyOutputD2H(void **cpu_dst, void **mlu_src, uint32_t batch
     }
     LOG(TRACE, "MemcpyOutputD2H in size %u, dst: %p, src: %p, tmp: %p", size, dst, src, temp_data);
     auto error_code = cnrtMemcpy(temp_data, src, size, CNRT_MEM_TRANS_DIR_DEV2HOST);
-    CHECK_CNRT_RET("Memcpy device to host failed.", error_code);
+    CHECK_CNRT_RET(error_code, "Memcpy device to host failed.");
     // format data
     DataLayout cpu_layout = ploader_->GetCpuOutputLayout(i);
     DataLayout mlu_layout = interface.GetMluOutputLayout(i);
@@ -312,21 +310,21 @@ void MluMemoryOp::MemcpyH2D(void *mlu_dst, void *cpu_src, size_t nBytes, uint32_
   cnrtRet_t error_code;
   LOG(TRACE, "copy memory from host to device in size %u, dst: %p, src: %p", nBytes * batch_size, mlu_dst, cpu_src);
   error_code = cnrtMemcpy(mlu_dst, cpu_src, nBytes * batch_size, CNRT_MEM_TRANS_DIR_HOST2DEV);
-  CHECK_CNRT_RET("Memcpy host to device failed.", error_code);
+  CHECK_CNRT_RET(error_code, "Memcpy host to device failed.");
 }
 
 void MluMemoryOp::MemcpyD2H(void *cpu_dst, void *mlu_src, size_t nBytes, uint32_t batch_size) const {
   cnrtRet_t error_code;
   LOG(TRACE, "copy memory from device to host in size %u, dst: %p, src: %p", nBytes * batch_size, cpu_dst, mlu_src);
   error_code = cnrtMemcpy(cpu_dst, mlu_src, nBytes * batch_size, CNRT_MEM_TRANS_DIR_DEV2HOST);
-  CHECK_CNRT_RET("Memcpy host to device failed.", error_code);
+  CHECK_CNRT_RET(error_code, "Memcpy host to device failed.");
 }
 
 void MluMemoryOp::MemcpyD2D(void *mlu_dst, void *mlu_src, size_t nBytes) const {
   cnrtRet_t error_code;
   LOG(TRACE, "copy memory from device to device in size %u, dst: %p, src: %p", nBytes, mlu_dst, mlu_src);
   error_code = cnrtMemcpy(mlu_dst, mlu_src, nBytes, CNRT_MEM_TRANS_DIR_DEV2DEV);
-  CHECK_CNRT_RET("Memcpy device to device failed.", error_code);
+  CHECK_CNRT_RET(error_code, "Memcpy device to device failed.");
 }
 
 }  // namespace edk

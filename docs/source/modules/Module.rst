@@ -22,6 +22,9 @@
 --------------
 数据源（DataSource）模块是pipeline的起始模块，实现了视频图像获取功能。通过FFmpeg来解封装，或解复用本地文件或者网络流，来得到码流。之后喂给CNDecoder或者CPU Decoder进行解码，得到图像，并把图像存到CNDataFrame的syncedMem中。另外，为了调试方便，该模块还支持读取H264和H265格式的裸码流文件。
 
+.. attention::
+   |  一个pipeline只支持定义一个数据源模块。
+
 数据源模块主要有以下特点：
 
 - 作为pipeline的起始模块，没有输入队列。因此pipeline不会为DataSource启动线程，也不会调度source。source module需要内部启动线程，通过pipeline的 ``ProvideData()`` 接口向下游发送数据。

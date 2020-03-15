@@ -61,8 +61,7 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
     if (mlu_ctx.GetCoreVersion() == edk::CoreVersion::MLU270) {
       use_scaler_ = false;
     }
-    if (!use_scaler_)
-      rcop_res_ = std::make_shared<RCOpResource>(model, batchsize);
+    if (!use_scaler_) rcop_res_ = std::make_shared<RCOpResource>(model, batchsize);
     cpu_input_res_->Init();
     cpu_output_res_->Init();
     mlu_input_res_->Init();
@@ -97,8 +96,7 @@ InferEngine::~InferEngine() {
     cpu_output_res_->Destroy();
     mlu_input_res_->Destroy();
     mlu_output_res_->Destroy();
-    if (rcop_res_.get())
-      rcop_res_->Destroy();
+    if (rcop_res_.get()) rcop_res_->Destroy();
     DLOG(INFO) << "Destroied resources";
   } catch (CnstreamError& e) {
     if (error_func_) {
@@ -168,7 +166,7 @@ void InferEngine::StageAssemble() {
         batching_stage_ = std::make_shared<ScalerBatchingStage>(model_, batchsize_, mlu_input_res_);
       } else {
         // 2.3.2 use resize convert
-        batching_stage_ = std::make_shared<ResizeConvertBatchingStage>(model_, batchsize_, rcop_res_);
+        batching_stage_ = std::make_shared<ResizeConvertBatchingStage>(model_, batchsize_, dev_id_, rcop_res_);
         std::shared_ptr<BatchingDoneStage> rc_done_stage =
             std::make_shared<ResizeConvertBatchingDoneStage>(model_, batchsize_, dev_id_, rcop_res_, mlu_input_res_);
         batching_done_stages_.push_back(rc_done_stage);
@@ -178,8 +176,7 @@ void InferEngine::StageAssemble() {
   std::shared_ptr<BatchingDoneStage> infer_stage =
       std::make_shared<InferBatchingDoneStage>(model_, batchsize_, dev_id_, mlu_input_res_, mlu_output_res_);
   auto mlu_queue = dynamic_cast<InferBatchingDoneStage*>(infer_stage.get())->SharedMluQueue();
-  if (rcop_res_.get())
-    rcop_res_->SetMluQueue(mlu_queue);  // multiplexing cnrtQueue from EasyInfer.
+  if (rcop_res_.get()) rcop_res_->SetMluQueue(mlu_queue);  // multiplexing cnrtQueue from EasyInfer.
   std::shared_ptr<BatchingDoneStage> d2h_stage =
       std::make_shared<D2HBatchingDoneStage>(model_, batchsize_, dev_id_, mlu_output_res_, cpu_output_res_);
   std::shared_ptr<BatchingDoneStage> postproc_stage =

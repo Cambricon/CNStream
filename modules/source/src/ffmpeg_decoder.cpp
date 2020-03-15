@@ -224,8 +224,8 @@ bool FFmpegCpuDecoder::Create(AVStream *st) {
     LOG(ERROR) << "avcodec_find_decoder failed";
     return false;
   }
-#if (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 14, 0)) \
-  || ((LIBAVCODEC_VERSION_MICRO >= 100) && (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 33, 100)))
+#if (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 14, 0)) || \
+    ((LIBAVCODEC_VERSION_MICRO >= 100) && (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 33, 100)))
   instance_ = st->codec;
 #else
   instance_ = avcodec_alloc_context3(dec);
@@ -261,8 +261,8 @@ void FFmpegCpuDecoder::Destroy() {
       std::this_thread::yield();
     }
     eos_got_.store(0);
-#if !((LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 14, 0)) \
-        || ((LIBAVCODEC_VERSION_MICRO >= 100) && (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 33, 100))))
+#if !((LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 14, 0)) || \
+      ((LIBAVCODEC_VERSION_MICRO >= 100) && (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 33, 100))))
     avcodec_free_context(&instance_);
 #endif
     instance_ = nullptr;
@@ -340,7 +340,7 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     if (y_size_ != frame->linesize[0] * frame->height) {
       if (nullptr != nv21_data_) delete[] nv21_data_;
       y_size_ = frame->linesize[0] * frame->height;
-      nv21_data_ = new(std::nothrow) uint8_t[y_size_ * 3 / 2];
+      nv21_data_ = new (std::nothrow) uint8_t[y_size_ * 3 / 2];
       if (nullptr == nv21_data_) {
         LOG(ERROR) << "FFmpegCpuDecoder::ProcessFrame() Failed to alloc memory, size:" << y_size_ * 3 / 2;
         return false;
@@ -367,8 +367,8 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     auto t = reinterpret_cast<uint8_t *>(data->frame.mlu_data);
     for (int i = 0; i < data->frame.GetPlanes(); ++i) {
       size_t plane_size = data->frame.GetPlaneBytes(i);
-      CNSyncedMemory* CNSyncedMemory_ptr =
-        new(std::nothrow) CNSyncedMemory(plane_size, dev_ctx_.dev_id, dev_ctx_.ddr_channel);
+      CNSyncedMemory *CNSyncedMemory_ptr =
+          new (std::nothrow) CNSyncedMemory(plane_size, dev_ctx_.dev_id, dev_ctx_.ddr_channel);
       LOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "FFmpegCpuDecoder::ProcessFrame() new CNSyncedMemory failed";
       data->frame.data[i].reset(CNSyncedMemory_ptr);
       data->frame.data[i]->SetMluData(t);
@@ -391,7 +391,7 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     auto t = reinterpret_cast<uint8_t *>(data->frame.cpu_data);
     for (int i = 0; i < data->frame.GetPlanes(); ++i) {
       size_t plane_size = data->frame.GetPlaneBytes(i);
-      CNSyncedMemory* CNSyncedMemory_ptr = new(std::nothrow) CNSyncedMemory(plane_size);
+      CNSyncedMemory *CNSyncedMemory_ptr = new (std::nothrow) CNSyncedMemory(plane_size);
       LOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "FFmpegCpuDecoder::ProcessFrame() new CNSyncedMemory failed";
       data->frame.data[i].reset(CNSyncedMemory_ptr);
       data->frame.data[i]->SetCpuData(t);

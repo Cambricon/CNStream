@@ -55,8 +55,9 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
                         const cnstream::CNFrameInfoPtr& package) {
   // check params
   auto input_shapes = model->InputShapes();
-  if (net_inputs.size() != 1 || input_shapes[0].c != 3) {
-    LOG(ERROR) << "[PreprocCpu] model input shape not supported";
+  if (net_inputs.size() != 1 || (input_shapes[0].c != 3 && input_shapes[0].c != 4)) {
+    LOG(ERROR) << "[PreprocCpu] model input shape not supported, net_input.size = "
+               << net_inputs.size() << ", input_shapes[0].c = " << input_shapes[0].c;
     return -1;
   }
 

@@ -64,6 +64,7 @@ TEST(Source, OpenClose) {
   ModuleParamSet param;
 
   ResetParam(param);
+  EXPECT_TRUE(src->CheckParamSet(param));
   EXPECT_TRUE(src->Open(param));
 
   // invalid source type
@@ -106,6 +107,7 @@ TEST(Source, OpenClose) {
   EXPECT_FALSE(src->Open(param));
   ResetParam(param);
   param.erase("height");
+  EXPECT_FALSE(src->CheckParamSet(param));
   EXPECT_FALSE(src->Open(param));
   ResetParam(param);
   param.erase("interlaced");
@@ -118,6 +120,7 @@ TEST(Source, OpenClose) {
   param["output_type"] = "mlu";
   param["decoder_type"] = "mlu";
   param["device_id"] = "0";
+  EXPECT_TRUE(src->CheckParamSet(param));
   EXPECT_TRUE(src->Open(param));
   param.clear();
   src->Close();
@@ -390,4 +393,3 @@ TEST(Source, RawMLU) {
 }
 
 }  // namespace cnstream
-

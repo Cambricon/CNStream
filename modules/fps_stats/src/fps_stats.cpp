@@ -29,7 +29,7 @@
 namespace cnstream {
 
 FpsStats::FpsStats(const std::string& name) : Module(name) {
-  stream_fps_ = new(std::nothrow) StreamFps[GetMaxStreamNumber()];
+  stream_fps_ = new (std::nothrow) StreamFps[GetMaxStreamNumber()];
   LOG_IF(FATAL, nullptr == stream_fps_) << "FpsStats::FpsStats() new StreamFps failed";
   param_register_.SetModuleDesc("FpsStats is a module for show fps stats.");
 }
@@ -71,7 +71,7 @@ void FpsStats::ShowStatistics() {
   std::cout << "Total fps:" << total_fps << std::endl;
 }
 
-bool FpsStats::CheckParamSet(ModuleParamSet paramSet) {
+bool FpsStats::CheckParamSet(const ModuleParamSet& paramSet) const {
   for (auto& it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
       LOG(WARNING) << "[FpsStats] Unknown param: " << it.first;

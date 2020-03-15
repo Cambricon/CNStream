@@ -46,17 +46,11 @@ class CnrtInitTool {
     if (!is_initialized_) {
       int err_code;
       if (CNRT_RET_SUCCESS != (err_code = cnrtInit(0))) {
-        throw MluContextError(
-            "Init cambricon runtime failed."
-            " error code " +
-            std::to_string(err_code));
+        throw MluContextError("Init cambricon runtime failed. error code " + std::to_string(err_code));
       }
       unsigned int dev_cnt;
       if (CNRT_RET_SUCCESS != (err_code = cnrtGetDeviceCount(&dev_cnt))) {
-        throw MluContextError(
-            "Get device count failed."
-            " error code " +
-            std::to_string(err_code));
+        throw MluContextError("Get device count failed. error code " + std::to_string(err_code));
       }
       if (0 == dev_cnt) {
         throw MluContextError("No device found.");
@@ -93,16 +87,10 @@ void MluContext::ConfigureForThisThread() {
   int err_code;
   cnrtDev_t dev;
   if (CNRT_RET_SUCCESS != (err_code = cnrtGetDeviceHandle(&dev, dev_id_))) {
-    throw MluContextError(
-        "Get device failed."
-        " error code " +
-        std::to_string(err_code));
+    throw MluContextError("Get device failed. error code " + std::to_string(err_code));
   }
   if (CNRT_RET_SUCCESS != (err_code = cnrtSetCurrentDevice(dev))) {
-    throw MluContextError(
-        "Set current device failed."
-        " error code " +
-        std::to_string(err_code));
+    throw MluContextError("Set current device failed. error code " + std::to_string(err_code));
   }
   if (channel_id_ >= 0) {
     if (channel_id_ >= MLU_CHANNEL_NUM) {

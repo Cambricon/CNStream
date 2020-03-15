@@ -41,7 +41,7 @@ class EventBusPrivate {
 
 EventBus::EventBus() {
   running_.store(false);
-  d_ptr_ = new(std::nothrow) EventBusPrivate(this);
+  d_ptr_ = new (std::nothrow) EventBusPrivate(this);
   LOG_IF(FATAL, nullptr == d_ptr_) << "EventBus::EventBus() new EventBusPrivate failed.";
 }
 

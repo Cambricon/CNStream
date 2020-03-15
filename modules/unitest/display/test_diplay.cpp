@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <thread>
 
 #include "displayer.hpp"
 
@@ -25,6 +26,7 @@ TEST(Display, OpenClose) {
   params["max-channels"] = "16";
   params["show"] = "false";
   params["full-screen"] = "false";
+  EXPECT_TRUE(module.CheckParamSet(params));
   EXPECT_TRUE(module.Open(params));
   module.Close();
 
@@ -34,19 +36,28 @@ TEST(Display, OpenClose) {
   params["refresh-rate"] = "22";
   params["max-channels"] = "16";
   params["show"] = "false";
+  EXPECT_FALSE(module.CheckParamSet(params));
   EXPECT_FALSE(module.Open(params));
 
+  // invalid full-screen and show
+  params["full-screen"] = "aaa";
+  params["show"] = "bbb";
+  EXPECT_FALSE(module.CheckParamSet(params));
+
+  params["full-screen"] = "false";
+  params["show"] = "false";
   params["window-width"] = "1920";
   params["window-height"] = "1080";
   params["refresh-rate"] = "22";
   params["max-channels"] = "16";
   params["show"] = "false";
+  EXPECT_TRUE(module.CheckParamSet(params));
   EXPECT_TRUE(module.Open(params));
   module.Close();
 }
 
 TEST(Display, Process) {
-  std::shared_ptr<Module> display = std::make_shared<Displayer>(gname);
+  std::shared_ptr<Displayer> display = std::make_shared<Displayer>(gname);
   int width = 1920;
   int height = 1080;
   ModuleParamSet params;
@@ -56,7 +67,8 @@ TEST(Display, Process) {
   params["max-channels"] = "16";
   params["show"] = "false";
   ASSERT_TRUE(display->Open(params));
-  cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
+
+  cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 127, 0));
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
   CNDataFrame &frame = data->frame;
   data->channel_idx = 0;
@@ -70,7 +82,15 @@ TEST(Display, Process) {
   frame.fmt = CN_PIXEL_FORMAT_BGR24;
   frame.CopyToSyncMem();
   EXPECT_EQ(display->Process(data), 0);
+  auto thread_loop = [&display]() {
+    display->GUILoop(nullptr);
+  };
+  std::thread thread_ = std::thread(thread_loop);
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
   display->Close();
+  if (thread_.joinable()) {
+    thread_.join();
+  }
 }
 
 }  // namespace cnstream

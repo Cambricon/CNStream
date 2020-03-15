@@ -128,6 +128,8 @@ class EasyDecode {
   bool Resume();
   bool Pause();
 
+  void AbortDecoder();
+
   /**
    * @brief Send data to decoder, block when STATUS is pause.
    *        An Exception is thrown when send data failed.

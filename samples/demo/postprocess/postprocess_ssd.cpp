@@ -117,7 +117,7 @@ int PostprocSsd::Execute(const std::vector<float*>& net_outputs, const std::shar
   auto box_num = data[0];
   data += 64;
 
-  for (decltype(box_num) bi = 0; bi < box_num; ++bi, data += 7) {
+  for (decltype(box_num) bi = 0; bi < box_num; ++bi) {
     // if (data[0] != batch_index) continue;
     if (data[1] == 0) continue;
     if (threshold_ > 0 && data[2] < threshold_) continue;
@@ -130,6 +130,7 @@ int PostprocSsd::Execute(const std::vector<float*>& net_outputs, const std::shar
     object->bbox.h = data[6] - object->bbox.y;
 
     package->objs.push_back(object);
+    data += 7;
   }
 #endif
   return 0;

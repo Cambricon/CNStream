@@ -120,7 +120,7 @@ class Displayer : public Module, public ModuleCreator<Displayer> {
    *
    * @return Returns true if this API run successfully. Otherwise, returns false.
    */
-  bool CheckParamSet(ModuleParamSet paramSet) override;
+  bool CheckParamSet(const ModuleParamSet& paramSet) const override;
 
  private:
   SDLVideoPlayer* player_;

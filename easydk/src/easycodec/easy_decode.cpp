@@ -174,8 +174,8 @@ DecodeHandler::~DecodeHandler() {
   /**
    * Release resources.
    */
+  unique_lock<mutex> eos_lk(eos_mtx_);
   if (!got_eos_) {
-    eos_mtx_.lock();
     if (!send_eos_ && handle_) {
       eos_mtx_.unlock();
       LOG(INFO, "Send EOS in destruct");
@@ -184,11 +184,13 @@ DecodeHandler::~DecodeHandler() {
       decoder_->SendData(packet, true);
     } else {
       if (!handle_) got_eos_ = true;
-      eos_mtx_.unlock();
     }
   }
 
-  unique_lock<mutex> eos_lk(eos_mtx_);
+  if (!eos_lk.owns_lock()) {
+    eos_lk.lock();
+  }
+
   if (!got_eos_) {
     LOG(INFO, "Wait EOS in destruct");
     eos_cond_.wait(eos_lk, [this]() -> bool { return got_eos_; });
@@ -230,12 +232,27 @@ DecodeHandler::~DecodeHandler() {
 }
 
 void DecodeHandler::AbortDecoder() {
-  if (jpeg_decode_) {
-    cnjpegDecAbort(handle_);
+  LOG(WARNING, "Abort decoder");
+  if (handle_) {
+    if (jpeg_decode_) {
+      cnjpegDecAbort(handle_);
+    } else {
+      cnvideoDecAbort(handle_);
+    }
+    handle_ = nullptr;
+
+    if (attr_.eos_callback) {
+      attr_.eos_callback();
+    }
+    unique_lock<mutex> status_lk(status_mtx_);
+    status_ = EasyDecode::Status::EOS;
+
+    unique_lock<mutex> eos_lk(eos_mtx_);
+    got_eos_ = true;
+    eos_cond_.notify_one();
   } else {
-    cnvideoDecAbort(handle_);
+    LOG(ERROR, "Won't do abort, since cndecode handler has not been initialized");
   }
-  got_eos_ = true;
 }
 
 std::pair<bool, std::string> DecodeHandler::Init(const EasyDecode::Attr& attr) {
@@ -368,6 +385,7 @@ void DecodeHandler::ReceiveFrame(void* out) {
     LOG(WARNING, "Receive empty frame");
     return;
   }
+  finfo.device_id = attr_.dev_id;
   finfo.channel_id = frame->channel;
   finfo.buf_id = reinterpret_cast<uint64_t>(frame);
   finfo.width = frame->width;
@@ -443,7 +461,7 @@ void DecodeHandler::ReceiveEOS() {
   ss << "Thread id: " << std::this_thread::get_id() << ",Received EOS from cncodec";
   LOG(INFO, ss.str());
 
-  if (NULL != attr_.eos_callback) {
+  if (attr_.eos_callback) {
     attr_.eos_callback();
   }
   unique_lock<mutex> status_lk(status_mtx_);
@@ -636,6 +654,10 @@ bool EasyDecode::Resume() {
     return true;
   }
   return false;
+}
+
+void EasyDecode::AbortDecoder() {
+  handler_->AbortDecoder();
 }
 
 EasyDecode::Status EasyDecode::GetStatus() const {

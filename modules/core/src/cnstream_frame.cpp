@@ -64,7 +64,7 @@ cv::Mat* CNDataFrame::ImageBGR() {
   }
   int stride_ = stride[0];
   cv::Mat bgr(height, stride_, CV_8UC3);
-  uint8_t* img_data = new(std::nothrow) uint8_t[GetBytes()];
+  uint8_t* img_data = new (std::nothrow) uint8_t[GetBytes()];
   LOG_IF(FATAL, nullptr == img_data) << "CNDataFrame::ImageBGR() failed to alloc memory";
   uint8_t* t = img_data;
   for (int i = 0; i < GetPlanes(); ++i) {
@@ -94,7 +94,7 @@ cv::Mat* CNDataFrame::ImageBGR() {
     }
   }
   delete[] img_data;
-  bgr_mat = new(std::nothrow) cv::Mat();
+  bgr_mat = new (std::nothrow) cv::Mat();
   LOG_IF(FATAL, nullptr == bgr_mat) << "CNDataFrame::ImageBGR() failed to alloc cv::Mat";
   *bgr_mat = bgr;
   return bgr_mat;
@@ -136,7 +136,7 @@ void CNDataFrame::CopyToSyncMem() {
     if (this->ctx.dev_type == DevContext::MLU_CPU) {
       for (int i = 0; i < GetPlanes(); i++) {
         size_t plane_size = GetPlaneBytes(i);
-        this->data[i].reset(new(std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
+        this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
         this->data[i]->SetMluCpuData(this->ptr_mlu[i], this->ptr_cpu[i]);
       }
     } else {
@@ -146,7 +146,7 @@ void CNDataFrame::CopyToSyncMem() {
     /*cndecoder buffer will be used to avoid dev2dev copy*/
     for (int i = 0; i < GetPlanes(); i++) {
       size_t plane_size = GetPlaneBytes(i);
-      this->data[i].reset(new(std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
+      this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
       this->data[i]->SetMluData(this->ptr_mlu[i]);
     }
 #endif
@@ -165,7 +165,7 @@ void CNDataFrame::CopyToSyncMem() {
       size_t plane_size = GetPlaneBytes(i);
       CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dst, ptr_mlu[i], plane_size, CNRT_MEM_TRANS_DIR_DEV2DEV), ctx.dev_id,
                            ctx.ddr_channel);
-      this->data[i].reset(new(std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
+      this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
       this->data[i]->SetMluData(dst);
       dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
     }
@@ -183,7 +183,7 @@ void CNDataFrame::CopyToSyncMem() {
     for (int i = 0; i < GetPlanes(); i++) {
       size_t plane_size = GetPlaneBytes(i);
       memcpy(dst, ptr_cpu[i], plane_size);
-      this->data[i].reset(new(std::nothrow) CNSyncedMemory(plane_size));
+      this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size));
       this->data[i]->SetCpuData(dst);
       dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
     }
@@ -196,7 +196,7 @@ void CNDataFrame::CopyToSyncMem() {
   }
 }
 
-void CNDataFrame::SetModuleMask(Module* module, Module* current) {
+uint64_t CNDataFrame::SetModuleMask(Module* module, Module* current) {
   CNSpinLockGuard guard(mask_lock_);
   auto iter = module_mask_map_.find(module->GetId());
   if (iter != module_mask_map_.end()) {
@@ -204,6 +204,7 @@ void CNDataFrame::SetModuleMask(Module* module, Module* current) {
   } else {
     module_mask_map_[module->GetId()] = (uint64_t)1 << current->GetId();
   }
+  return module_mask_map_[module->GetId()];
 }
 
 uint64_t CNDataFrame::GetModulesMask(Module* module) {
@@ -304,7 +305,7 @@ std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, b
     LOG(ERROR) << "CNFrameInfo::Create() stream_id is empty string.";
     return nullptr;
   }
-  std::shared_ptr<CNFrameInfo> ptr(new(std::nothrow) CNFrameInfo());
+  std::shared_ptr<CNFrameInfo> ptr(new (std::nothrow) CNFrameInfo());
   if (!ptr) {
     LOG(ERROR) << "CNFrameInfo::Create() new CNFrameInfo failed.";
     return nullptr;

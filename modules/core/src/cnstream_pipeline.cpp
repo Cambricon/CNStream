@@ -50,7 +50,7 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
     LOG(ERROR) << "Parse module configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
-      << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. JSON:" << jstr;
+               << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. JSON:" << jstr;
     return false;
   }
 
@@ -186,6 +186,7 @@ bool CNModuleConfig::ParseByJSONFile(const std::string& jfname) {
 struct ModuleAssociatedInfo {
   std::shared_ptr<Module> instance;
   uint32_t parallelism = 0;
+  std::shared_ptr<Connector> connector;
   std::set<std::string> down_nodes;
   std::vector<std::string> input_connectors;
   std::vector<std::string> output_connectors;
@@ -267,10 +268,10 @@ class PipelinePrivate {
 };  // class PipelinePrivate
 
 Pipeline::Pipeline(const std::string& name) : Module(name) {
-  d_ptr_ = new(std::nothrow) PipelinePrivate(this);
+  d_ptr_ = new (std::nothrow) PipelinePrivate(this);
   LOG_IF(FATAL, nullptr == d_ptr_) << "Pipeline::Pipeline() failed to alloc PipelinePrivate";
 
-  event_bus_ = new(std::nothrow) EventBus();
+  event_bus_ = new (std::nothrow) EventBus();
   LOG_IF(FATAL, nullptr == event_bus_) << "Pipeline::Pipeline() failed to alloc EventBus";
   GetEventBus()->AddBusWatch(std::bind(&Pipeline::DefaultBusWatch, this, std::placeholders::_1, std::placeholders::_2),
                              this);
@@ -354,16 +355,24 @@ bool Pipeline::AddModule(std::shared_ptr<Module> module) {
   ModuleAssociatedInfo associated_info;
   associated_info.instance = module;
   associated_info.parallelism = 1;
+  associated_info.connector = std::make_shared<Connector>(associated_info.parallelism);
   module->SetContainer(this);
   d_ptr_->modules_.insert(std::make_pair(moduleName, associated_info));
 
   return true;
 }
 
-bool Pipeline::SetModuleParallelism(std::shared_ptr<Module> module, uint32_t parallelism) {
+bool Pipeline::SetModuleAttribute(std::shared_ptr<Module> module, uint32_t parallelism, size_t queue_capacity) {
   std::string moduleName = module->GetName();
   if (d_ptr_->modules_.find(moduleName) == d_ptr_->modules_.end()) return false;
   d_ptr_->modules_[moduleName].parallelism = parallelism;
+  if (parallelism && queue_capacity) {
+    d_ptr_->modules_[moduleName].connector = std::make_shared<Connector>(parallelism, queue_capacity);
+    return static_cast<bool>(d_ptr_->modules_[moduleName].connector);
+  }
+  if (!parallelism && d_ptr_->modules_[moduleName].connector) {
+    d_ptr_->modules_[moduleName].connector.reset();
+  }
   return true;
 }
 
@@ -373,8 +382,7 @@ uint32_t Pipeline::GetModuleParallelism(std::shared_ptr<Module> module) {
   return d_ptr_->modules_[moduleName].parallelism;
 }
 
-std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_ptr<Module> down_node,
-                                  size_t queue_capacity) {
+std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_ptr<Module> down_node) {
   if (up_node == nullptr || down_node == nullptr) {
     return "";
   }
@@ -392,6 +400,10 @@ std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_p
   ModuleAssociatedInfo& down_node_info = d_ptr_->modules_.find(down_node_name)->second;
 
   std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
+  if (!down_node_info.connector) {
+    LOG(ERROR) << "connector is invalid when linking " << link_id;
+    return "";
+  }
   auto ret = up_node_info.down_nodes.insert(down_node_name);
   if (!ret.second) {
     LOG(ERROR) << "modules have been linked already";
@@ -401,10 +413,9 @@ std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_p
   LOG(INFO) << "Link Module " << link_id;
 
   // create connector
-  std::shared_ptr<Connector> con = std::make_shared<Connector>(down_node_info.parallelism, queue_capacity);
   up_node_info.output_connectors.push_back(link_id);
   down_node_info.input_connectors.push_back(link_id);
-  d_ptr_->links_[link_id] = con;
+  d_ptr_->links_[link_id] = down_node_info.connector;
 
   down_node->SetParentId(up_node->GetId());
   return link_id;
@@ -454,8 +465,10 @@ bool Pipeline::Start() {
   event_bus_->running_.store(true);
   d_ptr_->event_thread_ = std::thread(&Pipeline::EventLoop, this);
 
-  for (std::pair<std::string, std::shared_ptr<Connector>> connector : d_ptr_->links_) {
-    connector.second->Start();
+  for (const std::pair<std::string, ModuleAssociatedInfo>& it : d_ptr_->modules_) {
+    if (it.second.connector) {
+      it.second.connector->Start();
+    }
   }
 
   // create process threads
@@ -463,6 +476,12 @@ bool Pipeline::Start() {
     const std::string node_name = it.first;
     ModuleAssociatedInfo& module_info = it.second;
     uint32_t parallelism = module_info.parallelism;
+    if ((!parallelism && module_info.connector) || (parallelism && !module_info.connector) ||
+        (parallelism && module_info.connector && parallelism != module_info.connector->GetConveyorCount())) {
+      LOG(INFO) << "Module parallelism do not equal input Connector's Conveyor number, name: "
+                << module_info.instance->GetName();
+      return false;
+    }
     for (uint32_t conveyor_idx = 0; conveyor_idx < parallelism; ++conveyor_idx) {
       d_ptr_->threads_.push_back(std::thread(&Pipeline::TaskLoop, this, node_name, conveyor_idx));
     }
@@ -477,8 +496,10 @@ bool Pipeline::Stop() {
   if (!IsRunning()) return true;
 
   // stop data transmit
-  for (std::pair<std::string, std::shared_ptr<Connector>> connector : d_ptr_->links_) {
-    connector.second->Stop();
+  for (const std::pair<std::string, ModuleAssociatedInfo>& it : d_ptr_->modules_) {
+    if (it.second.connector) {
+      it.second.connector->Stop();
+    }
   }
   running_.store(false);
   event_bus_->running_.store(false);
@@ -569,20 +590,23 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     }
   }
 
-  /*
-    set module mask
-   */
   for (auto& down_node_name : module_info.down_nodes) {
     ModuleAssociatedInfo& down_node_info = d_ptr_->modules_.find(down_node_name)->second;
-    data->frame.SetModuleMask(down_node_info.instance.get(), module_info.instance.get());
-  }
+    assert(down_node_info.connector);
+    assert(0 < down_node_info.input_connectors.size());
+    uint64_t frame_mask = data->frame.SetModuleMask(down_node_info.instance.get(), module_info.instance.get());
 
-  // broadcast
-  const std::vector<std::string>& connector_ids = module_info.output_connectors;
-  for (auto& id : connector_ids) {
-    std::shared_ptr<Connector>& connector = d_ptr_->links_[id];
-    int conveyor_idx = chn_idx % connector->GetConveyorCount();
-    connector->PushDataBufferToConveyor(conveyor_idx, data);
+    // case 1: down_node has only 1 input node: current node
+    // case 2: down_node has >1 input nodes, current node has brother nodes
+    // the processing data frame will not be pushed into down_node Connector
+    // until processed by all brother nodes, the last node responds to transmit
+    bool processed_by_all_modules = frame_mask == down_node_info.instance->GetModulesMask();
+
+    if (processed_by_all_modules) {
+      std::shared_ptr<Connector> connector = down_node_info.connector;
+      int conveyor_idx = chn_idx % connector->GetConveyorCount();
+      connector->PushDataBufferToConveyor(conveyor_idx, data);
+    }
   }
 }
 
@@ -590,13 +614,9 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
   LOG_IF(FATAL, d_ptr_->modules_.find(node_name) == d_ptr_->modules_.end());
 
   ModuleAssociatedInfo& module_info = d_ptr_->modules_[node_name];
+  std::shared_ptr<Connector> connector = module_info.connector;
 
-  std::vector<std::shared_ptr<Connector>> input_connectors;
-  std::transform(module_info.input_connectors.begin(), module_info.input_connectors.end(),
-                 std::back_inserter(input_connectors),
-                 [&](std::string idx) -> std::shared_ptr<Connector> { return d_ptr_->links_[idx]; });
-
-  if (input_connectors.size() == 0) return;
+  if (!connector) return;
 
   size_t len = node_name.size() > 10 ? 10 : node_name.size();
   std::string thread_name = "cn-" + node_name.substr(0, len) + std::to_string(conveyor_idx);
@@ -607,60 +627,54 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
     has_data = false;
     std::shared_ptr<CNFrameInfo> data;
     // sync data
-    for (std::shared_ptr<Connector> connector : input_connectors) {
-      data = connector->PopDataBufferFromConveyor(conveyor_idx);
-      if (nullptr == data.get()) {
-        /*
-          nullptr will be received when connector stops.
-          maybe only part of the connectors stopped.
+    data = connector->PopDataBufferFromConveyor(conveyor_idx);
+    if (nullptr == data.get()) {
+      /*
+         nullptr will be received when connector stops.
+         maybe only part of the connectors stopped.
          */
+      continue;
+    }
+
+    has_data = true;
+    assert(data->frame.GetModulesMask(module_info.instance.get()) == module_info.instance->GetModulesMask());
+
+    data->frame.ClearModuleMask(module_info.instance.get());
+    int flags = data->frame.flags;
+
+    if (!module_info.instance->hasTranmit() && (CN_FRAME_FLAG_EOS & flags)) {
+      /*normal module, transmit EOS by the framework*/
+      TransmitData(node_name, data);
+      continue;
+    }
+
+    {
+      int ret = module_info.instance->DoProcess(data);
+      /*process failed*/
+      if (ret < 0) {
+        Event e;
+        e.type = EventType::EVENT_ERROR;
+        e.module = module_info.instance.get();
+        e.message = module_info.instance->GetName() + " process failed, return number: " + std::to_string(ret);
+        e.thread_id = std::this_thread::get_id();
+        event_bus_->PostEvent(e);
+        StreamMsg msg;
+        msg.type = StreamMsgType::ERROR_MSG;
+        msg.chn_idx = data->channel_idx;
+        msg.stream_id = data->frame.stream_id;
+        d_ptr_->UpdateByStreamMsg(msg);
+        return;
+      } else if (ret > 0) {
+        // data has been transmitted by the module itself
+        if (!module_info.instance->hasTranmit()) {
+          LOG(ERROR) << "Module::Process() should not return 1\n";
+          return;
+        }
         continue;
       }
-
-      has_data = true;
-
-      if (data->frame.GetModulesMask(module_info.instance.get()) == module_info.instance->GetModulesMask()) {
-        data->frame.ClearModuleMask(module_info.instance.get());
-        int flags = data->frame.flags;
-
-        if (!module_info.instance->hasTranmit() && (CN_FRAME_FLAG_EOS & flags)) {
-          /*normal module, transmit EOS by the framework*/
-          TransmitData(node_name, data);
-          continue;
-        }
-
-        {
-          int ret = module_info.instance->DoProcess(data);
-          /*process failed*/
-          if (ret < 0) {
-            Event e;
-            e.type = EventType::EVENT_ERROR;
-            e.module = module_info.instance.get();
-            e.message = module_info.instance->GetName() + " process failed, return number: " + std::to_string(ret);
-            e.thread_id = std::this_thread::get_id();
-            event_bus_->PostEvent(e);
-            StreamMsg msg;
-            msg.type = StreamMsgType::ERROR_MSG;
-            msg.chn_idx = data->channel_idx;
-            msg.stream_id = data->frame.stream_id;
-            d_ptr_->UpdateByStreamMsg(msg);
-            return;
-          } else if (ret > 0) {
-            // data has been transmitted by the module itself
-            if (!module_info.instance->hasTranmit()) {
-              LOG(ERROR) << "Module::Process() should not return 1\n";
-              return;
-            }
-            continue;
-          }
-        }
-        TransmitData(node_name, data);
-      } else {
-        // LOG(INFO) << std::hex << data->frame.GetModulesMask(module_info.instance.get()) << " : " <<
-        // module_info.instance->GetModulesMask();
-      }
-    }  // for
-  }    // while
+    }
+    TransmitData(node_name, data);
+  }  // while
 }
 
 /* ------config/auto-graph methods------ */
@@ -698,7 +712,6 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
   /*TODO,check configs*/
   uint64_t linked_id_mask = 0;
   ModuleCreatorWorker creator;
-  std::map<std::string, int> queues_size;
   for (auto& v : configs) {
     this->AddModuleConfig(v);
     std::shared_ptr<Module> instance(creator.Create(v.className, v.name));
@@ -708,13 +721,12 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
     }
     instance->ShowPerfInfo(v.showPerfInfo);
     d_ptr_->modules_map_[v.name] = instance;
-    queues_size[v.name] = v.maxInputQueueSize;
     this->AddModule(instance);
-    this->SetModuleParallelism(instance, v.parallelism);
+    this->SetModuleAttribute(instance, v.parallelism, v.maxInputQueueSize);
   }
   for (auto& v : d_ptr_->connections_config_) {
     for (auto& name : v.second) {
-      if (this->LinkModules(d_ptr_->modules_map_[v.first], d_ptr_->modules_map_[name], queues_size[name]).empty()) {
+      if (this->LinkModules(d_ptr_->modules_map_[v.first], d_ptr_->modules_map_[name]).empty()) {
         LOG(ERROR) << "Link [" << v.first << "] with [" << name << "] failed.";
         return -1;
       }
@@ -722,8 +734,8 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
     }
   }
   for (auto& v : configs) {
-    if (v.className != "cnstream::DataSource"
-        && !(((uint64_t)1 << d_ptr_->modules_map_[v.name]->GetId()) & linked_id_mask)) {
+    if (v.className != "cnstream::DataSource" &&
+        !(((uint64_t)1 << d_ptr_->modules_map_[v.name]->GetId()) & linked_id_mask)) {
       LOG(ERROR) << v.name << " not linked to any module.";
       return -1;
     }
@@ -747,7 +759,7 @@ int Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
     LOG(ERROR) << "Parse pipeline configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
-          << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. ";
+               << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. ";
     return -1;
   }
 
@@ -756,7 +768,7 @@ int Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
     mconf.name = iter->name.GetString();
     if (find(namelist.begin(), namelist.end(), mconf.name) != namelist.end()) {
       LOG(ERROR) << "Module name should be unique in Jason file. Module name : [" << mconf.name + "]"
-          << " appeared more than one time.";
+                 << " appeared more than one time.";
       return -1;
     }
     namelist.push_back(mconf.name);
@@ -766,7 +778,7 @@ int Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
     iter->value.Accept(jwriter);
 
     if (!mconf.ParseByJSONStr(std::string(sbuf.GetString()))) {
-      LOG(ERROR) << "Parse module config failed. Module name : [" <<  mconf.name << "]";
+      LOG(ERROR) << "Parse module config failed. Module name : [" << mconf.name << "]";
       return -1;
     }
 
@@ -785,8 +797,8 @@ int Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
 
     if (mconf.parameters.end() != mconf.parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
       LOG(WARNING)
-        << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
-        << "up by cnstream as the directory where the configuration file is located and passed to the module.";
+          << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
+          << "up by cnstream as the directory where the configuration file is located and passed to the module.";
     }
 
     mconf.parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;

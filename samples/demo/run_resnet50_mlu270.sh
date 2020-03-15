@@ -22,7 +22,7 @@ MODEL_PATH=$CURRENT_DIR/../../data/models/MLU270/Classification/resnet50
 
  pushd $MODEL_PATH
      if [ ! -f "resnet50_offline.cambricon" ]; then
-       wget -O resnet50_offline.cambricon https://github.com/Cambricon/models/raw/master/MLU270/Classification/resnet50/resnet50_offline.cambricon
+       wget -O resnet50_offline.cambricon  http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline.cambricon
      else
        echo "resnet50 offline model exists."
      fi

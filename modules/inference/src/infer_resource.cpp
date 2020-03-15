@@ -77,7 +77,7 @@ IOResValue CpuOutputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, 
     value.datas[output_idx].ptr = value.ptrs[output_idx];
     value.datas[output_idx].shape = model->OutputShapes()[output_idx];
     value.datas[output_idx].batch_offset =
-      static_cast<size_t>(value.datas[output_idx].shape.nhwc() / batchsize) * sizeof(float);
+        static_cast<size_t>(value.datas[output_idx].shape.nhwc() / batchsize) * sizeof(float);
     value.datas[output_idx].batchsize = batchsize;
   }
   return value;
@@ -191,9 +191,9 @@ void RCOpResource::AllocateFakeData() {
   uint32_t stride = op_attr.src_stride;
   uint32_t y_plane_size = stride * h;
   uint32_t uv_plane_size = stride * h / 2;
-  void** y_planes = new(std::nothrow) void*[batchsize_];
+  void** y_planes = new (std::nothrow) void*[batchsize_];
   LOG_IF(FATAL, nullptr == y_planes) << "RCOpResource::AllocateFakeData() new y_planes failed";
-  void** uv_planes = new(std::nothrow) void*[batchsize_];
+  void** uv_planes = new (std::nothrow) void*[batchsize_];
   LOG_IF(FATAL, nullptr == uv_planes) << "RCOpResource::AllocateFakeData() new uv_planes failed";
   for (uint32_t bidx = 0; bidx < batchsize_; ++bidx) {
     if (CNRT_RET_SUCCESS != cnrtMalloc(&y_planes[bidx], y_plane_size)) {

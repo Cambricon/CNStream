@@ -139,7 +139,7 @@ TEST(Inferencer, InferThreadPool_TaskSequence) {
   InferThreadPool tp;
   tp.Init(0, ktask_num);
   std::chrono::steady_clock::time_point ts[ktask_num];  // NOLINT
-  InferTaskSptr tasks[ktask_num];                                // NOLINT
+  InferTaskSptr tasks[ktask_num];                       // NOLINT
   std::function<int(std::chrono::steady_clock::time_point * t)> func =
       [](std::chrono::steady_clock::time_point* t) -> int {
     *t = std::chrono::steady_clock::now();

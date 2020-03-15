@@ -64,8 +64,7 @@ IMPLEMENT_REFLEX_OBJECT_EX(FakePreproc, Preproc);
 static const char *name = "test-infer";
 static const char *g_image_path = "../../data/images/3.jpg";
 #ifdef CNS_MLU100
-static const char *g_model_path =
-    "../../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon";
+static const char *g_model_path = "../../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon";
 #elif CNS_MLU270
 static const char *g_model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
 #endif
@@ -80,20 +79,62 @@ TEST(Inferencer, Construct) {
   EXPECT_STREQ(infer->GetName().c_str(), name);
 }
 
+TEST(Inferencer, CheckParamSet) {
+  std::shared_ptr<Module> infer = std::make_shared<Inferencer>(name);
+  ModuleParamSet param;
+  EXPECT_FALSE(infer->CheckParamSet(param));
+
+  param["fake_key"] = "fake_value";
+  EXPECT_FALSE(infer->CheckParamSet(param));
+
+  param["model_path"] = "fake_path";
+  param["func_name"] = g_func_name;
+  param["postproc_name"] = "fake_name";
+  EXPECT_FALSE(infer->CheckParamSet(param));
+
+  param["model_path"] = GetExePath() + g_model_path;
+  param["func_name"] = g_func_name;
+  param["postproc_name"] = g_postproc_name;
+  EXPECT_TRUE(infer->CheckParamSet(param));
+
+  param["batching_timeout"] = "30";
+  param["threshold"] = "0.3";
+  param["device_id"] = "fake_value";
+  EXPECT_FALSE(infer->CheckParamSet(param));
+
+  param["device_id"] = "0";
+  EXPECT_TRUE(infer->CheckParamSet(param));
+
+  param["data_order"] = "NCHW";
+  param["infer_interval"] = "1";
+  param["threshold"] = "0.3";
+  EXPECT_TRUE(infer->CheckParamSet(param));
+  EXPECT_TRUE(infer->Open(param));
+}
+
 TEST(Inferencer, Open) {
   std::shared_ptr<Module> infer = std::make_shared<Inferencer>(name);
   ModuleParamSet param;
   EXPECT_FALSE(infer->Open(param));
   param["model_path"] = "test-infer";
   param["func_name"] = g_func_name;
-  param["postproc_name"] = "test-postproc-name";
-  param["device_id"] = std::to_string(g_dev_id);
   EXPECT_FALSE(infer->Open(param));
 
   param["model_path"] = GetExePath() + g_model_path;
   param["func_name"] = g_func_name;
+  param["device_id"] = std::to_string(g_dev_id);
+
+  param["postproc_name"] = "test-postproc-name";
+  EXPECT_FALSE(infer->Open(param));
+
   param["postproc_name"] = g_postproc_name;
   EXPECT_TRUE(infer->Open(param));
+
+  param["use_scaler"] = "true";
+  EXPECT_TRUE(infer->Open(param));
+
+  param["preproc_name"] = "test-preproc-name";
+  EXPECT_FALSE(infer->Open(param));
   infer->Close();
 }
 
@@ -205,10 +246,9 @@ TEST(Inferencer, Process) {
     frame.ctx.dev_type = DevContext::DevType::CPU;
     frame.CopyToSyncMem();
 
-
     int ret = infer->Process(data);
     EXPECT_EQ(ret, 1);
-    delete []frame_data;
+    delete[] frame_data;
     // create eos frame for clearing stream idx
     cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
     ASSERT_NO_THROW(infer->Close());

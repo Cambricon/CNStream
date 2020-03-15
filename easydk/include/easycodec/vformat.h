@@ -27,6 +27,8 @@
 #ifndef EASYCODEC_VFORMAT_H_
 #define EASYCODEC_VFORMAT_H_
 
+#include <cstdint>
+
 #define CN_MAXIMUM_PLANE 6
 
 namespace edk {

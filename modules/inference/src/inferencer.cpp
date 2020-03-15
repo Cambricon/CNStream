@@ -86,20 +86,25 @@ class InferencerPrivate {
 Inferencer::Inferencer(const std::string& name) : Module(name) {
   d_ptr_ = nullptr;
   hasTransmit_.store(1);  // transmit data by module itself
-  param_register_.SetModuleDesc("Inferencer is a module for running offline model inference,"
-                                " as well as preprocedding and postprocessing.");
-  param_register_.Register("model_path", "The offline model path. Normally offline model is a file"
+  param_register_.SetModuleDesc(
+      "Inferencer is a module for running offline model inference,"
+      " as well as preprocedding and postprocessing.");
+  param_register_.Register("model_path",
+                           "The offline model path. Normally offline model is a file"
                            " with cambricon extension.");
   param_register_.Register("func_name", "The offline model function name, usually is 'subnet0'.");
   param_register_.Register("peproc_name", "The preprocessing method name.");
   param_register_.Register("postproc_name", "The postprocessing method name.");
   param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
-  param_register_.Register("batching_timeout", "If we can not get a certain number (batch size) of frames"
+  param_register_.Register("batching_timeout",
+                           "If we can not get a certain number (batch size) of frames"
                            " within a certain time (batching_timeout), we will stop waiting and append fake data.");
-  param_register_.Register("data_order", "It should be 'NCHW' (if the data is like, for example, rrr ggg bbb) or"
+  param_register_.Register("data_order",
+                           "It should be 'NCHW' (if the data is like, for example, rrr ggg bbb) or"
                            " 'NHWC' (e.g., rgb rgb rgb).");
   param_register_.Register("batch_size", "How many frames will be fed to model in one inference.");
-  param_register_.Register("infer_interval", "How many frames will be discarded between two frames"
+  param_register_.Register("infer_interval",
+                           "How many frames will be discarded between two frames"
                            " which will be fed to model for inference.");
   param_register_.Register("use_scaler", "Use scaler to do preprocess.");
   param_register_.Register("threshold", "The threshold of the results.");
@@ -114,7 +119,7 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
     return false;
   }
 
-  d_ptr_ = new(std::nothrow) InferencerPrivate(this);
+  d_ptr_ = new (std::nothrow) InferencerPrivate(this);
   if (!d_ptr_) {
     LOG(ERROR) << "Inferencer::Open() new InferencerPrivate failed";
     return false;
@@ -131,10 +136,7 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
 
   try {
     d_ptr_->model_loader_ = std::make_shared<edk::ModelLoader>(model_path, func_name);
-    if (d_ptr_->model_loader_.get() == nullptr) {
-      LOG(ERROR) << "[Inferencer] load model failed, model path: " << model_path;
-      return false;
-    }
+
     if (Data_Order == "NCHW") {
       for (uint32_t index = 0; index < d_ptr_->model_loader_->OutputNum(); ++index) {
         edk::DataLayout layout;
@@ -152,10 +154,7 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
     }
 
     if (paramSet.find("threshold") != paramSet.end()) {
-      float threshold;
-      std::stringstream ss;
-      ss << paramSet["threshold"];
-      ss >> threshold;
+      float threshold = std::stof(paramSet["threshold"]);
       d_ptr_->post_proc_->SetThreshold(threshold);
       LOG(INFO) << GetName() << " threshold: " << threshold;
     }
@@ -181,13 +180,8 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
     d_ptr_->use_scaler_ = true;
   }
 
-  d_ptr_->device_id_ = 0;
   if (paramSet.find("device_id") != paramSet.end()) {
-    std::stringstream ss;
-    int device_id;
-    ss << paramSet["device_id"];
-    ss >> device_id;
-    d_ptr_->device_id_ = device_id;
+    d_ptr_->device_id_ = std::stoi(paramSet["device_id"]);
   }
 
 #ifdef CNS_MLU100
@@ -202,17 +196,13 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
   DLOG(INFO) << GetName() << " batch size:" << d_ptr_->bsize_;
 
   if (paramSet.find("infer_interval") != paramSet.end()) {
-    std::stringstream ss;
-    ss << paramSet["infer_interval"];
-    ss >> d_ptr_->interval_;
+    d_ptr_->interval_ = std::stoi(paramSet["infer_interval"]);
     LOG(INFO) << GetName() << " infer_interval:" << d_ptr_->interval_;
   }
 
   // batching timeout
   if (paramSet.find("batching_timeout") != paramSet.end()) {
-    std::stringstream ss;
-    ss << paramSet["batching_timeout"];
-    ss >> d_ptr_->batching_timeout_;
+    d_ptr_->batching_timeout_ = std::stof(paramSet["batching_timeout"]);
     LOG(INFO) << GetName() << " batching timeout:" << d_ptr_->batching_timeout_;
   }
 
@@ -261,7 +251,7 @@ int Inferencer::Process(CNFrameInfoPtr data) {
   return 1;
 }
 
-bool Inferencer::CheckParamSet(ModuleParamSet paramSet) {
+bool Inferencer::CheckParamSet(const ModuleParamSet& paramSet) const {
   ParametersChecker checker;
   for (auto& it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
@@ -273,8 +263,8 @@ bool Inferencer::CheckParamSet(ModuleParamSet paramSet) {
     LOG(ERROR) << "Inferencer must specify [model_path], [func_name], [postproc_name].";
     return false;
   }
-  if (!checker.CheckPath(paramSet["model_path"], paramSet)) {
-    LOG(ERROR) << "[Inferencer] [model_path] : " << paramSet["model_path"] << " non-existence.";
+  if (!checker.CheckPath(paramSet.at("model_path"), paramSet)) {
+    LOG(ERROR) << "[Inferencer] [model_path] : " << paramSet.at("model_path") << " non-existence.";
     return false;
   }
   std::string err_msg;

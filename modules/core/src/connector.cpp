@@ -40,12 +40,12 @@ class ConnectorPrivate {
 };  // class ConnectorPrivate
 
 Connector::Connector(const size_t conveyor_count, size_t conveyor_capacity)
-  : d_ptr_(new(std::nothrow) ConnectorPrivate(this)) {
+    : d_ptr_(new (std::nothrow) ConnectorPrivate(this)) {
   LOG_IF(FATAL, nullptr == d_ptr_) << "Connector::Connector()  new ConnectorPrivate failed.";
   d_ptr_->conveyor_capacity_ = conveyor_capacity;
   d_ptr_->vec_conveyor_.reserve(conveyor_count);
   for (size_t i = 0; i < conveyor_count; ++i) {
-    Conveyor* Conveyor_ptr = new(std::nothrow) Conveyor(this, conveyor_capacity);
+    Conveyor* Conveyor_ptr = new (std::nothrow) Conveyor(this, conveyor_capacity);
     LOG_IF(FATAL, nullptr == Conveyor_ptr) << "Connector::Connector()  new Conveyor failed.";
     d_ptr_->vec_conveyor_.push_back(Conveyor_ptr);
   }

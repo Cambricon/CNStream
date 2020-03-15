@@ -242,7 +242,7 @@ TEST(SourceMluFFmpegDecoder, ProcessFrame) {
   void *mlu_ptr = nullptr;
   cnrtMalloc(&mlu_ptr, 256 * 256 * 3 / 2);
   frame.ptrs[0] = mlu_ptr;
-  frame.ptrs[1] = reinterpret_cast<void*>(reinterpret_cast<char*>(mlu_ptr) + 256 * 256);
+  frame.ptrs[1] = reinterpret_cast<void *>(reinterpret_cast<char *>(mlu_ptr) + 256 * 256);
   bool reused = false;
   EXPECT_EQ(env.ffmpeg_mlu_decoder->ProcessFrame(frame, &reused), 0);
   EXPECT_FALSE(reused);
@@ -424,7 +424,7 @@ TEST(SourceMluRawDecoder, ProcessFrame) {
   void *mlu_ptr = nullptr;
   cnrtMalloc(&mlu_ptr, 256 * 256 * 3 / 2);
   frame.ptrs[0] = mlu_ptr;
-  frame.ptrs[1] = reinterpret_cast<void*>(reinterpret_cast<char*>(mlu_ptr) + 256 * 256);
+  frame.ptrs[1] = reinterpret_cast<void *>(reinterpret_cast<char *>(mlu_ptr) + 256 * 256);
   bool reused = false;
   EXPECT_EQ(env.raw_mlu_decoder->ProcessFrame(frame, &reused), 0);
   EXPECT_FALSE(reused);

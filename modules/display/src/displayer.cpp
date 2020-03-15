@@ -27,7 +27,7 @@
 namespace cnstream {
 
 Displayer::Displayer(const std::string &name) : Module(name) {
-  player_ = new(std::nothrow) SDLVideoPlayer;
+  player_ = new (std::nothrow) SDLVideoPlayer;
   LOG_IF(FATAL, nullptr == player_) << "Displayer::Displayer() new SDLVideoPlayer failed.";
   param_register_.SetModuleDesc("Displayer is a module for displaying video.");
   param_register_.Register("window-width", "Width of the displayer window.");
@@ -102,7 +102,7 @@ void Displayer::GUILoop(const std::function<void()> &quit_callback) {
   }
 }
 
-bool Displayer::CheckParamSet(ModuleParamSet paramSet) {
+bool Displayer::CheckParamSet(const ModuleParamSet &paramSet) const {
   if (paramSet.find("window-width") == paramSet.end() || paramSet.find("window-height") == paramSet.end() ||
       paramSet.find("refresh-rate") == paramSet.end() || paramSet.find("max-channels") == paramSet.end() ||
       paramSet.find("show") == paramSet.end()) {
@@ -124,14 +124,14 @@ bool Displayer::CheckParamSet(ModuleParamSet paramSet) {
   }
 
   if (paramSet.find("full-screen") != paramSet.end()) {
-    if (paramSet["full-screen"] != "true" && paramSet["full-screen"] != "false") {
+    if (paramSet.at("full-screen") != "true" && paramSet.at("full-screen") != "false") {
       LOG(ERROR) << "[Displayer] [full-screen] should be true or false.";
       return false;
     }
   }
 
   if (paramSet.find("show") != paramSet.end()) {
-    if (paramSet["show"] != "true" && paramSet["show"] != "false") {
+    if (paramSet.at("show") != "true" && paramSet.at("show") != "false") {
       LOG(ERROR) << "[Displayer] [show] should be true or false.";
       return false;
     }

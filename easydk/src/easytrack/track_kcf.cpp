@@ -18,6 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#ifdef ENABLE_KCF
+
 #include <algorithm>
 #include <cstring>
 #include <memory>
@@ -304,3 +306,6 @@ void KcfTrackPrivate::ProcessTrack(const std::vector<DetectObject> &det_objs, in
 }
 
 }  // namespace edk
+
+#endif  // ENABLE_KCF
+

@@ -248,4 +248,3 @@ TEST(CoreFrame, CreateFrameInfoMultiParal) {
 }
 
 }  // namespace cnstream
-
