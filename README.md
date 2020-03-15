@@ -86,10 +86,8 @@ After finished prerequiste, you can build instructions with the following steps:
    | build_osd           | ON / OFF                                 | ON      | build osd module           |
    | build_source        | ON / OFF                                 | ON      | build source module        |
    | build_track         | ON / OFF                                 | ON      | build track module         |
-   | build_discard_frame | ON / OFF                                 | ON      | build discard_frame module |
    | build_tests         | ON / OFF                                 | ON      | build tests                |
    | build_samples       | ON / OFF                                 | ON      | build samples              |
-   | build_apps          | ON / OFF                                 | ON      | build apps                 |
    | build_test_coverage | ON / OFF                                 | OFF     | build test coverage        |
    | MLU                 | MLU270  / MLU220_SOC                     | MLU270  | specify MLU platform       |
    | RELEASE             | ON / OFF                                 | ON      | release / debug            |
@@ -208,7 +206,7 @@ Modify the `files.list_video` file, which is under the cnstream/samples/demo dir
 . Modify the `postproc_name` parameter in `cnstream/samples/demo/detection_config.json` to the post-processing class name (MyPostproc).
 
 ## Documentation ##
-[CNStream Read-the-Docs](cnstream.readthedocs.io) or [Cambricon Forum Docs](http://forum.cambricon.com/index.php?m=content&c=index&a=lists&catid=85)
+[CNStream Read-the-Docs](http://cnstream.readthedocs.io) or [Cambricon Forum Docs](http://forum.cambricon.com/index.php?m=content&c=index&a=lists&catid=85)
 
 Check out the Examples page for tutorials on how to use CNStream. Concepts page for basic definitions
 
