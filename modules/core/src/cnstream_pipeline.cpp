@@ -642,7 +642,7 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
     data->frame.ClearModuleMask(module_info.instance.get());
     int flags = data->frame.flags;
 
-    if (!module_info.instance->hasTranmit() && (CN_FRAME_FLAG_EOS & flags)) {
+    if (!module_info.instance->HasTransmit() && (CN_FRAME_FLAG_EOS & flags)) {
       /*normal module, transmit EOS by the framework*/
       TransmitData(node_name, data);
       continue;
@@ -666,7 +666,7 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
         return;
       } else if (ret > 0) {
         // data has been transmitted by the module itself
-        if (!module_info.instance->hasTranmit()) {
+        if (!module_info.instance->HasTransmit()) {
           LOG(ERROR) << "Module::Process() should not return 1\n";
           return;
         }

@@ -32,6 +32,7 @@
 #include "easycodec/vformat.h"
 #include "easyinfer/mlu_context.h"
 
+#define SAVE_PACKET 1
 #define ALIGN(size, alignment) (((uint32_t)(size) + (alignment)-1) & ~((alignment)-1))
 
 CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, int dst_height, float frame_rate,
@@ -58,9 +59,9 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
   frame_rate_num_ = frame_rate;
   uint32_t bps = bit_rate_ / 1000;
 
-  LOG(INFO) << "kbps:　" << bps;
-  LOG(INFO) << "fps: " << frame_rate;
+  LOG(INFO) << "kbps: " << bps;
   LOG(INFO) << "gop: " << gop_size_;
+  LOG(INFO) << "fps: " << frame_rate;
   LOG(INFO) << "format: " << format_;
   LOG(INFO) << "device Id: " << device_id_;
   LOG(INFO) << "input_width: " << src_width_;
@@ -99,15 +100,6 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
   }
 
   switch (format_) {
-    case YUV420P:
-      LOG(ERROR) << "CNEncoder does not support YUV420P";
-      return;
-    case RGB24:
-      LOG(ERROR) << "CNEncoder does not support RGB24";
-      return;
-    case BGR24:
-      LOG(ERROR) << "CNEncoder does not support BGR24";
-      return;
     case NV21:
       LOG(INFO) << "PixelFmt::NV21";
       picture_format_ = edk::PixelFmt::NV21;
@@ -134,6 +126,10 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
       LOG(INFO) << "CodecType::MPEG4";
       codec_type_ = edk::CodecType::MPEG4;
       break;
+    case JPEG:
+      LOG(INFO) << "CodecType::JPEG";
+      codec_type_ = edk::CodecType::JPEG;
+      break;
     default:
       codec_type_ = edk::CodecType::H264;
       break;
@@ -155,8 +151,17 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
   attr.pixel_format = picture_format_;
   attr.codec_type = codec_type_;
   attr.b_frame_num = 0;
-  attr.input_buffer_num = 2;
-  attr.output_buffer_num = 3;
+  attr.input_buffer_num = 6;
+  attr.output_buffer_num = 6;
+  attr.gop_type = edk::GopType::BIDIRECTIONAL;
+  if (type_ == H264) {
+    attr.insertSpsPpsWhenIDR = 1;
+    attr.level = edk::VideoLevel::H264_41;
+    attr.profile = edk::VideoProfile::H264_MAIN;
+  } else {
+    attr.level = edk::VideoLevel::H265_MAIN_41;
+    attr.profile = edk::VideoProfile::H265_MAIN;
+  }
   memset(&attr.rate_control, 0, sizeof(edk::RateControl));
   attr.rate_control.vbr = false;
   attr.rate_control.gop = gop_size_;
@@ -266,7 +271,7 @@ bool CNEncoderStream::Update(uint8_t *image, int64_t timestamp, bool eos) {
   edk::CnFrame *cnframe = new edk::CnFrame;
   memset(cnframe, 0, sizeof(edk::CnFrame));
   if (!eos) {
-    ResizeYUV(image, output_data);
+    ResizeYuvNearest(image, output_data);
     cnframe->pts = timestamp;
     cnframe->width = dst_width_;
     cnframe->height = dst_height_;
@@ -296,62 +301,47 @@ bool CNEncoderStream::Update(uint8_t *image, int64_t timestamp, bool eos) {
   return true;
 }
 
-void CNEncoderStream::ResizeYUV(const uint8_t *src, uint8_t *dst) {
+void CNEncoderStream::ResizeYuvNearest(uint8_t* src, uint8_t* dst) {
   if (src_width_ == dst_width_ && src_height_ == dst_height_) {
     memcpy(dst, src, output_frame_size_ * sizeof(uint8_t));
     return;
   }
-  const uint8_t *src_plane_y = src;
-  const uint8_t *src_plane_uv = src + src_width_ * src_height_;
-  uint8_t *dst_plane_y = dst;
-  uint8_t *dst_plane_uv = dst + dst_width_ * dst_height_;
-  if (src_width_ > dst_width_) {
-    int x_scale = std::round(src_width_ * 1.0 / dst_width_);
-    int y_scale = std::round(src_height_ * 1.0 / dst_height_);
-    for (uint32_t i = 0; i < dst_height_; i++) {
-      for (uint32_t j = 0; j < dst_width_; j++) {
-        *(dst_plane_y + i * dst_width_ + j) = *(src_plane_y + i * y_scale * src_width_ + j * x_scale);
-      }
+  uint32_t srcy, srcx, src_index;
+  uint32_t xrIntFloat_16 = (src_width_ << 16) / dst_width_ + 1;
+  uint32_t yrIntFloat_16 = (src_height_ << 16) / dst_height_ + 1;
+
+  uint8_t* dst_uv = dst + dst_height_ * dst_width_;
+  uint8_t* src_uv = src + src_height_ * src_width_;
+  uint8_t* dst_uv_yScanline = nullptr;
+  uint8_t* src_uv_yScanline = nullptr;
+  uint8_t* dst_y_slice = dst;
+  uint8_t* src_y_slice = nullptr;
+  uint8_t* sp = nullptr;
+  uint8_t* dp = nullptr;
+
+  for (uint32_t y = 0; y < (dst_height_ & ~7); ++y) {
+    srcy = (y * yrIntFloat_16) >> 16;
+    src_y_slice = src + srcy * src_width_;
+    if (0 == (y & 1)) {
+      dst_uv_yScanline = dst_uv + (y / 2) * dst_width_;
+      src_uv_yScanline = src_uv + (srcy / 2) * src_width_;
     }
-    for (uint32_t i = 0; i < dst_height_ / 2; i++) {
-      for (uint32_t j = 0; j < dst_width_; j += 2) {
-        *(dst_plane_uv + i * dst_width_ + j) = *(src_plane_uv + i * y_scale * src_width_ + j * x_scale);
-        *(dst_plane_uv + i * dst_width_ + j + 1) = *(src_plane_uv + i * y_scale * src_width_ + j * x_scale + 1);
-      }
-    }
-  } else {
-    int x_scale = dst_width_ / src_width_;
-    int y_scale = dst_height_ / src_height_;
-    for (uint32_t i = 0; i < src_height_; i++) {
-      for (uint32_t j = 0; j < src_width_; j++) {
-        uint8_t y_value = *(src_plane_y + i * src_width_ + j);
-        for (int k = 0; k < x_scale; k++) {
-          *(dst_plane_y + i * y_scale * dst_width_ + j * x_scale + k) = y_value;
+    for (uint32_t x = 0; x < (dst_width_ & ~7); ++x) {
+      srcx = (x * xrIntFloat_16) >> 16;
+      dst_y_slice[x] = src_y_slice[srcx];
+      if ((y & 1) == 0) {  // y is even
+        if ((x & 1) == 0) {  // x is even
+          src_index = (srcx / 2) * 2;
+          sp = dst_uv_yScanline + x;
+          dp = src_uv_yScanline + src_index;
+          *sp = *dp;
+          ++sp;
+          ++dp;
+          *sp = *dp;
         }
       }
-      uint8_t *src_row = dst_plane_y + i * y_scale * dst_width_;
-      uint8_t *dst_row = nullptr;
-      for (int t = 1; t < y_scale; t++) {
-        dst_row = (dst_plane_y + (i * y_scale + t) * dst_width_);
-        memcpy(dst_row, src_row, dst_width_ * sizeof(uint8_t));
-      }
     }
-    for (uint32_t i = 0; i < src_height_ / 2; i++) {
-      for (uint32_t j = 0; j < src_width_; j += 2) {
-        uint8_t v_value = *(src_plane_uv + i * src_width_ + j);
-        uint8_t u_value = *(src_plane_uv + i * src_width_ + j + 1);
-        for (int k = 0; k < x_scale * 2; k += 2) {
-          *(dst_plane_uv + i * y_scale * dst_width_ + j * x_scale + k) = v_value;
-          *(dst_plane_uv + i * y_scale * dst_width_ + j * x_scale + k + 1) = u_value;
-        }
-      }
-      uint8_t *src_row = dst_plane_uv + i * y_scale * dst_width_;
-      uint8_t *dst_row = nullptr;
-      for (int t = 1; t < y_scale; t++) {
-        dst_row = (dst_plane_uv + (i * y_scale + t) * dst_width_);
-        memcpy(dst_row, src_row, dst_width_ * sizeof(uint8_t));
-      }
-    }
+    dst_y_slice += dst_width_;
   }
 }
 
@@ -434,17 +424,24 @@ void CNEncoderStream::PacketCallback(const edk::CnPacket &packet) {
     return;
   }
 
+#if SAVE_PACKET
   if (packet.codec_type == edk::CodecType::H264) {
     snprintf(output_file, sizeof(output_file), "./output/cnencode_%d.h264", channelIdx_);
   } else if (packet.codec_type == edk::CodecType::H265) {
     snprintf(output_file, sizeof(output_file), "./output/cnencode_%d.h265", channelIdx_);
+  } else if (packet.codec_type == edk::CodecType::JPEG) {
+    snprintf(output_file, sizeof(output_file), "./output/cnencoded_%d_%02d.jpg", channelIdx_, frame_count_++);
   } else {
     LOG(ERROR) << "ERROR::unknown output codec type !!!" << static_cast<int>(packet.codec_type);
   }
 
-  if (p_file == nullptr) p_file = fopen(output_file, "wb");
-  if (p_file == nullptr) {
-    LOG(ERROR) << "open output file failed !!!";
+  if (packet.codec_type == edk::CodecType::JPEG) {
+    p_file = fopen(output_file, "wb");
+  } else {
+    if (p_file == nullptr) p_file = fopen(output_file, "wb");
+    if (p_file == nullptr) {
+      LOG(ERROR) << "open output file failed !!!";
+    }
   }
 
   uint32_t length = packet.length;
@@ -453,6 +450,7 @@ void CNEncoderStream::PacketCallback(const edk::CnPacket &packet) {
     LOG(ERROR) << "ERROR: written size: " << (uint)written << "!="
                << "data length: " << length;
   }
+#endif
 }
 
 void CNEncoderStream::EosCallback() {

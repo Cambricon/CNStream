@@ -118,6 +118,7 @@ class CNEncoder : public Module, public ModuleCreator<CNEncoder> {
  private:
   CNEncoderContext* GetCNEncoderContext(CNFrameInfoPtr data);
   std::string pre_type_;
+  std::string enc_type_;
   uint32_t device_id_ = 0;
   uint32_t bit_rate_ = 0;
   uint32_t gop_size_ = 0;

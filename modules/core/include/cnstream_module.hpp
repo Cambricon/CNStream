@@ -60,6 +60,7 @@ using ModuleParamSet = std::unordered_map<std::string, std::string>;
  * to the specified JSON file path.
  *
  * @param path The path relative to the JSON file or an absolute path.
+ * @param param_set The module parameters. The JSON file path is one of the parameters.
  *
  * @return Returns the complete path of a file.
  */
@@ -269,6 +270,8 @@ class Module {
   /**
    * Sets a container to this module and identifies which pipeline the module is added to.
    *
+   * @param container the container of this module, which is a pipeline pointer.
+   * 
    * @note This function is called automatically by the pipeline after this module
    *       is added into the pipeline. You do not need to call this function by yourself.
    */
@@ -289,11 +292,13 @@ class Module {
   uint64_t GetModulesMask() const { return mask_; }
 
   /**
+   * @brief Checks if this module has permission to transmit data by itself.
+   * 
    * @return Returns true if this module has permission to transmit data by itself. Otherwise, returns false.
    *
    * @see Process
    */
-  bool hasTranmit() const { return hasTransmit_.load(); }
+  bool HasTransmit() const { return hasTransmit_.load(); }
 
   /**
    * @brief Processes the data.
@@ -317,9 +322,9 @@ class Module {
    */
   bool ShowPerfInfo() { return showPerfInfo_.load(); }
   /**
-   * @brief Whether to display the performance information when the status is changed.
+   * @brief Enable or disable showing performance information.
    *
-   * @param enable The latest status.
+   * @param enable If it is true, enbale showing performance information, otherwise, disable.
    *
    * @return Void.
    */

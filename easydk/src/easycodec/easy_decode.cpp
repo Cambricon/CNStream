@@ -136,6 +136,9 @@ class DecodeHandler {
   bool send_eos_ = false;
   bool got_eos_ = false;
   bool jpeg_decode_ = false;
+
+  // feed data timeout
+  int feeddata_timeout_ = 10000;
 };      // class DecodeHandler
 
 static i32_t EventHandler(cncodecCbEventType type, void *user_data, void *package) {
@@ -154,6 +157,11 @@ static i32_t EventHandler(cncodecCbEventType type, void *user_data, void *packag
     case CNCODEC_CB_EVENT_HW_RESET:
       LOG(ERROR, "Get cncodec event: %d", type);
       handler->AbortDecoder();
+      break;
+    case CNCODEC_CB_EVENT_ABORT_ERROR:
+    case CNCODEC_CB_EVENT_OUT_OF_MEMORY:
+      LOG(ERROR, "Get cncodec event: %d", type);
+	  handler->ReceiveEOS();  // follow codec's sample code
       break;
     default:
       LOG(ERROR, "Unknown event type");
@@ -482,7 +490,7 @@ bool DecodeHandler::SendJpegData(const CnPacket &packet, bool eos) {
     input.flags = CNJPEGDEC_FLAG_TIMESTAMP;
     LOG(TRACE, "Feed stream info) data: %p, length: %lu, pts: %lu", input.streamBuffer, input.streamLength, input.pts);
 
-    auto ecode = cnjpegDecFeedData(handle_, &input, -1);
+    auto ecode = cnjpegDecFeedData(handle_, &input, feeddata_timeout_);
     if (CNCODEC_SUCCESS != ecode) {
       throw EasyDecodeError("Send data failed. Error code: " + to_string(ecode));
     }
@@ -499,8 +507,8 @@ bool DecodeHandler::SendJpegData(const CnPacket &packet, bool eos) {
     std::ostringstream ss;
     ss << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
     LOG(INFO, ss.str());
-    auto ecode = cnjpegDecFeedData(handle_, &input, -1);
-    if (CNCODEC_SUCCESS != ecode) {
+    auto ecode = cnjpegDecFeedData(handle_, &input, feeddata_timeout_);
+	if (CNCODEC_SUCCESS != ecode) {
       throw EasyDecodeError("Send EOS failed. Error code: " + to_string(ecode));
     }
 
@@ -520,7 +528,7 @@ bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos) {
     input.flags = CNVIDEODEC_FLAG_TIMESTAMP;
     LOG(TRACE, "Feed stream info) data: %p, length: %lu, pts: %lu", input.streamBuf, input.streamLength, input.pts);
 
-    auto ecode = cnvideoDecFeedData(handle_, &input, -1);
+    auto ecode = cnvideoDecFeedData(handle_, &input, feeddata_timeout_);
     if (CNCODEC_SUCCESS != ecode) {
       throw EasyDecodeError("Send data failed. Error code: " + to_string(ecode));
     }
@@ -537,7 +545,7 @@ bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos) {
     std::ostringstream ss;
     ss << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
     LOG(INFO, ss.str());
-    auto ecode = cnvideoDecFeedData(handle_, &input, -1);
+    auto ecode = cnvideoDecFeedData(handle_, &input, feeddata_timeout_);
     if (CNCODEC_SUCCESS != ecode) {
       throw EasyDecodeError("Send EOS failed. Error code: " + to_string(ecode));
     }

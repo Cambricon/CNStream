@@ -34,7 +34,7 @@ TEST(DiscardFrame, Constructor) {
   std::shared_ptr<Module> discard_frame = std::make_shared<DiscardFrame>(gname);
   EXPECT_STREQ(discard_frame->GetName().c_str(), gname);
   // bool variable
-  EXPECT_TRUE(discard_frame->hasTranmit());
+  EXPECT_TRUE(discard_frame->HasTransmit());
 }
 
 TEST(DiscardFrame, OpenClose) {

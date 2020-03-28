@@ -41,22 +41,22 @@ namespace cnstream {
  *  @brief The type of stream or source to be processed.
  */
 enum SourceType {
-  SOURCE_RAW,     ///< raw stream, send to decode directly
-  SOURCE_FFMPEG   ///< normal stream, will demux with ffmpeg before send to decode
+  SOURCE_RAW,     ///< Represents the raw stream. The source is sent for decoding directly.
+  SOURCE_FFMPEG   ///< Represents the normal stream. The source is demuxed with FFmpeg before send for decoding.
 };
 /**
  * @brief The storage type of the output frame data that are stored for modules on CPU or MLU.
  */
 enum OutputType {
-  OUTPUT_CPU,   ///< output to cpu
-  OUTPUT_MLU    ///< output to mlu
+  OUTPUT_CPU,   ///< Outputs to CPU.
+  OUTPUT_MLU    ///< Outputs to MLU.
 };
 /**
  * @brief The decoder type used in the source module.
  */
 enum DecoderType {
-  DECODER_CPU,   ///< cpu decoder with ffmpeg
-  DECODER_MLU    ///< mlu decoder with cncodec
+  DECODER_CPU,   ///< CPU decoder with FFmpeg.
+  DECODER_MLU    ///< MLU decoder with CNCodec.
 };
 /**
  * @brief A structure for private usage.

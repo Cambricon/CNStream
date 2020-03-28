@@ -1,23 +1,24 @@
 # Cambricon CNStream #
 
-CNStream is a streaming framework with plug-ins. It is used to connect other modules, includes basic functionality, libraries,
+CNStream is a streaming framework with plug-ins. It is used to connect other modules, includes basic functionalities, libraries,
 and essential elements.
-CNStream provides following plug-in modules:
+
+CNStream provides the following plug-in modules:
 
 - source: Supports RTSP, video file, and images（H.264, H.265, and JPEG decoding.） 
 - inference: MLU-based inference accelerator for detection and classification.
 - osd (On-screen display): Module for highlighting objects and text overlay.
 - encode: Encodes on CPU.
-- display: Display the video on screen
-- tracker: Multi object tracking
+- display: Display the video on screen.
+- tracker: Multi-object tracking.
 
 ## **Cambricon Dependencies** ##
 
-You can find the cambricon dependencies, including headers and libraries, in the MLU directory.
+You can find Cambricon dependencies, including headers and libraries in the MLU directory.
 
 ### Quick Start ###
 
-This section introduces how to quickly build instructions on CNStream and how to develop your own applications based on CNStream. **We strongly recommend you to excute `pre_required_helper.sh` to prepare the environment.** If not, please follow below commands.
+This section introduces how to quickly build instructions on CNStream and how to develop your own applications based on CNStream. **We strongly recommend you execute ``pre_required_helper.sh`` to prepare for the environment.** If not, please follow the commands below.
 
 #### **Required environments** ####
 
@@ -27,8 +28,8 @@ Before building instructions, you need to install the following software:
 - GFlags2.1.2
 - GLog0.3.4
 - Cmake2.8.7+
-- Live555         // if WITH_RTSP=ON, please run `download_live
-- SDL22.0.4+      // if build_display=ON
+- Live555         // If WITH_RTSP=ON, please run download_live.
+- SDL22.0.4+      // If build_display=ON.
 
 #### Ubuntu or Debian ####
 
@@ -56,7 +57,7 @@ If you are using Centos, run the following commands:
 
 ## Build Instructions Using CMake ##
 
-After finished prerequiste, you can build instructions with the following steps:
+After finished prerequisites, you can build instructions with the following steps:
 
 1. Run the following command to save a directory for saving the output.
 
@@ -119,21 +120,21 @@ After finished prerequiste, you can build instructions with the following steps:
 
 ### **Demo Overview** ###
 
-The samples/demo is a cnstream-based target detection demo, which includes the following Plug-in modules：
+This demo shows how to detect objects using CNStream. It includes the following plug-in modules: 
 
-- **source**: With MLU to decode video streams, such as local video files, rtmp, and rtsp.
-- **inferencer**: With MLU for Neural Network Inferencing.
-- **osd**: Draw Inferencing results on images.
-- **tracker**: Track multi objects.
-- **encoder**: Encode images with inferencing results(detection result).
-- **displayer**: Displays inferencing results on the screen.
+- **source**: Decodes video streams with MLU, such as local video files, RTMP stream, and RTSP stream. 
+- **inferencer**: Neural Network inference with MLU.
+- **osd**: Draws inference results on images.
+- **tracker**: Tracks multi-objects.
+- **encoder**: Encodes images with inference results, namely the detection result.
+- **displayer**: Displays inference results on the screen.
 - **fps** **statistics**: Prints the statistics on the terminal.
 
-In the script run.sh, we set detection_config.json as the config file. If we check the config file, it will be found out that, resnet34_ssd.cambricon is the offline model used for inference, which means, after decoding, the data will be feed to a ssd model. And the results will be shown on the screen.
+In the run.sh script, ``detection_config.json`` is set as the configuration file. In this configuration file, resnet34_ssd.cambricon is the offline model used for inference, which means, the data will be fed to an SSD model after decoding. And the results will be shown on the screen.
 
-In addition, see the comments in cnstream/samples/demo/run.sh for details.)
+In addition, see the comments in ``cnstream/samples/demo/run.sh`` for details.
 
-Another script run_yolov3_mlu270.sh, is an example of running Yolov3. The output will be encoded to AVI file(s), as an encoder plugin is added. The output directory can be specified by the [dump_dir] parameter, in this case, dump_dir is set to 'output', therefore AVI file(s) will be found in cnstream/samples/demo/output directory.
+Another script run_yolov3_mlu270.sh, is an example of Yolov3 implementation. The output will be encoded to AVI files, as an encoder plugin is added. The output directory can be specified by the [dump_dir] parameter. In this case, dump_dir is set to 'output', therefore AVI files can be found in the ``cnstream/samples/demo/output`` directory.
 
 ### **Run samples** ###
 
@@ -154,7 +155,7 @@ To run the CNStream sample:
 
 ### **How to create an application based on CNStream?** ###
 
-you should find a sample from "samples/example/example.cpp",that help developer eassily understand how to develop an application based on cnstream pipeline.
+You should find a sample from ``samples/example/example.cpp`` that helps developers easily understand how to develop an application based on CNStream pipeline.
 
 ### **How to replace SSD offline model in a demo?** ###
 
@@ -172,14 +173,15 @@ Modify the `files.list_video` file, which is under the cnstream/samples/demo dir
 
 2. Specifies that `cpu_preproc` preprocesses the input image on the CPU. Applicable to situations where >b cannot complete pre-processing, such as yolov3.
 
-3. If `cpu_preproc` is NULL, the MLU is used for pre-processing. The offline model needs to have the ability to reduce the mean and multiply the scale in the pre-processing. You can achieve the purpose by configuring the first-level convolution of the mean_value and std parameters. The inferencer plugin performs color space conversion (yuv various formats to RGBA format) and image reduction before performing offline inferencing.
+3. If `cpu_preproc` is NULL, the MLU is used for pre-processing. The offline model needs to have the ability to reduce the mean and multiply the scale in the pre-processing. You can achieve the purpose by configuring the first-level convolution of the mean_value and std parameters. The inferencer plugin performs color space conversion (YUV various formats to RGBA format) and image reduction before performing offline inferencing.
 
 
    a. Configure the pre-processing based on foreground information.
 
       If the CPU is used for pre-processing, the corresponding pre-processing function is implemented first. Then modify the `cpu_preproc` parameter specified when creating the inferencer plugin in the demo, so that it points to the implemented pre-processing function.
 
-   b. Configure the post processing.
+   b. Configure the post-processing.
+   
       1. Implement the post-processing:
 
           ```code

@@ -422,10 +422,14 @@ int64_t ModelLoader::GetOutputDataBatchAlignSize(int data_index) const {
 void ModelLoader::ReleaseModel() {
   LOG(INFO, "Destroy neural network function");
   cnrtRet_t error_code = cnrtDestroyFunction(d_ptr_->function_);
-  CHECK_CNRT_RET(error_code, "Destroy function failed. error_code : " + std::to_string(error_code));
+  if (CNRT_RET_SUCCESS != error_code) {
+    LOG(WARNING, "Destroy function failed. error_code : %s", std::to_string(error_code).c_str());
+  }
   LOG(INFO, "Unload offline model");
   error_code = cnrtUnloadModel(d_ptr_->model_);
-  CHECK_CNRT_RET(error_code, "Unload model failed. error_code : " + std::to_string(error_code));
+  if (CNRT_RET_SUCCESS != error_code) {
+    LOG(ERROR, "Unload model failed. error_code : %s", std::to_string(error_code).c_str());
+  }
 }
 
 ModelLoader::~ModelLoader() {

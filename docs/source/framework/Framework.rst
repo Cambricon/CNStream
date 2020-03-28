@@ -24,7 +24,7 @@ EventBus模式主要用来处理事件，包括三个部分：
 Pipeline和EventBus模式实现了CNStream框架。相关组成以及在CNStream SDK实现中对应关系如下：
 
 - Pipeline：对应 **cnstream::Pipeline** 类。
-- Module：Pipeline的每个处理阶段是一个组件，对应 **cnstream::Module** 类。每一个具体的mdule都是 **cnstream::Module** 的派生类。
+- Module：Pipeline的每个处理阶段是一个组件，对应 **cnstream::Module** 类。每一个具体的module都是 **cnstream::Module** 的派生类。
 - FrameInfo：Pipeline模式的Context，对应 **cnstream::CNFrameInfo** 类。
 - Event-bus和Event：分别对应 **cnstream::EventBus** 类和 **cnstream::Event** 类。
 
@@ -186,3 +186,49 @@ CNDataFrame中的SyncedMem支持deep copy或者复用已有的内存。当管理
 ::
 
   std::map<std::string, std::string> extra_attributes_;
+
+cnstream::EventBus类
+---------------------
+
+**cnstream::EventBus** 类是各个模块与pipeline通信的事件总线。各模块发布事件到总线上，由总线监听器接收。一条事件总线可以拥有多个监听器。
+
+每条pipeline有一条事件总线及对应的一个默认事件监听器。pipeline会对事件总线进行轮询，收到事件后分发给监听器。
+
+**cnstream::EventBus** 类在 ``cnstream_eventbus.hpp`` 文件中定义，主要接口如下。``cnstream_eventbus.hpp`` 文件存放在 ``modules/core/include`` 文件夹下。源代码中有详细的注释，这里仅给出必要的说明。
+
+::
+
+  class EventBus {
+   public:
+
+    // 向事件总线上发布一个事件。
+    bool PostEvent(Event event);
+
+    // 添加事件总线的监听器。
+    uint32_t AddBusWatch(BusWatcher func, Module *watch_module);
+  };
+
+cnstream::Event类
+---------------------
+
+**cnstream::Event** 类是模块和piepline之间通信的基本单元，即事件。事件由四个部分组成：事件类型、消息、发布事件的模块、发布事件的线程号。消息类型包括：无效、错误、警告、EOS(End of Stream)、停止，以及一个预留类型。
+
+**cnstream::Event** 类在 ``cnstream_eventbus.hpp`` 文件定义，``cnstream_eventbus.hpp`` 文件存放在 ``modules/core/include`` 文件夹下。
+
+::
+
+  struct Event {
+    EventType type;             // 事件类型。
+    std::string message;        // 消息。
+    const Module *module;       // 发布事件的模块。
+    std::thread::id thread_id;  // 发布事件的线程号。
+  };
+
+  enum EventType {
+    EVENT_INVALID,  // 无效消息。
+    EVENT_ERROR,    // 错误消息。
+    EVENT_WARNING,  // 警告消息。
+    EVENT_EOS,      // EOS消息。
+    EVENT_STOP,     // 停止消息。
+    EVENT_TYPE_END  // 预留位。
+  };

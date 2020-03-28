@@ -86,9 +86,9 @@ TEST(CoreModule, ModuleMask) {
 
 TEST(CoreModule, TransmitAttr) {
   TestModuleBase module;
-  EXPECT_FALSE(module.hasTranmit());
+  EXPECT_FALSE(module.HasTransmit());
   TestModuleBaseEx module_ex;
-  EXPECT_TRUE(module_ex.hasTranmit());
+  EXPECT_TRUE(module_ex.HasTransmit());
 }
 
 TEST(CoreModule, postevent) {

@@ -7,7 +7,7 @@ import json
 import re
 import codecs
 import shutil
-from conf import latex_documents
+#from conf import latex_documents
 
 
 def __openconfjsonfile__():
@@ -186,7 +186,7 @@ class clsModifyTex:
             if len(caption_dict ) > 0 :
                 newtableattr = self.__ModifySingleTableattr(tablestr[1],caption_dict ) #tablestr也是3个内容的数组，因为正则表达式被分为了3组，只取中间分组的内容。
                 #重新组成新的字符串
-                newcontent = newcontent.replace(str(tablestr[1]), str(newtableattr))
+                newcontent = newcontent.replace(tablestr[1], newtableattr)
 
         self.content = newcontent
 
@@ -208,9 +208,9 @@ class clsModifyTex:
         searchstr = r'\\sphinxcaption{(?P<caption>[\s\S]*?)}'
         matchcaption = re.search(searchstr, singletablecontent, re.M | re.I|re.U)
         if matchcaption != None:
-        	tablecaption = matchcaption.group('caption') #得到caption的值
-	else:
-                tablecaption = ''
+            tablecaption = matchcaption.group('caption') #得到caption的值
+        else:
+            tablecaption = ''
         if tablecaption in caption_dict:
             #修改表格属性
             tablestyle_dict = caption_dict[tablecaption]
@@ -233,22 +233,22 @@ class clsModifyTex:
         splittable = re.split(searchstr, singletablecontent,0, re.M | re.I|re.U )
         if splittable == None or len(splittable) < 5:
            	 #再修改长表格属性
-        	searchstr = r'\\begin{longtable}({[\s\S].*})'
-       		 #为了添加表格的通用属性，先对字符串做分割
-        	#python会把正则表达式中的分组自动分割，因此上面的正则表达式会自动分割为三个字符串
-        	#加上头尾字符串总共分为5个字符串数组。要修改第1维字符串为\\being{longtable},第2维字符串直接删除，第3维字符串不变
-        	splittable = re.split(searchstr, singletablecontent,0, re.M | re.I|re.U )
-                if len(splittable) < 3:
-            	        #至少是3维的数组，否则不是预想的内容，不做处理
-            		return singletablecontent
-		newtable4 = self.__ModifyTableHead(splittable[2], self.tablesattrobj.headtype)
-        	singletablecontent = r'\begin{longtable}'+splittable[1]+newtable4  #begin{longtable}必须再加上，因为Python并不认为它是正则表达式，因此不再分组里面第0个分组为空。
+            searchstr = r'\\begin{longtable}({[\s\S].*})'
+            #为了添加表格的通用属性，先对字符串做分割
+            #python会把正则表达式中的分组自动分割，因此上面的正则表达式会自动分割为三个字符串
+            #加上头尾字符串总共分为5个字符串数组。要修改第1维字符串为\\being{longtable},第2维字符串直接删除，第3维字符串不变
+            splittable = re.split(searchstr, singletablecontent,0, re.M | re.I|re.U )
+            if len(splittable) < 3:
+                #至少是3维的数组，否则不是预想的内容，不做处理
+                return singletablecontent
+            newtable4 = self.__ModifyTableHead(splittable[2], self.tablesattrobj.headtype)
+            singletablecontent = r'\begin{longtable}'+splittable[1]+newtable4  #begin{longtable}必须再加上，因为Python并不认为它是正则表达式，因此不再分组里面第0个分组为空。
 
-        	return singletablecontent
+            return singletablecontent
 
         #拆分后splittable应该为5个字符串的数组，拆分后便于添加通用属性
         if self.tablesattrobj.rowtype != '':
-		splittable[0] += self.tablesattrobj.rowtype + '\n'
+            splittable[0] += self.tablesattrobj.rowtype + '\n'
 
         #修改表头字体颜色为白色加粗
         newtable4 = self.__ModifyTableHead(splittable[4], self.tablesattrobj.headtype)
@@ -269,8 +269,8 @@ class clsModifyTex:
         headcontent = m.group(1) #匹配到的第一个即为表头内容
         posarr = m.span(1)  #保存起始位置和结束位置，便于组成新的内容
 
-	if 'multicolumn' in headcontent:
-		return content        
+        if 'multicolumn' in headcontent:
+            return content        
 
         if r'\sphinxstyletheadfamily' in headcontent:
             pattern = re.compile(r'(?<=\\sphinxstyletheadfamily)(?P<value>[\s\S]*?)(?=(\\unskip|&)|\\\\)', re.M | re.I|re.U)
@@ -285,63 +285,131 @@ class clsModifyTex:
         headlist = []
         preposlist = []
         for mobj in mobjarr:
-           amarr = mobj.group()
-           curposlist = mobj.span()
+            amarr = mobj.group()
+            curposlist = mobj.span()
 
-           #用表头内容数组替换
-           fontcolor = self.tablesattrobj.headfontcolor
-           #先去掉首尾空格，避免首尾有空格无法去掉回车换行符
-	   amarr = amarr.strip()
-	   amarr = amarr.strip('\r')
-	   amarr = amarr.strip('\n')
-	   amarr = amarr.strip()  #再去掉首尾空格，避免多余的空格出现
-	   if amarr == '':
-              continue
-           fontcolor = fontcolor.replace('{}','{'+ amarr+'}',1)
-           if len(preposlist) > 0:
-           	headlist.append(headcontent[preposlist[1]:curposlist[0]])
-           else:
-           	headlist.append(headcontent[0:curposlist[0]])
-           headlist.append(fontcolor)
-           preposlist = curposlist
-           print(len(preposlist))
+            #用表头内容数组替换
+            fontcolor = self.tablesattrobj.headfontcolor
+            #先去掉首尾空格，避免首尾有空格无法去掉回车换行符
+            amarr = amarr.strip()
+            amarr = amarr.strip('\r')
+            amarr = amarr.strip('\n')
+            amarr = amarr.strip()  #再去掉首尾空格，避免多余的空格出现
+            if amarr == '':
+                continue
+            fontcolor = fontcolor.replace('{}','{'+ amarr+'}',1)
+            if len(preposlist) > 0:
+                headlist.append(headcontent[preposlist[1]:curposlist[0]])
+            else:
+           	    headlist.append(headcontent[0:curposlist[0]])
+            headlist.append(fontcolor)
+            preposlist = curposlist
+           #print(len(preposlist))
         #if len(preposlist)>1:
         headlist.append(headcontent[preposlist[1]:len(headcontent)])  #把最后一个字符串加上
         headcontent = ''
         for prelist in headlist:
-              headcontent = headcontent + prelist + '\n'
+            headcontent = headcontent + prelist + '\n'
         newcontent = content[0:posarr[0]]+headtype+headcontent+content[posarr[1]:len(content)]
         return newcontent
 
 
+# 打开Makefile文件查找source和build文件夹
+def OpenMakefile():
+    global source_dir
+    global build_dir
+    source_dir = ''
+    build_dir = ''
+    try:
+        with open('Makefile',"r") as f:
+            fstr = f.read()
+            
+        #用正则表达式查找source和build文件夹具体路径
+        searchstr = r"SOURCEDIR *= *(\S+)"
+        m = re.search(searchstr, fstr, re.M|re.I|re.U )
+        source_dir = m.group(1) #匹配到的第一个即为源所在目录
+        
+        searchstr = r"BUILDDIR *= *(\S+)"
+        m = re.search(searchstr, fstr, re.M|re.I|re.U )
+        build_dir = m.group(1) #匹配到的第一个即为源所在目录
+        print(build_dir) #该行输出，为了在makelatexpdf.sh脚本中直接使用build文件夹的值，因此该行绝对不能删除，否则会导致脚本失败。
+    except Exception as e:
+        print(e)
+        return
+
+def GetLatex_documents():
+    global source_dir
+    if source_dir == '':
+        return
+    #得到配置文件conf.py的路径
+    if source_dir == '.':
+        confdir = './conf.py'
+    else:
+        confdir = './' + source_dir +'/conf.py'
+     
+    conffile = os.path.abspath(confdir)
+     #打开conf.py文件
+    with codecs.open(conffile,"r+",encoding='utf-8') as f:
+            fstr = f.read()
+        
+    #根据正则表达式，找出latex_documents内容
+    searchstr = r"latex_documents *= *\[([\s\S]*?)\]"
+    m = re.search(searchstr, fstr, re.M|re.I|re.U )
+    latex_documents = m.group(1) #匹配到的第一个即为源所在目录
+    #拆分二维数组，兼容多个情况
+    list = latex_documents.split(")")
+    for i in range(len(list)):
+        list[i]= list[i].split(",")
+    list.pop() #删除第一个无效内容
+    return list
+
+#根据正则表达式取单引号和双引号中的内容
+def getquomarkcontent(strarr):
+    #根据正则表达式，找出双引号和单引号中的内容
+    searchstr = r"[\"|'](.*?)[\"|']"
+    m = re.search(searchstr, strarr, re.M|re.I|re.U )
+    return m.group(1).strip() #匹配到的第一个即为源所在目录
+
+source_dir = '' #保存源文件所在目录
+build_dir = ''  #保存生成文件所在目录
+OpenMakefile()
+latex_documents = GetLatex_documents() #保存latex文档所在数组
 __load_dict__ = __openconfjsonfile__()
 if __name__ == '__main__':
-	if len(sys.argv) > 1:
-		doclen = len(latex_documents)
-		for i in range(0,doclen):
-			#得到latex路径
-                        latexpath = './' + sys.argv[1] + '/latex/'
-                        #copy 背景图到latex路径，背景图必须与该文件在同一个目录下
-                        shutil.copy('./chapterbkpaper.pdf',latexpath)
-                        #得到相对路径
-			texfilepath = latexpath + latex_documents[i][1]
-			#相对路径转绝对路径
-			texfile = os.path.abspath(texfilepath)
-			fo = codecs.open(texfile, "r+",encoding = 'utf-8')
-			texcontent = fo.read()
-			fo.close
 
-			#得到修改tex文件的对象
-			ModTexobj = clsModifyTex(texcontent)
-			ModTexobj.AddPackageToTex()
-                        ModTexobj.AddOtherTocToTex()                
-                        ModTexobj.AddCustormOptionsToTex()
-                        ModTexobj.ModifyReplacePackage()
-			ModTexobj.ModifyTablesAttributes()
-
-			fw = codecs.open(texfile, "w+",encoding = 'utf-8')
-			fw.write(ModTexobj.content)
-			fw.close
+    latexdir = ''
+    # 可以自定义latex目录，通过参数传入，如果传入参数默认是latex目录
+    if len(sys.argv) > 1:
+        latexdir = '/' + sys.argv[1] + '/'
+    else:
+        latexdir = '/latex/'
+        
+    doclen = len(latex_documents)
+    for i in range(0,doclen):
+        #得到latex路径
+        latexpath = './' + build_dir + latexdir
+        #copy 背景图到latex路径，背景图必须与该文件在同一个目录下
+        if os.path.exists('./chapterbkpaper.pdf'):
+            shutil.copy('./chapterbkpaper.pdf',latexpath)
+        #得到相对路径
+        texfilepath = latexpath + getquomarkcontent(latex_documents[i][1])
+        #相对路径转绝对路径
+        texfile = os.path.abspath(texfilepath)
+        fo = codecs.open(texfile, "r+",encoding = 'utf-8')
+        texcontent = fo.read()
+        fo.close
+        
+        #得到修改tex文件的对象
+        ModTexobj = clsModifyTex(texcontent)
+        ModTexobj.AddPackageToTex()
+        ModTexobj.AddOtherTocToTex()                
+        ModTexobj.AddCustormOptionsToTex()
+        ModTexobj.ModifyReplacePackage()
+        ModTexobj.ModifyTablesAttributes()
+        
+        fw = codecs.open(texfile, "w+",encoding = 'utf-8')
+        fw.write(ModTexobj.content)
+        fw.close
 
 
 

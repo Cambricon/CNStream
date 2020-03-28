@@ -33,23 +33,19 @@ using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 
 class Connector;
 
-/****************************************************************************
- * @brief used to transmit data between two modules.
+/**
+ * @brief Conveyor is used to transmit data between two modules.
  *
- * Conveyor has two buffer queue, data queue and free queue.
- * A complete transmission process in a conveyor is,
+ * Conveyor belongs to Connector.
+ * Each Connect could have several conveyors which depends on the paramllelism of each module.
  *
- * module A  -> data queue ->  module B
+ * Conveyor has one buffer queue for transmitting data from one module to another.
+ * The upstream node module will push data to buffer queue, and the downstream node will pop data from buffer queue.
  *
- * Module A get data from input data queue.
- * Module A process data and push it to data queue.
- * Module B get data from data queue and push down after processing it.
- *
- * If the queue is empty, the module could not pop buffer from it
- * until it is not.
- * Or if the queue is full, the module could not push buffer, unless
- * the other module pop a buffer from it.
- ****************************************************************************/
+ * The capacity of buffer queue could be set in configuration json file (see README for more information of
+ * configuration json file). If there is no element in buffer queue, the downstream node will wait to pop and
+ * be blocked. On contrary, if the queue is full, the upstream node will wait to push and be blocked.
+ */
 class Conveyor {
  public:
   friend class Connector;

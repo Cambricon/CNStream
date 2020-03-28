@@ -139,7 +139,9 @@ class ICNMediaImageMapper {
    * @return Returns the device address.
    */
   virtual void* GetDevAddress(int index) = 0;
-  /// Destructor
+  /**
+   *  Destructor of class ICNMediaImageMapper.
+   */
   virtual ~ICNMediaImageMapper() {}
 };
 
@@ -205,7 +207,13 @@ struct CNDataFrame {
   std::shared_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Synce data helper.
 
 #ifdef HAVE_OPENCV
-  /*Called after CopyToSyncMem() is invoked.*/
+  /**
+   * Converts data from RGB to BGR. Called after CopyToSyncMem() is invoked.
+   * 
+   * If data is not RGB image but BGR, YUV420NV12 or YUV420NV21 image, its color mode will not be converted.
+   * 
+   * @return Returns data with opencv mat type.
+   */
   cv::Mat* ImageBGR();
 
  private:

@@ -56,14 +56,12 @@ void CNStreamMallocHost(void** ptr, size_t size);
  */
 inline void CNStreamFreeHost(void* ptr) { free(ptr); }
 
-/*
-  @attention
- */
 /**
- * @class CNSyncedMemory
+ * @brief Synchronizes memory between CPU and MLU.
  *
- * Syncronizes memory between CPU and MLU.
- *
+ * If the lastest data is on MLU, but the data is needed to be on cpu, sync cpu data.
+ * Otherwise, if cpu data is newer than mlu data, sync mlu data.
+ * 
  * @note CNSyncedMemory::Head() always returns CNSyncedMemory::UNINITIALIZED when memory size is 0.
  */
 class CNSyncedMemory {

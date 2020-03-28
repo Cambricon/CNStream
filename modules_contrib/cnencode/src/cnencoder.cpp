@@ -43,6 +43,7 @@ CNEncoder::CNEncoder(const std::string &name) : Module(name) {
                            " gop_size is the number of frames between two I-frames.");
   param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
   param_register_.Register("pre_type", "Resize and colorspace convert type.");
+  param_register_.Register("enc_type", "encode type, it include h264/h265/jpeg.");
   hasTransmit_.store(1);  // for receive eos
 }
 
@@ -53,7 +54,6 @@ CNEncoderContext *CNEncoder::GetCNEncoderContext(CNFrameInfoPtr data) {
     ctx = search->second;
   } else {
     ctx = new CNEncoderContext;
-    cn_type_ = CNEncoderStream::H264;
     switch (data->frame.fmt) {
       case cnstream::CNDataFormat::CN_PIXEL_FORMAT_BGR24:
         cn_format_ = CNEncoderStream::BGR24;
@@ -90,10 +90,10 @@ bool CNEncoder::Open(ModuleParamSet paramSet) {
     bit_rate_ = 0x100000;
   } else {
     bit_rate_ = std::stoi(paramSet["bit_rate"]);
-    bit_rate_ *= 1024;
+    bit_rate_ *= 1000;
   }
   if (paramSet.find("gop_size") == paramSet.end()) {
-    gop_size_ = 10;
+    gop_size_ = 30;
   } else {
     gop_size_ = std::stoi(paramSet["gop_size"]);
   }
@@ -117,9 +117,20 @@ bool CNEncoder::Open(ModuleParamSet paramSet) {
   } else {
     pre_type_ = paramSet["pre_type"];
   }
+  if (paramSet.find("enc_type") == paramSet.end()) {
+    enc_type_ = "h264";
+  } else {
+    enc_type_ = paramSet["enc_type"];
+  }
 
-  // cn_type_ = CNEncoderStream::H264;
-  // cn_format_ = CNEncoderStream::NV21;
+  if ("h264" == enc_type_) {
+    cn_type_ = CNEncoderStream::H264;
+  } else if ("hevc" == enc_type_) {
+    cn_type_ = CNEncoderStream::HEVC;
+  } else if ("jpeg" == enc_type_) {
+    cn_type_ = CNEncoderStream::JPEG;
+  }
+
   edk::MluContext tx;
   tx.SetDeviceId(device_id_);
   tx.ConfigureForThisThread();
@@ -177,15 +188,16 @@ bool CNEncoder::CheckParamSet(const ModuleParamSet &paramSet) {
   if (paramSet.find("dst_width") == paramSet.end() || paramSet.find("dst_height") == paramSet.end() ||
       paramSet.find("frame_rate") == paramSet.end() || paramSet.find("bit_rate") == paramSet.end() ||
       paramSet.find("gop_size") == paramSet.end() || paramSet.find("device_id") == paramSet.end() ||
-      paramSet.find("pre_type") == paramSet.end()) {
+      paramSet.find("pre_type") == paramSet.end() || paramSet.find("enc_type") == paramSet.end()) {
     LOG(ERROR) << "CNEncoder must specify ";
-    LOG(ERROR) << "[dst_width], [dst_height], [frame_rate], [bit_rate], [gop_size], [device_id], [pre_type].";
+    LOG(ERROR) << "[dst_width], [dst_height], [frame_rate], [bit_rate].";
+    LOG(ERROR) << "[gop_size], [device_id], [pre_type], [enc_type].";
     return false;
   }
 
   std::string err_msg;
-  if (!checker.IsNum({"dst_width", "dst_height, frame_rate", "bit_rate", "gop_size", "device_id", "pre_type"}, paramSet,
-                     err_msg, true)) {
+  if (!checker.IsNum({"dst_width", "dst_height, frame_rate", "bit_rate", "gop_size", "device_id",
+                      "pre_type", "enc_type"}, paramSet, err_msg, true)) {
     LOG(ERROR) << "[CNEncoder] " << err_msg;
     return false;
   }
