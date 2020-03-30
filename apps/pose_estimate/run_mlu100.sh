@@ -14,7 +14,7 @@ CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 
 pushd $CURRENT_DIR
     if [ ! -f "$CURRENT_DIR/openpose-1batch.cambricon" ]; then
-      wget -O openpose-1batch.cambricon https://github.com/Cambricon/models/raw/master/MLU100/openpose/openpose-1batch.cambricon
+      wget -O openpose-1batch.cambricon http://video.cambricon.com/models/MLU100/openpose/openpose-1batch.cambricon
     else
       echo "openpose offline model exists."
     fi

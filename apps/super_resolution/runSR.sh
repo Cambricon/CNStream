@@ -21,7 +21,7 @@ CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 
 pushd $CURRENT_DIR
     if [ ! -f "$CURRENT_DIR/SuperResolution.cambricon" ]; then
-      wget -O SuperResolution.cambricon https://github.com/Cambricon/models/raw/master/MLU100/SuperResolution/SuperResolution.cambricon 
+      wget -O SuperResolution.cambricon http://video.cambricon.com/models/MLU100/SuperResolution/SuperResolution.cambricon 
     else
       echo "cambricom file exists."
     fi

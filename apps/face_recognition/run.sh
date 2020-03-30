@@ -37,7 +37,7 @@ if [ ! -d "$CURRENT_DIR/mtcnn_model" ]; then
                           det2_24x24.cambricon
                           det3_48x48.cambricon) 
   for model in ${mtcnn_model_name_list[*]};do
-    wget -P $CURRENT_DIR/mtcnn_model https://github.com/Cambricon/models/raw/master/MLU100/mtcnn/$model
+    wget -P $CURRENT_DIR/mtcnn_model http://video.cambricon.com/models/MLU100/mtcnn/$model
     echo "$model download successful!"
   done
 else 
@@ -47,7 +47,7 @@ fi
 if [ ! -d "$CURRENT_DIR/vggface_model" ]; then
   mkdir -p $CURRENT_DIR/vggface_model
   vggface_name=VGG_FACE.cambricon  
-  wget -P $CURRENT_DIR/vggface_model https://github.com/Cambricon/models/raw/master/MLU100/vgg_face/$vggface_name
+  wget -P $CURRENT_DIR/vggface_model http://video.cambricon.com/models/MLU100/vgg_face/$vggface_name
   echo "$vggface_name download successful!"
 else 
   echo "vggface_model already exist."
