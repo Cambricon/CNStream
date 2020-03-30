@@ -22,7 +22,7 @@ CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 
 pushd $CURRENT_DIR
     if [ ! -f "$CURRENT_DIR/japan_8mp.cambricon" ]; then
-      wget -O japan_8mp.cambricon https://github.com/Cambricon/models/raw/master/MLU100/style_transfer/japan_8mp.cambricon
+      wget -O japan_8mp.cambricon http://video.cambricon.com/models/MLU100/style_transfer/japan_8mp.cambricon
     else
       echo "cambricom file exists."
     fi

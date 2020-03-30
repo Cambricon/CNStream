@@ -23,38 +23,38 @@ pushd $CURRENT_DIR
     mkdir -p $CURRENT_DIR/secondary_models
     mkdir -p $CURRENT_DIR/secondary_models/Secondary_CarBrand
     if [ ! -f "$CURRENT_DIR/secondary_models/Secondary_CarBrand/resnet18_car.cambricon" ]; then
-        wget -P $CURRENT_DIR/secondary_models/Secondary_CarBrand  https://github.com/Cambricon/models/raw/master/MLU100/secondary_models/Secondary_CarBrand/resnet18_car.cambricon
+        wget -P $CURRENT_DIR/secondary_models/Secondary_CarBrand  http://video.cambricon.com/models/MLU100/secondary_models/Secondary_CarBrand/resnet18_car.cambricon
     fi
     if [ ! -f "$CURRENT_DIR/secondary_models/Secondary_CarBrand/car_label.txt" ]; then
-        wget -P $CURRENT_DIR/secondary_models/Secondary_CarBrand  https://github.com/Cambricon/models/raw/master/MLU100/secondary_models/Secondary_CarBrand/car_label.txt
+        wget -P $CURRENT_DIR/secondary_models/Secondary_CarBrand  http://video.cambricon.com/models/MLU100/secondary_models/Secondary_CarBrand/car_label.txt
     fi
     mkdir -p $CURRENT_DIR/secondary_models/Secondary_CarModel/audi
     if [ ! -f "$CURRENT_DIR/secondary_models/Secondary_CarModel/audi/resnet18_Audi.cambricon" ]; then
-        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/audi  https://github.com/Cambricon/models/raw/master/MLU100/secondary_models/Secondary_CarModel/audi/resnet18_Audi.cambricon
+        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/audi  http://video.cambricon.com/models/MLU100/secondary_models/Secondary_CarModel/audi/resnet18_Audi.cambricon
     fi
     if [ ! -f "$CURRENT_DIR/secondary_models/Secondary_CarModel/audi/Audi_label.txt" ]; then
-        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/audi  https://github.com/Cambricon/models/raw/master/MLU100/secondary_models/Secondary_CarModel/audi/Audi_label.txt
+        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/audi  http://video.cambricon.com/models/MLU100/secondary_models/Secondary_CarModel/audi/Audi_label.txt
     fi
     mkdir -p $CURRENT_DIR/secondary_models/Secondary_CarModel/bmw
     if [ ! -f "$CURRENT_DIR/secondary_models/Secondary_CarModel/bmw/resnet18_BMW.cambricon" ]; then
-        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/bmw  https://github.com/Cambricon/models/raw/master/MLU100/secondary_models/Secondary_CarModel/bmw/resnet18_BMW.cambricon
+        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/bmw  http://video.cambricon.com/models/MLU100/secondary_models/Secondary_CarModel/bmw/resnet18_BMW.cambricon
     fi
     if [ ! -f "$CURRENT_DIR/secondary_models/Secondary_CarModel/bmw/BMW_label.txt" ]; then
-        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/bmw  https://github.com/Cambricon/models/raw/master/MLU100/secondary_models/Secondary_CarModel/bmw/BMW_label.txt
+        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/bmw  http://video.cambricon.com/models/MLU100/secondary_models/Secondary_CarModel/bmw/BMW_label.txt
     fi
     mkdir -p $CURRENT_DIR/secondary_models/Secondary_CarModel/chevrolet
     if [ ! -f "$CURRENT_DIR/secondary_models/Secondary_CarModel/chevrolet/resnet18_Chevrolet.cambricon" ]; then
-        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/chevrolet  https://github.com/Cambricon/models/raw/master/MLU100/secondary_models/Secondary_CarModel/chevrolet/resnet18_Chevrolet.cambricon
+        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/chevrolet  http://video.cambricon.com/models/MLU100/secondary_models/Secondary_CarModel/chevrolet/resnet18_Chevrolet.cambricon
     fi
     if [ ! -f "$CURRENT_DIR/secondary_models/Secondary_CarModel/chevrolet/Chevrolet_label.txt" ]; then
-        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/chevrolet  https://github.com/Cambricon/models/raw/master/MLU100/secondary_models/Secondary_CarModel/chevrolet/Chevrolet_label.txt
+        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/chevrolet  http://video.cambricon.com/models/MLU100/secondary_models/Secondary_CarModel/chevrolet/Chevrolet_label.txt
     fi
     mkdir -p $CURRENT_DIR/secondary_models/Secondary_CarModel/ford
     if [ ! -f "$CURRENT_DIR/secondary_models/Secondary_CarModel/ford/resnet18_Ford.cambricon" ]; then
-        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/ford  https://github.com/Cambricon/models/raw/master/MLU100/secondary_models/Secondary_CarModel/ford/resnet18_Ford.cambricon
+        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/ford  http://video.cambricon.com/models/MLU100/secondary_models/Secondary_CarModel/ford/resnet18_Ford.cambricon
     fi
     if [ ! -f "$CURRENT_DIR/secondary_models/Secondary_CarModel/ford/Ford_label.txt" ]; then
-        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/ford  https://github.com/Cambricon/models/raw/master/MLU100/secondary_models/Secondary_CarModel/ford/Ford_label.txt
+        wget -P $CURRENT_DIR/secondary_models/Secondary_CarModel/ford  http://video.cambricon.com/models/MLU100/secondary_models/Secondary_CarModel/ford/Ford_label.txt
     fi
 popd
 

@@ -27,5 +27,5 @@ fi
 CURRENT_DIR=$(dirname ${BASH_SOURCE[0]})
 
 if [ ! -f "$CURRENT_DIR/faceswap.cambricon" ]; then
-    wget -P $CURRENT_DIR  https://github.com/Cambricon/models/raw/master/MLU100/faceswap/faceswap.cambricon
+    wget -P $CURRENT_DIR  http://video.cambricon.com/models/MLU100/faceswap/faceswap.cambricon
 fi
