@@ -4,9 +4,28 @@
 #$3 -- dst_lib_dir 
 CWD="$( cd "$( dirname "$0"  )" && pwd  )"
 
-cp -p $1/include/cnrt.h $2
-cp -p $1/include/cn_video_*.h $2
-cp -p $1/lib64/libcnrt.* $3
-cp -p $1/lib64/libcncodec.* $3
-cp -p $1/lib64/libmsgq.* $3
-cp -p $1/lib64/librpc.* $3
+
+INCLUDE_DIR=$1/include
+LIB_DIR=$1/lib64
+
+cd $INCLUDE_DIR
+for file in cn_*
+do
+    ln -sf $INCLUDE_DIR/$file  $2/$file
+done
+cd -
+
+ln -sf $INCLUDE_DIR/cnrt.h $2/cnrt.h
+
+cd $LIB_DIR
+for file in libcnrt.*
+do
+    ln -sf $LIB_DIR/$file  $3/$file
+done
+
+for file in libcncodec.*
+do
+    ln -sf $LIB_DIR/$file  $3/$file
+done
+
+cd -

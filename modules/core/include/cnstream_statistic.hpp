@@ -80,18 +80,18 @@ struct StreamFpsStat {
 
  private:
   struct StreamFps {
-    std::chrono::time_point<std::chrono::high_resolution_clock> start_time_;
-    std::chrono::time_point<std::chrono::high_resolution_clock> end_time_;
+    std::chrono::time_point<std::chrono::steady_clock> start_time_;
+    std::chrono::time_point<std::chrono::steady_clock> end_time_;
     std::string stream_id_;
     uint64_t frame_count_ = 0;
     void Update(std::shared_ptr<CNFrameInfo> data) {
       if (stream_id_.empty()) {
         stream_id_ = data->frame.stream_id;
-        start_time_ = end_time_ = std::chrono::high_resolution_clock::now();
+        start_time_ = end_time_ = std::chrono::steady_clock::now();
       }
       if (!(data->frame.flags & CN_FRAME_FLAG_EOS)) {
         ++frame_count_;
-        end_time_ = std::chrono::high_resolution_clock::now();
+        end_time_ = std::chrono::steady_clock::now();
       }
     }
     double Fps() {

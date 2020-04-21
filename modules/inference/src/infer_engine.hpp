@@ -43,6 +43,7 @@ class BatchingStage;
 class MluInputResource;
 class CpuOutputResource;
 class RCOpResource;
+class ScalerResource;
 class Preproc;
 class Postproc;
 class InferThreadPool;
@@ -64,7 +65,7 @@ class InferEngine {
     std::shared_ptr<std::promise<void>> promise_;
   };  // class ResultWaitingCard
   InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, std::shared_ptr<Preproc> preprocessor,
-              std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, float batch_timeout,
+              std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, float batch_timeout, bool use_scaler,
               const std::function<void(const std::string& err_msg)>& error_func = NULL);
   ~InferEngine();
   ResultWaitingCard FeedData(std::shared_ptr<CNFrameInfo> finfo);
@@ -93,6 +94,7 @@ class InferEngine {
   std::shared_ptr<InferThreadPool> tp_;
   std::function<void(const std::string& err_msg)> error_func_ = NULL;
   int dev_id_ = 0;
+  bool use_scaler_ = false;
 };  // class InferEngine
 
 }  // namespace cnstream

@@ -7,31 +7,23 @@
       "source_type" : "ffmpeg",
       "output_type" : "mlu",
       "decoder_type" : "mlu",
+      "output_buf_number" : 8,
       "device_id" : 0
     }
   },
 
   "detector" : {
     "class_name" : "cnstream::Inferencer",
-    "parallelism" : 4,
-    "max_input_queue_size" : 20,
-    "next_modules" : ["tracker"],
-    "custom_params" : {
-      "model_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon",
-      "func_name" : "subnet0",
-      "postproc_name" : "PostprocSsd",
-      "device_id" : 0
-    }
-  },
-
-  "tracker" : {
-    "class_name" : "cnstream::Tracker",
-    "parallelism" : 4,
+    "parallelism" : 1,
     "max_input_queue_size" : 20,
     "next_modules" : ["osd"],
     "custom_params" : {
-      "model_path" : "../data/models/MLU100/Track/track.cambricon",
-      "func_name" : "subnet0"
+      "model_path" : "../../data/models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocSsd",
+      "threshold" : 0.5,
+      "batching_timeout" : 100,
+      "device_id" : 0
     }
   },
 
@@ -42,7 +34,7 @@
     "next_modules" : ["displayer"],
     "custom_params" : {
       "chinese_label_flag" : "false", 
-      "label_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/label_voc.txt"
+      "label_path" : "../../data/models/MLU270/Primary_Detector/ssd/label_voc.txt"
     }
   },
 
@@ -56,7 +48,7 @@
       "window-height" : 1080,
       "refresh-rate" : 25,
       "max-channels" : 32,
-      "show" : "false",
+      "show" : "false",  // Please confirm build_display is ON before setting true
       "full-screen" : "false"
     }
   },

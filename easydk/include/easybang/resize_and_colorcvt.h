@@ -30,6 +30,7 @@
 #include <string>
 #include "cxxutil/exception.h"
 #include "easyinfer/easy_infer.h"
+#include "easyinfer/mlu_context.h"
 
 struct KernelParam;
 
@@ -94,6 +95,8 @@ class MluResizeConvertOp {
     uint32_t crop_x = 0, crop_y = 0, crop_w = 0, crop_h = 0;
     /// Kernel batch size
     int batch_size = 1;
+    /// device id
+    CoreVersion core_version = CoreVersion::MLU270;
   };
 
   /**
@@ -109,6 +112,13 @@ class MluResizeConvertOp {
    * @return MluTaskQueue_t
    */
   MluTaskQueue_t GetMluQueue() const;
+
+  /**
+   * @brief Check if ResizeConvertOp shared MluTaskQueue with other task
+   *
+   * @return true if queue is shared, false otherwise
+   */
+  bool IsSharedQueue() const;
 
   /**
    * @brief Initialize operator

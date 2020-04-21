@@ -55,8 +55,9 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
                         const cnstream::CNFrameInfoPtr& package) {
   // check params
   auto input_shapes = model->InputShapes();
-  if (net_inputs.size() != 1 || input_shapes[0].c != 3) {
-    LOG(ERROR) << "[PreprocCpu] model input shape not supported";
+  if (net_inputs.size() != 1 || (input_shapes[0].c != 3 && input_shapes[0].c != 4)) {
+    LOG(ERROR) << "[PreprocCpu] model input shape not supported, net_input.size = "
+               << net_inputs.size() << ", input_shapes[0].c = " << input_shapes[0].c;
     return -1;
   }
 
@@ -67,7 +68,11 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
   int dst_w = input_shapes[0].w;
   int dst_h = input_shapes[0].h;
 
-  uint8_t* img_data = new uint8_t[package->frame.GetBytes()];
+  uint8_t* img_data = new(std::nothrow) uint8_t[package->frame.GetBytes()];
+  if (!img_data) {
+    LOG(ERROR) << "Failed to alloc memory, size: " << package->frame.GetBytes();
+    return -1;
+  }
   uint8_t* t = img_data;
 
   for (int i = 0; i < package->frame.GetPlanes(); ++i) {
@@ -118,3 +123,4 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
   delete[] img_data;
   return 0;
 }
+

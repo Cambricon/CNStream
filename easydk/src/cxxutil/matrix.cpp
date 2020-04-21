@@ -149,7 +149,7 @@ bool operator==(const Matrix &lhs, const Matrix &rhs) {
 
   for (int i = 0; i < lhs.Rows(); ++i) {
     for (int j = 0; j < lhs.Cols(); ++j) {
-      if (rhs[i][j] != rhs[i][j]) {
+      if (lhs[i][j] != rhs[i][j]) {
         return false;
       }
     }

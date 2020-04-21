@@ -20,15 +20,16 @@
 
 #include <cnrt.h>
 #include <sys/time.h>
-#include <ctime>
+#include <cassert>
 #include <iostream>
 #include <string>
+
 #include "ResizeAndConvertKernel.h"
 #include "ResizeAndConvertMacro.h"
-#include "half.hpp"
 
 using std::string;
 using std::to_string;
+
 struct KernelParam {
   half* consts_mlu = nullptr;
   // half* maskUV_mlu = nullptr;
@@ -40,6 +41,8 @@ struct KernelParam {
   int input2half, output2uint;
   int scaleX, scaleY, batchNum;
   uint32_t* cycles = nullptr;
+  cnrtKernelInitParam_t init_param = nullptr;
+  void *kernel_func = nullptr;
 };
 
 void FreeKernelParam(KernelParam* param) {
@@ -50,6 +53,9 @@ void FreeKernelParam(KernelParam* param) {
     if (param->cycles) {
       cnrtFree(param->cycles);
     }
+    if (param->init_param) {
+      cnrtDestroyKernelInitParamAndMemory(param->init_param);
+    }
     //   if (param->maskUV_mlu) {
     //     cnrtFree(param->maskUV_mlu);
     //   }
@@ -57,8 +63,72 @@ void FreeKernelParam(KernelParam* param) {
   }
 }
 
-int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h,
-                       int color_mode, int data_type, int batchsize, KernelParam** param, string* estr) {
+union _bit32_u {
+  float f;
+  uint32_t i;
+};
+
+static uint16_t float2half(const float f) {
+  // assert((f > HALF_MIN) && (f < HALF_MAX));
+  // assert((f == 0) || (f > HALF_PRECISION) || (f < -HALF_PRECISION));
+  _bit32_u u;
+  u.f = f;
+  unsigned int bytes = u.i;
+  unsigned char sign = (bytes >> 31) & 0x00000001;
+  unsigned char exp = (bytes >> 23) & 0x000000FF;
+  unsigned int eff = ((bytes >> 13) & 0x000003FF);  // + ((bytes >> 12) & 0x00000001);
+
+  if (exp == 0xFF) {
+    // inf or nan
+    exp = 0x1F;
+    if (eff) {
+      // nan        -NaN     +NaN
+      return sign ? 0xFFFF : 0x7FFF;
+    } else {
+      // inf        -inf     +inf
+      return sign ? 0xFC00 : 0x7C00;
+    }
+  } else if (exp == 0x00) {
+    // zero or denormal
+    if (eff) {
+      // denormal
+      return sign ? 0x8000 : 0x0000;
+    } else {
+      return sign ? 0x8000 : 0x0000;
+    }
+  } else if (exp - 0x7F >= 0x1F - 0x0F) {
+    // +/- inf
+    // inf        -inf     +inf
+    return sign ? 0xFC00 : 0x7C00;
+  } else if (exp - 0x7F <= 0x00 - 0x0F) {
+    // denormal
+    int shift = (0x7F - exp - 0x0E);
+    shift = shift > 11 ? 11 : shift;
+    return ((sign << 15) | ((0x0400 | eff) >> shift));
+  } else {
+    // normal number
+    exp = ((exp - 0x7F) + 0x0F) & 0x1F;
+    return (sign << 15) | (exp << 10) | eff;
+  }
+}
+
+#define CHECK_CNRT_RET(cnrt_ret, _estr, msg, code, ret_value) \
+  do {                                                        \
+    if (cnrt_ret != CNRT_RET_SUCCESS) {                       \
+      if (_estr) {                                            \
+        *_estr = msg;                                         \
+      }                                                       \
+      { code }                                                \
+      return ret_value;                                       \
+    }                                                         \
+  } while (0)
+
+bool PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h,
+                        int color_mode, int data_type, int batchsize, KernelParam** param, int dev_type, string* estr) {
+  const int CI = 64;
+  const int CO = 256;
+  const int LT_NUM = 64;
+
   *param = new KernelParam;
   // parse mode
   int inputType, outputType;
@@ -103,7 +173,7 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
     default:
       std::cout << "COLOR CONVERSION NOT SURPPORTED!" << std::endl;
       assert(0);
-      return -1;
+      return false;
   }
 
   // parse inputType
@@ -139,7 +209,7 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
     default:
       std::cout << "INPUT COLOR_TYPE NOT SURPPORTED!" << std::endl;
       assert(0);
-      return -1;
+      return false;
   }
 
   // parse outputType
@@ -160,7 +230,7 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
     default:
       std::cout << "OUTPUT COLOR_TYPE NOT SURPPORTED!" << std::endl;
       assert(0);
-      return -1;
+      return false;
   }
 
   // input2half = 1 when in_datatype = uint8
@@ -274,9 +344,8 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
           bIdx = 1;
           zIdx = 0;
         }
-        consts[idx * LT_NUM + lt + 2 * CI * CO] =  // bias
-            (-222.912 * ((lt % 4) == rIdx) + 135.616 * ((lt % 4) == gIdx) + -276.800 * ((lt % 4) == bIdx));
-#if CNSTK_MLU270
+        consts[idx * LT_NUM + lt + 2 * CI * CO] = float2half(  // bias
+            -222.912 * ((lt % 4) == rIdx) + 135.616 * ((lt % 4) == gIdx) + -276.800 * ((lt % 4) == bIdx));
         // Y
         ((int16_t*)consts)[offsetY] = ((lt % 4) != zIdx) * 0x253F;
 
@@ -286,18 +355,6 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
         // V
         ((int16_t*)consts)[offsetV] = ((lt % 4) == rIdx) * 0x3312       // R
                                       + ((lt % 4) == gIdx) * (0xE5FC);  // G
-
-#elif CNSTK_MLU100
-        // Y
-        consts[offsetY] = ((lt % 4) != zIdx) * 1.164;
-
-        // U
-        consts[offsetU] = ((lt % 4) == gIdx) * (-0.392)  // G
-                          + ((lt % 4) == bIdx) * 2.017;  // B
-        // V
-        consts[offsetV] = ((lt % 4) == rIdx) * 1.586        // R
-                          + ((lt % 4) == gIdx) * (-0.813);  // G
-#endif
       }
     }
   }
@@ -310,30 +367,20 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
 
   // malloc and copy consts_mlu
   int ecode = cnrtMalloc((void**)&((*param)->consts_mlu), (2 * CI * CO + CO) * sizeof(half));
-  if (CNRT_RET_SUCCESS != ecode) {
-    *estr = "Malloc consts FAILED! ERRCODE:" + to_string(ecode);
-    FreeKernelParam(*param);
-    free(consts);
-    return -1;
-  }
-  ecode = cnrtMemcpy((*param)->consts_mlu, reinterpret_cast<half*>(consts), (2 * CI * CO + CO) * sizeof(half),
+  CHECK_CNRT_RET(ecode, estr, "Malloc consts FAILED! ERRCODE:" + to_string(ecode),
+                 { FreeKernelParam(*param); free(consts); },
+                 false);
+
+  ecode = cnrtMemcpy((*param)->consts_mlu, reinterpret_cast<void*>(consts), (2 * CI * CO + CO) * sizeof(half),
                      CNRT_MEM_TRANS_DIR_HOST2DEV);
-  if (CNRT_RET_SUCCESS != ecode) {
-    *estr = "H2D consts FAILED! ERRCODE:" + to_string(ecode);
-    FreeKernelParam(*param);
-    free(consts);
-    return -1;
-  }
+  CHECK_CNRT_RET(ecode, estr, "H2D consts FAILED! ERRCODE:" + to_string(ecode),
+                 { FreeKernelParam(*param); free(consts); },
+                 false);
   free(consts);
 
-#ifdef CNSTK_MLU270
   ecode = cnrtMalloc((void**)&((*param)->cycles), sizeof(uint32_t));
-  if (CNRT_RET_SUCCESS != ecode) {
-    *estr = "cnrt malloc failed. ERRCODE:" + to_string(ecode);
-    FreeKernelParam(*param);
-    return -1;
-  }
-#endif
+  CHECK_CNRT_RET(ecode, estr, "cnrt malloc FAILED! ERRCODE:" + to_string(ecode), { FreeKernelParam(*param); }, false);
+
   // // malloc and copy maskUV_mlu
   // if (CNRT_RET_SUCCESS !=
   //   cnrtMalloc((void**)&maskUV_mlu, CI * CI * total * sizeof(half))) {
@@ -346,6 +393,16 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
   //   printf("cnrtMemcpy FAILED!\n");
   //   exit(-1);
   // }
+  
+  if (1 == dev_type) {
+    (*param)->kernel_func = reinterpret_cast<void*>(&ResizeAndConvertKernelMlu220);
+  } else if (2 == dev_type) {
+    (*param)->kernel_func = reinterpret_cast<void*>(&ResizeAndConvertKernelMlu270);
+  } else {
+    (*param)->kernel_func = reinterpret_cast<void*>(&ResizeAndConvertKernelMlu270);
+  }
+  cnrtCreateKernelInitParam(&(*param)->init_param);
+  cnrtInitKernelMemory((*param)->kernel_func, (*param)->init_param);
 
   // params.
   (*param)->yuvFilter = (*param)->consts_mlu;
@@ -367,11 +424,11 @@ int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, in
   (*param)->scaleX = scaleX;
   (*param)->scaleY = scaleY;
   (*param)->batchNum = batchsize;
-  return 0;
+  return true;
 }
 
 float reSizedConvert(half* dst, half* srcY, half* srcUV, KernelParam* kparam, cnrtFunctionType_t func_type,
-                     cnrtDim3_t dim, cnrtQueue_t queue, string* estr) {
+                     cnrtDim3_t dim, cnrtQueue_t queue, int dev_type, string* estr) {
   int pad = 0;  // useless, make no difference
   cnrtKernelParamsBuffer_t params;
   cnrtGetKernelParamsBuffer(&params);
@@ -393,33 +450,22 @@ float reSizedConvert(half* dst, half* srcY, half* srcUV, KernelParam* kparam, cn
   cnrtKernelParamsBufferAddParam(params, &kparam->output2uint, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &kparam->batchNum, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &pad, sizeof(int));
-#ifdef CNSTK_MLU270
   cnrtKernelParamsBufferAddParam(params, &kparam->cycles, sizeof(uint32_t*));
-#endif
 
-  int ecode = cnrtInvokeKernel_V2((void*)&ResizeAndConvertKernel, dim, params, func_type, queue);
-  if (CNRT_RET_SUCCESS != ecode) {
-    if (estr) {
-      *estr = "[ResizeAndConvert] cnrtInvokeKernel FAILED. ERRCODE:" + to_string(ecode);
-    }
-    cnrtDestroyKernelParamsBuffer(params);
-    return -1;
-  }
+  int ecode;
+
+  ecode = cnrtInvokeKernel_V3(kparam->kernel_func, kparam->init_param, dim, params, func_type, queue, NULL);
+
+  CHECK_CNRT_RET(ecode, estr, "[ResizeAndConvert] cnrtInvokeKernel FAILED. ERRCODE:" + to_string(ecode),
+                 { cnrtDestroyKernelParamsBuffer(params); }, -1);
 
   float _time = 0;
 
-#ifdef CNSTK_MLU270
   uint32_t cycles = 0;
   ecode = cnrtMemcpy(&cycles, srcY, 1 * sizeof(uint32_t), CNRT_MEM_TRANS_DIR_DEV2HOST);
-  if (CNRT_RET_SUCCESS != ecode) {
-    if (estr) {
-      *estr = "[ResizeAndConvert] memcpy cycles failed. ERRCODE:" + to_string(ecode);
-    }
-    cnrtDestroyKernelParamsBuffer(params);
-    return -1;
-  }
+  CHECK_CNRT_RET(ecode, estr, "[ResizeAndConvert] memcpy cycles FAILED. ERRCODE:" + to_string(ecode),
+                 { cnrtDestroyKernelParamsBuffer(params); }, -1);
   _time = cycles * 0.04 / 1000;
-#endif
 
   // free resources
   //  if (CNRT_RET_SUCCESS != cnrtFree(consts_mlu)) {
@@ -433,17 +479,13 @@ float reSizedConvert(half* dst, half* srcY, half* srcUV, KernelParam* kparam, cn
   //  }
 
   ecode = cnrtDestroyKernelParamsBuffer(params);
-  if (CNRT_RET_SUCCESS != ecode) {
-    if (estr) {
-      *estr = "[ResizeAndConvert] cnrtDestroyKernelParamsBuffer FAILED." + to_string(ecode);
-    }
-    return -1;
-  }
+  CHECK_CNRT_RET(ecode, estr, "[ResizeAndConvert] cnrtDestroyKernelParamsBuffer FAILED. ERRCODE:" + to_string(ecode),
+                 {}, -1);
   return _time;
 }
 
 float ResizeAndConvert(void* dst, void* srcY, void* srcUV, KernelParam* param, cnrtFunctionType_t func_type,
-                       cnrtDim3_t dim, cnrtQueue_t queue, string* estr) {
+                       cnrtDim3_t dim, cnrtQueue_t queue, int dev_type, string* estr) {
   return reSizedConvert(reinterpret_cast<half*>(dst), reinterpret_cast<half*>(srcY), reinterpret_cast<half*>(srcUV),
-                        param, func_type, dim, queue, estr);
+                        param, func_type, dim, queue, dev_type, estr);
 }

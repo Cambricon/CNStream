@@ -24,6 +24,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "cnstream_module.hpp"
 #include "osd.hpp"
@@ -70,7 +71,7 @@ TEST(Osd, Process) {
   frame.timestamp = 1000;
   frame.width = width;
   frame.height = height;
-  frame.ptr[0] = img.data;
+  frame.ptr_cpu[0] = img.data;
   frame.stride[0] = width;
   frame.ctx.dev_type = DevContext::DevType::CPU;
   frame.fmt = CN_PIXEL_FORMAT_BGR24;
@@ -96,6 +97,22 @@ TEST(Osd, Process) {
   }
 
   EXPECT_EQ(osd->Process(data), 0);
+}
+
+TEST(Osd, CheckParamSet) {
+  std::shared_ptr<Module> osd = std::make_shared<Osd>(gname);
+  ModuleParamSet param;
+  param.clear();
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param.insert(std::make_pair("label_path", "a"));
+  EXPECT_FALSE(osd->CheckParamSet(param));
+  param.clear();
+  std::string label_path = GetExePath() + glabel_path;
+  param["label_path"] = label_path;
+  param.insert(std::make_pair("chinese_label_flag", "a"));
+  EXPECT_FALSE(osd->CheckParamSet(param));
+  param["chinese_label_flag"] = "true";
+  EXPECT_TRUE(osd->CheckParamSet(param));
 }
 
 }  // namespace cnstream

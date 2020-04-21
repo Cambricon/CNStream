@@ -26,7 +26,7 @@
 /**
  * @file cnstream_module.hpp
  *
- * This file contains a declaration of the Module class and the ModuleFactoryclass.
+ * This file contains a declaration of the Module class and the ModuleFactory class.
  */
 #include <cxxabi.h>
 #include <unistd.h>
@@ -49,8 +49,21 @@
 
 namespace cnstream {
 
+/// Module parameter set.
 using ModuleParamSet = std::unordered_map<std::string, std::string>;
 
+/**
+ * @brief Gets the complete path of a file.
+ *
+ * If the path you set is an absolute path, returns the absolute path.
+ * If the path you set is a relative path, retuns the path that appends the relative path
+ * to the specified JSON file path.
+ *
+ * @param path The path relative to the JSON file or an absolute path.
+ * @param param_set The module parameters. The JSON file path is one of the parameters.
+ *
+ * @return Returns the complete path of a file.
+ */
 __attribute__((unused)) inline std::string GetPathRelativeToTheJSONFile(const std::string &path,
                                                                         const ModuleParamSet &param_set) {
   std::string jsf_dir = "./";
@@ -71,7 +84,7 @@ __attribute__((unused)) inline std::string GetPathRelativeToTheJSONFile(const st
 /**
  * @brief Module virtual base class.
  *
- * Module is the parent class of all modules. A module could have configurable
+ * Module is the parent class of all modules. A module should have configurable
  * number of upstream links and downstream links.
  * Some modules are already constructed with a framework,
  * such as source, inferencer, and so on.
@@ -81,8 +94,8 @@ class Module {
   /**
    * @brief ParamRegister
    *
-   * Each module registers its own parameters and descriptions,
-   * cnstream_inspect uses this to detect parameters of each module.
+   * Each module registers its own parameters and descriptions.
+   * CNStream Inspect tool uses this class to detect parameters of each module.
    *
    */
  public:
@@ -92,13 +105,37 @@ class Module {
     std::string module_desc_;
 
    public:
+    /**
+     * @brief Registers a paramter and its description.
+     *
+     * This is used in CNStream Inspect tool.
+     *
+     * @param key The parameter name.
+     * @param desc The description of the paramter.
+     *
+     * @return Void.
+     */
     void Register(const std::string &key, const std::string &desc) {
       module_params_.push_back(std::make_pair(key, desc));
     }
-
+    /**
+     * @brief Gets the registered paramters and the parameter descriptions.
+     *
+     * This is used in CNStream Inspect tool.
+     *
+     * @return Returns the registered paramters and the parameter descriptions.
+     */
     std::vector<std::pair<std::string, std::string>> GetParams() { return module_params_; }
-
-    bool IsRegisted(const std::string &key) {
+    /**
+     * @brief Checks if the paramter is registered.
+     *
+     * This is used in CNStream Inspect tool.
+     *
+     * @param key The parameter name.
+     *
+     * @return Returns true if the parameter has been registered. Otherwise, returns false.
+     */
+    bool IsRegisted(const std::string &key) const {
       if (strcmp(key.c_str(), CNS_JSON_DIR_PARAM_NAME) == 0) {
         return true;
       }
@@ -109,9 +146,23 @@ class Module {
       }
       return false;
     }
-
+    /**
+     * @brief Sets the description of the module.
+     *
+     * This is used in CNStream Inspect tool.
+     *
+     * @param desc The description of the module.
+     *
+     * @return Void.
+     */
     void SetModuleDesc(const std::string &desc) { module_desc_ = desc; }
-
+    /**
+     * @brief Gets the description of the module.
+     *
+     * This is used in CNStream Inspect tool.
+     *
+     * @return Returns the description of the module.
+     */
     std::string GetModuleDesc() { return module_desc_; }
   };
 
@@ -129,13 +180,13 @@ class Module {
   /**
    * Opens resources for a module.
    *
-   * @param param_set Parameters for this module.
+   * @param param_set A set of parameters for this module.
    *
-   * @return Returns true if this API run successfully. Otherwise, returns false.
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    *
-   * @note You do not need to call this function by yourself. This function will be called
-   *       by pipeline when pipeline starts. The pipeline will call the Process function
-   *       of this module automatically after the Open function is done.
+   * @note You do not need to call this function by yourself. This function is called
+   *       by pipeline automatically when pipeline is started. The pipeline calls the ``Process`` function
+   *       of this module automatically after the ``Open`` function is done.
    */
   virtual bool Open(ModuleParamSet param_set) = 0;
 
@@ -144,23 +195,22 @@ class Module {
    *
    * @return Void.
    *
-   * @note You do not need to call this function by yourself. This function will be called
-   *       by pipeline when pipeline stops. The pipeline calls the Close function
-   *       of this module automatically after the Open and Process functions are done.
+   * @note You do not need to call this function by yourself. This function is called
+   *       by pipeline automatically when pipeline is stoped. The pipeline calls the ``Close`` function
+   *       of this module automatically after the ``Open`` and ``Process`` functions are done.
    */
   virtual void Close() = 0;
 
   /**
    * Processes data.
    *
-   * @param data The data that the module will process.
+   * @param data The data to be processed by the module.
    *
-   * @return
-   * @retval 0 : OK, but framework needs to transmit data.
-   * @retval >0: OK, the data has been handled by this module. The hasTransmit_ must be set.
-   *            Module has to call Pipeline::ProvideData to tell pipeline to transmit data
-   *            to next modules.
-   * @retval <0: Pipeline will post an event with the EVENT_ERROR event type with return
+   * @retval 0: The data is processed successfully. But the data should be transmitted in framework then.
+   * @retval >0: The data is processed successfully. The data has been handled by this module. The ``hasTransmit_`` must be set.
+   *             The Pipeline::ProvideData should be called by Module to transmit data
+   *            to the next modules in the pipeline.
+   * @retval <0: Pipeline will post an event with the EVENT_ERROR event type and return
    *             number.
    */
   virtual int Process(std::shared_ptr<CNFrameInfo> data) = 0;
@@ -176,45 +226,54 @@ class Module {
    * Posts an event to the pipeline.
    *
    * @param type The type of an event.
-   * @param msg Message string.
+   * @param msg The event message string.
    *
-   * @return Returns true if this function run successfully. Returns false if this
-   *         module is not added to pipeline.
+   * @return Returns true if this function has run successfully. Returns false if this
+   *         module is not added to the pipeline.
    */
   bool PostEvent(EventType type, const std::string &msg) const;
 
   /**
-   * Show performance statistics for this module
+   * Displays the performance statistics for this module.
    */
   virtual void PrintPerfInfo();
 
-  /* Transmits data to next stages
-   *   valid when the module has permitssion to transmit data by itself.
+  /**
+   * @brief Transmits data to the following stages.
+   *
+   * Valid when the module has permitssion to transmit data by itself.
+   *
+   * @param data The pointer to the information of the frame.
+   *
+   * @return Returns true if the data has been transmitted successfully. Otherwise, returns false.
    */
   bool TransmitData(std::shared_ptr<CNFrameInfo> data);
 
   /**
-   * @brief Check ParamSet for a module.
+   * @brief Checks parameters for a module, including parameter name, type, value, validity, and so on.
    *
    * @param paramSet Parameters for this module.
    *
-   * @return Returns true if this API run successfully. Otherwise, returns false.
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
-  virtual bool CheckParamSet(ModuleParamSet paramSet) { return true; }
+  virtual bool CheckParamSet(const ModuleParamSet &paramSet) const { return true; }
 
  protected:
   friend class CNDataFrame;
   friend class Pipeline;
   friend class PipelinePrivate;
 
-#ifdef TEST
+#ifdef UNIT_TEST
+
  public:
 #endif
   /**
    * Sets a container to this module and identifies which pipeline the module is added to.
    *
-   * @note This function will be called automatically by the pipeline after this module
-   *       is added into the pipeline. You do not need to call it by yourself.
+   * @param container the container of this module, which is a pipeline pointer.
+   * 
+   * @note This function is called automatically by the pipeline after this module
+   *       is added into the pipeline. You do not need to call this function by yourself.
    */
   inline void SetContainer(Pipeline *container) { container_ = container; }
 
@@ -222,7 +281,7 @@ class Module {
   size_t GetId();
   /* useless for users */
   std::vector<size_t> GetParentIds() const { return parent_ids_; }
-  /* useless for users, set upstream node id to this module */
+  /* useless for users, set upstream node ID to this module */
   void SetParentId(size_t id) {
     parent_ids_.push_back(id);
     mask_ = 0;
@@ -233,18 +292,42 @@ class Module {
   uint64_t GetModulesMask() const { return mask_; }
 
   /**
-   * @return Returns whether this module has permission to transmit data by itself.
+   * @brief Checks if this module has permission to transmit data by itself.
+   * 
+   * @return Returns true if this module has permission to transmit data by itself. Otherwise, returns false.
    *
    * @see Process
    */
-  bool hasTranmit() const { return hasTransmit_.load(); }
+  bool HasTransmit() const { return hasTransmit_.load(); }
 
   /**
-   * called by pipeline
+   * @brief Processes the data.
+   *
+   * This function is called by pipeline.
+   *
+   * @param data The pointer to the information of the frame.
+   *
+   * @return
+   * @retval 0: The process has been run successfully. But the data should be transmitted by framework then.
+   * @retval >0: The process has been run successfully. The data has been handled by this module. The ``hasTransmit_`` must be set.
+   *             The Pipeline::ProvideData should be called by Module to transmit data
+   *             to the next modules in the pipeline.
+   * @retval <0: Pipeline posts an event with the EVENT_ERROR event type and return
+   *             number.
    */
   int DoProcess(std::shared_ptr<CNFrameInfo> data);
 
+  /**
+   * @return Returns true if the performance information is displayed. Otherwise, returns false.
+   */
   bool ShowPerfInfo() { return showPerfInfo_.load(); }
+  /**
+   * @brief Enable or disable showing performance information.
+   *
+   * @param enable If it is true, enbale showing performance information, otherwise, disable.
+   *
+   * @return Void.
+   */
   void ShowPerfInfo(bool enable) { showPerfInfo_.store(enable); }
 
  protected:
@@ -274,33 +357,39 @@ class ModuleEx : public Module {
 };
 
 /**
- * @brief ModuleCreator/ModuleFactory/ModuleCreatorWorker:
- *   Implements reflection mechanism to create a module instance dynamically with "ModuleClassName" and
- *   the "moduleName" parameter.
- *   Refer to the ActorFactory&DynamicCreator in https://github.com/Bwar/Nebula (under Apache2.0 license)
+ * @brief ModuleCreator, ModuleFactory, and ModuleCreatorWorker:
+ *   Implements reflection mechanism to create a module instance dynamically with the ``ModuleClassName`` and
+ *    ``moduleName`` parameters.
+ *   See ActorFactory&DynamicCreator in https://github.com/Bwar/Nebula (under Apache2.0 license)
  */
 
 /**
  * @brief ModuleFactory
- * Provides functions to create instances with "ModuleClassName" and the "moduleName" parameter.
+ * Provides functions to create instances with the ``ModuleClassName``and ``moduleName`` parameters.
  */
 class ModuleFactory {
  public:
+  /**
+   * @brief Creates or gets the instance of the ModuleFactory class.
+   *
+   * @return Returns the instance of the ModuleFactory class.
+   */
   static ModuleFactory *Instance() {
     if (nullptr == factory_) {
-      factory_ = new ModuleFactory();
+      factory_ = new (std::nothrow) ModuleFactory();
+      LOG_IF(FATAL, nullptr == factory_) << "ModuleFactory::Instance() new ModuleFactory failed.";
     }
     return (factory_);
   }
   virtual ~ModuleFactory() {}
 
   /**
-   * Registers "ModuleClassName" and CreateFunction.
+   * Registers ``ModuleClassName`` and ``CreateFunction``.
    *
-   * @param strTypeName, ModuleClassName (TypeName).
-   * @param pFunc, CreateFunction which has a parameter "moduleName".
+   * @param strTypeName The module class name.
+   * @param pFunc The ``CreateFunction`` of a Module object that has a parameter ``moduleName``.
    *
-   * @return Returns true for success.
+   * @return Returns true if this function has run successfully.
    */
   bool Regist(const std::string &strTypeName, std::function<Module *(const std::string &)> pFunc) {
     if (nullptr == pFunc) {
@@ -311,12 +400,12 @@ class ModuleFactory {
   }
 
   /**
-   * Creates a module instance with  "ModuleClassName" and "moduleName".
+   * Creates a module instance with ``ModuleClassName`` and ``moduleName``.
    *
-   * @param strTypeName, ModuleClassName (TypeName).
-   * @param name, The moduleName that is the parameter of CreateFunction.
+   * @param strTypeName The module class name.
+   * @param name The ``CreateFunction`` of a Module object that has a parameter ``moduleName``.
    *
-   * @return The module instance if run successfully. Returns nullptr if failed.
+   * @return Returns the module instance if this function has run successfully. Otherwise, returns nullptr if failed.
    */
   Module *Create(const std::string &strTypeName, const std::string &name) {
     auto iter = map_.find(strTypeName);
@@ -328,9 +417,9 @@ class ModuleFactory {
   }
 
   /**
-   * Get all registed module.
+   * Gets all registed modules.
    *
-   * @return All registed module ModuleClassName.
+   * @return All registed module class names.
    */
   std::vector<std::string> GetRegisted() {
     std::vector<std::string> registed_modules;
@@ -348,8 +437,8 @@ class ModuleFactory {
 
 /**
  * @brief ModuleCreator
- *   A concrete ModuleClass needs inherit ModuleCreator to enable reflection mechanism.
- *   ModuleCreator provides CreateFunction and registers ModuleClassName & CreateFunction to ModuleFactory.
+ *   A concrete ModuleClass needs to inherit ModuleCreator to enable reflection mechanism.
+ *   ModuleCreator provides ``CreateFunction``, and registers ``ModuleClassName`` and ``CreateFunction`` to ModuleFactory().
  */
 template <typename T>
 class ModuleCreator {
@@ -370,11 +459,20 @@ class ModuleCreator {
       }
       ModuleFactory::Instance()->Regist(strTypeName, CreateObject);
     }
-    inline void do_nothing() const {};
+    inline void do_nothing() const {}
   };
   ModuleCreator() { register_.do_nothing(); }
-  virtual ~ModuleCreator() { register_.do_nothing(); };
-  static T *CreateObject(const std::string &name) { return new T(name); }
+  virtual ~ModuleCreator() { register_.do_nothing(); }
+  /**
+   * @brief Creates an instance of template (T) with sepcified instance name.
+   *
+   * This is a template function.
+   *
+   * @param name The name of the instance.
+   *
+   * @return Returns the instance of template (T).
+   */
+  static T *CreateObject(const std::string &name) { return new (std::nothrow) T(name); }
   static Register register_;
 };
 
@@ -382,10 +480,19 @@ template <typename T>
 typename ModuleCreator<T>::Register ModuleCreator<T>::register_;
 
 /**
- * @brief ModuleCreatorWorker, dynamic-creator helper.
+ * @brief ModuleCreatorWorker, a dynamic-creator helper.
  */
 class ModuleCreatorWorker {
  public:
+  /**
+   * @brief Creates a module instance with ``ModuleClassName`` and ``moduleName``.
+   *
+   * @param strTypeName The module class name.
+   * @param name The module name.
+   *
+   * @return Returns the module instance if the module instance is created successfully. Returns nullptr if failed.
+   * @see ModuleFactory::Create
+   */
   Module *Create(const std::string &strTypeName, const std::string &name) {
     Module *p = ModuleFactory::Instance()->Create(strTypeName, name);
     return (p);
@@ -393,11 +500,18 @@ class ModuleCreatorWorker {
 };
 
 /**
- *@brief ParametersChecker, check the module parameters.
+ *@brief Checks the module parameters.
  */
 class ParametersChecker {
  public:
-  // check path is existence
+  /**
+   * @brief Checks if the path exists.
+   *
+   * @param path The path relative to JSON file or an absolute path.
+   * @param paramSet The module parameters. The JSON file path is one of the parameters.
+   *
+   * @return Returns true if exists. Otherwise, returns false.
+   */
   bool CheckPath(const std::string &path, const ModuleParamSet &paramSet) {
     std::string relative_path = GetPathRelativeToTheJSONFile(path, paramSet);
     if ((access(relative_path.c_str(), R_OK)) == -1) {
@@ -405,8 +519,18 @@ class ParametersChecker {
     }
     return true;
   }
-  // check str is number
-  bool IsNum(const std::list<std::string> &check_list, const ModuleParamSet &paramSet, std::string &err_msg, // NOLINT
+  /**
+   * @brief Checks if the parameters are number, and the value is specified in the correct range.
+   *
+   * @param check_list A list of parameter names.
+   * @param paramSet The module parameters.
+   * @param err_msg The error message.
+   * @param greater_than_zero If this parameter is set to ``true``, the parameter set should be
+   * greater than or equal to zero. If this parameter is set to ``false``, the parameter set is less than zero.
+   *
+   * @return Returns true if the parameters are number and the value is in the correct range. Otherwise, returns false.
+   */
+  bool IsNum(const std::list<std::string> &check_list, const ModuleParamSet &paramSet, std::string &err_msg,  // NOLINT
              bool greater_than_zero = false) {
     for (auto &it : check_list) {
       if (paramSet.find(it) != paramSet.end()) {

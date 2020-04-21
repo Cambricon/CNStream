@@ -135,7 +135,7 @@ class RCOpResource : public InferResource<std::shared_ptr<RCOpValue>> {
   bool Initialized() const { return value_->initialized; }
   void SetMluQueue(std::shared_ptr<edk::MluTaskQueue> mlu_queue) { value_->op.SetMluQueue(mlu_queue); }
   void Init(uint32_t src_w, uint32_t src_h, uint32_t src_stride, uint32_t dst_w, uint32_t dst_h,
-            edk::MluResizeConvertOp::ColorMode cmode);
+            edk::MluResizeConvertOp::ColorMode cmode, edk::CoreVersion core_ver);
   void Destroy();
 
  private:

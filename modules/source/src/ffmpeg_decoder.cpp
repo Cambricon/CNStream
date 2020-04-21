@@ -38,14 +38,10 @@ namespace cnstream {
 static std::mutex decoder_mutex;
 static CNDataFormat PixelFmt2CnDataFormat(edk::PixelFmt pformat) {
   switch (pformat) {
-    case edk::PixelFmt::YUV420SP_NV12:
+    case edk::PixelFmt::NV12:
       return CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
-    case edk::PixelFmt::YUV420SP_NV21:
+    case edk::PixelFmt::NV21:
       return CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
-    case edk::PixelFmt::RGB24:
-      return CNDataFormat::CN_PIXEL_FORMAT_RGB24;
-    case edk::PixelFmt::BGR24:
-      return CNDataFormat::CN_PIXEL_FORMAT_BGR24;
     default:
       return CNDataFormat::CN_INVALID;
   }
@@ -66,8 +62,8 @@ bool FFmpegMluDecoder::Create(AVStream *st) {
   edk::EasyDecode::Attr instance_attr;
   memset(&instance_attr, 0, sizeof(instance_attr));
   // common attrs
-  instance_attr.maximum_geometry.w = codec_width;
-  instance_attr.maximum_geometry.h = codec_height;
+  instance_attr.frame_geometry.w = codec_width;
+  instance_attr.frame_geometry.h = codec_height;
   switch (codec_id) {
     case AV_CODEC_ID_H264:
       instance_attr.codec_type = edk::CodecType::H264;
@@ -83,22 +79,20 @@ bool FFmpegMluDecoder::Create(AVStream *st) {
       return false;
     }
   }
-  instance_attr.pixel_format = edk::PixelFmt::YUV420SP_NV21;
-  instance_attr.output_geometry.w = handler_.Output_w() > 0 ? handler_.Output_w() : codec_width;
-  instance_attr.output_geometry.h = handler_.Output_h() > 0 ? handler_.Output_h() : codec_height;
-  instance_attr.drop_rate = 0;
+  instance_attr.pixel_format = edk::PixelFmt::NV21;
+  // instance_attr.output_geometry.w = handler_.Output_w() > 0 ? handler_.Output_w() : codec_width;
+  // instance_attr.output_geometry.h = handler_.Output_h() > 0 ? handler_.Output_h() : codec_height;
   instance_attr.input_buffer_num = handler_.InputBufNumber();
-  instance_attr.frame_buffer_num = handler_.OutputBufNumber();
+  instance_attr.output_buffer_num = handler_.OutputBufNumber();
   if (handler_.ReuseCNDecBuf()) {
-    instance_attr.frame_buffer_num += cnstream::GetParallelism();  // FIXME
+    instance_attr.output_buffer_num += cnstream::GetParallelism();  // FIXME
   }
   instance_attr.dev_id = dev_ctx_.dev_id;
-  instance_attr.video_mode = edk::VideoMode::FRAME_MODE;
   instance_attr.silent = false;
-
+  instance_attr.stride_align = 1;
   // callbacks
+
   instance_attr.frame_callback = std::bind(&FFmpegMluDecoder::FrameCallback, this, std::placeholders::_1);
-  instance_attr.perf_callback = std::bind(&FFmpegMluDecoder::PerfCallback, this, std::placeholders::_1);
   instance_attr.eos_callback = std::bind(&FFmpegMluDecoder::EOSCallback, this);
 
   // create CnDecode
@@ -181,15 +175,8 @@ int FFmpegMluDecoder::ProcessFrame(const edk::CnFrame &frame, bool *reused) {
   data->frame.height = frame.height;
   data->frame.fmt = PixelFmt2CnDataFormat(frame.pformat);
   for (int i = 0; i < data->frame.GetPlanes(); i++) {
-    // for debug,
-#if 1
-    if (frame.strides[i] == 0) {
-      LOG(ERROR) << "frame.strides[" << i << "] is zero";
-      return -1;
-    }
-#endif
     data->frame.stride[i] = frame.strides[i];
-    data->frame.ptr[i] = reinterpret_cast<void *>(frame.ptrs[i]);
+    data->frame.ptr_mlu[i] = reinterpret_cast<void *>(frame.ptrs[i]);
   }
   if (handler_.ReuseCNDecBuf()) {
     data->frame.deAllocator_ = std::make_shared<CNDeallocator>(this, frame.buf_id);
@@ -237,7 +224,10 @@ bool FFmpegCpuDecoder::Create(AVStream *st) {
     LOG(ERROR) << "avcodec_find_decoder failed";
     return false;
   }
-#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(58, 0, 0)
+#if (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 14, 0)) || \
+    ((LIBAVCODEC_VERSION_MICRO >= 100) && (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 33, 100)))
+  instance_ = st->codec;
+#else
   instance_ = avcodec_alloc_context3(dec);
   if (!instance_) {
     LOG(ERROR) << "Failed to do avcodec_alloc_context3";
@@ -248,8 +238,6 @@ bool FFmpegCpuDecoder::Create(AVStream *st) {
     return false;
   }
   av_codec_set_pkt_timebase(instance_, st->time_base);
-#else
-  instance_ = st->codec;
 #endif
   if (avcodec_open2(instance_, dec, NULL) < 0) {
     LOG(ERROR) << "Failed to open codec";
@@ -273,7 +261,8 @@ void FFmpegCpuDecoder::Destroy() {
       std::this_thread::yield();
     }
     eos_got_.store(0);
-#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(58, 0, 0)
+#if !((LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 14, 0)) || \
+      ((LIBAVCODEC_VERSION_MICRO >= 100) && (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 33, 100))))
     avcodec_free_context(&instance_);
 #endif
     instance_ = nullptr;
@@ -351,9 +340,9 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     if (y_size_ != frame->linesize[0] * frame->height) {
       if (nullptr != nv21_data_) delete[] nv21_data_;
       y_size_ = frame->linesize[0] * frame->height;
-      nv21_data_ = new uint8_t[y_size_ * 3 / 2];
+      nv21_data_ = new (std::nothrow) uint8_t[y_size_ * 3 / 2];
       if (nullptr == nv21_data_) {
-        LOG(ERROR) << "FFmpegCpuDecoder: Failed to alloc memory";
+        LOG(ERROR) << "FFmpegCpuDecoder::ProcessFrame() Failed to alloc memory, size:" << y_size_ * 3 / 2;
         return false;
       }
     }
@@ -378,7 +367,10 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     auto t = reinterpret_cast<uint8_t *>(data->frame.mlu_data);
     for (int i = 0; i < data->frame.GetPlanes(); ++i) {
       size_t plane_size = data->frame.GetPlaneBytes(i);
-      data->frame.data[i].reset(new CNSyncedMemory(plane_size, dev_ctx_.dev_id, dev_ctx_.ddr_channel));
+      CNSyncedMemory *CNSyncedMemory_ptr =
+          new (std::nothrow) CNSyncedMemory(plane_size, dev_ctx_.dev_id, dev_ctx_.ddr_channel);
+      LOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "FFmpegCpuDecoder::ProcessFrame() new CNSyncedMemory failed";
+      data->frame.data[i].reset(CNSyncedMemory_ptr);
       data->frame.data[i]->SetMluData(t);
       t += plane_size;
     }
@@ -399,7 +391,9 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     auto t = reinterpret_cast<uint8_t *>(data->frame.cpu_data);
     for (int i = 0; i < data->frame.GetPlanes(); ++i) {
       size_t plane_size = data->frame.GetPlaneBytes(i);
-      data->frame.data[i].reset(new CNSyncedMemory(plane_size));
+      CNSyncedMemory *CNSyncedMemory_ptr = new (std::nothrow) CNSyncedMemory(plane_size);
+      LOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "FFmpegCpuDecoder::ProcessFrame() new CNSyncedMemory failed";
+      data->frame.data[i].reset(CNSyncedMemory_ptr);
       data->frame.data[i]->SetCpuData(t);
       t += plane_size;
     }

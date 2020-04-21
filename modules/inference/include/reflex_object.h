@@ -133,7 +133,14 @@ T* ClassInfo<T>::CreateObject() const {
 
 template <typename T>
 T* ReflexObjectEx<T>::CreateObject(const std::string& name) {
-  return reinterpret_cast<T*>(ReflexObject::CreateObject(name));
+  auto ptr = ReflexObject::CreateObject(name);
+  if (nullptr == ptr) return nullptr;
+  T* ret = dynamic_cast<T*>(ptr);
+  if (nullptr == ret) {
+    delete ptr;
+    return nullptr;
+  }
+  return ret;
 }
 
 template <typename T>

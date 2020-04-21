@@ -17,6 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+#include <memory>
 #include <string>
 
 #include "cnstream_eventbus.hpp"
@@ -72,7 +73,7 @@ bool Module::PostEvent(EventType type, const std::string& msg) const {
 }
 
 int Module::DoProcess(std::shared_ptr<CNFrameInfo> data) {
-  if (!hasTranmit()) {
+  if (!HasTransmit()) {
     if (!isSource_) fps_stat_.Update(data);
     return Process(data);
   }
@@ -80,7 +81,7 @@ int Module::DoProcess(std::shared_ptr<CNFrameInfo> data) {
 }
 
 bool Module::TransmitData(std::shared_ptr<CNFrameInfo> data) {
-  if (hasTranmit()) {
+  if (HasTransmit()) {
     if (container_) {
       if (!isSource_) fps_stat_.Update(data);
       return container_->ProvideData(this, data);

@@ -28,11 +28,14 @@
 
 namespace edk {
 
-#define CALL_CNRT_FUNC(func, msg)                                                   \
-  {                                                                                 \
-    int ret = func;                                                                 \
-    if (0 != ret) throw EasyInferError(msg " error code : " + std::to_string(ret)); \
-  }
+#define CALL_CNRT_FUNC(func, msg)                                               \
+  do {                                                                          \
+    int ret = (func);                                                           \
+    if (0 != ret) {                                                             \
+      LOG(ERROR, "%s, error code: %d", (msg), ret);                             \
+      throw EasyInferError(msg " error code : " + std::to_string(ret));         \
+    }                                                                           \
+  } while (0)
 
 class EasyInferPrivate {
  public:
@@ -73,29 +76,13 @@ void EasyInfer::Init(std::shared_ptr<ModelLoader> ploader, int batch_size, int d
   d_ptr_->ploader_ = ploader;
   ModelLoaderInternalInterface interface(d_ptr_->ploader_.get());
 
+  LOG(INFO, "Init inference context, batch size: %d, device id: %d", batch_size, dev_id);
+
   // init function
   CALL_CNRT_FUNC(cnrtCreateFunction(&d_ptr_->function_), "Create function failed.");
 
   CALL_CNRT_FUNC(cnrtCopyFunction(&d_ptr_->function_, interface.Function()), "Copy function failed.");
 
-#ifdef CNSTK_MLU100
-  d_ptr_->batch_size_ = batch_size;
-  cnrtInitFuncParam_t init_func_param;
-  bool muta = false;
-  int parallelism = d_ptr_->batch_size_;
-  u32_t affinity = 0x1;
-  init_func_param.muta = &muta;
-  init_func_param.data_parallelism = &parallelism;
-  init_func_param.affinity = &affinity;
-  init_func_param.end = CNRT_PARAM_END;
-  CALL_CNRT_FUNC(cnrtInitFunctionMemory_V2(d_ptr_->function_, &init_func_param), "Init function memory failed.");
-
-  // check model stack size
-  d_ptr_->ploader_->AdjustStackMemory();
-
-  // create cnrt queue
-  CALL_CNRT_FUNC(cnrtCreateQueue(&d_ptr_->queue_->queue), "Create cnrt queue failed.");
-#elif CNSTK_MLU270
   d_ptr_->batch_size_ = 1;
   cnrtChannelType_t channel = CNRT_CHANNEL_TYPE_NONE;
   CALL_CNRT_FUNC(cnrtCreateRuntimeContext(&d_ptr_->runtime_context_, d_ptr_->function_, NULL),
@@ -107,9 +94,9 @@ void EasyInfer::Init(std::shared_ptr<ModelLoader> ploader, int batch_size, int d
                  "Set Runtime Context Device Id failed!");
   CALL_CNRT_FUNC(cnrtInitRuntimeContext(d_ptr_->runtime_context_, NULL), "Init runtime context failed!");
 
+  LOG(INFO, "Create MLU task queue from runtime context");
   CALL_CNRT_FUNC(cnrtRuntimeContextCreateQueue(d_ptr_->runtime_context_, &d_ptr_->queue_->queue),
                  "Runtime Context Create Queue failed");
-#endif
   // init param
   d_ptr_->param_ = new void*[d_ptr_->ploader_->InputNum() + d_ptr_->ploader_->OutputNum()];
   // create event for hardware time
@@ -121,6 +108,8 @@ void EasyInfer::Run(void** input, void** output, float* hw_time) const {
   int i_num = d_ptr_->ploader_->InputNum();
   int o_num = d_ptr_->ploader_->OutputNum();
 
+  LOG(TRACE, "Process inference on one frame, input num: %d, output num: %d", i_num, o_num);
+  LOG(TRACE, "Inference, input: %p, output: %p", input, output);
   // prepare params for invokefunction
   for (int i = 0; i < i_num; ++i) {
     d_ptr_->param_[i] = input[i];
@@ -133,25 +122,8 @@ void EasyInfer::Run(void** input, void** output, float* hw_time) const {
     CALL_CNRT_FUNC(cnrtPlaceNotifier(d_ptr_->notifier_start_, d_ptr_->queue_->queue), "Place event failed");
   }
 
-#ifdef CNSTK_MLU100
-  // invoke params
-  constexpr cnrtDim3_t dim = {1, 1, 1};
-  cnrtInvokeFuncParam_t invoke_func_param;
-  u32_t affinity = 0x1;
-  int parallelism = d_ptr_->batch_size_;
-  invoke_func_param.data_parallelism = &parallelism;
-  invoke_func_param.affinity = &affinity;
-  invoke_func_param.end = CNRT_PARAM_END;
-  constexpr cnrtFunctionType_t func_type = static_cast<cnrtFunctionType_t>(0);
-
-  // invoke
-  CALL_CNRT_FUNC(cnrtInvokeFunction_V2(d_ptr_->function_, dim, d_ptr_->param_, func_type, d_ptr_->queue_->queue,
-                                       reinterpret_cast<void*>(&invoke_func_param)),
-                 "Invoke function failed.");
-#elif CNSTK_MLU270
   CALL_CNRT_FUNC(cnrtInvokeRuntimeContext(d_ptr_->runtime_context_, d_ptr_->param_, d_ptr_->queue_->queue, NULL),
                  "Invoke Runtime Context failed");
-#endif
 
   if (hw_time) {
     // place end event
@@ -162,6 +134,7 @@ void EasyInfer::Run(void** input, void** output, float* hw_time) const {
     CALL_CNRT_FUNC(cnrtNotifierDuration(d_ptr_->notifier_start_, d_ptr_->notifier_end_, hw_time),
                    "Calculate elapsed time failed.");
     *hw_time /= 1000.0f;
+    LOG(TRACE, "Inference hardware time %f ms", *hw_time);
   }
 }
 
@@ -173,6 +146,7 @@ MluTaskQueue_t EasyInfer::GetMluQueue() const { return d_ptr_->queue_; }
 
 MluTaskQueue::~MluTaskQueue() {
   if (queue) {
+    LOG(INFO, "Destroy MLU task queue");
     cnrtRet_t ret = cnrtDestroyQueue(queue);
     if (ret != CNRT_RET_SUCCESS) LOG(ERROR, "Destroy cnrtQueue failed");
   }

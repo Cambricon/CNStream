@@ -52,10 +52,10 @@ namespace cnstream {
  */
 typedef enum {
   CN_INVALID = -1,                  ///< This frame is invalid.
-  CN_PIXEL_FORMAT_YUV420_NV21 = 0,  ///< Identifies that this frame is in the YUV420SP(NV21) format.
-  CN_PIXEL_FORMAT_YUV420_NV12,      ///< Identifies that this frame is in the YUV420sp(NV12) format.
-  CN_PIXEL_FORMAT_BGR24,            ///< Identifies that this frame is in the BGR24 format.
-  CN_PIXEL_FORMAT_RGB24             ///<  Identifies that this frame is in the RGB24 format.
+  CN_PIXEL_FORMAT_YUV420_NV21 = 0,  ///< This frame is in the YUV420SP(NV21) format.
+  CN_PIXEL_FORMAT_YUV420_NV12,      ///< This frame is in the YUV420sp(NV12) format.
+  CN_PIXEL_FORMAT_BGR24,            ///< This frame is in the BGR24 format.
+  CN_PIXEL_FORMAT_RGB24             ///< This frame is in the RGB24 format.
 } CNDataFormat;
 
 /**
@@ -63,12 +63,13 @@ typedef enum {
  */
 typedef struct {
   enum DevType {
-    INVALID = -1,        ///< Invalid device type
+    INVALID = -1,        ///< Invalid device type.
     CPU = 0,             ///< The data is allocated by CPU.
-    MLU = 1              ///< The data is allocated by MLU.
-  } dev_type = INVALID;  ///< Device type
-  int dev_id = 0;        ///< Ordinal device id.
-  int ddr_channel = 0;   ///< Ordinal channel id for MLU. [0, 4).
+    MLU = 1,             ///< The data is allocated by MLU.
+    MLU_CPU = 2          ///< Both MLU and CPU. Used for M220_SOC.
+  } dev_type = INVALID;  ///< Device type.
+  int dev_id = 0;        ///< Ordinal device ID.
+  int ddr_channel = 0;   ///< Ordinal channel ID for MLU. The value should be in the range [0, 4).
 } DevContext;
 
 /**
@@ -79,7 +80,7 @@ enum CNFrameFlag {
 };
 
 /**
- * Gets image plane number by for a specified image typeformat.
+ * Gets image plane number by a specified image format.
  *
  * @param
  *   fmt The format of the image.
@@ -110,27 +111,63 @@ class IDataDeallocator {
   virtual ~IDataDeallocator() {}
 };
 
+/**
+ * ICNMediaImageMapper is an abstract class.
+ */
+class ICNMediaImageMapper {
+ public:
+  /**
+   * Gets an image.
+   * @return Returns the image address.
+   */
+  virtual void* GetMediaImage() = 0;
+  /**
+   * Gets pitch.
+   * @param index
+   * @return Returns pitch.
+   */
+  virtual int GetPitch(int index) = 0;
+  /**
+   * Gets CPU address.
+   * @param index
+   * @return Returns the CPU address.
+   */
+  virtual void* GetCpuAddress(int index) = 0;
+  /**
+   * Gets the device address.
+   * @param index
+   * @return Returns the device address.
+   */
+  virtual void* GetDevAddress(int index) = 0;
+  /**
+   *  Destructor of class ICNMediaImageMapper.
+   */
+  virtual ~ICNMediaImageMapper() {}
+};
+
 class Module;
 class Pipeline;
 /**
- * The structure contains a frame of the data and the description of this frame.
+ * The structure holding a data frame and the frame description.
  */
 struct CNDataFrame {
-  std::string stream_id;  ///< The data stream alias where this frame is located to.
-  size_t flags = 0;       ///< The mask for this frame, CNFrameFlag.
+  std::string stream_id;  ///< The data stream aliases where this frame is located to.
+  size_t flags = 0;       ///< The mask for this frame, ``CNFrameFlag``.
   int64_t frame_id;       ///< The frame index that incremented from 0.
-  int64_t timestamp;      ///< The timestamp of this frame.
+  int64_t timestamp;      ///< The time stamp of this frame.
 
   /**
-   * The source data information. should be filled before calling CopyToSyncMem().
+   * The source data information. You need to set the information before calling CopyToSyncMem().
    */
   CNDataFormat fmt;                                          ///< The format of the frame.
   int width;                                                 ///< The width of the frame.
   int height;                                                ///< The height of the frame.
   int stride[CN_MAX_PLANES];                                 ///< The strides of the frame.
   DevContext ctx;                                            ///< The device context of this frame.
-  void* ptr[CN_MAX_PLANES];                                  ///< The CPU or MLU data addresses for planes.
+  void* ptr_mlu[CN_MAX_PLANES];                              ///< The MLU data addresses for planes.
+  void* ptr_cpu[CN_MAX_PLANES];                              ///< The CPU data addresses for planes.
   std::shared_ptr<IDataDeallocator> deAllocator_ = nullptr;  ///< The dedicated deallocator for CNDecoder Buffer.
+  std::shared_ptr<ICNMediaImageMapper> mapper_ = nullptr;    ///< The dedicated Mapper for M220 CNDecoder.
 
   CNDataFrame() {}
 
@@ -170,7 +207,13 @@ struct CNDataFrame {
   std::shared_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Synce data helper.
 
 #ifdef HAVE_OPENCV
-  /*Called after CopyToSyncMem() is invoked.*/
+  /**
+   * Converts data from RGB to BGR. Called after CopyToSyncMem() is invoked.
+   * 
+   * If data is not RGB image but BGR, YUV420NV12 or YUV420NV21 image, its color mode will not be converted.
+   * 
+   * @return Returns data with opencv mat type.
+   */
   cv::Mat* ImageBGR();
 
  private:
@@ -179,10 +222,10 @@ struct CNDataFrame {
 
  private:
   /**
-   * The below methods and members are used by the framework
+   * The below methods and members are used by the framework.
    */
   friend class Pipeline;
-  void SetModuleMask(Module* module, Module* current);
+  uint64_t SetModuleMask(Module* module, Module* current);  // return changed mask
   uint64_t GetModulesMask(Module* module);
   void ClearModuleMask(Module* module);
   uint64_t AddEOSMask(Module* module);
@@ -197,7 +240,7 @@ struct CNDataFrame {
 };  // struct CNDataFrame
 
 /**
- * A structure hoding the bounding box for detection information of an object.
+ * A structure holding the bounding box for detection information of an object.
  * Normalized coordinates.
  */
 typedef struct {
@@ -208,13 +251,13 @@ typedef struct {
  * A structure holding the classification properties of an object.
  */
 typedef struct {
-  int id = -1;      ///< The unique id of the classification. -1 is invalid.
+  int id = -1;      ///< The unique ID of the classification. The value -1 is invalid.
   int value = -1;   ///< The label value of the classification.
   float score = 0;  ///< The label score of the classification.
 } CNInferAttr;
 
 /**
- * Feature value for one object.
+ * The feature value for one object.
  */
 typedef std::vector<float> CNInferFeature;
 
@@ -223,19 +266,19 @@ typedef std::vector<float> CNInferFeature;
  */
 struct CNInferObject {
  public:
-  std::string id;           ///< The id of the classification. (label value).
-  std::string track_id;     ///< Track result.
+  std::string id;           ///< The ID of the classification. (label value).
+  std::string track_id;     ///< The tracking result.
   float score;              ///< The label score.
-  CNInferBoundingBox bbox;  ///< The object nrmalized coordinates.
+  CNInferBoundingBox bbox;  ///< The object normalized coordinates.
 
   /**
    * Adds the key of an attribute to a specified object.
    *
-   * @param key The Key of attribute you want to add the attribute to. See GetAttribute.
+   * @param key The Key of the attribute you want to add to. See GetAttribute().
    * @param value The value of the attribute.
    *
-   * @return Returns true if the attribute is added successfully. Returns false if the attribute
-   *         identified by the key already exists.
+   * @return Returns true if the attribute has been added successfully. Returns false if the attribute
+   *         already exists.
    *
    * @note This is a thread-safe function.
    */
@@ -246,8 +289,8 @@ struct CNInferObject {
    *
    * @param attribute The attribute pair (key, value) to be added.
    *
-   * @return Returns true if the attribute is added successfully. Returns false if the attribute
-   *         identified by the key already exists.
+   * @return Returns true if the attribute has been added successfully. Returns false if the attribute
+   *         already exists.
    *
    * @note This is a thread-safe function.
    */
@@ -256,10 +299,10 @@ struct CNInferObject {
   /**
    * Gets an attribute by key.
    *
-   * @param key The key of an attribute you want to query. See AddAttribute.
+   * @param key The key of an attribute you want to query. See AddAttribute().
    *
-   * @return Return the attribute key. If the attribute identified by the key
-   *         is not exists, CNInferAttr::id will be set to -1.
+   * @return Returns the attribute key. If the attribute 
+   *         does not exist, CNInferAttr::id will be set to -1.
    *
    * @note This is a thread-safe function.
    */
@@ -268,10 +311,10 @@ struct CNInferObject {
   /**
    * Adds the key of the extended attribute to a specified object.
    *
-   * @param key The key of an attribute. You can get this attribute by key. See GetExtraAttribute.
-   * @param valueThe value of the attribute.
+   * @param key The key of an attribute. You can get this attribute by key. See GetExtraAttribute().
+   * @param value The value of the attribute.
    *
-   * @return Returns true if attribute is added successfully. Returns false if the attribute
+   * @return Returns true if the attribute has been added successfully. Returns false if the attribute
    *        already exists in the object.
    *
    * @note This is a thread-safe function.
@@ -279,11 +322,11 @@ struct CNInferObject {
   bool AddExtraAttribute(const std::string& key, const std::string& value);
 
   /**
-   * Add the key pairs of the extended attributes to a specified object.
+   * Adds the key pairs of the extended attributes to a specified object.
    *
-   * @param attributes Attributes to be add.
+   * @param attributes Attributes to be added.
    *
-   * @return Returns true if the attribute is added successfully. Returns false if the attribute
+   * @return Returns true if the attribute has been added successfully. Returns false if the attribute
    *         already exists.
    * @note This is a thread-safe function.
    */
@@ -292,9 +335,9 @@ struct CNInferObject {
   /**
    * Gets the extended attribute by key.
    *
-   * @param key The key of an identify attribute. See AddExtraAttribute
+   * @param key The key of an identified attribute. See AddExtraAttribute().
    *
-   * @return Returns the attribute identified by the key. If the attribute identified by the key
+   * @return Returns the attribute that is identified by the key. If the attribute 
    *         does not exist, returns NULL.
    *
    * @note This is a thread-safe function.
@@ -302,11 +345,11 @@ struct CNInferObject {
   std::string GetExtraAttribute(const std::string& key);
 
   /**
-   * Adds feature value to a specified object.
+   * Adds the feature value to a specified object.
    *
-   * @param features The feature value you want to added to.
+   * @param features The feature value you want to add to.
    *
-   * @return void.
+   * @return Void.
    *
    * @note This is a thread-safe function.
    */
@@ -337,19 +380,19 @@ struct CNInferObject {
  */
 struct CNFrameInfo {
   /**
-   * Create an CNFrameInfo instance.
+   * Creates a CNFrameInfo instance.
    *
-   * @param stream_id Data stream alias. Identifies which data stream the frame data comes from.
-   * @param eos If true, CNDataFrame::flags will set to CN_FRAME_FLAG_EOS. Then, the modules
+   * @param stream_id The data stream alias. Identifies which data stream the frame data comes from.
+   * @param eos If true, CNDataFrame::flags will be set to ``CN_FRAME_FLAG_EOS``. Then, the modules
    *            do not have permission to process this frame. This frame should be handed over to the pipeline
    *            for processing.
    *
-   * @return Returns a shared_ptr of CNFrameInfo if runs successfully. Otherwise, returns NULL.
+   * @return Returns ``shared_ptr`` of ``CNFrameInfo`` if this function has run successfully. Otherwise, returns NULL.
    */
   static std::shared_ptr<CNFrameInfo> Create(const std::string& stream_id, bool eos = false);
-  uint32_t channel_idx = INVALID_STREAM_IDX;         ///< The index of the channel, stream_index
-  CNDataFrame frame;                                 ///< The data of the frame.
-  std::vector<std::shared_ptr<CNInferObject>> objs;  ///< Structured information of the objects for this frame.
+  uint32_t channel_idx = INVALID_STREAM_IDX;              ///< The index of the channel, stream_index
+  CNDataFrame frame;                                      ///< The data of the frame.
+  ThreadSafeVector<std::shared_ptr<CNInferObject>> objs;  ///< Structured information of the objects for this frame.
   ~CNFrameInfo();
 
  private:

@@ -87,17 +87,17 @@ TEST(Inferencer, InferTask_RemoveResourceAfterExecute) {
 }
 
 TEST(Inferencer, InferTask_ExecuteSequence) {
-  std::chrono::high_resolution_clock::time_point task0_tp, task1_tp, task2_tp;
+  std::chrono::steady_clock::time_point task0_tp, task1_tp, task2_tp;
   InferTaskSptr task0 = std::make_shared<InferTask>([&task0_tp]() -> int {
-    task0_tp = std::chrono::high_resolution_clock::now();
+    task0_tp = std::chrono::steady_clock::now();
     return 0;
   });
   InferTaskSptr task1 = std::make_shared<InferTask>([&task1_tp]() -> int {
-    task1_tp = std::chrono::high_resolution_clock::now();
+    task1_tp = std::chrono::steady_clock::now();
     return 0;
   });
   InferTaskSptr task2 = std::make_shared<InferTask>([&task2_tp]() -> int {
-    task2_tp = std::chrono::high_resolution_clock::now();
+    task2_tp = std::chrono::steady_clock::now();
     return 0;
   });
 

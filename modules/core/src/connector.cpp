@@ -39,11 +39,15 @@ class ConnectorPrivate {
   DISABLE_COPY_AND_ASSIGN(ConnectorPrivate);
 };  // class ConnectorPrivate
 
-Connector::Connector(const size_t conveyor_count, size_t conveyor_capacity) : d_ptr_(new ConnectorPrivate(this)) {
+Connector::Connector(const size_t conveyor_count, size_t conveyor_capacity)
+    : d_ptr_(new (std::nothrow) ConnectorPrivate(this)) {
+  LOG_IF(FATAL, nullptr == d_ptr_) << "Connector::Connector()  new ConnectorPrivate failed.";
   d_ptr_->conveyor_capacity_ = conveyor_capacity;
   d_ptr_->vec_conveyor_.reserve(conveyor_count);
   for (size_t i = 0; i < conveyor_count; ++i) {
-    d_ptr_->vec_conveyor_.push_back(new Conveyor(this, conveyor_capacity));
+    Conveyor* Conveyor_ptr = new (std::nothrow) Conveyor(this, conveyor_capacity);
+    LOG_IF(FATAL, nullptr == Conveyor_ptr) << "Connector::Connector()  new Conveyor failed.";
+    d_ptr_->vec_conveyor_.push_back(Conveyor_ptr);
   }
 }
 
@@ -79,7 +83,7 @@ ConnectorPrivate::~ConnectorPrivate() {
 
 Conveyor* ConnectorPrivate::GetConveyorByIdx(int idx) const {
   CHECK_GE(idx, 0);
-  CHECK_LT(idx, vec_conveyor_.size());
+  CHECK_LT(idx, static_cast<int>(vec_conveyor_.size()));
   return vec_conveyor_[idx];
 }
 

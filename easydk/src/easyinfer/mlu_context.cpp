@@ -19,6 +19,7 @@
  *************************************************************************/
 
 #include <cnrt.h>
+#include <atomic>
 #include <iostream>
 #include <string>
 
@@ -45,17 +46,11 @@ class CnrtInitTool {
     if (!is_initialized_) {
       int err_code;
       if (CNRT_RET_SUCCESS != (err_code = cnrtInit(0))) {
-        throw MluContextError(
-            "Init cambricon runtime failed."
-            " error code " +
-            std::to_string(err_code));
+        throw MluContextError("Init cambricon runtime failed. error code " + std::to_string(err_code));
       }
       unsigned int dev_cnt;
       if (CNRT_RET_SUCCESS != (err_code = cnrtGetDeviceCount(&dev_cnt))) {
-        throw MluContextError(
-            "Get device count failed."
-            " error code " +
-            std::to_string(err_code));
+        throw MluContextError("Get device count failed. error code " + std::to_string(err_code));
       }
       if (0 == dev_cnt) {
         throw MluContextError("No device found.");
@@ -70,7 +65,7 @@ class CnrtInitTool {
   ~CnrtInitTool() {
     if (is_initialized_) cnrtDestroy();
   }
-  volatile bool is_initialized_;
+  std::atomic<bool> is_initialized_;
   SpinLock lock_;
 
   // disable copy and assign
@@ -78,29 +73,24 @@ class CnrtInitTool {
   CnrtInitTool& operator=(const CnrtInitTool&) = delete;
 };  // class CnrtInitTool
 
-int MluContext::DeviceId() const { return dev_id_; }
+bool MluContext::CheckDeviceId(int id) {
+  CnrtInitTool::instance()->init();
+  cnrtDev_t dev;
+  return CNRT_RET_SUCCESS == cnrtGetDeviceHandle(&dev, id);
+}
 
-void MluContext::SetDeviceId(int id) { dev_id_ = id; }
-
-int MluContext::ChannelId() const { return channel_id_; }
-
-void MluContext::SetChannelId(int id) { channel_id_ = id; }
-
-void MluContext::ConfigureForThisThread() const {
+void MluContext::ConfigureForThisThread() {
+  // static thread_local bool init = false;
+  static bool has_core_version = false;
+  static CoreVersion version_tmp = CoreVersion::MLU270;
   CnrtInitTool::instance()->init();
   int err_code;
   cnrtDev_t dev;
   if (CNRT_RET_SUCCESS != (err_code = cnrtGetDeviceHandle(&dev, dev_id_))) {
-    throw MluContextError(
-        "Get device failed."
-        " error code " +
-        std::to_string(err_code));
+    throw MluContextError("Get device failed. error code " + std::to_string(err_code));
   }
   if (CNRT_RET_SUCCESS != (err_code = cnrtSetCurrentDevice(dev))) {
-    throw MluContextError(
-        "Set current device failed."
-        " error code " +
-        std::to_string(err_code));
+    throw MluContextError("Set current device failed. error code " + std::to_string(err_code));
   }
   if (channel_id_ >= 0) {
     if (channel_id_ >= MLU_CHANNEL_NUM) {
@@ -112,6 +102,30 @@ void MluContext::ConfigureForThisThread() const {
       throw MluContextError("Set current channel failed. error code " + std::to_string(err_code));
     }
   }
+  if (!has_core_version) {
+    cnrtDeviceInfo_t device_info;
+    err_code = cnrtGetDeviceInfo(&device_info, dev_id_);
+    if (CNRT_RET_SUCCESS != err_code) {
+      throw MluContextError("Get device info failed. error code " + std::to_string(err_code));
+    }
+    switch (device_info.core_version) {
+      case CNRT_MLU220: {
+        version_tmp = CoreVersion::MLU220;
+        LOG(INFO, "Get Core Version MLU220");
+        break;
+      }
+      case CNRT_MLU270: {
+        version_tmp = CoreVersion::MLU270;
+        LOG(INFO, "Get Core Version MLU270");
+        break;
+      }
+      default: throw MluContextError(
+        "Unsupport cnrt core version " + std::to_string(static_cast<int>(device_info.core_version)));
+    }
+    has_core_version = true;
+  }
+  version_ = version_tmp;
 }
 
 }  // namespace edk
+

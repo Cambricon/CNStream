@@ -265,12 +265,12 @@ std::pair<std::vector<std::shared_ptr<Module>>, std::shared_ptr<Pipeline>> Creat
   // set thread number
   std::uniform_int_distribution<> ths_randomer(1, dynamic_cast<TestProcessor*>(modules[0].get())->GetCnts().size());
   std::vector<uint32_t> thread_nums;
-  pipeline->SetModuleParallelism(modules[0], 0);
+  pipeline->SetModuleAttribute(modules[0], 0);
   thread_nums.push_back(0);
   for (size_t i = 1; i < modules.size(); i++) {
     uint32_t thread_num = ths_randomer(e);
-    EXPECT_TRUE(pipeline->SetModuleParallelism(modules[i], thread_num));
-    // EXPECT_TRUE(pipeline->SetModuleParallelism(modules[i],
+    EXPECT_TRUE(pipeline->SetModuleAttribute(modules[i], thread_num));
+    // EXPECT_TRUE(pipeline->SetModuleAttribute(modules[i],
     // dynamic_cast<TestProcessor*>(modules[0].get())->GetCnts().size()));
     thread_nums.push_back(thread_num);
   }
@@ -311,8 +311,8 @@ void TestProcess(const std::vector<std::list<int>>& neighbor_list) {
   for (size_t i = 1; i < modules.size(); ++i) {
     auto processor = dynamic_cast<TestProcessor*>(modules[i].get());
     EXPECT_TRUE(nullptr != processor);
-    for (size_t i = 1; i < processor->GetCnts().size(); ++i) {
-      EXPECT_EQ(provider->GetFrameCnts()[i], processor->GetCnts()[i]);
+    for (size_t j = 0; j < processor->GetCnts().size(); ++j) {
+      EXPECT_EQ(provider->GetFrameCnts()[j], processor->GetCnts()[j]);
     }
   }
 }
@@ -445,48 +445,48 @@ TEST(CorePipeline, ParseByJSONStrNextModule) {
 TEST(CorePipeline, ParseByJSONStrParseError) {
   CNModuleConfig m_cfg;
   std::string json_str = "";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONStrClassNameError) {
   CNModuleConfig m_cfg;
   // there is no class name, throw error
   std::string json_str = "{}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
   // class name must be string type
   json_str = "{\"class_name\":0}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONStrParallelismError) {
   CNModuleConfig m_cfg;
   // parallelism must be uint type
   std::string json_str = "{\"class_name\":\"test\",\"parallelism\":\"0\"}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONStrMaxInputQueueError) {
   CNModuleConfig m_cfg;
   // max input queue size must be uint type
   std::string json_str = "{\"class_name\":\"test\",\"max_input_queue_size\":-1}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONStrNextModuleError) {
   CNModuleConfig m_cfg;
   // next module must be array
   std::string json_str = "{\"class_name\":\"test\",\"next_modules\":\"next\"}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
   // next module must be array of string
   json_str = "{\"class_name\":\"test\",\"next_modules\":[\"next\", 0]}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONStrCustomParamsError) {
   CNModuleConfig m_cfg;
   // custom params must be an object
   std::string json_str = "{\"class_name\":\"test\",\"custom_params\":\"wrong\"}";
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONStr(json_str));
+  EXPECT_FALSE(m_cfg.ParseByJSONStr(json_str));
 }
 
 TEST(CorePipeline, ParseByJSONFile) {
@@ -506,7 +506,7 @@ TEST(CorePipeline, ParseByJSONFile) {
 TEST(CorePipeline, ParseByJSONFileError) {
   CNModuleConfig m_cfg;
   // invaid file path
-  EXPECT_ANY_THROW(m_cfg.ParseByJSONFile(""));
+  EXPECT_FALSE(m_cfg.ParseByJSONFile(""));
 }
 
 TEST(CorePipeline, OpenCloseProcess) {
@@ -612,15 +612,15 @@ TEST(CorePipeline, SetAndGetModuleParallelism) {
   auto module = std::make_shared<TestModule>("test_module");
   EXPECT_TRUE(pipeline.AddModule(module));
   uint32_t paral = 32;
-  EXPECT_TRUE(pipeline.SetModuleParallelism(module, paral));
+  EXPECT_TRUE(pipeline.SetModuleAttribute(module, paral));
   EXPECT_EQ(pipeline.GetModuleParallelism(module), paral);
 }
 
-TEST(CorePipeline, SetModuleParallelismFailed) {
+TEST(CorePipeline, SetModuleAttributeFailed) {
   Pipeline pipeline("test pipeline");
   auto module = std::make_shared<TestModule>("test_module");
   // can not find module in the pipeline
-  EXPECT_FALSE(pipeline.SetModuleParallelism(module, 32));
+  EXPECT_FALSE(pipeline.SetModuleAttribute(module, 32));
   EXPECT_EQ(pipeline.GetModuleParallelism(module), (uint32_t)0);
 }
 
@@ -713,7 +713,7 @@ TEST(CorePipeline, QueryLinkStatus) {
   // parallelism between [1, 64]
   uint32_t paral = rand_r(&seed) % 64 + 1;
   EXPECT_TRUE(pipeline.AddModule(down_node_2));
-  pipeline.SetModuleParallelism(down_node_2, paral);
+  pipeline.SetModuleAttribute(down_node_2, paral);
 
   /* up_node ---- down_node
              |
@@ -865,7 +865,7 @@ TEST(CorePipeline, TransmitData) {
   EXPECT_TRUE(pipeline.AddModule(down_node));
   uint32_t seed = (uint32_t)time(0);
   uint32_t paral = rand_r(&seed) % 64 + 1;
-  pipeline.SetModuleParallelism(down_node, paral);
+  pipeline.SetModuleAttribute(down_node, paral);
   /* up_node ---- down_node */
   std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
   EXPECT_EQ(pipeline.LinkModules(up_node, down_node), link_id);
@@ -948,7 +948,7 @@ void RunTaskLoop(std::shared_ptr<TestModule> up_node, std::shared_ptr<TestModule
   Pipeline pipeline("test pipeline");
   EXPECT_TRUE(pipeline.AddModule(up_node));
   EXPECT_TRUE(pipeline.AddModule(down_node));
-  pipeline.SetModuleParallelism(down_node, 1);
+  pipeline.SetModuleAttribute(down_node, 1);
   /* up_node ---- down_node */
   std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
   EXPECT_EQ(pipeline.LinkModules(up_node, down_node), link_id);
@@ -1105,13 +1105,13 @@ TEST(CorePipeline, BuildPipelineByJSONFile) {
 TEST(CorePipeline, BuildPipelineByJSONFileFailed) {
   Pipeline pipeline("test pipeline");
   std::string empty_file_path = "";
-  EXPECT_ANY_THROW(pipeline.BuildPipelineByJSONFile(empty_file_path));
+  EXPECT_EQ(pipeline.BuildPipelineByJSONFile(empty_file_path), -1);
 
   std::string parse_error_file_path = GetExePath() + "../../modules/unitest/core/data/parse_error.json";
-  EXPECT_ANY_THROW(pipeline.BuildPipelineByJSONFile(parse_error_file_path));
+  EXPECT_EQ(pipeline.BuildPipelineByJSONFile(parse_error_file_path), -1);
 
   std::string name_error_file_path = GetExePath() + "../../modules/unitest/core/data/name_error.json";
-  EXPECT_ANY_THROW(pipeline.BuildPipelineByJSONFile(name_error_file_path));
+  EXPECT_EQ(pipeline.BuildPipelineByJSONFile(name_error_file_path), -1);
 }
 
 TEST(CorePipeline, GetModule) {

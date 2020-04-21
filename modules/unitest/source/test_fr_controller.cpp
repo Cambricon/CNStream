@@ -57,14 +57,14 @@ TEST(SourceFrController, Control) {
   // reset frame rate to 10
   frame_rate = 10;
   fr_controller.SetFrameRate(frame_rate);
-  auto start = std::chrono::high_resolution_clock::now();
+  auto start = std::chrono::steady_clock::now();
   fr_controller.Start();
 
   std::chrono::duration<double, std::milli> diff;
   uint32_t loop_num = 10;
   while (loop_num--) {
     fr_controller.Control();
-    auto end = std::chrono::high_resolution_clock::now();
+    auto end = std::chrono::steady_clock::now();
     diff = end - start;
 
     EXPECT_TRUE(diff.count() >= static_cast<double>(1000) / static_cast<double>(frame_rate));
@@ -78,7 +78,7 @@ TEST(SourceFrController, Control) {
   loop_num = 20;
   while (loop_num--) {
     fr_controller.Control();
-    auto end = std::chrono::high_resolution_clock::now();
+    auto end = std::chrono::steady_clock::now();
     diff = end - start;
     EXPECT_TRUE(diff.count() >= static_cast<double>(1000) / static_cast<double>(frame_rate));
     start = end;

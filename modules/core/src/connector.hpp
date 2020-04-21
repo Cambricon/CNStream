@@ -32,36 +32,34 @@ using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 class ConnectorPrivate;
 class Conveyor;
 
-/****************************************************************
- * @brief Connect two modules.
- *        Transmit data between modules through conveyor(s).
+/**
+ * @brief Connects two modules. Transmits data between modules through Conveyor(s).
  *
- * Connector could be blocked to balance the various speed of
- * different modules in the same pipeline.
+ * The number of Conveyors of Connector depends on the paramllelism of downstream node module.
+ * The parallelism of each module could be set in configuration json file (see README for
+ * more information of configuration json file).
  *
- * connector
- * /----------------------------------------------------------\
- * |    conveyor                                              |
- * |   /---------------------------------------------- ---\   |
- * |   |      data              data ...                  |   |
- * |   |   /--------\         /--------\                  |   |
- * |   | --|  info  |---------|  info  |----- ... -----   |   |
- * |   |   |  ...   |         |  ...   |                  |   |
- * |   |   \--------/         \--------/                  |   |
- * |   |                       data queue                 |   |
- * |   \--------------------------------------------------/   |
- * |                                                          |
- * |    conveyor  ... ...                                     |
- * \----------------------------------------------------------/
- ****************************************************************/
+ * Connector could be blocked to balance the various speed of different modules in the same pipeline.
+ *
+ *  -----------                                                   -----------
+ * |           |       /---------------------------------\       |           |
+ * |           |      |             connector             |      |           |
+ * |           | push |                                   | pop  |           |
+ * |   module  |----->|  -----------conveyor1------------ |----->|   module  |
+ * |     A     |----->|  -----------conveyor2------------ |----->|     B     |
+ * |           |----->|  -----------conveyor3------------ |----->|           |
+ * |           |      |              ... ...              |      |           |
+ * |           |       \---------------------------------/       |           |
+ *  -----------                                                   -----------
+ */
 class Connector {
  public:
-  /****************************************************************************
+  /**
    * @brief Connector constructor.
    * @param
    *   [conveyor_count]: the conveyor num of this connector.
    *   [conveyor_capacity]: the maximum buffer number of a conveyor.
-   ***************************************************************************/
+   */
   explicit Connector(const size_t conveyor_count, size_t conveyor_capacity = 20);
   ~Connector();
 

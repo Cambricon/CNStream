@@ -81,7 +81,6 @@ class FFmpegMluDecoder : public FFmpegDecoder {
     edk::MluContext env;
     env.SetDeviceId(dev_ctx_.dev_id);
     env.ConfigureForThisThread();
-    PrintPerformanceInfomation();
   }
   bool Create(AVStream *st) override;
   void Destroy() override;
@@ -94,32 +93,18 @@ class FFmpegMluDecoder : public FFmpegDecoder {
   std::atomic<int> cndec_buf_ref_count_{0};
   void FrameCallback(const edk::CnFrame &frame);
   void EOSCallback();
-#ifdef TEST
+#ifdef UNIT_TEST
  public:  // NOLINT
 #endif
   int ProcessFrame(const edk::CnFrame &frame, bool *reused);
-#ifdef TEST
+#ifdef UNIT_TEST
  private:  // NOLINT
 #endif
-  CNTimer fps_calculators[4];
-  void PrintPerformanceInfomation() const {
-    printf("stream_id: %s:\n", stream_id_.c_str());
-    fps_calculators[0].PrintFps("transfer memory: ");
-    fps_calculators[1].PrintFps("decode delay: ");
-    fps_calculators[2].PrintFps("send data to codec: ");
-    fps_calculators[3].PrintFps("output :");
-  }
-  void PerfCallback(const edk::DecodePerfInfo &info) {
-    fps_calculators[0].Dot(1.0f * info.transfer_us / 1000, 1);
-    fps_calculators[1].Dot(1.0f * info.decode_us / 1000, 1);
-    fps_calculators[2].Dot(1.0f * info.total_us / 1000, 1);
-    fps_calculators[3].Dot(1);
-  }
 
  private:
   class CNDeallocator : public cnstream::IDataDeallocator {
    public:
-    explicit CNDeallocator(FFmpegMluDecoder *decoder, uint32_t buf_id) : decoder_(decoder), buf_id_(buf_id) {
+    explicit CNDeallocator(FFmpegMluDecoder *decoder, uint64_t buf_id) : decoder_(decoder), buf_id_(buf_id) {
       ++decoder_->cndec_buf_ref_count_;
     }
     ~CNDeallocator() {
@@ -131,7 +116,7 @@ class FFmpegMluDecoder : public FFmpegDecoder {
 
    private:
     FFmpegMluDecoder *decoder_;
-    uint32_t buf_id_;
+    uint64_t buf_id_;
   };
 };
 
@@ -144,7 +129,7 @@ class FFmpegCpuDecoder : public FFmpegDecoder {
   bool Process(AVPacket *pkt, bool eos) override;
 
  private:
-#ifdef TEST
+#ifdef UNIT_TEST
  public:  // NOLINT
 #endif
   bool ProcessFrame(AVFrame *frame);

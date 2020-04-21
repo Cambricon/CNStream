@@ -35,14 +35,10 @@ namespace cnstream {
 static std::mutex decoder_mutex;
 static CNDataFormat PixelFmt2CnDataFormat(edk::PixelFmt pformat) {
   switch (pformat) {
-    case edk::PixelFmt::YUV420SP_NV12:
+    case edk::PixelFmt::NV12:
       return CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
-    case edk::PixelFmt::YUV420SP_NV21:
+    case edk::PixelFmt::NV21:
       return CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
-    case edk::PixelFmt::RGB24:
-      return CNDataFormat::CN_PIXEL_FORMAT_RGB24;
-    case edk::PixelFmt::BGR24:
-      return CNDataFormat::CN_PIXEL_FORMAT_BGR24;
     default:
       return CNDataFormat::CN_INVALID;
   }
@@ -54,8 +50,8 @@ bool RawMluDecoder::Create(DecoderContext *ctx) {
   edk::EasyDecode::Attr instance_attr;
   memset(&instance_attr, 0, sizeof(instance_attr));
   // common attrs
-  instance_attr.maximum_geometry.w = ctx->width;
-  instance_attr.maximum_geometry.h = ctx->height;
+  instance_attr.frame_geometry.w = ctx->width;
+  instance_attr.frame_geometry.h = ctx->height;
   switch (ctx->codec_id) {
     case DecoderContext::CN_CODEC_ID_H264:
       instance_attr.codec_type = edk::CodecType::H264;
@@ -71,26 +67,18 @@ bool RawMluDecoder::Create(DecoderContext *ctx) {
       return false;
     }
   }
-  instance_attr.pixel_format = edk::PixelFmt::YUV420SP_NV21;
-  instance_attr.output_geometry.w = ctx->width;
-  instance_attr.output_geometry.h = ctx->height;
-  instance_attr.drop_rate = 0;
+  instance_attr.pixel_format = edk::PixelFmt::NV21;
   instance_attr.input_buffer_num = handler_.InputBufNumber();
-  instance_attr.frame_buffer_num = handler_.OutputBufNumber();
+  instance_attr.output_buffer_num = handler_.OutputBufNumber();
   if (handler_.ReuseCNDecBuf()) {
-    instance_attr.frame_buffer_num += cnstream::GetParallelism();  // FIXME
+    instance_attr.output_buffer_num += cnstream::GetParallelism();  // FIXME
   }
   instance_attr.dev_id = dev_ctx_.dev_id;
-  if (instance_attr.codec_type == edk::CodecType::JPEG) {
-    instance_attr.video_mode = edk::VideoMode::FRAME_MODE;
-  } else {
-    instance_attr.video_mode = edk::VideoMode::STREAM_MODE;
-  }
   instance_attr.silent = false;
+  instance_attr.stride_align = 1;
 
   // callbacks
   instance_attr.frame_callback = std::bind(&RawMluDecoder::FrameCallback, this, std::placeholders::_1);
-  instance_attr.perf_callback = std::bind(&RawMluDecoder::PerfCallback, this, std::placeholders::_1);
   instance_attr.eos_callback = std::bind(&RawMluDecoder::EOSCallback, this);
 
   // create CnDecode
@@ -174,8 +162,15 @@ int RawMluDecoder::ProcessFrame(const edk::CnFrame &frame, bool *reused) {
   data->frame.height = frame.height;
   data->frame.fmt = PixelFmt2CnDataFormat(frame.pformat);
   for (int i = 0; i < data->frame.GetPlanes(); i++) {
+    // for debug,
+#if 1
+    if (frame.strides[i] == 0) {
+      LOG(ERROR) << "frame.strides[" << i << "] is zero";
+      return -1;
+    }
+#endif
     data->frame.stride[i] = frame.strides[i];
-    data->frame.ptr[i] = reinterpret_cast<void *>(frame.ptrs[i]);
+    data->frame.ptr_mlu[i] = reinterpret_cast<void *>(frame.ptrs[i]);
   }
   if (handler_.ReuseCNDecBuf()) {
     data->frame.deAllocator_ = std::make_shared<CNDeallocator>(this, frame.buf_id);

@@ -34,31 +34,15 @@ namespace cnstream {
 class TimeoutHelperTest {
  public:
   explicit TimeoutHelperTest(TimeoutHelper* th) : th_(th) {}
-  std::thread& getThread() {
-    return th_->handle_th_;
-  }
-  float getTime() {
-    return th_->timeout_;
-  }
-  void setTime(float time) {
-    th_->timeout_ = time;
-  }
-  TimeoutHelper::State getState() {
-    return th_->state_;
-  }
-  void setState(int number) {
-    th_->state_ = TimeoutHelper::State(number);
-  }
+  std::thread& getThread() { return th_->handle_th_; }
+  float getTime() { return th_->timeout_; }
+  void setTime(float time) { th_->timeout_ = time; }
+  TimeoutHelper::State getState() { return th_->state_; }
+  void setState(int number) { th_->state_ = TimeoutHelper::State(number); }
   // condition_variable do not support move or reference
-  void ConditionNotify() {
-    th_->cond_.notify_one();
-  }
-  int get_timeout_print_cnt() {
-    return static_cast<int>(th_->timeout_print_cnt_);
-  }
-  void set_timeout_print_cnt(int number) {
-    th_->timeout_print_cnt_ = number;
-  }
+  void ConditionNotify() { th_->cond_.notify_one(); }
+  int get_timeout_print_cnt() { return static_cast<int>(th_->timeout_print_cnt_); }
+  void set_timeout_print_cnt(int number) { th_->timeout_print_cnt_ = number; }
 
  private:
   TimeoutHelper* th_;
@@ -112,27 +96,24 @@ TEST(Inferencer, TimeoutHelper_HandleFunc) {
   TimeoutHelperTest th_test(th.get());
   th_test.setTime(wait_time);
   std::atomic<bool> HandleCall(false);
-  std::function<void()> Func = [] () ->void {};
+  std::function<void()> Func = []() -> void {};
 
   std::thread& Threadhandle = th_test.getThread();
-  if (Threadhandle.joinable())
-    Threadhandle.detach();
+  if (Threadhandle.joinable()) Threadhandle.detach();
 
-  std::function<double()> wait_for_time(
-    [&] () -> double {
-      // HandleCall.store(true);
-      auto stime = std::chrono::high_resolution_clock::now();
-      th_test.ConditionNotify();  // unlock the last wait
-      th_test.setState(1);
-      HandleCall.store(true);
-      // get the next state(until wait_for time end)
-      while (static_cast<int>(th_test.getState()) != 2)
-        std::this_thread::sleep_for(std::chrono::nanoseconds(1));
-      th->Reset(Func);  // for the next test
-      auto etime = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double, std::nano> diff = etime - stime;
-      return diff.count();
-    });
+  std::function<double()> wait_for_time([&]() -> double {
+    // HandleCall.store(true);
+    auto stime = std::chrono::steady_clock::now();
+    th_test.ConditionNotify();  // unlock the last wait
+    th_test.setState(1);
+    HandleCall.store(true);
+    // get the next state(until wait_for time end)
+    while (static_cast<int>(th_test.getState()) != 2) std::this_thread::sleep_for(std::chrono::nanoseconds(1));
+    th->Reset(Func);  // for the next test
+    auto etime = std::chrono::steady_clock::now();
+    std::chrono::duration<double, std::nano> diff = etime - stime;
+    return diff.count();
+  });
   // one loop finish with state_do
   std::future<double> handle_func = std::async(std::launch::async, wait_for_time);
   while (!HandleCall.load()) {
@@ -148,7 +129,7 @@ TEST(Inferencer, TimeoutHelper_HandleFunc) {
   EXPECT_EQ(th_test.get_timeout_print_cnt(), 1);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  Func = [] () -> void {};
+  Func = []() -> void {};
   th->Reset(Func);
   th_test.set_timeout_print_cnt(99);
   th_test.setState(2);  // state_do
@@ -160,4 +141,3 @@ TEST(Inferencer, TimeoutHelper_HandleFunc) {
 }
 
 }  // namespace cnstream
-

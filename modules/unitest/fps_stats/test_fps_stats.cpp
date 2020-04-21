@@ -34,6 +34,20 @@ namespace cnstream {
 
 static const char *name = "fps_stats";
 
+TEST(FpsStats, Construct) {
+  std::shared_ptr<FpsStats> fps_stats = std::make_shared<FpsStats>(name);
+  EXPECT_STREQ(fps_stats->GetName().c_str(), name);
+}
+
+TEST(FpsStats, CheckParamSet) {
+  std::shared_ptr<FpsStats> fps_stats = std::make_shared<FpsStats>(name);
+  ModuleParamSet param;
+  EXPECT_TRUE(fps_stats->CheckParamSet(param));
+
+  param["fake_key"] = "fake_value";
+  EXPECT_TRUE(fps_stats->CheckParamSet(param));
+}
+
 TEST(FpsStats, Process) {
   std::shared_ptr<FpsStats> fps_stats = std::make_shared<FpsStats>(name);
   EXPECT_STREQ(fps_stats->GetName().c_str(), name);

@@ -1,5 +1,0 @@
-0 ./secondary_models/Secondary_CarBrand/resnet18_car.cambricon ./secondary_models/Secondary_CarBrand/car_label.txt
-3 ./secondary_models/Secondary_CarModel/audi/resnet18_Audi.cambricon ./secondary_models/Secondary_CarModel/audi/Audi_label.txt
-4 ./secondary_models/Secondary_CarModel/bmw/resnet18_BMW.cambricon ./secondary_models/Secondary_CarModel/bmw/BMW_label.txt
-9 ./secondary_models/Secondary_CarModel/chevrolet/resnet18_Chevrolet.cambricon ./secondary_models/Secondary_CarModel/chevrolet/Chevrolet_label.txt
-17 ./secondary_models/Secondary_CarModel/ford/resnet18_Ford.cambricon ./secondary_models/Secondary_CarModel/ford/Ford_label.txt

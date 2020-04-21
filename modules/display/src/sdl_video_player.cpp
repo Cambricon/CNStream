@@ -13,6 +13,7 @@
 #define REFRESH_EVENT (SDL_USEREVENT + 1)
 namespace cnstream {
 
+#ifdef HAVE_SDL
 class SdlInitTool {
  public:
   static SdlInitTool* instance() {
@@ -20,17 +21,18 @@ class SdlInitTool {
     return &instance;
   }
 
-  void init() {
+  bool init() {
     mutex_.lock();
     if (!initialized_) {
       if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         LOG(ERROR) << "Unable to initialize SDL:" << SDL_GetError();
         mutex_.unlock();
-        return;
+        return false;
       }
       initialized_ = true;
     }
     mutex_.unlock();
+    return true;
   }
 
  private:
@@ -62,7 +64,9 @@ SDLVideoPlayer::~SDLVideoPlayer() {}
 
 bool SDLVideoPlayer::Init(int max_chn) {
   std::cout << "before init" << std::endl;
-  SdlInitTool::instance()->init();
+  if (!SdlInitTool::instance()->init()) {
+    return false;
+  }
   std::cout << "before create window" << std::endl;
   window_ = SDL_CreateWindow("CNStream", 0, 0, window_w_, window_h_, 0);
   if (nullptr == window_) {
@@ -101,12 +105,15 @@ void SDLVideoPlayer::Destroy() {
   Stop();
   if (texture_) {
     SDL_DestroyTexture(texture_);
+    texture_ = nullptr;
   }
   if (renderer_) {
     SDL_DestroyRenderer(renderer_);
+    renderer_ = nullptr;
   }
   if (window_) {
     SDL_DestroyWindow(window_);
+    window_ = nullptr;
   }
   data_queues_.clear();
 }
@@ -196,5 +203,7 @@ std::vector<UpdateData> SDLVideoPlayer::PopDataBatch() {
   }
   return ret;
 }
+
+#endif  // HAVE_SDL
 
 }  // namespace cnstream

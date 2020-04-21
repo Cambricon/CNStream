@@ -5,14 +5,11 @@
 #include <limits>
 #include <map>
 #include <numeric>
+#include <string>
 
 #define AVERAGE_DISTANCE false
 
 namespace edk {
-
-static inline float L2Norm(const std::vector<float>& feature) {
-  return std::sqrt(std::inner_product(feature.begin(), feature.end(), feature.begin(), 0));
-}
 
 static float CosineDistance(const std::vector<std::vector<float>>& track_feature, const std::vector<float>& feature) {
   float cos_simi, x_y, y_squa, x_squa;
@@ -42,13 +39,22 @@ static float CosineDistance(const std::vector<std::vector<float>>& track_feature
       y_squa += feat[i] * feat[i];
       x_y += feature[i] * feat[i];
     }
-    cos_simi = x_y / (std::sqrt(x_squa) * std::sqrt(y_squa));
+    if (x_squa * y_squa == 0) {
+      cos_simi = -1;
+    } else {
+      cos_simi = x_y / (std::sqrt(x_squa) * std::sqrt(y_squa));
+    }
     max_simi = std::max(cos_simi, max_simi);
   }
 #endif
 
   if (max_simi > 1) max_simi = 1;
   return 1 - max_simi;
+}
+
+#ifdef ENABLE_ECULIDEAN_DISTANCE
+static inline float L2Norm(const std::vector<float>& feature) {
+  return std::sqrt(std::inner_product(feature.begin(), feature.end(), feature.begin(), 0));
 }
 
 static float EculideanDistance(const std::vector<std::vector<float>>& track_feature,
@@ -68,12 +74,15 @@ static float EculideanDistance(const std::vector<std::vector<float>>& track_feat
   }
   return min_dist;
 }
+#endif
 
 std::map<std::string, DistanceFunc> MatchAlgorithm::distance_algo_;
 
 MatchAlgorithm::MatchAlgorithm() {
   distance_algo_["Cosine"] = CosineDistance;
+#ifdef ENABLE_ECULIDEAN_DISTANCE
   distance_algo_["Eculidean"] = EculideanDistance;
+#endif
 }
 
 MatchAlgorithm* MatchAlgorithm::Instance() {

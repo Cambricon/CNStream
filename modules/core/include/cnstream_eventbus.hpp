@@ -44,24 +44,24 @@ class Module;
 class EventBusPrivate;
 
 /**
- * @brief Flag to specify how bus watcher handle a single event.
+ * @brief Flags to specify how bus watchers handle a single event.
  */
 enum EventType {
   EVENT_INVALID,  ///< An invalid event type.
   EVENT_ERROR,    ///< An error event.
   EVENT_WARNING,  ///< A warning event.
-  EVENT_EOS,      ///< An EOS event.
-  EVENT_STOP,     ///< Stops an event that is called by application layer usually.
+  EVENT_EOS,      ///< An EOS (End of Stream) event.
+  EVENT_STOP,     ///< Stops an event that is called by an application.
   EVENT_TYPE_END  ///< Reserved for your custom events.
 };
 
 /**
- * @brief Flag to specify the way in which bus watcher handled one event.
+ * @brief Flags to specify the way in which bus watcher handled one event.
  */
 enum EventHandleFlag {
   EVENT_HANDLE_NULL,          ///< Event is not handled.
-  EVENT_HANDLE_INTERCEPTION,  ///< Watcher is informed and intercept the event.
-  EVENT_HANDLE_SYNCED,        ///< Watcher is informed and informed other watchers.
+  EVENT_HANDLE_INTERCEPTION,  ///< Watcher is informed and intercepts the event.
+  EVENT_HANDLE_SYNCED,        ///< Watcher is informed and informs other watchers.
   EVENT_HANDLE_STOP           ///< Stops a poll event.
 };
 
@@ -72,16 +72,16 @@ struct Event {
   EventType type;             ///< The event type.
   std::string message;        ///< Additional event messages.
   const Module *module;       ///< The module that posts this event.
-  std::thread::id thread_id;  ///< The thread id from which the event is posted.
+  std::thread::id thread_id;  ///< The thread ID from which the event is posted.
 };
 
 /**
- * @brief The bus watcher function
+ * @brief The bus watcher function.
  *
  * @param event The event polled from the event bus.
  * @param module The module that is watching.
  *
- * @return Flag specifies how the event is handled.
+ * @return Returns the flag that specifies how the event is handled.
  */
 using BusWatcher = std::function<EventHandleFlag(const Event &, Module *)>;
 
@@ -92,11 +92,11 @@ class EventBus {
  public:
   friend class Pipeline;
   /**
-   * @brief Posts an event to bus.
+   * @brief Posts an event to a bus.
    *
    * @param event The event to be posted.
    *
-   * @return Returns true if this function run successfully.
+   * @return Returns true if this function has run successfully.
    */
   bool PostEvent(Event event);
 
@@ -106,12 +106,12 @@ class EventBus {
    * @param func The bus watcher to be added.
    * @param watch_module The module that adds this bus watcher.
    *
-   * @return The number of bus watchers that has been added to this event bus.
+   * @return The number of bus watchers that have been added to this event bus.
    */
   uint32_t AddBusWatch(BusWatcher func, Module *watch_module);
 
  private:
-#ifdef TEST
+#ifdef UNIT_TEST
 
  public:
 #endif
@@ -121,14 +121,27 @@ class EventBus {
   /**
    * @brief Polls an event from a bus [block].
    *
-   * @note Block until an event or a bus is stopped.
+   * @note This function is blocked until an event or a bus is stopped.
    */
   Event PollEvent();
+
+  /**
+   * @brief Gets all bus watchers from the event bus.
+   *
+   * @return A list with pairs of bus watcher and module.
+   */
   const std::list<std::pair<BusWatcher, Module *>> &GetBusWatchers() const;
+
   /**
    * @brief Removes all bus watchers.
    */
   void ClearAllWatchers();
+
+  /**
+   * @brief Checks if the event bus is running.
+   *
+   * @return Returns true if the event bus is running. Otherwise, returns false.
+   */
   inline bool IsRunning() const { return running_.load(); }
   std::atomic<bool> running_{false};
 

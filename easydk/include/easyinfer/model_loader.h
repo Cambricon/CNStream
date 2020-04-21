@@ -110,7 +110,9 @@ class ModelLoader {
   bool WithYUVInput() const;
 
   /**
-   * @brief Init model input data and output data layout
+   * @brief Init model input data and output data layout on MLU100
+   * @attention Implement as an empty function on this version
+   * @deprecated
    */
   void InitLayout();
 

@@ -45,6 +45,17 @@
     edk::Logger::GetInstance()->Record(edk::LogLevel::level, __LINE__, __FILE__, __VA_ARGS__); \
   } while (0)
 
+#define FAIL_UNLESS(cond)                                                      \
+  do {                                                                         \
+    if (!(cond)) {                                                             \
+      LOG(ERROR, "check condition %s failed in function %s", #cond, __func__); \
+      edk::Logger::GetInstance()->Flush();                                     \
+      abort();                                                                 \
+    }                                                                          \
+  } while (0)
+
+#define MAX_LOG_LENGTH 2048
+
 namespace edk {
 
 /**
@@ -88,7 +99,7 @@ class Logger {
    */
   template <typename... Args>
   void Record(LogLevel level, const int line, const std::string &filename, const std::string &info, Args... args) {
-    if (!out_to_file_ && !out_to_screen_) return;
+    if (!to_file_ && !to_screen_) return;
     static int level_int;
     static size_t string_size;
     level_int = static_cast<int>(level);
@@ -97,17 +108,21 @@ class Logger {
 
       // generate log string
       std::string file = filename.substr(filename.find_last_of('/') + 1);
-      time_t tm;
-      time(&tm);
-      strftime(time_string_, 128, "%m.%d %T", localtime(&tm));
-      std::string format_str = std::string("%s %s:%d [%s] ") + info;
-      string_size = snprintf(log_string_, 2048, format_str.c_str(), time_string_, file.c_str(), line,  // NOLINT
+      std::string format_str = std::string(" %s:%d [%s] ") + info;
+      string_size = snprintf(log_string_, MAX_LOG_LENGTH, format_str.c_str(), file.c_str(), line,
                              log_level_str_[level_int], args...);
-      if (string_size > 2048) std::cerr << "[WARNING] Logger: The excessive log beyond 2048 bytes will be cut off";
+      if (string_size > MAX_LOG_LENGTH)
+        std::cerr << "[WARNING] Logger: The excessive log beyond " << MAX_LOG_LENGTH << " bytes will be cut off"
+                  << std::endl;
 
       WriteLog(level_int, log_string_);
     }
   }
+
+  /**
+   *  @brief write all cached log to file if to_file flag is set true
+   */
+  void Flush();
 
  public:
   ~Logger();
@@ -120,12 +135,11 @@ class Logger {
 
  private:
   static char log_string_[2048];
-  static char time_string_[128];
   static const char *log_level_str_[4];
-  static bool out_to_file_;
-  static bool out_to_screen_;
+  static bool to_file_;
+  static bool to_screen_;
 
-  SpinLock lock_;
+  static SpinLock lock_;
   int level_;
   LogPrivate *d_ptr_ = nullptr;
 };  // class Logger

@@ -66,7 +66,7 @@ class Postproc : virtual public ReflexObjectEx<Postproc> {
    *
    * @return void
    */
-  void set_threshold(const float threshold);
+  void SetThreshold(const float threshold);
 
   /**
    * @brief Execute postproc on neural network outputs

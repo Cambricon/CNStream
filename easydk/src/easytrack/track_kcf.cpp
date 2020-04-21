@@ -18,6 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#ifdef ENABLE_KCF
+
 #include <algorithm>
 #include <cstring>
 #include <memory>
@@ -132,6 +134,9 @@ void KcfTrack::UpdateFrame(const TrackFrame &frame, const Objects &detects, Obje
 }
 
 KcfTrackPrivate::~KcfTrackPrivate() {
+  edk::MluContext context;
+  context.SetDeviceId(device_id_);
+  context.ConfigureForThisThread();
   if (yuv2gray_outputs_ != nullptr) mem_op_.FreeArrayMlu(yuv2gray_outputs_, model_loader_->OutputNum());
   if (detect_float_output_ != nullptr) delete[] detect_float_output_;
   if (detect_half_output_ != nullptr) delete[] detect_half_output_;
@@ -301,3 +306,6 @@ void KcfTrackPrivate::ProcessTrack(const std::vector<DetectObject> &det_objs, in
 }
 
 }  // namespace edk
+
+#endif  // ENABLE_KCF
+

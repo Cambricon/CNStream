@@ -33,6 +33,12 @@ namespace edk {
 
 TOOLKIT_REGISTER_EXCEPTION(MluContext);
 
+enum class CoreVersion {
+  MLU100 = 0,
+  MLU220,
+  MLU270,
+};
+
 /**
  * @brief MLU environment helper class
  */
@@ -43,38 +49,51 @@ class MluContext {
    *
    * @return Device id
    */
-  int DeviceId() const;
+  inline int DeviceId() const { return dev_id_; }
 
   /**
    * @brief Set the device id
    *
    * @param id[in] Device id
    */
-  void SetDeviceId(int id);
+  inline void SetDeviceId(int id) { dev_id_ = id; };
+
+  /**
+   * @brief Check whether device exists
+   *
+   * @param id[in] Device id
+   * @return true if device exists, otherwise false returned
+   */
+  bool CheckDeviceId(int id);
 
   /**
    * @brief Get the MLU channel id
    *
    * @return MLU Channel id
    */
-  int ChannelId() const;
+  inline int ChannelId() const { return channel_id_; }
 
   /**
    * @brief Set the MLU channel id in range [0, 3]
    *
    * @param id[in] MLU channel id
    */
-  void SetChannelId(int id);
+  inline void SetChannelId(int id) { channel_id_ = id; };
 
   /**
    * @brief Bind MLU environment for this thread
    * @note Each thread processing MLU memory or task need to set MLU environment
    */
-  void ConfigureForThisThread() const;
+  void ConfigureForThisThread();
+
+  inline CoreVersion GetCoreVersion() const {
+    return version_;
+  }
 
  private:
   int dev_id_ = 0;
   int channel_id_ = -1;
+  CoreVersion version_ = CoreVersion::MLU270;
 };  // class MluContext
 
 }  // namespace edk

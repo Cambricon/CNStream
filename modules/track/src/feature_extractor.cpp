@@ -38,6 +38,7 @@
 #include "easyinfer/easy_infer.h"
 #include "easyinfer/mlu_context.h"
 
+#ifdef CNS_MLU100
 bool FeatureExtractor::Init(const std::string &model_path, const std::string &func_name, int dev_id,
                             uint32_t batch_size) {
   if (model_path.empty() || func_name.empty()) {
@@ -66,7 +67,7 @@ bool FeatureExtractor::Init(const std::string &model_path, const std::string &fu
     return false;
   }
   if (model_->InputShapes()[0].c != 3) {
-    std::cout << "track model wrong input shape!" << std::endl;
+    LOG(ERROR) << "[FeatureExtractor] track model wrong input shape!";
   }
 
   // prepare input and output memory
@@ -82,17 +83,20 @@ bool FeatureExtractor::Init(const std::string &model_path, const std::string &fu
   extract_feature_mlu_ = true;
   return true;
 }
+#endif
 
 FeatureExtractor::~FeatureExtractor() { Destroy(); }
 
 void FeatureExtractor::Destroy() {
   if (extract_feature_mlu_) {
+#ifdef CNS_MLU100
     LOG(INFO) << "[FeatureExtractor] release resources";
     if (input_mlu_ptr_) mem_op_.FreeArrayMlu(input_mlu_ptr_, model_->InputNum());
     if (output_mlu_ptr_) mem_op_.FreeArrayMlu(output_mlu_ptr_, model_->OutputNum());
     if (input_cpu_ptr_) mem_op_.FreeCpuInput(input_cpu_ptr_);
     if (output_cpu_ptr_) mem_op_.FreeCpuOutput(output_cpu_ptr_);
     input_mlu_ptr_ = output_mlu_ptr_ = input_cpu_ptr_ = output_cpu_ptr_ = nullptr;
+#endif
   }
 }
 
@@ -114,8 +118,10 @@ std::vector<float> FeatureExtractor::ExtractFeature(const edk::TrackFrame &frame
   cv::Mat image(frame.height, frame.width, CV_8UC3, frame.data);
   cv::Mat obj_img(image, cv::Rect(obj.bbox.x * frame.width, obj.bbox.y * frame.height, obj.bbox.width * frame.width,
                                   obj.bbox.height * frame.height));
+  std::vector<float> result;
 
   if (extract_feature_mlu_) {
+#ifdef CNS_MLU100
     std::lock_guard<std::mutex> lk(mlu_proc_mutex_);
     Preprocess(obj_img);
 
@@ -127,12 +133,21 @@ std::vector<float> FeatureExtractor::ExtractFeature(const edk::TrackFrame &frame
 
     const float *begin = reinterpret_cast<float *>(output_cpu_ptr_[1]);
     const float *end = begin + model_->OutputShapes()[1].DataCount();
-    return std::vector<float>(begin, end);
+    result.swap(std::vector<float>(begin, end));
+#endif
   } else {
 #if (CV_MAJOR_VERSION == 2)
-    cv::Ptr<cv::ORB> processer = new cv::ORB(128);
+    cv::Ptr<cv::ORB> processer = new (std::nothrow) cv::ORB(128);
+    if (!processer) {
+      LOG(ERROR) << "[FeatureExtractor] new cv::ORB(128) failed";
+      return {};
+    }
 #elif (CV_MAJOR_VERSION >= 3)  // NOLINT
     cv::Ptr<cv::ORB> processer = cv::ORB::create(128);
+    if (!processer) {
+      LOG(ERROR) << "[FeatureExtractor] new cv::ORB(128) failed";
+      return {};
+    }
 #endif
     std::vector<cv::KeyPoint> keypoints;
     processer->detect(obj_img, keypoints);
@@ -143,10 +158,12 @@ std::vector<float> FeatureExtractor::ExtractFeature(const edk::TrackFrame &frame
     for (int i = 0; i < 128; i++) {
       features[i] = i < desc.rows ? CalcFeatureOfRow(desc, i) : 0;
     }
-    return features;
+    result.swap(features);
   }
+  return result;
 }
 
+#ifdef CNS_MLU100
 void FeatureExtractor::Preprocess(const cv::Mat &image) {
   // resize image
   edk::Shape in_shape = model_->InputShapes()[0];
@@ -164,3 +181,4 @@ void FeatureExtractor::Preprocess(const cv::Mat &image) {
   cv::Mat image_normalized(in_shape.h, in_shape.w, CV_32FC3, reinterpret_cast<float *>(input_cpu_ptr_[0]));
   cv::divide(image_float, 255.0, image_normalized);
 }
+#endif

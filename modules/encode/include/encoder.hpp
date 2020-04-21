@@ -27,8 +27,8 @@
  */
 
 #include <memory>
-#include <string>
 #include <mutex>
+#include <string>
 #include <unordered_map>
 #ifdef HAVE_OPENCV
 #include <opencv2/opencv.hpp>
@@ -112,7 +112,7 @@ class Encoder : public Module, public ModuleCreator<Encoder> {
    *
    * @return Returns true if this API run successfully. Otherwise, returns false.
    */
-  bool CheckParamSet(ModuleParamSet paramSet) override;
+  bool CheckParamSet(const ModuleParamSet& paramSet) const override;
 
  private:
   std::mutex encoder_mutex_;

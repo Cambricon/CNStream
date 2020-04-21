@@ -41,7 +41,7 @@ namespace cnstream {
 
 static constexpr const char *gname = "source";
 static constexpr const char *gmp4_path = "../../modules/unitest/source/data/img.mp4";
-static constexpr const char *gimage_path = "../../samples/data/images/%d.jpg";
+static constexpr const char *gimage_path = "../../data/images/%d.jpg";
 
 class PrepareEnv {
  public:
@@ -236,11 +236,13 @@ TEST(SourceMluFFmpegDecoder, ProcessFrame) {
   frame.buf_id = 1;
   frame.height = 256;
   frame.width = 256;
-  frame.pformat = edk::PixelFmt::BGR24;
+  frame.pformat = edk::PixelFmt::NV12;
   frame.strides[0] = 256;
+  frame.strides[1] = 256;
   void *mlu_ptr = nullptr;
-  cnrtMalloc(&mlu_ptr, 256 * 256 * 3);
+  cnrtMalloc(&mlu_ptr, 256 * 256 * 3 / 2);
   frame.ptrs[0] = mlu_ptr;
+  frame.ptrs[1] = reinterpret_cast<void *>(reinterpret_cast<char *>(mlu_ptr) + 256 * 256);
   bool reused = false;
   EXPECT_EQ(env.ffmpeg_mlu_decoder->ProcessFrame(frame, &reused), 0);
   EXPECT_FALSE(reused);
@@ -416,11 +418,13 @@ TEST(SourceMluRawDecoder, ProcessFrame) {
   frame.buf_id = 1;
   frame.height = 256;
   frame.width = 256;
-  frame.pformat = edk::PixelFmt::BGR24;
+  frame.pformat = edk::PixelFmt::NV21;
   frame.strides[0] = 256;
+  frame.strides[1] = 256;
   void *mlu_ptr = nullptr;
-  cnrtMalloc(&mlu_ptr, 256 * 256 * 3);
+  cnrtMalloc(&mlu_ptr, 256 * 256 * 3 / 2);
   frame.ptrs[0] = mlu_ptr;
+  frame.ptrs[1] = reinterpret_cast<void *>(reinterpret_cast<char *>(mlu_ptr) + 256 * 256);
   bool reused = false;
   EXPECT_EQ(env.raw_mlu_decoder->ProcessFrame(frame, &reused), 0);
   EXPECT_FALSE(reused);

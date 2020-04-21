@@ -1,0 +1,55 @@
+#/*************************************************************************
+# * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
+# *
+# *  Licensed under the Apache License, Version 2.0 (the "License");
+# *  you may not use this file except in compliance with the License.
+# *  You may obtain a copy of the License at
+# *
+# *     http://www.apache.org/licenses/LICENSE-2.0
+# *
+# * The above copyright notice and this permission notice shall be included in
+# * all copies or substantial portions of the Software.
+# * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# * THE SOFTWARE.
+# *************************************************************************/
+
+# 1. copy your neuware package into the directory of CNStream
+# 2. docker build -f docker/Dockerfile.CentOS --build-arg neuware_package=${neuware_package_name} -t centos_cnstream:v1 .
+# 3. docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace centos_cnstream:v1
+
+FROM centos:7.6.1810
+
+MAINTAINER <Cambricon, Inc.>
+
+WORKDIR /root/CNStream/
+
+ARG neuware_package=neuware-mlu270-1.2.5.el7.x86_64.rpm
+ARG mlu_platform=MLU270
+
+RUN echo -e 'nameserver 114.114.114.114' > /etc/resolv.conf
+
+RUN  yum install -y wget && \
+     mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.backup  && \
+     wget -O /etc/yum.repos.d/CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-7.repo && \
+	 yum clean all && yum makecache && \
+	 yum install -y epel-release && \
+	 yum install -y zlib-devel git make vim gcc gcc-c++ kernel-devel net-tools cmake && \
+	 yum install -y opencv-devel.x86_64 gflags-devel glog-devel SDL2_gfx-devel &&\
+	 rpm --import http://li.nux.ro/download/nux/RPM-GPG-KEY-nux.ro && \
+	 rpm -Uvh http://li.nux.ro/download/nux/dextop/el7/x86_64/nux-dextop-release-0-5.el7.nux.noarch.rpm && \
+	 yum install -y ffmpeg ffmpeg-devel gstreamer*
+
+COPY . /root/CNStream/
+
+RUN yum install  -y /root/CNStream/$neuware_package && \
+    yum install  -y cnrt cnml cncodec cndev && \
+    mkdir build && cd build && cmake .. -DMLU=$mlu_platform && make -j2 && \
+    rm -rf /root/CNStream/$neuware_package
+
+WORKDIR /root/CNStream/samples/demo
+

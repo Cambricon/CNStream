@@ -141,7 +141,7 @@ TEST(CoreSyncedMem, SyncedMem) {
     EXPECT_EQ(memory->own_mlu_data_, false);
   });
 
-  auto __start_test_time = std::chrono::high_resolution_clock::now();
+  auto __start_test_time = std::chrono::steady_clock::now();
   auto __last_time = __start_test_time;
   double __total_test_time = 0;  // ms
   size_t total_test_function_number = 0;
@@ -149,7 +149,7 @@ TEST(CoreSyncedMem, SyncedMem) {
   while (__total_test_time < 1000 * 2) {
     total_test_function_number++;
     funcs[func_idx_random_number_generator(random_engine)]();
-    auto __now_time = std::chrono::high_resolution_clock::now();
+    auto __now_time = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> __diff_time = __now_time - __last_time;
     if (__diff_time.count() >= 100 * 5) {
       __last_time = __now_time;

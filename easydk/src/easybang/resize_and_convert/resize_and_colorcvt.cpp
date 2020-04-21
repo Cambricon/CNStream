@@ -18,22 +18,25 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include "easybang/resize_and_colorcvt.h"
 #include <deque>
 #include <memory>
 #include <string>
 #include <utility>
 
 #include "../../easyinfer/mlu_task_queue.h"
+#include "cxxutil/logger.h"
+#include "easybang/resize_and_colorcvt.h"
+#include "easyinfer/mlu_context.h"
 
 using std::string;
-extern int PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h,
-                              int color_mode, int data_type, int bsize_, KernelParam** param, string* estr);
+extern bool PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h,
+                               int color_mode, int data_type, int bsize_, KernelParam** param, int dev_type,
+                               string* estr);
 
 extern void FreeKernelParam(KernelParam* param);
 
 extern float ResizeAndConvert(void* dst, void* srcY, void* srcUV, KernelParam* param, cnrtFunctionType_t ftype,
-                              cnrtDim3_t dim, cnrtQueue_t queue, string* estr);
+                              cnrtDim3_t dim, cnrtQueue_t queue, int dev_type, string* estr);
 
 namespace edk {
 
@@ -47,6 +50,9 @@ class MluResizeConvertPrivate {
   void *y_ptrs_cpu_ = nullptr, *uv_ptrs_cpu_ = nullptr;
   void *y_ptrs_mlu_ = nullptr, *uv_ptrs_mlu_ = nullptr;
   std::string estr_;
+  bool shared_queue_ = false;
+
+  bool PrepareTaskQueue();
 };
 
 MluResizeConvertOp::MluResizeConvertOp() { d_ptr_ = new MluResizeConvertPrivate; }
@@ -60,9 +66,27 @@ const MluResizeConvertOp::Attr& MluResizeConvertOp::GetAttr() { return d_ptr_->a
 
 MluTaskQueue_t MluResizeConvertOp::GetMluQueue() const { return d_ptr_->queue_; }
 
-void MluResizeConvertOp::SetMluQueue(MluTaskQueue_t queue) { d_ptr_->queue_ = queue; }
+void MluResizeConvertOp::SetMluQueue(MluTaskQueue_t queue) {
+  if (queue) {
+    d_ptr_->queue_ = queue;
+    d_ptr_->shared_queue_ = true;
+  } else {
+    LOG(WARNING, "SetMluQueue(): param queue is nullptr");
+  }
+}
+
+bool MluResizeConvertOp::IsSharedQueue() const { return d_ptr_->shared_queue_; }
 
 std::string MluResizeConvertOp::GetLastError() const { return d_ptr_->estr_; }
+
+#define CHECK_CNRT_RET(cnrt_ret, _estr, msg, code, ret_value) \
+  do {                                                        \
+    if (cnrt_ret != CNRT_RET_SUCCESS) {                       \
+      _estr = msg;                                            \
+      { code }                                                \
+      return ret_value;                                       \
+    }                                                         \
+  } while (0)
 
 bool MluResizeConvertOp::Init(const MluResizeConvertOp::Attr& attr) {
   d_ptr_->attr_ = attr;
@@ -82,15 +106,9 @@ bool MluResizeConvertOp::Init(const MluResizeConvertOp::Attr& attr) {
   d_ptr_->y_ptrs_cpu_ = malloc(sizeof(void*) * attr.batch_size);
   d_ptr_->uv_ptrs_cpu_ = malloc(sizeof(void*) * attr.batch_size);
   cnrtRet_t cnret = cnrtMalloc(&d_ptr_->y_ptrs_mlu_, sizeof(void*) * attr.batch_size);
-  if (cnret != CNRT_RET_SUCCESS) {
-    d_ptr_->estr_ = "Malloc mlu buffer failed. Error code:" + std::to_string(cnret);
-    return false;
-  }
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. Error code:" + std::to_string(cnret), {}, false);
   cnret = cnrtMalloc(&d_ptr_->uv_ptrs_mlu_, sizeof(void*) * attr.batch_size);
-  if (cnret != CNRT_RET_SUCCESS) {
-    d_ptr_->estr_ = "Malloc mlu buffer failed. Error code:" + std::to_string(cnret);
-    return false;
-  }
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. Error code:" + std::to_string(cnret), {}, false);
 
   switch (attr.batch_size) {
     case 1:
@@ -113,16 +131,28 @@ bool MluResizeConvertOp::Init(const MluResizeConvertOp::Attr& attr) {
       return false;
   }
 
-  return 0 == ::PrepareKernelParam(d_ptr_->attr_.src_h, d_ptr_->attr_.src_stride, d_ptr_->attr_.dst_h,
-                                   d_ptr_->attr_.dst_w, crop_x, crop_y, crop_w, crop_h,
-                                   static_cast<int>(d_ptr_->attr_.color_mode),
-                                   static_cast<int>(d_ptr_->attr_.data_mode), d_ptr_->attr_.batch_size,
-                                   &d_ptr_->kparam_, &d_ptr_->estr_);
+  LOG(INFO, "Init ResizeAndConvert Operator");
+
+  return ::PrepareKernelParam(d_ptr_->attr_.src_h, d_ptr_->attr_.src_stride, d_ptr_->attr_.dst_h, d_ptr_->attr_.dst_w,
+                              crop_x, crop_y, crop_w, crop_h, static_cast<int>(d_ptr_->attr_.color_mode),
+                              static_cast<int>(d_ptr_->attr_.data_mode), d_ptr_->attr_.batch_size, &d_ptr_->kparam_,
+                              static_cast<int>(d_ptr_->attr_.core_version), &d_ptr_->estr_);
+}
+
+bool MluResizeConvertPrivate::PrepareTaskQueue() {
+  queue_.reset(new MluTaskQueue);
+  cnrtRet_t ret = cnrtCreateQueue(&queue_->queue);
+  CHECK_CNRT_RET(ret, estr_, "Create cnrt queue failed. Error code:" + std::to_string(ret), {}, false);
+  shared_queue_ = false;
+  return true;
 }
 
 int MluResizeConvertOp::InvokeOp(void* dst, void* srcY, void* srcUV) {
   if (nullptr == d_ptr_->queue_ || nullptr == d_ptr_->queue_->queue) {
-    throw MluResizeConvertOpError("cnrt queue is null.");
+    LOG(INFO, "MluTaskQueue has not been set, MluResizeConvertOp will create a new one");
+    if (!d_ptr_->PrepareTaskQueue()) {
+      return -1;
+    }
   }
   if (d_ptr_->attr_.batch_size != 1) {
     throw MluResizeConvertOpError(
@@ -137,17 +167,20 @@ int MluResizeConvertOp::InvokeOp(void* dst, void* srcY, void* srcUV) {
 }
 
 void MluResizeConvertOp::BatchingUp(void* src_y, void* src_uv) {
+  LOG(TRACE, "Store resize and convert operator input for batching, %p, %p", src_y, src_uv);
   d_ptr_->yuv_ptrs_cache_.push_back(std::make_pair(src_y, src_uv));
 }
 
 bool MluResizeConvertOp::SyncOneOutput(void* dst) {
   if (nullptr == d_ptr_->queue_ || nullptr == d_ptr_->queue_->queue) {
-    throw MluResizeConvertOpError("cnrt queue is null.");
+    LOG(INFO, "MluTaskQueue has not been set, MluResizeConvertOp will create a new one");
+    if (!d_ptr_->PrepareTaskQueue()) {
+      return false;
+    }
   }
-  if (static_cast<int>(d_ptr_->yuv_ptrs_cache_.size()) < d_ptr_->attr_.batch_size) {
-    d_ptr_->estr_ = "Batchsize is " + std::to_string(d_ptr_->attr_.batch_size) + ", but only has" +
-                    std::to_string(d_ptr_->yuv_ptrs_cache_.size());
-    return false;
+  // while cache count less than batch size, fill with copy to batch size
+  while (static_cast<int>(d_ptr_->yuv_ptrs_cache_.size()) < d_ptr_->attr_.batch_size) {
+    d_ptr_->yuv_ptrs_cache_.push_back(d_ptr_->yuv_ptrs_cache_.front());
   }
   for (int bi = 0; bi < d_ptr_->attr_.batch_size; ++bi) {
     reinterpret_cast<void**>(d_ptr_->y_ptrs_cpu_)[bi] = d_ptr_->yuv_ptrs_cache_.front().first;
@@ -156,22 +189,24 @@ bool MluResizeConvertOp::SyncOneOutput(void* dst) {
   }
   cnrtRet_t cnret = cnrtMemcpy(d_ptr_->y_ptrs_mlu_, d_ptr_->y_ptrs_cpu_, sizeof(void*) * d_ptr_->attr_.batch_size,
                                CNRT_MEM_TRANS_DIR_HOST2DEV);
-  if (cnret != CNRT_RET_SUCCESS) {
-    d_ptr_->estr_ = "Memcpy host to device failed. Error code: " + std::to_string(cnret);
-    return false;
-  }
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy host to device failed. Error code:" + std::to_string(cnret), {}, false);
   cnret = cnrtMemcpy(d_ptr_->uv_ptrs_mlu_, d_ptr_->uv_ptrs_cpu_, sizeof(void*) * d_ptr_->attr_.batch_size,
                      CNRT_MEM_TRANS_DIR_HOST2DEV);
-  if (cnret != CNRT_RET_SUCCESS) {
-    d_ptr_->estr_ = "Memcpy host to device failed. Error code: " + std::to_string(cnret);
-    return false;
-  }
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy host to device failed. Error code:" + std::to_string(cnret), {}, false);
   cnrtDim3_t dim;
   dim.x = d_ptr_->attr_.batch_size;
   dim.y = 1;
   dim.z = 1;
-  return -1 != ::ResizeAndConvert(dst, d_ptr_->y_ptrs_mlu_, d_ptr_->uv_ptrs_mlu_, d_ptr_->kparam_, d_ptr_->ftype_, dim,
-                                  d_ptr_->queue_->queue, &d_ptr_->estr_);
+
+  LOG(TRACE, "Do resize and convert process, dst: %p", dst);
+  bool ret =
+      -1 != ::ResizeAndConvert(dst, d_ptr_->y_ptrs_mlu_, d_ptr_->uv_ptrs_mlu_, d_ptr_->kparam_, d_ptr_->ftype_, dim,
+                               d_ptr_->queue_->queue, static_cast<int>(d_ptr_->attr_.core_version), &d_ptr_->estr_);
+  /* if (!d_ptr_->shared_queue_ && ret) { */
+  /*   cnrtRet_t cnrt_ret = cnrtSyncQueue(d_ptr_->queue_->queue); */
+  /*   CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Sync queue failed. Error code:" + std::to_string(cnret), {}, false); */
+  /* } */
+  return ret;
 }
 
 void MluResizeConvertOp::Destroy() {
@@ -196,6 +231,14 @@ void MluResizeConvertOp::Destroy() {
     d_ptr_->uv_ptrs_mlu_ = nullptr;
   }
   d_ptr_->yuv_ptrs_cache_.clear();
+
+  if (!d_ptr_->shared_queue_ && d_ptr_->queue_ && d_ptr_->queue_->queue) {
+    auto ret = cnrtDestroyQueue(d_ptr_->queue_->queue);
+    if (ret != CNRT_RET_SUCCESS) {
+      LOG(WARNING, "Destroy queue failed. Error code: %u", ret);
+    }
+    d_ptr_->queue_->queue = nullptr;
+  }
 }
 
 }  // namespace edk
