@@ -6,15 +6,6 @@ LIVE555_INST_DIR=${CWD}/../3rdparty/live555
 LIVE555_CONFIG=linux-with-shared-libraries
 
 
-
-if [ -f "$CWD/build_live555.done" ]; then
-  echo "build_live555.done already exist. Remove $CWD/build_live555.done lockfile to re-building it."
-  exit 0
-else
-  touch "$CWD/build_live555.done"
-fi
-
-
 if [ -f "$LIVE555_INST_DIR/lib/libliveMedia.so" ];then
   echo "live555 has been built and installed already"
   exit 0
@@ -48,7 +39,6 @@ if [ $? = 0 ]; then
 fi
 make clean
 cd ${CWD}
-rm -rf "$CWD/build_live555.done"
 if [ ${SRC_TYPE} = 2 ]; then
   rm -rf ${CWD}/${PACKAGE_NAME}
 fi

@@ -845,17 +845,6 @@ TEST(CorePipeline, EventLoop) {
   EXPECT_TRUE(pipeline.Stop());
 }
 
-TEST(CorePipeline, PrintInfo) {
-  Pipeline pipeline("test pipeline");
-  auto module = std::make_shared<TestModule>("test_module");
-  EXPECT_TRUE(pipeline.AddModule(module));
-  EXPECT_TRUE(pipeline.Start());
-
-  EXPECT_NO_THROW(pipeline.PrintPerformanceInformation());
-
-  EXPECT_TRUE(pipeline.Stop());
-}
-
 TEST(CorePipeline, TransmitData) {
   Pipeline pipeline("test pipeline");
 
@@ -1132,7 +1121,7 @@ TEST(CorePipeline, GetLinkIds) {
 
   std::vector<std::string> links;
   links = pipeline.GetLinkIds();
-  EXPECT_EQ(links.size(), uint32_t(5));
+  EXPECT_EQ(links.size(), uint32_t(4));
 }
 
 TEST(CorePipeline, StreamMsgObserver) {
@@ -1146,6 +1135,99 @@ TEST(CorePipeline, StreamMsgObserver) {
   msg.chn_idx = 0;
   msg.stream_id = "0";
   pipeline.NotifyStreamMsg(msg);
+}
+
+TEST(CorePipeline, CreatePerfManager) {
+  Pipeline pipeline("test pipeline");
+  auto up_node = std::make_shared<TestModule>("up_node");
+  auto down_node = std::make_shared<TestModule>("down_node");
+  // add two modules to the pipeline and link
+  EXPECT_TRUE(pipeline.AddModule(up_node));
+  EXPECT_TRUE(pipeline.AddModule(down_node));
+  std::string link_id = pipeline.LinkModules(up_node, down_node);
+
+  std::vector<std::string> stream_ids = {"0", "1", "2", "3"};
+  std::string db_dir = "perf_dir";
+  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, db_dir));
+
+  EXPECT_TRUE(pipeline.Start());
+  EXPECT_TRUE(pipeline.Stop());
+
+  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, ""));
+  EXPECT_TRUE(pipeline.Start());
+  // cannot create when perf_running is true
+  EXPECT_FALSE(pipeline.CreatePerfManager(stream_ids, ""));
+  EXPECT_TRUE(pipeline.Stop());
+  // after pipeline stop, we could recreate perf manager
+  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, ""));
+  EXPECT_TRUE(pipeline.Start());
+  EXPECT_TRUE(pipeline.Stop());
+}
+
+TEST(CorePipeline, CreatePerfManagerFailedCase) {
+  Pipeline pipeline1("test pipeline");
+  Pipeline pipeline2("test pipeline");
+  auto up_node = std::make_shared<TestModule>("up_node");
+  auto down_node = std::make_shared<TestModule>("down_node");
+
+  // add two modules to the pipeline and link
+  EXPECT_TRUE(pipeline1.AddModule(up_node));
+  EXPECT_TRUE(pipeline1.AddModule(down_node));
+  pipeline1.LinkModules(up_node, down_node);
+
+  EXPECT_TRUE(pipeline2.AddModule(up_node));
+  EXPECT_TRUE(pipeline2.AddModule(down_node));
+  pipeline2.LinkModules(up_node, down_node);
+
+  std::vector<std::string> stream_ids = {"0", "1", "2", "3"};
+  std::string db_dir = "perf_dir";
+  EXPECT_TRUE(pipeline1.CreatePerfManager(stream_ids, db_dir));
+
+  EXPECT_TRUE(pipeline1.Start());
+
+#ifdef HAVE_SQLITE
+  // failed as the db file is opened by pipeline1
+  EXPECT_FALSE(pipeline2.CreatePerfManager(stream_ids, db_dir));
+#else
+  EXPECT_TRUE(pipeline2.CreatePerfManager(stream_ids, db_dir));
+#endif
+
+  EXPECT_TRUE(pipeline1.Stop());
+}
+
+TEST(CorePipeline, PerfTaskLoop) {
+  Pipeline pipeline("test pipeline");
+  auto up_node = std::make_shared<TestModule>("up_node");
+  auto down_node = std::make_shared<TestModule>("down_node");
+  auto end_node = std::make_shared<TestModule>("end_node");
+  EXPECT_TRUE(pipeline.AddModule(up_node));
+  EXPECT_TRUE(pipeline.AddModule(down_node));
+  EXPECT_TRUE(pipeline.AddModule(end_node));
+  pipeline.LinkModules(up_node, down_node);
+  pipeline.LinkModules(down_node, end_node);
+  // two linked modules are added to the pipeline
+  EXPECT_TRUE(pipeline.Start());
+  std::vector<std::string> stream_ids = {"0", "1", "2", "3"};
+  std::string db_dir = "perf_dir";
+  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, db_dir));
+
+  uint32_t data_num = 10;
+  uint32_t id = 0;
+  for (auto it : stream_ids) {
+    for (uint32_t i = 0; i < data_num + id * 10; i++) {
+      auto data = CNFrameInfo::Create(it);
+      data->channel_idx = id;
+      data->frame.timestamp = i;
+      EXPECT_NO_THROW(pipeline.TransmitData("up_node", data));
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    auto eos_data = CNFrameInfo::Create(it, true);
+    eos_data->channel_idx = id;
+    EXPECT_NO_THROW(pipeline.TransmitData("up_node", eos_data));
+    id++;
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  EXPECT_TRUE(pipeline.Stop());
 }
 
 }  // namespace cnstream

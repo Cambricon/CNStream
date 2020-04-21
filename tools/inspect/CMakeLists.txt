@@ -14,14 +14,16 @@ message("target :  ${name}")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,--no-as-needed")
 
-if(WITH_RTSP)
+if(build_rtsp_sink)
   link_directories(${PROJECT_SOURCE_DIR}/3rdparty/live555/lib)
-  set(Live555_LIBS liveMedia UsageEnvironment BasicUsageEnvironment groupsock)
+#set(Live555_LIBS liveMedia UsageEnvironment BasicUsageEnvironment groupsock)
+# target_link_libraries(${name} ${Live555_LIBS})
 endif()
 
 add_executable(${name} ${SRC})
 
 target_link_libraries(${name} cnstream dl glog pthread)
-if(WITH_RTSP AND build_modules_contrib)
-  target_link_libraries(${name} ${Live555_LIBS} cnstream_contrib)
+if(build_modules_contrib)
+  target_link_libraries(${name} cnstream_contrib)
 endif()
+

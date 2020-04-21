@@ -40,6 +40,7 @@ RUN sed -i "1i deb http://mirrors.aliyun.com/ubuntu/ bionic main restricted univ
             git build-essential cmake make vim \
             libgoogle-glog-dev \
             openssh-server \
+            libsqlite3-dev sqlite3 \ 
             net-tools && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

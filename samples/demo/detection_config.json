@@ -3,6 +3,7 @@
     "class_name" : "cnstream::DataSource",
     "parallelism" : 0,
     "next_modules" : ["detector"],
+    "show_perf_info" : true,
     "custom_params" : {
       "source_type" : "ffmpeg",
       "output_type" : "mlu",
@@ -17,6 +18,7 @@
     "parallelism" : 1,
     "max_input_queue_size" : 20,
     "next_modules" : ["osd"],
+    "show_perf_info" : true,
     "custom_params" : {
       "model_path" : "../../data/models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon",
       "func_name" : "subnet0",
@@ -32,6 +34,7 @@
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["displayer"],
+    "show_perf_info" : true,
     "custom_params" : {
       "chinese_label_flag" : "false", 
       "label_path" : "../../data/models/MLU270/Primary_Detector/ssd/label_voc.txt"
@@ -42,7 +45,7 @@
     "class_name" : "cnstream::Displayer",
     "parallelism" : 16,
     "max_input_queue_size" : 20,
-    "next_modules" : ["fps_stats"],
+    "show_perf_info" : true,
     "custom_params" : {
       "window-width" : 1920,
       "window-height" : 1080,
@@ -51,11 +54,5 @@
       "show" : "false",  // Please confirm build_display is ON before setting true
       "full-screen" : "false"
     }
-  },
-
-  "fps_stats" : {
-    "class_name" : "cnstream::FpsStats",
-    "parallelism" : 2,
-    "max_input_queue_size" : 20
   }
 }

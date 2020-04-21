@@ -38,7 +38,6 @@ extern "C" {
 #include <string>
 #include <thread>
 #include "cnstream_frame.hpp"
-#include "cnstream_timer.hpp"
 #include "data_handler.hpp"
 #include "easycodec/easy_decode.h"
 #include "easycodec/vformat.h"

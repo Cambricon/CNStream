@@ -29,6 +29,8 @@
 #include <thread>
 #include <utility>
 
+#include "perf_manager.hpp"
+
 namespace cnstream {
 
 #ifdef __GNUC__
@@ -139,6 +141,12 @@ bool DataHandlerRaw::Extract() {
 
 bool DataHandlerRaw::Process() {
   bool ret = Extract();
+
+  if (perf_manager_ != nullptr) {
+    PerfInfo info {false, "PROCESS", module_->GetName(), packet_.pts};
+    perf_manager_->RecordPerfInfo(info);
+  }
+
   if (!ret) {
     LOG(INFO) << "Read EOS from file";
     demux_eos_.store(1);

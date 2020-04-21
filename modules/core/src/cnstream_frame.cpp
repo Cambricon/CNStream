@@ -21,6 +21,14 @@
 #include "cnstream_frame.hpp"
 
 #include <cnrt.h>
+
+#include <fcntl.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #include <glog/logging.h>
 #include <map>
 #include <memory>
@@ -103,7 +111,6 @@ cv::Mat* CNDataFrame::ImageBGR() {
 
 size_t CNDataFrame::GetPlaneBytes(int plane_idx) const {
   if (plane_idx < 0 || plane_idx >= GetPlanes()) return 0;
-
   switch (fmt) {
     case CN_PIXEL_FORMAT_BGR24:
     case CN_PIXEL_FORMAT_RGB24:
@@ -196,38 +203,188 @@ void CNDataFrame::CopyToSyncMem() {
   }
 }
 
-uint64_t CNDataFrame::SetModuleMask(Module* module, Module* current) {
-  CNSpinLockGuard guard(mask_lock_);
-  auto iter = module_mask_map_.find(module->GetId());
-  if (iter != module_mask_map_.end()) {
-    iter->second |= (uint64_t)1 << current->GetId();
+void CNDataFrame::MmapSharedMem(MemMapType type) {
+  if (!GetBytes()) {
+    LOG(ERROR) << "GetByte() is 0.";
+    return;
+  }
+  if (map_mem_ptr) {
+    LOG(FATAL) << "MmapSharedMem should be called once for each frame";
+  }
+
+  if (type == MemMapType::MEMMAP_CPU) {
+    // open shared memory
+    size_t map_mem_size = ROUND_UP(GetBytes(), 64 * 1024);
+    const std::string key = "stream_id_" + stream_id + "_frame_id_" + std::to_string(frame_id);
+    map_mem_fd = shm_open(key.c_str(), O_RDWR, S_IRUSR | S_IWUSR);
+    if (map_mem_fd < 0) {
+      LOG(FATAL) << "Shered memory open failed, fd: " << map_mem_fd << ", error code: " << errno;
+    }
+    map_mem_ptr = mmap(NULL, map_mem_size, PROT_READ | PROT_WRITE, MAP_SHARED, map_mem_fd, 0);
+    if (map_mem_ptr == MAP_FAILED) {
+      LOG(FATAL) << "Mmap error";
+    }
+
+    if (ftruncate(map_mem_fd, map_mem_size) == -1) {
+      LOG(FATAL) << "truncate shared memory size failed";
+    }
+    // sync shared memory
+    if (this->ctx.dev_type == DevContext::CPU) {
+      // open shared memory, and set to frame syncdata
+      auto ptmp = reinterpret_cast<uint8_t*>(map_mem_ptr);
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size));
+        this->data[i]->SetCpuData(ptmp);
+        ptmp += plane_size;
+      }
+    } else if (this->ctx.dev_type == DevContext::MLU) {
+      size_t bytes = GetBytes();
+      bytes = ROUND_UP(bytes, 64 * 1024);
+      CALL_CNRT_BY_CONTEXT(cnrtMalloc(&mlu_data, bytes), ctx.dev_id, ctx.ddr_channel);
+      auto dst = reinterpret_cast<uint8_t*>(mlu_data);
+      CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dst, map_mem_ptr, bytes, CNRT_MEM_TRANS_DIR_HOST2DEV), ctx.dev_id,
+                           ctx.ddr_channel);
+
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        // open shared mem
+        CNSyncedMemory* sync_ptr = new (std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel);
+        this->data[i].reset(sync_ptr);
+        this->data[i]->SetMluData(dst);
+        dst += plane_size;
+      }
+    } else {
+      LOG(FATAL) << "Device type not supported";
+    }
+  } else if (type == MemMapType::MEMMAP_MLU) {
+    // get shared mlu memory from mlu memory handle
+    CALL_CNRT_BY_CONTEXT(cnrtMapMemHandle(&map_mem_ptr, mlu_mem_handle, 0), ctx.dev_id, ctx.ddr_channel);
+    if (this->ctx.dev_type == DevContext::CPU) {
+      size_t bytes = GetBytes();
+      bytes = ROUND_UP(bytes, 64 * 1024);
+      CNStreamMallocHost(&cpu_data, bytes);
+      if (nullptr == cpu_data) {
+        LOG(FATAL) << "MmapSharedMem: failed to alloc cpu memory";
+      }
+      CALL_CNRT_BY_CONTEXT(cnrtMemcpy(cpu_data, map_mem_ptr, bytes, CNRT_MEM_TRANS_DIR_DEV2HOST), ctx.dev_id,
+                           ctx.ddr_channel);
+
+      void* dst = cpu_data;
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size));
+        this->data[i]->SetCpuData(dst);
+        dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+      }
+    } else if (this->ctx.dev_type == DevContext::MLU) {
+      void* dst = map_mem_ptr;
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
+        this->data[i]->SetMluData(dst);
+        dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+      }
+    } else {
+      LOG(FATAL) << "Device type not supported";
+    }
   } else {
-    module_mask_map_[module->GetId()] = (uint64_t)1 << current->GetId();
-  }
-  return module_mask_map_[module->GetId()];
-}
-
-uint64_t CNDataFrame::GetModulesMask(Module* module) {
-  CNSpinLockGuard guard(mask_lock_);
-  auto iter = module_mask_map_.find(module->GetId());
-  if (iter != module_mask_map_.end()) {
-    return iter->second;
-  }
-  return 0;
-}
-
-void CNDataFrame::ClearModuleMask(Module* module) {
-  CNSpinLockGuard guard(mask_lock_);
-  auto iter = module_mask_map_.find(module->GetId());
-  if (iter != module_mask_map_.end()) {
-    iter->second = 0;
+    LOG(FATAL) << "Mem map type not supported";
   }
 }
 
-uint64_t CNDataFrame::AddEOSMask(Module* module) {
-  CNSpinLockGuard guard(eos_lock_);
-  eos_mask |= (uint64_t)1 << module->GetId();
-  return eos_mask;
+void CNDataFrame::UnMapSharedMem(MemMapType type) {
+  if (!GetBytes()) {
+    LOG(ERROR) << "GetByte() is 0.";
+    return;
+  }
+  if (!map_mem_ptr) return;
+
+  if (type == MemMapType::MEMMAP_CPU) {
+    size_t map_mem_size = ROUND_UP(GetBytes(), 64 * 1024);
+    munmap(map_mem_ptr, map_mem_size);
+    close(map_mem_fd);
+  } else if (type == MemMapType::MEMMAP_MLU) {
+    CALL_CNRT_BY_CONTEXT(cnrtUnMapMemHandle(map_mem_ptr), ctx.dev_id, ctx.ddr_channel);
+  } else {
+    LOG(FATAL) << "Mem map type not supported";
+  }
+}
+
+void CNDataFrame::CopyToSharedMem(MemMapType type) {
+  if (!GetBytes()) {
+    LOG(ERROR) << "GetByte() is 0.";
+    return;
+  }
+
+  if (shared_mem_ptr) {
+    LOG(FATAL) << "CopyToSharedMem should be called once for each frame";
+  }
+
+  if (type == MemMapType::MEMMAP_CPU) {
+    // create shared memory
+    size_t shared_mem_size = ROUND_UP(GetBytes(), 64 * 1024);
+    const std::string key = "stream_id_" + stream_id + "_frame_id_" + std::to_string(frame_id);
+    // O_EXCL ensure open one time
+    shared_mem_fd = shm_open(key.c_str(), O_CREAT | O_TRUNC | O_RDWR /*| O_EXCL*/, S_IRUSR | S_IWUSR);
+    if (shared_mem_fd < 0) {
+      LOG(FATAL) << "Shared memory create failed, fd: " << shared_mem_fd << ", error code: " << errno;
+    }
+    if (ftruncate(shared_mem_fd, shared_mem_size) == -1) {
+      LOG(FATAL) << "truncate shared size memory failed";
+    }
+    shared_mem_ptr = mmap(NULL, shared_mem_size, PROT_READ | PROT_WRITE, MAP_SHARED, shared_mem_fd, 0);
+    if (shared_mem_ptr == MAP_FAILED) {
+      LOG(FATAL) << "Mmap error";
+    }
+    // copy frame data to cpu shared memory
+    auto ptmp = reinterpret_cast<uint8_t*>(shared_mem_ptr);
+    for (int i = 0; i < GetPlanes(); i++) {
+      size_t plane_size = GetPlaneBytes(i);
+      memcpy(ptmp, data[i]->GetCpuData(), plane_size);
+      ptmp += plane_size;
+    }
+  } else if (type == MemMapType::MEMMAP_MLU) {
+    // acquire cnrt memory handle to share
+    if (nullptr != deAllocator_) {
+      size_t bytes = GetBytes();
+      bytes = ROUND_UP(bytes, 64 * 1024);
+      CALL_CNRT_BY_CONTEXT(cnrtMalloc(&shared_mem_ptr, bytes), ctx.dev_id, ctx.ddr_channel);
+      void* dst = shared_mem_ptr;
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dst, data[i]->GetMutableMluData(), plane_size, CNRT_MEM_TRANS_DIR_DEV2DEV),
+                             ctx.dev_id, ctx.ddr_channel);
+        dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+      }
+    } else {
+      shared_mem_ptr = mlu_data;
+    }
+
+    CALL_CNRT_BY_CONTEXT(cnrtAcquireMemHandle(&mlu_mem_handle, shared_mem_ptr), ctx.dev_id, ctx.ddr_channel);
+  } else {
+    LOG(FATAL) << "Mem map type not supported";
+  }
+  return;
+}
+
+void CNDataFrame::ReleaseSharedMem(MemMapType type) {
+  if (!shared_mem_ptr) return;
+  if (type == MemMapType::MEMMAP_CPU) {
+    const std::string key = "stream_id_" + stream_id + "_frame_id_" + std::to_string(frame_id);
+    size_t shared_mem_size = ROUND_UP(GetBytes(), 64 * 1024);
+    munmap(shared_mem_ptr, shared_mem_size);
+    close(shared_mem_fd);
+    shm_unlink(key.c_str());
+  } else if (type == MemMapType::MEMMAP_MLU) {
+    if (nullptr != deAllocator_) {
+      CALL_CNRT_BY_CONTEXT(cnrtFree(shared_mem_ptr), ctx.dev_id, ctx.ddr_channel);
+    }
+  } else {
+    LOG(FATAL) << "Mem map type not supported";
+  }
+
+  return;
 }
 
 bool CNInferObject::AddAttribute(const std::string& key, const CNInferAttr& value) {
@@ -359,6 +516,40 @@ CNFrameInfo::~CNFrameInfo() {
       LOG(ERROR) << "Invaid stream_id, please check\n";
     }
   }
+}
+
+uint64_t CNFrameInfo::SetModuleMask(Module* module, Module* current) {
+  CNSpinLockGuard guard(mask_lock_);
+  auto iter = module_mask_map_.find(module->GetId());
+  if (iter != module_mask_map_.end()) {
+    iter->second |= (uint64_t)1 << current->GetId();
+  } else {
+    module_mask_map_[module->GetId()] = (uint64_t)1 << current->GetId();
+  }
+  return module_mask_map_[module->GetId()];
+}
+
+uint64_t CNFrameInfo::GetModulesMask(Module* module) {
+  CNSpinLockGuard guard(mask_lock_);
+  auto iter = module_mask_map_.find(module->GetId());
+  if (iter != module_mask_map_.end()) {
+    return iter->second;
+  }
+  return 0;
+}
+
+void CNFrameInfo::ClearModuleMask(Module* module) {
+  CNSpinLockGuard guard(mask_lock_);
+  auto iter = module_mask_map_.find(module->GetId());
+  if (iter != module_mask_map_.end()) {
+    iter->second = 0;
+  }
+}
+
+uint64_t CNFrameInfo::AddEOSMask(Module* module) {
+  CNSpinLockGuard guard(eos_lock_);
+  eos_mask |= (uint64_t)1 << module->GetId();
+  return eos_mask;
 }
 
 }  // namespace cnstream

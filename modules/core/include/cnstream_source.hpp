@@ -28,6 +28,7 @@
  */
 
 #include <atomic>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -41,7 +42,7 @@ namespace cnstream {
 class SourceHandler;
 class SourceModule : public Module {
  public:
-  explicit SourceModule(const std::string &name) : Module(name) { isSource_.store(true); }
+  explicit SourceModule(const std::string &name) : Module(name) { }
   /**
    * @brief Add one stream to DataSource module, should be called after pipeline starts.
    * @param
@@ -95,6 +96,7 @@ class SourceModule : public Module {
   std::map<std::string /*stream_id*/, std::shared_ptr<SourceHandler>> source_map_;
 };
 
+class PerfRecorder;
 class SourceHandler {
  public:
   explicit SourceHandler(SourceModule *module, const std::string &stream_id, int frame_rate, bool loop)
@@ -122,6 +124,7 @@ class SourceHandler {
   int frame_rate_ = 0;
   bool loop_ = false;
   uint32_t stream_index_;
+  std::shared_ptr<PerfManager> perf_manager_;
 };
 
 }  // namespace cnstream

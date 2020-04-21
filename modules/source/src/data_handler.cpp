@@ -31,6 +31,8 @@ bool DataHandler::Open() {
     return false;
   }
 
+  perf_manager_ = module_->GetPerfManager(stream_id_);
+
   // default value
   dev_ctx_.dev_type = DevContext::MLU;
   dev_ctx_.dev_id = 0;
