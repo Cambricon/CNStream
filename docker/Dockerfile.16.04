@@ -52,6 +52,7 @@ RUN echo deb http://mirrors.aliyun.com/ubuntu/ xenial main restricted  > /etc/ap
             libgoogle-glog-dev \
             openssh-server \
             libsdl2-dev  \ 
+            libsqlite3-dev sqlite3 \ 
             net-tools && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

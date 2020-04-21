@@ -32,6 +32,8 @@ CNStream文件目录结构如下图所示：
 
        CNStream文件目录结构图
 
+.. _programmingguide:
+
 编程指南
 ---------
 

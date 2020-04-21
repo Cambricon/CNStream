@@ -73,6 +73,15 @@ typedef struct {
 } DevContext;
 
 /**
+ * Identifies memory shared type for multi-process.
+ */
+enum MemMapType {
+  MEMMAP_INVALID = 0,   ///< Invalid memory shared type.
+  MEMMAP_CPU = 1,       ///< cpu memory shared type.
+  MEMMAP_MLU = 2        ///< mlu memory shared type.
+};
+
+/**
  * An enumerated type that specifies the mask of CNDataFrame.
  */
 enum CNFrameFlag {
@@ -166,6 +175,7 @@ struct CNDataFrame {
   DevContext ctx;                                            ///< The device context of this frame.
   void* ptr_mlu[CN_MAX_PLANES];                              ///< The MLU data addresses for planes.
   void* ptr_cpu[CN_MAX_PLANES];                              ///< The CPU data addresses for planes.
+  void* mlu_mem_handle = nullptr;                                      ///< The MLU memory handle for mlu data.
   std::shared_ptr<IDataDeallocator> deAllocator_ = nullptr;  ///< The dedicated deallocator for CNDecoder Buffer.
   std::shared_ptr<ICNMediaImageMapper> mapper_ = nullptr;    ///< The dedicated Mapper for M220 CNDecoder.
 
@@ -201,6 +211,34 @@ struct CNDataFrame {
    */
   void CopyToSyncMem();
 
+  /**
+   * @brief Map shared memory, for multi-process case.
+   * @param memory map/shared type.
+   * @return void.
+   */
+  void MmapSharedMem(MemMapType type);
+
+  /**
+   * @brief Unmap shared memery, for multi-process case.
+   * @param memory map/shared type.
+   * @return void.
+   */
+  void UnMapSharedMem(MemMapType type);
+
+  /**
+   * @brief Copy source-data to shared memery, for multi-process case.
+   * @param memory map/shared type.
+   * @return void.
+   */
+  void CopyToSharedMem(MemMapType type);
+
+  /**
+   * @brief Release shared memery, for multi-process case.
+   * @param memory map/shared type.
+   * @return void.
+   */
+  void ReleaseSharedMem(MemMapType type);
+
  public:
   void* cpu_data = nullptr;  ///< CPU data pointer. You need to allocate it by calling CNStreamMallocHost().
   void* mlu_data = nullptr;  ///< A pointer to the MLU data.
@@ -221,22 +259,10 @@ struct CNDataFrame {
 #endif
 
  private:
-  /**
-   * The below methods and members are used by the framework.
-   */
-  friend class Pipeline;
-  uint64_t SetModuleMask(Module* module, Module* current);  // return changed mask
-  uint64_t GetModulesMask(Module* module);
-  void ClearModuleMask(Module* module);
-  uint64_t AddEOSMask(Module* module);
-
- private:
-  CNSpinLock mask_lock_;
-  /*The mask map of the module. It identifies which modules the data can already be processed by.*/
-  std::map<unsigned int, uint64_t> module_mask_map_;
-
-  CNSpinLock eos_lock_;
-  uint64_t eos_mask = 0;
+  void* shared_mem_ptr = nullptr;           ///< shared memory pointer, for mlu or cpu
+  void* map_mem_ptr = nullptr;              ///< mapped memory pointer, for mlu or cpu
+  int shared_mem_fd = -1;                   ///< shared memory fd, for cpu shared memory
+  int map_mem_fd = -1;                      ///< mapped memory fd, for cpu mapped memory
 };  // struct CNDataFrame
 
 /**
@@ -394,6 +420,24 @@ struct CNFrameInfo {
   CNDataFrame frame;                                      ///< The data of the frame.
   ThreadSafeVector<std::shared_ptr<CNInferObject>> objs;  ///< Structured information of the objects for this frame.
   ~CNFrameInfo();
+
+ private:
+  /**
+   * The below methods and members are used by the framework.
+   */
+  friend class Pipeline;
+  uint64_t SetModuleMask(Module* module, Module* current);  // return changed mask
+  uint64_t GetModulesMask(Module* module);
+  void ClearModuleMask(Module* module);
+  uint64_t AddEOSMask(Module* module);
+
+ private:
+  CNSpinLock mask_lock_;
+  /*The mask map of the module. It identifies which modules the data can already be processed by.*/
+  std::map<unsigned int, uint64_t> module_mask_map_;
+
+  CNSpinLock eos_lock_;
+  uint64_t eos_mask = 0;
 
  private:
   CNFrameInfo() {}

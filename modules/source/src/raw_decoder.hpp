@@ -26,7 +26,6 @@
 #include <string>
 #include <thread>
 #include "cnstream_frame.hpp"
-#include "cnstream_timer.hpp"
 #include "data_handler.hpp"
 #include "easycodec/easy_decode.h"
 #include "easycodec/vformat.h"
@@ -37,7 +36,7 @@ namespace cnstream {
 struct RawPacket {
   uint8_t *data = nullptr;
   size_t size = 0;
-  uint64_t pts = 0;
+  int64_t pts = 0;
   uint32_t flags = 0;
 };
 

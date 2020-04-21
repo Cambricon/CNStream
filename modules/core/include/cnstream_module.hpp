@@ -44,10 +44,11 @@
 #include "cnstream_common.hpp"
 #include "cnstream_eventbus.hpp"
 #include "cnstream_frame.hpp"
-#include "cnstream_statistic.hpp"
-#include "cnstream_timer.hpp"
+#include "threadsafe_queue.hpp"
 
 namespace cnstream {
+
+class PerfManager;
 
 /// Module parameter set.
 using ModuleParamSet = std::unordered_map<std::string, std::string>;
@@ -234,11 +235,6 @@ class Module {
   bool PostEvent(EventType type, const std::string &msg) const;
 
   /**
-   * Displays the performance statistics for this module.
-   */
-  virtual void PrintPerfInfo();
-
-  /**
    * @brief Transmits data to the following stages.
    *
    * Valid when the module has permitssion to transmit data by itself.
@@ -259,7 +255,6 @@ class Module {
   virtual bool CheckParamSet(const ModuleParamSet &paramSet) const { return true; }
 
  protected:
-  friend class CNDataFrame;
   friend class Pipeline;
   friend class PipelinePrivate;
 
@@ -318,23 +313,52 @@ class Module {
   int DoProcess(std::shared_ptr<CNFrameInfo> data);
 
   /**
+   * @brief Checks if showing performance information is enabled.
+   *
    * @return Returns true if the performance information is displayed. Otherwise, returns false.
    */
   bool ShowPerfInfo() { return showPerfInfo_.load(); }
   /**
    * @brief Enable or disable showing performance information.
    *
-   * @param enable If it is true, enbale showing performance information, otherwise, disable.
+   * @param enable If it is true, enable showing performance information, otherwise, disable.
    *
    * @return Void.
    */
   void ShowPerfInfo(bool enable) { showPerfInfo_.store(enable); }
 
+  /**
+   * @brief Sets PerfManagers, therefore, the module could use PerfManagers.
+   *
+   * @param perf_managers PerfManagers is an unordered_map, the key of which is stream id,
+   * and the value of which is shared_ptr points to a PerfManager
+   *
+   * @return Void.
+   */
+  void SetPerfManagers(const std::unordered_map<std::string, std::shared_ptr<PerfManager>>& perf_managers);
+  /**
+   * @brief Get PerfManager by stream id.
+   *
+   * @param stream_id stream id.
+   *
+   * @return PerfManager pointer.
+   */
+  std::shared_ptr<PerfManager> GetPerfManager(const std::string& stream_id);
+  /**
+   * @brief Clear PerfManagers.
+   *
+   * @return Void.
+   */
+  void ClearPerfManagers() {
+    perf_managers_.clear();
+  }
+
+  std::shared_ptr<CNFrameInfo> GetOutputFrame();
+
  protected:
   Pipeline *container_ = nullptr;         ///< The container.
   std::string name_;                      ///< The name of the module.
   std::atomic<bool> hasTransmit_{false};  ///< If it has permission to transmit data.
-  std::atomic<bool> isSource_{false};     ///< If it is a source module.
 
  private:
   void ReturnId();
@@ -345,10 +369,11 @@ class Module {
 
   std::vector<size_t> parent_ids_;
   uint64_t mask_ = 0;
+  ThreadSafeQueue<std::shared_ptr<CNFrameInfo>> output_frame_queue_;
 
  protected:
-  StreamFpsStat fps_stat_;
   std::atomic<bool> showPerfInfo_{false};
+  std::unordered_map<std::string, std::shared_ptr<PerfManager>> perf_managers_;
 };
 
 class ModuleEx : public Module {

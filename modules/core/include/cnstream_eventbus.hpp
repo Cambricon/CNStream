@@ -52,7 +52,7 @@ enum EventType {
   EVENT_WARNING,  ///< A warning event.
   EVENT_EOS,      ///< An EOS (End of Stream) event.
   EVENT_STOP,     ///< Stops an event that is called by an application.
-  EVENT_TYPE_END  ///< Reserved for your custom events.
+  EVENT_TYPE_END,  ///< Reserved for your custom events.
 };
 
 /**

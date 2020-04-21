@@ -59,9 +59,10 @@ inline void CNStreamFreeHost(void* ptr) { free(ptr); }
 /**
  * @brief Synchronizes memory between CPU and MLU.
  *
- * If the lastest data is on MLU, but the data is needed to be on cpu, sync cpu data.
- * Otherwise, if cpu data is newer than mlu data, sync mlu data.
- * 
+ * If the data on MLU is the latest, the data on CPU should be synchronized before processing the data on CPU.
+ * Vice versa, if the data on CPU is the latest, the data on MLU should be synchronized before processing
+ * the data on MLU.
+ *
  * @note CNSyncedMemory::Head() always returns CNSyncedMemory::UNINITIALIZED when memory size is 0.
  */
 class CNSyncedMemory {

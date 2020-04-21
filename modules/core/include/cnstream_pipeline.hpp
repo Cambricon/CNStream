@@ -34,6 +34,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "cnstream_eventbus.hpp"
@@ -379,11 +380,6 @@ class Pipeline : public Module {
    */
   bool QueryLinkStatus(LinkStatus* status, const std::string& link_id);
 
-  /**
-   * Prints the performance information for all modules.
-   */
-  void PrintPerformanceInformation() const;
-
   /* -----stream message methods------ */
  public:
   /**
@@ -418,6 +414,62 @@ class Pipeline : public Module {
    */
   void NotifyStreamMsg(const StreamMsg& smsg);
 
+  /**
+   * @brief Creates PerfManager to measure performance of modules and pipeline, for each stream.
+   *
+   * This function will create database for each stream. And two other threads will be created and start.
+   * One thread is for committing sqlite events to increase the speed of inserting data to the database.
+   * Another is for calculating perfomance of modules and pipepline, and printing performance statistics afterwards.
+   *
+   * @param stream_ids The stream ids
+   * @param db_dir The directory where database files will be saved
+   *
+   * @return Returns true, if successfully create PerfManager. Otherwise false.
+   */
+  bool CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir);
+  /**
+   * @brief Commits sqlite events to increase the speed of inserting data to the database.
+   *
+   * This is a thread function. It will commit events every one second.
+   *
+   * @return Void.
+   */
+  void PerfSqlCommitLoop();
+  /**
+   * @brief Calculates performance of modules and pipeline, and prints performance statistics, every 2s.
+   *
+   * This is a thread function.
+   *
+   * @return Void.
+   */
+  void CalculatePerfStats();
+  /**
+   * @brief Calculates perfomance of modules and prints performance statistics.
+   *
+   * This is called by thread function CalculatePerfStats.
+   *
+   * @return Void.
+   */
+  void CalculateModulePerfStats();
+  /**
+   * @brief Calculates perfomance of pipeline and prints performance statistics.
+   *
+   * This is called by thread function CalculatePerfStats.
+   *
+   * @return Void.
+   */
+  void CalculatePipelinePerfStats();
+  /* called by pipeline */
+  /**
+   * Regist IPC frame done callback function.
+   *
+   * @return Void.
+   *
+   */
+  inline void RegistIPCFrameDoneCallBack(std::function<void(std::shared_ptr<CNFrameInfo>)> callback) {
+    frame_done_callback_ = std::move(callback);
+  }
+
  private:
   StreamMsgObserver* smsg_observer_ = nullptr;  ///< Stream message observer.
 
@@ -438,6 +490,7 @@ class Pipeline : public Module {
   std::atomic<bool> running_{false};
   EventBus* event_bus_;
   DECLARE_PRIVATE(d_ptr_, Pipeline);
+  std::function<void(std::shared_ptr<CNFrameInfo>)> frame_done_callback_ = nullptr;
 };  // class Pipeline
 
 }  // namespace cnstream

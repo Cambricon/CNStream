@@ -4,10 +4,7 @@
 概述
 -----------------------------
 
-CNStream支持用户创建自定义模块。使用CNStream框架创建自定义模块非常简单，用户
-只需根据 ``samples/example`` 目录下的 ``example.cpp`` 文件里给出的例子，即可方便快捷地实现自定义模块的轮廓。自定义模块需要
-多重继承 **cnstream::Module** 和 **cnstream::ModuleCreator** 两个基类。其中 **cnstream::Module** 是
-所有模块的基类。**cnstream::ModuleCreator** 实现了反射机制，提供了 ``CreateFunction``， 并注册 ``ModuleClassName`` 和 ``CreateFunction`` 至 ``ModuleFactory`` 中。
+CNStream支持用户创建自定义模块。使用CNStream框架创建自定义模块非常简单，用户只需根据 ``samples/example`` 目录下的 ``example.cpp`` 文件里给出的例子，即可方便快捷地实现自定义模块的轮廓。自定义模块需要多重继承 **cnstream::Module** 和 **cnstream::ModuleCreator** 两个基类。其中 **cnstream::Module** 是所有模块的基类。**cnstream::ModuleCreator** 实现了反射机制，提供了 ``CreateFunction``， 并注册 ``ModuleClassName`` 和 ``CreateFunction`` 至 ``ModuleFactory`` 中。
 
 自定义普通模块
 ---------------------
