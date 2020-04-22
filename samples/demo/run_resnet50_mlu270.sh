@@ -36,5 +36,5 @@ mkdir -p output
     --wait_time 0 \
     --rtsp=false \
     --loop=false \
-    --config_fname "classification_resnet50_mlu270_config.json" \
+    --config_fname "resnet50_config_mlu270.json" \
     --alsologtostderr
