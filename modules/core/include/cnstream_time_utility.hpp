@@ -123,8 +123,24 @@ class ClockBase {
   using Elapsed_t = duration<double, precision>;
 
   /**
-   * @brief calculate average elapsed time
+   * @brief calculate total elapsed time
    * @return elapsed duration
+   */
+  Elapsed_t ElapsedTotal() const {
+    return total_;
+  }
+
+  /**
+   * @brief calculate total elapsed time
+   * @return elapsed duration as double
+   */
+  double ElapsedTotalAsDouble() const {
+    return total_.count();
+  }
+
+  /**
+   * @brief calculate average elapsed time
+   * @return average elapsed duration
    */
   Elapsed_t ElapsedAverage() const {
     return times_ == 0 ? Elapsed_t::zero() : total_ / times_;
@@ -132,7 +148,7 @@ class ClockBase {
 
   /**
    * @brief calculate average elapsed time
-   * @return elapsed duration as double
+   * @return average elapsed duration as double
    */
   double ElapsedAverageAsDouble() const {
     return ElapsedAverage().count();
@@ -148,7 +164,7 @@ class ClockBase {
   }
 
  protected:
-  Elapsed_t total_;
+  Elapsed_t total_ = Elapsed_t::zero();
   uint32_t times_ = 0;
 };
 

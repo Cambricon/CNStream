@@ -21,6 +21,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -151,7 +152,7 @@ TEST(PerfCalculator, CalcThroughput) {
   PerfStats stats = perf_cal.CalcThroughput(sql, table_name, keys[0], keys[1]);
 #ifdef HAVE_SQLITE
   EXPECT_EQ(stats.frame_cnt, data_num);
-  EXPECT_DOUBLE_EQ(stats.fps, data_num * 1.f * 1e3 / (end -start) * 1e3);
+  EXPECT_DOUBLE_EQ(stats.fps, ceil(static_cast<double>(data_num) * 1e7 / (end -start)) / 10.0);
 #else
   EXPECT_EQ(stats.frame_cnt, (unsigned)0);
   EXPECT_DOUBLE_EQ(stats.fps, 0);

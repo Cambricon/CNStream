@@ -39,7 +39,7 @@ endif()
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 #FIXME
-set(SOURCE_LINKER_LIBS dl ${CN_LIBS} ${3RDPARTY_LIBS} ${OpenCV_LIBS} ${SDL2_LIBRARIES} ${FFMPEG_LIBRARIES} ${PROTOBUF_LIBRARIES} pthread)
+set(SOURCE_LINKER_LIBS dl ${CN_LIBS} ${3RDPARTY_LIBS} ${OpenCV_LIBS} ${SDL2_LIBRARIES} ${FFMPEG_LIBRARIES} pthread)
   
 foreach(module ${module_list})
   include_directories(${PROJECT_SOURCE_DIR}/modules/${module}/include)

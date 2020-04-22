@@ -43,9 +43,9 @@ TEST(TimeUtilityTest, TimeStampTest) {
     }
   }
   // inaccurate rate < 1/1000
-  EXPECT_NEAR(ts2 - ts1, 1E5, 100);
-  EXPECT_NEAR(std::stoll(ts2_str), ts2, 100);
-  EXPECT_NEAR(std::stoll(ts2_str) - ts1, 1E5, 100);
+  EXPECT_NEAR(ts2 - ts1, 1E5, 1E2);
+  EXPECT_NEAR(std::stoll(ts2_str), ts2, 1E2);
+  EXPECT_NEAR(std::stoll(ts2_str) - ts1, 1E5, 1E2);
 }
 
 TEST(TimeUtilityTest, TickClockTest) {
@@ -56,12 +56,14 @@ TEST(TimeUtilityTest, TickClockTest) {
     if (steady_clock::now() - start_time > milliseconds(10)) {
       tick_clock.Tick();
       start_time = steady_clock::now();
-      if (--tick_times <= 0) break;
+      if (--tick_times < 0) break;
     }
   }
   double avg_time = tick_clock.ElapsedAverageAsDouble();
   // inaccurate rate < 1/1000
-  EXPECT_NEAR(avg_time, 1E4, 10);
+  EXPECT_NEAR(avg_time, 1E4, 1E1);
+  double total_time = tick_clock.ElapsedTotalAsDouble();
+  EXPECT_NEAR(total_time, 1E5, 1E2);
 
   tick_clock.Clear();
   avg_time = tick_clock.ElapsedAverageAsDouble();
@@ -79,7 +81,13 @@ TEST(TimeUtilityTest, TickTockClockTest) {
 
   double avg_duration = duration_recorder.ElapsedAverageAsDouble();
   // inaccurate rate < 1/1000
-  EXPECT_NEAR(avg_duration, 1E4, 10);
+  EXPECT_NEAR(avg_duration, 1E4, 1E1);
+  double total_time = duration_recorder.ElapsedTotalAsDouble();
+  EXPECT_NEAR(total_time, 1E5, 1E2);
+
+  duration_recorder.Clear();
+  avg_duration = duration_recorder.ElapsedAverageAsDouble();
+  EXPECT_DOUBLE_EQ(avg_duration, 0.0);
 }
 
 TEST(TimeUtilityTest, TimerCallbackTimes) {

@@ -21,6 +21,7 @@
 #include "perf_calculator.hpp"
 
 #include <chrono>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -42,12 +43,12 @@ void PrintLatency(const PerfStats& stats) {
 }
 
 void PrintThroughput(const PerfStats& stats) {
-  std::cout << " -- [fps] : " << std::fixed <<std::setprecision(3) << stats.fps
+  std::cout << " -- [fps] : " << std::fixed << std::setprecision(1) << stats.fps
             << ", [frame cnt] : " << stats.frame_cnt << std::endl;
 }
 
 void PrintPerfStats(const PerfStats& stats) {
-  std::cout << " -- [fps] : " << std::fixed << std::setprecision(3) << stats.fps
+  std::cout << " -- [fps] : " << std::fixed << std::setprecision(1) << stats.fps
             << ", [latency] avg : " << stats.latency_avg / 1000 << "."
             << std::setw(3) << std::setfill('0') << stats.latency_avg % 1000
             << " ms, max : " << stats.latency_max / 1000 << "."
@@ -121,7 +122,7 @@ PerfStats PerfCalculator::CalcThroughput(std::shared_ptr<Sqlite> sql, std::strin
   size_t end = sql->FindMax(type, end_node);
   if (end > start) {
     size_t interval =  end - start;
-    stats.fps = frame_cnt * 1.f * 1e3 / interval * 1e3;
+    stats.fps = ceil(static_cast<double>(frame_cnt) * 1e7 / interval) / 10.0;
     stats.frame_cnt = frame_cnt;
   }
 #endif
