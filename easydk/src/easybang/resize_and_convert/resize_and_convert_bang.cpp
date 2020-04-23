@@ -24,7 +24,7 @@
 #include <iostream>
 #include <string>
 
-#include "ResizeAndConvertKernel.h"
+#include "resize_and_convert_kernel.h"
 #include "ResizeAndConvertMacro.h"
 
 using std::string;

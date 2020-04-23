@@ -14,7 +14,30 @@ CNStream provides the following plug-in modules:
 
 ## **Cambricon Dependencies** ##
 
-You can find Cambricon dependencies, including headers and libraries in the MLU directory.
+CNStream depends on the CNCodec library and the CNRT library which are packed in Cambricon neuware package.
+Therefore, the lastest Cambricon neuware package is required. If you do not have one, please feel free to contact with us.
+Our mailbox: service@cambricon.com
+
+### Install Cambricon neuware package ###
+
+#### Ubuntu or Debian ####
+
+```bash
+  dpkg -i neuware-mluxxx-x.x.x_Ubuntuxx.xx_amd64.deb
+  cd /var/neuware-mluxxx-x.x.x
+  dpkg -i cncodec-xxx.deb cnrt_xxx.deb
+```
+
+#### Centos ####
+
+```bash
+  yum -y install neuware-mluxxx-x.x.x.el7.x86_64.rpm
+  cd /var/neuware-mluxxx-x.x.x
+  yum -y install cncodec-xxx.rpm cnrt-xxx.rpm
+```
+After that, Cambricon dependencies that CNStream needed are installed at path '/usr/loacl/neuware'.
+
+Please make sure you must ``not`` install cnstream_xxx.deb or cnstream-xxx.rpm.
 
 ### Quick Start ###
 

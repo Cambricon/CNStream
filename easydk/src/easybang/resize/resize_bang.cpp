@@ -20,8 +20,8 @@
 
 #include <string>
 
-#include "ResizeKernel.h"
 #include "cnrt.h"
+#include "resize_kernel.h"
 
 using std::string;
 using std::to_string;
