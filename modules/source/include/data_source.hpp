@@ -42,7 +42,7 @@ namespace cnstream {
  */
 enum SourceType {
   SOURCE_RAW,     ///< Represents the raw stream. The source is sent for decoding directly.
-  SOURCE_FFMPEG   ///< Represents the normal stream. The source is demuxed with FFmpeg before send for decoding.
+  SOURCE_FFMPEG   ///< Represents the normal stream. The source is demuxed with FFmpeg before sent for decoding.
 };
 /**
  * @brief The storage type of the output frame data that are stored for modules on CPU or MLU.
@@ -64,16 +64,16 @@ enum DecoderType {
 struct DataSourceParam {
   SourceType source_type_ = SOURCE_RAW;     ///< The demuxer type. The ``SOURCE_RAW`` value is set for debugging.
   OutputType output_type_ = OUTPUT_CPU;     ///< Outputs data to CPU or MLU.
-  size_t interval_ = 1;                     ///< Outputs image every ``interval`` frames.
+  size_t interval_ = 1;                     ///< Outputs image for every ``interval`` frames.
   DecoderType decoder_type_ = DECODER_CPU;  ///< The decoder type.
   bool reuse_cndec_buf = false;             ///< Valid when ``DECODER_MLU`` is used.
-  int device_id_ = -1;                      ///< The MLU device ID. To disable MLU, set the value to ``-1`` .
+  int device_id_ = -1;                      ///< The MLU device ID. To disable MLU, set the value to ``-1``.
   size_t chunk_size_ = 0;                   ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
   size_t width_ = 0;                        ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
   size_t height_ = 0;                       ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
   bool interlaced_ = false;                 ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
-  size_t output_w = 0;                      ///< Valid for MLU100.
-  size_t output_h = 0;                      ///< Valid for MLU100.
+  size_t output_w = 0;                      ///< Invalid for MLU200 series.
+  size_t output_h = 0;                      ///< Invalid for MLU200 series.
   uint32_t input_buf_number_ = 2;           ///< Valid when ``decoder_type`` is set to ``DECODER_MLU``.
   uint32_t output_buf_number_ = 3;          ///< Valid when ``decoder_type`` is set to ``DECODER_MLU``.
 };
@@ -84,13 +84,13 @@ struct DataSourceParam {
 class DataSource : public SourceModule, public ModuleCreator<DataSource> {
  public:
   /**
-   * @brief Construct DataSource object with a given module name.
+   * @brief Constructs DataSource object with a given module name.
    * @param
    * 	moduleName[in]: A defined module name.
    */
   explicit DataSource(const std::string &moduleName);
   /**
-   * @brief Deconstruct DataSource object.
+   * @brief Deconstructs DataSource object.
    *
    */
   ~DataSource();
@@ -98,7 +98,7 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
   /**
    * @brief Called by pipeline when the pipeline is started.
    
-   * @param paramSet：
+   * @param paramSet
    * @verbatim
    * source_type: Required. The demuxer type. Supported values are ``raw`` and ``ffmpeg``.
    * output_type: Required. The output type. Supported values are ``mlu`` and ``cpu``.
@@ -115,7 +115,7 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
    *@endverbatim
    *
    * @return
-   *    Returns true if ``paramSet`` are supported and valid. Othersize, returns false.
+   *    Returns true if ``paramSet`` are supported and valid. Otherwise, returns false.
    */
   bool Open(ModuleParamSet paramSet) override;
   /**

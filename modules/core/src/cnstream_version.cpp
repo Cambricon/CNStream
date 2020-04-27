@@ -21,10 +21,6 @@
 #include "cnstream_version.hpp"
 #include <cstdio>
 
-#define MAJOR_VERSION 4
-#define MINOR_VERSION 0
-#define PATCH_VERSION 0
-
 #define VERSION_STRING_LENGTH 10
 
 namespace cnstream {

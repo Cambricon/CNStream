@@ -195,201 +195,201 @@ TEST(Source, SendData) {
   EXPECT_TRUE(src->SendData(data));
 }
 
-TEST(Source, AddVideoSource) {
-  auto src = std::make_shared<DataSource>(gname);
-  std::string stream_id1 = "1";
-  std::string stream_id2 = "2";
-  std::string video_path = GetExePath() + gvideo_path;
-  ModuleParamSet param;
-  param["source_type"] = "ffmpeg";
-  param["output_type"] = "mlu";
-  param["decoder_type"] = "mlu";
-  param["device_id"] = "0";
-  ASSERT_TRUE(src->Open(param));
-
-  // successfully add video source
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24, true), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 24, false), 0);
-
-  // repeadly add video source, wrong!
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), -1);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, false), -1);
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  src->Close();
-
-  // filename.empty(), return -1
-  for (uint32_t i = 0; i < GetMaxStreamNumber(); i++) {
-    EXPECT_EQ(src->AddVideoSource(std::to_string(i), "", 24, true), -1);
-  }
-  // open source failed, return -1
-  EXPECT_EQ(src->AddVideoSource(std::to_string(GetMaxStreamNumber()), "", 24), -1);
-  src->Close();
-
-  // filename valid, return 0
-  for (uint32_t i = 0; i < GetMaxStreamNumber(); i++) {
-    EXPECT_EQ(src->AddVideoSource(std::to_string(i), video_path, 24, true), 0);
-  }
-  // open source failed, return -1
-  EXPECT_EQ(src->AddVideoSource(std::to_string(GetMaxStreamNumber()), video_path, 24), -1);
-  src->Close();
-}
-
-TEST(Source, RemoveSource) {
-  std::string video_path = GetExePath() + gvideo_path;
-  auto src = std::make_shared<DataSource>(gname);
-  std::string stream_id1 = "1";
-  std::string stream_id2 = "2";
-  std::string stream_id3 = "3";
-  std::string stream_id4 = "4";
-  ModuleParamSet param;
-  param["source_type"] = "ffmpeg";
-  param["output_type"] = "mlu";
-  param["decoder_type"] = "mlu";
-  param["device_id"] = "0";
-  ASSERT_TRUE(src->Open(param));
-
-  // successfully add video source
-  for (int i = 0; i < 10; i++) {
-    EXPECT_EQ(src->AddVideoSource(std::to_string(i), video_path, false), 0);
-  }
-  // remove source
-  for (int i = 0; i < 10; i++) {
-    EXPECT_EQ(src->RemoveSource(std::to_string(i)), 0);
-  }
-  // source not exist, log warning
-  EXPECT_EQ(src->RemoveSource(std::to_string(0)), 0);
-  EXPECT_EQ(src->RemoveSource(std::to_string(4)), 0);
-
-  // remove all sources
-  src->Close();
-
-  // source not exist, log warning
-  EXPECT_EQ(src->RemoveSource(std::to_string(3)), 0);
-  EXPECT_EQ(src->RemoveSource(std::to_string(9)), 0);
-}
-
-TEST(Source, FFMpegMLU) {
-  auto src = std::make_shared<DataSource>(gname);
-  std::string video_path = GetExePath() + gvideo_path;
-  std::string image_path = GetExePath() + gimage_path;
-  std::string stream_id1 = "1";
-  std::string stream_id2 = "2";
-  std::string stream_id3 = "3";
-  std::string stream_id4 = "4";
-
-  ModuleParamSet param;
-  param["source_type"] = "ffmpeg";
-  param["output_type"] = "mlu";
-  param["decoder_type"] = "mlu";
-  param["device_id"] = "0";
-  ASSERT_TRUE(src->Open(param));
-
-  // add source
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 24, true), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id3, video_path, 24, false), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id4, image_path, 24), 0);
-
-  EXPECT_NE(src->AddVideoSource(stream_id3, video_path, 24), 0);
-  EXPECT_NE(src->AddVideoSource(stream_id4, image_path, 24), 0);
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(300));
-
-  EXPECT_EQ(src->RemoveSource(stream_id1), 0);
-  EXPECT_EQ(src->RemoveSource(stream_id2), 0);
-
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, image_path, 24), 0);
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  src->Close();
-
-  // reuse codec buffer
-  param["reuse_cndec_buf"] = "true";
-  ASSERT_TRUE(src->Open(param));
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), 0);
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  src->Close();
-}
-
-TEST(Source, FFMpegCPU) {
-  auto src = std::make_shared<DataSource>(gname);
-  std::string video_path = GetExePath() + gvideo_path;
-  std::string stream_id1 = "1";
-  std::string stream_id2 = "2";
-  std::string stream_id3 = "3";
-
-  ModuleParamSet param;
-  param["source_type"] = "ffmpeg";
-  param["output_type"] = "cpu";
-  param["decoder_type"] = "cpu";
-  ASSERT_TRUE(src->Open(param));
-
-  // add source
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 23), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 24, true), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id3, video_path, 25, false), 0);
-
-  EXPECT_NE(src->AddVideoSource(stream_id3, video_path, 26), 0);
-  EXPECT_NE(src->AddVideoSource(stream_id1, video_path, 27), 0);
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(300));
-
-  EXPECT_EQ(src->RemoveSource(stream_id1), 0);
-  EXPECT_EQ(src->RemoveSource(stream_id2), 0);
-
-  param["output_type"] = "mlu";
-  param["device_id"] = "0";
-  ASSERT_TRUE(src->Open(param));
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 22), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 21), 0);
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  src->Close();
-}
-
-TEST(Source, RawMLU) {
-  std::string h264_path = GetExePath() + "../../modules/unitest/source/data/raw.h264";
-  std::string h265_path = GetExePath() + "../../modules/unitest/source/data/raw.h265";
-  auto src = std::make_shared<DataSource>(gname);
-  std::string stream_id0 = "0";
-  std::string stream_id1 = "1";
-  std::string stream_id2 = "2";
-  std::string stream_id3 = "3";
-
-  ModuleParamSet param;
-  param["source_type"] = "raw";
-  param["output_type"] = "mlu";
-  param["decoder_type"] = "mlu";
-  param["device_id"] = "0";
-  // chunk size 50K
-  param["chunk_size"] = "50000";
-  param["width"] = "256";
-  param["height"] = "256";
-  param["interlaced"] = "false";
-  ASSERT_TRUE(src->Open(param));
-
-  // add source
-  EXPECT_EQ(src->AddVideoSource(stream_id0, h264_path, 23, false), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id1, h264_path, 30, true), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, h265_path, 21, false), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id3, h265_path, 27, true), 0);
-
-  EXPECT_NE(src->AddVideoSource(stream_id3, h264_path, 20, true), 0);
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  src->Close();
-
-  // reuse codec buffer
-  param["reuse_cndec_buf"] = "true";
-  ASSERT_TRUE(src->Open(param));
-  EXPECT_EQ(src->AddVideoSource(stream_id0, h264_path, 24, false), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id1, h264_path, 24, true), 0);
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  src->Close();
-}
+//  TEST(Source, AddVideoSource) {
+//    auto src = std::make_shared<DataSource>(gname);
+//    std::string stream_id1 = "1";
+//    std::string stream_id2 = "2";
+//    std::string video_path = GetExePath() + gvideo_path;
+//    ModuleParamSet param;
+//    param["source_type"] = "ffmpeg";
+//    param["output_type"] = "mlu";
+//    param["decoder_type"] = "mlu";
+//    param["device_id"] = "0";
+//    ASSERT_TRUE(src->Open(param));
+//
+//    // successfully add video source
+//    EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24, true), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 24, false), 0);
+//
+//    // repeadly add video source, wrong!
+//    EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), -1);
+//    EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, false), -1);
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+//    src->Close();
+//
+//    // filename.empty(), return -1
+//    for (uint32_t i = 0; i < GetMaxStreamNumber(); i++) {
+//      EXPECT_EQ(src->AddVideoSource(std::to_string(i), "", 24, true), -1);
+//    }
+//    // open source failed, return -1
+//    EXPECT_EQ(src->AddVideoSource(std::to_string(GetMaxStreamNumber()), "", 24), -1);
+//    src->Close();
+//
+//    // filename valid, return 0
+//    for (uint32_t i = 0; i < GetMaxStreamNumber(); i++) {
+//      EXPECT_EQ(src->AddVideoSource(std::to_string(i), video_path, 24, true), 0);
+//    }
+//    // open source failed, return -1
+//    EXPECT_EQ(src->AddVideoSource(std::to_string(GetMaxStreamNumber()), video_path, 24), -1);
+//    src->Close();
+//  }
+//
+//  TEST(Source, RemoveSource) {
+//    std::string video_path = GetExePath() + gvideo_path;
+//    auto src = std::make_shared<DataSource>(gname);
+//    std::string stream_id1 = "1";
+//    std::string stream_id2 = "2";
+//    std::string stream_id3 = "3";
+//    std::string stream_id4 = "4";
+//    ModuleParamSet param;
+//    param["source_type"] = "ffmpeg";
+//    param["output_type"] = "mlu";
+//    param["decoder_type"] = "mlu";
+//    param["device_id"] = "0";
+//    ASSERT_TRUE(src->Open(param));
+//
+//    // successfully add video source
+//    for (int i = 0; i < 10; i++) {
+//      EXPECT_EQ(src->AddVideoSource(std::to_string(i), video_path, false), 0);
+//    }
+//    // remove source
+//    for (int i = 0; i < 10; i++) {
+//      EXPECT_EQ(src->RemoveSource(std::to_string(i)), 0);
+//    }
+//    // source not exist, log warning
+//    EXPECT_EQ(src->RemoveSource(std::to_string(0)), 0);
+//    EXPECT_EQ(src->RemoveSource(std::to_string(4)), 0);
+//
+//    // remove all sources
+//    src->Close();
+//
+//    // source not exist, log warning
+//    EXPECT_EQ(src->RemoveSource(std::to_string(3)), 0);
+//    EXPECT_EQ(src->RemoveSource(std::to_string(9)), 0);
+//  }
+//
+//  TEST(Source, FFMpegMLU) {
+//    auto src = std::make_shared<DataSource>(gname);
+//    std::string video_path = GetExePath() + gvideo_path;
+//    std::string image_path = GetExePath() + gimage_path;
+//    std::string stream_id1 = "1";
+//    std::string stream_id2 = "2";
+//    std::string stream_id3 = "3";
+//    std::string stream_id4 = "4";
+//
+//    ModuleParamSet param;
+//    param["source_type"] = "ffmpeg";
+//    param["output_type"] = "mlu";
+//    param["decoder_type"] = "mlu";
+//    param["device_id"] = "0";
+//    ASSERT_TRUE(src->Open(param));
+//
+//    // add source
+//    EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 24, true), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id3, video_path, 24, false), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id4, image_path, 24), 0);
+//
+//    EXPECT_NE(src->AddVideoSource(stream_id3, video_path, 24), 0);
+//    EXPECT_NE(src->AddVideoSource(stream_id4, image_path, 24), 0);
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+//
+//    EXPECT_EQ(src->RemoveSource(stream_id1), 0);
+//    EXPECT_EQ(src->RemoveSource(stream_id2), 0);
+//
+//    EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id2, image_path, 24), 0);
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+//    src->Close();
+//
+//    // reuse codec buffer
+//    param["reuse_cndec_buf"] = "true";
+//    ASSERT_TRUE(src->Open(param));
+//    EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), 0);
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+//    src->Close();
+//  }
+//
+//  TEST(Source, FFMpegCPU) {
+//    auto src = std::make_shared<DataSource>(gname);
+//    std::string video_path = GetExePath() + gvideo_path;
+//    std::string stream_id1 = "1";
+//    std::string stream_id2 = "2";
+//    std::string stream_id3 = "3";
+//
+//    ModuleParamSet param;
+//    param["source_type"] = "ffmpeg";
+//    param["output_type"] = "cpu";
+//    param["decoder_type"] = "cpu";
+//    ASSERT_TRUE(src->Open(param));
+//
+//    // add source
+//    EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 23), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 24, true), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id3, video_path, 25, false), 0);
+//
+//    EXPECT_NE(src->AddVideoSource(stream_id3, video_path, 26), 0);
+//    EXPECT_NE(src->AddVideoSource(stream_id1, video_path, 27), 0);
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+//
+//    EXPECT_EQ(src->RemoveSource(stream_id1), 0);
+//    EXPECT_EQ(src->RemoveSource(stream_id2), 0);
+//
+//    param["output_type"] = "mlu";
+//    param["device_id"] = "0";
+//    ASSERT_TRUE(src->Open(param));
+//    EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 22), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 21), 0);
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+//    src->Close();
+//  }
+//
+//  TEST(Source, RawMLU) {
+//    std::string h264_path = GetExePath() + "../../modules/unitest/source/data/raw.h264";
+//    std::string h265_path = GetExePath() + "../../modules/unitest/source/data/raw.h265";
+//    auto src = std::make_shared<DataSource>(gname);
+//    std::string stream_id0 = "0";
+//    std::string stream_id1 = "1";
+//    std::string stream_id2 = "2";
+//    std::string stream_id3 = "3";
+//
+//    ModuleParamSet param;
+//    param["source_type"] = "raw";
+//    param["output_type"] = "mlu";
+//    param["decoder_type"] = "mlu";
+//    param["device_id"] = "0";
+//    // chunk size 50K
+//    param["chunk_size"] = "50000";
+//    param["width"] = "256";
+//    param["height"] = "256";
+//    param["interlaced"] = "false";
+//    ASSERT_TRUE(src->Open(param));
+//
+//    // add source
+//    EXPECT_EQ(src->AddVideoSource(stream_id0, h264_path, 23, false), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id1, h264_path, 30, true), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id2, h265_path, 21, false), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id3, h265_path, 27, true), 0);
+//
+//    EXPECT_NE(src->AddVideoSource(stream_id3, h264_path, 20, true), 0);
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+//    src->Close();
+//
+//    // reuse codec buffer
+//    param["reuse_cndec_buf"] = "true";
+//    ASSERT_TRUE(src->Open(param));
+//    EXPECT_EQ(src->AddVideoSource(stream_id0, h264_path, 24, false), 0);
+//    EXPECT_EQ(src->AddVideoSource(stream_id1, h264_path, 24, true), 0);
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+//    src->Close();
+//  }
 
 }  // namespace cnstream

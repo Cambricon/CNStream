@@ -45,7 +45,7 @@ namespace cnstream {
  * Allocates data on a host.
  *
  * @param ptr Outputs data pointer.
- * @param size Size of the data to be allocated.
+ * @param size The size of the data to be allocated.
  */
 void CNStreamMallocHost(void** ptr, size_t size);
 
@@ -92,7 +92,7 @@ class CNSyncedMemory {
    *
    * @return Returns the CPU data pointer.
    *
-   * @note If the size is 0, always returns nullptr.
+   * @note If the size is 0, nullptr is always returned.
    */
   const void* GetCpuData();
   /**
@@ -108,7 +108,7 @@ class CNSyncedMemory {
    *
    * @return Returns the MLU data pointer.
    *
-   * @note If the size is 0, always returns nullptr.
+   * @note If the size is 0, nullptr is always returned.
    */
   const void* GetMluData();
   /**
@@ -152,13 +152,13 @@ class CNSyncedMemory {
    */
   void* GetMutableMluData();
   /**
-   * Synchronized head.
+   * Head synchronization.
    */
   enum SyncedHead {
-    UNINITIALIZED,  ///< The memory has not been allocated.
-    HEAD_AT_CPU,    ///< The data has been updated to CPU but has not been synchronized to MLU yet.
-    HEAD_AT_MLU,    ///< The data has been updated to MLU but has not been synchronized to CPU yet.
-    SYNCED          ///< The data has been synchronized to both CPU and MLU.
+    UNINITIALIZED,  ///< The memory is not allocated.
+    HEAD_AT_CPU,    ///< The data is updated to CPU but is not synchronized to MLU yet.
+    HEAD_AT_MLU,    ///< The data is updated to MLU but is not synchronized to CPU yet.
+    SYNCED          ///< The data is synchronized to both CPU and MLU.
   };
   /**
    * Gets synchronized head.
@@ -203,7 +203,7 @@ class CNSyncedMemory {
  public:
 #endif
   /**
-   * Allocates memory by ``CNSyncedMemory`` if it is true.
+   * Allocates memory by ``CNSyncedMemory`` if a certain condition is true.
    */
   bool own_cpu_data_ = false;  ///< Whether CPU data is allocated by ``SyncedMemory``.
   bool own_mlu_data_ = false;  ///< Whether MLU data is allocated by ``SyncedMemory``.
@@ -212,7 +212,7 @@ class CNSyncedMemory {
 
  private:
 #endif
-  SyncedHead head_ = UNINITIALIZED;  ///< Identifies which device the data is synchronized on.
+  SyncedHead head_ = UNINITIALIZED;  ///< Identifies which device data is synchronized on.
   size_t size_ = 0;                  ///< The data size.
 
   int dev_id_ = 0;   ///< Ordinal MLU device ID.

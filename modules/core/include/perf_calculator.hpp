@@ -31,7 +31,7 @@ namespace cnstream {
 class Sqlite;
 
 /**
- * @brief The basic data structure of performance statistics, including latency, frame count and throughout.
+ * @brief The basic data structure of performance statistics, including latency, frame count, and throughout.
  */
 struct PerfStats {
   size_t latency_avg;
@@ -42,27 +42,27 @@ struct PerfStats {
 
 /**
  * @brief Prints latency.
- * @param stats Performance statstics.
+ * @param stats The performance statstics.
  * @return Void.
  */
 void PrintLatency(const PerfStats& stats);
 /**
  * @brief Prints throughput.
- * @param stats Performance statstics.
+ * @param stats The performance statstics.
  * @return Void.
  */
 void PrintThroughput(const PerfStats& stats);
 /**
  * @brief Prints performance statistics.
- * @param stats Performance statstics.
+ * @param stats The performance statstics.
  * @return Void.
  */
 void PrintPerfStats(const PerfStats& stats);
 
 /**
- * @brief PerfCalculator class is for calculating performance statistics.
+ * @brief Calculates performance statistics.
  *
- * Read useful data from database and then it could calculate performance statistics like latency and throughput.
+ * Reads useful data from database and then calculates performance statistics including latency, throughput, and so on.
  */
 class PerfCalculator {
  public:
@@ -75,31 +75,31 @@ class PerfCalculator {
   */
   ~PerfCalculator();
   /**
-   * @brief Calculates latency
+   * @brief Calculates latency.
    *
-   * Each time we call this function, it will calculate latency from the previous time to now.
-   * After that, it will update the performance statistics, store it and replace the previous time with now.
-   * Finally, return the performance statistics.
+   * Calculates latency from the previous time that this API is called, to now.
+   * Then the performance statistics are updated and saved. 
+   * The time when this API is called is recorded and will be used in calculation in the call of this API next time.
    *
-   * @param sql A shared pointer points to Sqlite which is a class for operating the database.
-   * @param type perf type.
-   * @param start_key The index name of start time points in database.
-   * @param end_key The index name of end time points in database.
+   * @param sql A shared pointer points to Sqlite, which is a class for operating the database.
+   * @param type The type of perf.
+   * @param start_key The index name of start-time points in database.
+   * @param end_key The index name of end-time points in database.
    *
-   * @return PerfStats, i.e., performance statistics.
+   * @return Returns the performance statistics.
    */
   PerfStats CalcLatency(std::shared_ptr<Sqlite> sql, std::string type, std::string start_key, std::string end_key);
   /**
-   * @brief Calculates throughput
+   * @brief Calculates throughput. The formlua is as follows:
    *
-   * throughput = frame count / (the maximum of the end time points - the minimum of the start time points)
+   * throughput = frame_count / (maximum_of_the_end_time_points - minimum_of_the_start_time_points)
    *
-   * @param sql A shared pointer points to Sqlite which is a class for operating the database.
-   * @param type perf type.
-   * @param start_key The index name of the start time points in database.
-   * @param end_key The index name of the end time points in database.
+   * @param sql A shared pointer points to Sqlite, which is a class for operating the database.
+   * @param type The type of perf.
+   * @param start_key The index name of the start-time points in database.
+   * @param end_key The index name of the end-time points in database.
    *
-   * @return PerfStats, i.e., performance statistics.
+   * @return Returns the performance statistics.
    */
   PerfStats CalcThroughput(std::shared_ptr<Sqlite> sql, std::string type, std::string start_node, std::string end_node);
 

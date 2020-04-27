@@ -41,22 +41,23 @@ class PerfCalculator;
 class PerfStats;
 
 /**
- * @brief The basic data structure of measuring performance.
+ * @brief The basic data structure for performance measurements.
  *
- * Record PerfInfo at start time point and end time point.
+ * Records performance information at the start-time point and end-time point.
  */
 struct PerfInfo {
-  bool is_finished;         /// If it is true means start time, otherwise end time.
-  std::string perf_type;    /// perf type
-  std::string module_name;  /// module name
-  int64_t pts;              /// pts of each data frame
-  size_t timestamp;         /// timestamp
+  /// If the value is true, it represents the start time. If the value is false, it represents the end time.
+  bool is_finished;
+  std::string perf_type;    /// The type of perf.
+  std::string module_name;  /// The module name.
+  int64_t pts;              /// The pts (Presentation Time Stamp) of each data frame.
+  size_t timestamp;         /// The time stamp.
 };  // struct PerfInfo
 
 /**
- * @brief PerfManager class
+ * @brief PerfManager class.
  *
- * It could record PerfInfo and calculate modules and pipeline performance statistics.
+ * Records PerfInfo and calculates the performance statistics of modules and pipeline .
  */
 class PerfManager {
  public:
@@ -75,65 +76,65 @@ class PerfManager {
   */
   void Stop();
   /**
-  * @brief Inits PerfManager.
+  * @brief Initializes PerfManager.
   *
-  * Create database and tables, create PerfCalculator, and start thread function, which is used to insert PerfInfo to database.
+  * Creates database, tables, and PerfCalculator, and starts the thread function, which inserts PerfInfo to database.
   *
   * @param db_name The name of the database.
-  * @param module_names All module names of the pipeline.
-  * @param start_node Start node module name of the pipeline.
-  * @param end_nodes All end node module names of the pipeline.
+  * @param module_names All module names in the pipeline.
+  * @param start_node The name of the start module in the pipeline.
+  * @param end_nodes The names of all end modules in the pipeline.
   *
-  * @return Returns true if PerfManager inits successfully, otherwise returns false.
+  * @return Returns true if PerfManager is initialized successfully, otherwise returns false.
   */
   bool Init(std::string db_name, std::vector<std::string> module_names,
             std::string start_node, std::vector<std::string> end_nodes);
   /**
   * @brief Records PerfInfo.
   *
-  * Create timestamp and set it to PerfInfo. And then insert it to database.
+  * Creates timestamp and sets it to PerfInfo. And then inserts the time stamp into database.
   *
-  * @param info PerfInfo.
+  * @param info The PerfInfo.
   *
-  * @return Returns true if the info is recorded successfully, otherwise returns false.
+  * @return Returns true if the information is recorded successfully, otherwise returns false.
   */
   bool RecordPerfInfo(PerfInfo info);
   /**
-  * @brief Registers perf type.
+  * @brief Registers performance type.
   *
-  * @param type perf type.
+  * @param type The type of performance.
   *
-  * @return Returns true if type is registered successfully, otherwise returns false.
+  * @return Returns true if the performance type is registered successfully, otherwise returns false.
   */
   bool RegisterPerfType(std::string type);
 
   /**
-  * @brief Begins sqlite3 event.
+  * @brief Begins a sqlite3 event.
   *
   * @return Void.
   */
   void SqlBeginTrans();
   /**
-  * @brief Commits sqlite3 event.
+  * @brief Commits a sqlite3 event.
   *
   * @return Void.
   */
   void SqlCommitTrans();
   /**
-  * @brief Calculates Performance statistics of modules.
+  * @brief Calculates the performance statistics of modules.
   *
-  * @param perf_type perf type.
-  * @param module_name module name.
+  * @param perf_type The type of performance.
+  * @param module_name The module name.
   *
-  * @return Returns performance statistics.
+  * @return Returns the performance statistics.
   */
   PerfStats CalculatePerfStats(std::string perf_type, std::string module_name);
   /**
-  * @brief Calculates Performance statistics of pipeline.
+  * @brief Calculates the performance statistics of a pipeline.
   *
-  * @param perf_type perf type.
+  * @param perf_type The type of performance.
   *
-  * @return Returns performance statistics of all end nodes of pipeline.
+  * @return Returns performance statistics of all end modules of a pipeline.
   */
   std::vector<std::pair<std::string, PerfStats>> CalculatePipelinePerfStats(std::string perf_type);
 
