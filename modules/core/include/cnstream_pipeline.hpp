@@ -86,7 +86,7 @@ struct StreamMsg {
 class StreamMsgObserver {
  public:
   /**
-   * Receives stream messages from a pipeline passively.
+   * Receives stream messages from a pipeline.
    *
    * @param msg The stream message from a pipeline.
    */
@@ -130,11 +130,11 @@ struct CNModuleConfig {
   std::string name;  ///< The name of the module.
   ModuleParamSet
       parameters;   ///< The key-value pairs. The pipeline passes this value to the CNModuleConfig::name module.
-  int parallelism;  ///< Module parallelism. It is equal to module thread number and the data queue for input data.
+  int parallelism;  ///< Module parallelism. The module thread number should be the same as this parameter.
   int maxInputQueueSize;          ///< The maximum size of the input data queues.
   std::string className;          ///< The class name of the module.
   std::vector<std::string> next;  ///< The name of the downstream modules.
-  bool showPerfInfo;              ///< Whether to show performance information or not.
+  bool showPerfInfo;              ///< Whether to show performance information.
 
   /**
    * Parses members from JSON string except CNModuleConfig::name.
@@ -219,7 +219,7 @@ class Pipeline : public Module {
    */
   bool Stop();
   /**
-   * Returns the running status for a pipeline.
+   * Returns the running status of a pipeline.
    *
    * @return Returns true if the pipeline is running. Returns false if the pipeline is
    *         not running.
@@ -415,28 +415,28 @@ class Pipeline : public Module {
   void NotifyStreamMsg(const StreamMsg& smsg);
 
   /**
-   * @brief Creates PerfManager to measure performance of modules and pipeline, for each stream.
+   * @brief Creates PerfManager to measure performance of modules and pipeline for each stream.
    *
-   * This function will create database for each stream. And two other threads will be created and start.
+   * This function creates database for each stream.
    * One thread is for committing sqlite events to increase the speed of inserting data to the database.
    * Another is for calculating perfomance of modules and pipepline, and printing performance statistics afterwards.
    *
-   * @param stream_ids The stream ids
-   * @param db_dir The directory where database files will be saved
+   * @param stream_ids The stream IDs.
+   * @param db_dir The directory where database files to be saved.
    *
-   * @return Returns true, if successfully create PerfManager. Otherwise false.
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
   bool CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir);
   /**
    * @brief Commits sqlite events to increase the speed of inserting data to the database.
    *
-   * This is a thread function. It will commit events every one second.
+   * This is a thread function. The events are committed every second.
    *
    * @return Void.
    */
   void PerfSqlCommitLoop();
   /**
-   * @brief Calculates performance of modules and pipeline, and prints performance statistics, every 2s.
+   * @brief Calculates performance of modules and pipeline, and prints performance statistics every two seconds.
    *
    * This is a thread function.
    *
@@ -444,7 +444,7 @@ class Pipeline : public Module {
    */
   void CalculatePerfStats();
   /**
-   * @brief Calculates perfomance of modules and prints performance statistics.
+   * @brief Calculates the perfomance of modules and prints the performance statistics.
    *
    * This is called by thread function CalculatePerfStats.
    *
@@ -452,7 +452,7 @@ class Pipeline : public Module {
    */
   void CalculateModulePerfStats();
   /**
-   * @brief Calculates perfomance of pipeline and prints performance statistics.
+   * @brief Calculates the perfomance of pipeline and prints the performance statistics.
    *
    * This is called by thread function CalculatePerfStats.
    *
@@ -461,7 +461,7 @@ class Pipeline : public Module {
   void CalculatePipelinePerfStats();
   /* called by pipeline */
   /**
-   * Regist IPC frame done callback function.
+   * Registers a callback to be called after the frame process is done.
    *
    * @return Void.
    *

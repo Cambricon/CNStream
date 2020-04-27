@@ -116,7 +116,7 @@ After finished prerequisites, you can build instructions with the following step
    | build_tests         | ON / OFF                                 | ON      | build tests                 |
    | build_samples       | ON / OFF                                 | ON      | build samples               |
    | build_test_coverage | ON / OFF                                 | OFF     | build test coverage         |
-   | MLU                 | MLU270  / MLU220_SOC                     | MLU270  | specify MLU platform        |
+   | MLU                 | MLU270                                   | MLU270  | specify MLU platform        |
    | RELEASE             | ON / OFF                                 | ON      | release / debug             |
    | WITH_FFMPEG         | ON / OFF                                 | ON      | build with FFMPEG           |
    | WITH_OPENCV         | ON / OFF                                 | ON      | build with OPENCV           |
