@@ -32,6 +32,8 @@ Encoder::Encoder(const std::string &name) : Module(name) {
   param_register_.Register("dump_dir",
                            "Where to store the encoded video."
                            " For example, '.' means storing to current directory.");
+  param_register_.Register("dump_type",
+                           "dump type, \"video\" or \"image\".");
 }
 
 #ifdef CNS_MLU220_SOC
@@ -121,6 +123,12 @@ bool Encoder::Open(ModuleParamSet paramSet) {
   } else {
     output_dir_ = paramSet["dump_dir"];
   }
+
+  if (paramSet["dump_type"] == "image") {
+    dump_as_image_ = true;
+  } else {
+    dump_as_image_ = false;
+  }
   // 1, one channel binded to one thread, it can't be one channel binded to multi threads.
   // 2, the hash value, each channel_idx (key) mapped to, is unique. So, each bucket stores one value.
   // 3, set the buckets number of the unordered map to the maximum channel number before the threads are started,
@@ -145,13 +153,19 @@ void Encoder::Close() {
 }
 
 int Encoder::Process(CNFrameInfoPtr data) {
-  EncoderContext *ctx = GetEncoderContext(data);
-  if (ctx == nullptr) {
-    LOG(ERROR) << "Get Encoder Context Failed.";
-    return -1;
+  if (dump_as_image_) {
+    cv::imwrite(output_dir_ + "/ch" + std::to_string(data->channel_idx)
+        + "_stream" + data->frame.stream_id + "_frame"
+        + std::to_string(data->frame.frame_id)
+        + ".jpg", *data->frame.ImageBGR());
+  } else {
+    EncoderContext *ctx = GetEncoderContext(data);
+    if (ctx == nullptr) {
+      LOG(ERROR) << "Get Encoder Context Failed.";
+      return -1;
+    }
+    ctx->writer.write(*data->frame.ImageBGR());
   }
-
-  ctx->writer.write(*data->frame.ImageBGR());
   return 0;
 }
 
@@ -159,6 +173,14 @@ bool Encoder::CheckParamSet(const ModuleParamSet &paramSet) const {
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
       LOG(WARNING) << "[Encoder] Unknown param: " << it.first;
+    }
+  }
+
+  if (paramSet.find("dump_type") != paramSet.end()) {
+    if (paramSet.at("dump_type") != "video" && paramSet.at("dump_type") != "image") {
+      LOG(ERROR) << "[Encoder] (ERROR) unsupported dump type: \""
+          << paramSet.at("dump_type") << "\". Choose from \"video\" and \"image\".";
+      return false;
     }
   }
   return true;
