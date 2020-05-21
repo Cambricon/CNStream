@@ -49,7 +49,7 @@ using TrackPtr = std::shared_ptr<edk::EasyTrack>;
 
 /**
  *  @brief Tracker is a module for realtime tracking.
- *   It would be MLU feature extracting if the model path provided.
+ *   Extracts feature on MLU if the model path is provided.
  *   Otherwise, it would be done on CPU.
  */
 class Tracker : public Module, public ModuleCreator<Tracker> {
@@ -73,14 +73,14 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
   /**
    *  @brief Called by pipeline when pipeline is started.
    *
-   *  @param paramSet :
+   *  @param paramSet:
    * @verbatim
    * track_name: The class name for track. The "FeatureMatch" is provided.
    * model_path: The path of the offline model.
    * func_name:  Function name defined in the offline model. This can be found in the Cambricon twins description file.
                  It is "subnet0" for the most cases.
    * @endverbatim
-   *  @return Returns if the module has been opened successfully.
+   *  @return Returns true if the module has been opened successfully.
    */
   bool Open(cnstream::ModuleParamSet paramSet) override;
 
@@ -97,7 +97,7 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
    * @param data : Pointer to the frame information.
    *
    * @return Whether the process succeed.
-   * @retval 0: The process has run successfully and does no intercept data.
+   * @retval 0: The process has run successfully and has no intercepted data.
    * @retval <0: The process is failed.
    */
   int Process(std::shared_ptr<CNFrameInfo> data) override;

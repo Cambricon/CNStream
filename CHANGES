@@ -1,3 +1,10 @@
+changes for 4.4.0
+* add Ubuntu 18.04 CentOS dockerfile
+* add performance statistics mechanism
+* support multi process
+* support Neuware 1.2.5
+* fix some bugs
+
 changes for 4.0.0:
 
 * Initial Open Source release of CNStream

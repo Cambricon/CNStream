@@ -183,56 +183,56 @@ TEST(SourceHandlerFFmpeg, CheckTimeOut) {
   EXPECT_TRUE(ffmpeg_handler->CheckTimeOut(ts.tv_sec * 1000 + ts.tv_nsec / 1000000 + 5000));
 }
 
-TEST(SourceHandlerFFmpeg, PrepareResources) {
-  DataSource src(gname);
-  std::string h264_path = GetExePath() + "../../modules/unitest/source/data/img.h264";
-  std::string flv_path = GetExePath() + "../../modules/unitest/source/data/img.flv";
-  std::string mkv_path = GetExePath() + "../../modules/unitest/source/data/img.mkv";
-  std::string mp4_path = GetExePath() + "../../modules/unitest/source/data/img.mp4";
-  std::string h265_path = GetExePath() + "../../modules/unitest/source/data/265.mp4";
-  std::string car_path = GetExePath() + "../../modules/unitest/source/data/cars_short.mp4";
-
-  // H264
-  auto ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), h264_path, 30, false);
-  EXPECT_TRUE(ffmpeg_handler->PrepareResources());
-  // flv
-  ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), flv_path, 30, false);
-  EXPECT_TRUE(ffmpeg_handler->PrepareResources());
-  // mkv
-  ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), mkv_path, 30, false);
-  EXPECT_TRUE(ffmpeg_handler->PrepareResources());
-  // mp4
-  ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), mp4_path, 30, false);
-  EXPECT_TRUE(ffmpeg_handler->PrepareResources());
-  // H265
-  ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), h265_path, 30, false);
-  EXPECT_TRUE(ffmpeg_handler->PrepareResources());
-
-  ModuleParamSet param;
-  param["source_type"] = "ffmpeg";
-  param["output_type"] = "mlu";
-  param["decoder_type"] = "mlu";
-  param["device_id"] = "0";
-
-  // mlu decoder
-  EXPECT_TRUE(src.Open(param));
-  EXPECT_TRUE(ffmpeg_handler->Open());
-  ffmpeg_handler->Close();
-  EXPECT_TRUE(ffmpeg_handler->PrepareResources());
-
-  ffmpeg_handler->ClearResources();
-
-  // cpu decoder
-  param["decoder_type"] = "cpu";
-  param["output_type"] = "cpu";
-  EXPECT_TRUE(src.Open(param));
-  ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), car_path, 30, false);
-  EXPECT_TRUE(ffmpeg_handler->Open());
-  ffmpeg_handler->Close();
-  EXPECT_TRUE(ffmpeg_handler->PrepareResources());
-
-  ffmpeg_handler->ClearResources();
-}
+//  TEST(SourceHandlerFFmpeg, PrepareResources) {
+//    DataSource src(gname);
+//    std::string h264_path = GetExePath() + "../../modules/unitest/source/data/img.h264";
+//    std::string flv_path = GetExePath() + "../../modules/unitest/source/data/img.flv";
+//    std::string mkv_path = GetExePath() + "../../modules/unitest/source/data/img.mkv";
+//    std::string mp4_path = GetExePath() + "../../modules/unitest/source/data/img.mp4";
+//    std::string h265_path = GetExePath() + "../../modules/unitest/source/data/265.mp4";
+//    std::string car_path = GetExePath() + "../../modules/unitest/source/data/cars_short.mp4";
+//
+//    // H264
+//    auto ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), h264_path, 30, false);
+//    EXPECT_TRUE(ffmpeg_handler->PrepareResources());
+//    // flv
+//    ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), flv_path, 30, false);
+//    EXPECT_TRUE(ffmpeg_handler->PrepareResources());
+//    // mkv
+//    ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), mkv_path, 30, false);
+//    EXPECT_TRUE(ffmpeg_handler->PrepareResources());
+//    // mp4
+//    ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), mp4_path, 30, false);
+//    EXPECT_TRUE(ffmpeg_handler->PrepareResources());
+//    // H265
+//    ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), h265_path, 30, false);
+//    EXPECT_TRUE(ffmpeg_handler->PrepareResources());
+//
+//    ModuleParamSet param;
+//    param["source_type"] = "ffmpeg";
+//    param["output_type"] = "mlu";
+//    param["decoder_type"] = "mlu";
+//    param["device_id"] = "0";
+//
+//    // mlu decoder
+//    EXPECT_TRUE(src.Open(param));
+//    EXPECT_TRUE(ffmpeg_handler->Open());
+//    ffmpeg_handler->Close();
+//    EXPECT_TRUE(ffmpeg_handler->PrepareResources());
+//
+//    ffmpeg_handler->ClearResources();
+//
+//    // cpu decoder
+//    param["decoder_type"] = "cpu";
+//    param["output_type"] = "cpu";
+//    EXPECT_TRUE(src.Open(param));
+//    ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), car_path, 30, false);
+//    EXPECT_TRUE(ffmpeg_handler->Open());
+//    ffmpeg_handler->Close();
+//    EXPECT_TRUE(ffmpeg_handler->PrepareResources());
+//
+//    ffmpeg_handler->ClearResources();
+//  }
 
 TEST(SourceHandlerFFmpeg, Extract) {
   DataSource src(gname);
@@ -248,61 +248,61 @@ TEST(SourceHandlerFFmpeg, Extract) {
   ffmpeg_handler->ClearResources();
 }
 
-TEST(SourceHandlerFFmpeg, ProcessMlu) {
-  DataSource src(gname);
-  std::string mp4_path = GetExePath() + "../../modules/unitest/source/data/img.mp4";
-  // H264
-  auto ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), mp4_path, 30, false);
-  ModuleParamSet param;
-  param["source_type"] = "ffmpeg";
-  param["output_type"] = "mlu";
-  param["decoder_type"] = "mlu";
-  param["device_id"] = "0";
-
-  EXPECT_TRUE(src.Open(param));
-  EXPECT_TRUE(ffmpeg_handler->Open());
-  ffmpeg_handler->Close();
-  EXPECT_TRUE(ffmpeg_handler->PrepareResources());
-
-  // img.mp4 has 5 frames
-  for (uint32_t i = 0; i < 5; i++) {
-    EXPECT_TRUE(ffmpeg_handler->Process());
-  }
-  // loop is set to false, send eos and return false
-  EXPECT_FALSE(ffmpeg_handler->Process());
-
-  ffmpeg_handler->ClearResources();
-
-  // set loop to true
-  ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), mp4_path, 30, true);
-
-  EXPECT_TRUE(ffmpeg_handler->Open());
-  ffmpeg_handler->Close();
-  EXPECT_TRUE(ffmpeg_handler->PrepareResources());
-
-  uint32_t loop = 10;
-  while (loop--) {
-    // img.mp4 has 5 frames
-    for (uint32_t i = 0; i < 5; i++) {
-      EXPECT_TRUE(ffmpeg_handler->Process());
-    }
-    // loop is set to true, do not send eos and return true
-    EXPECT_TRUE(ffmpeg_handler->Process());
-  }
-
-  ffmpeg_handler->ClearResources();
-
-  // reuse codec buffer
-  param["reuse_cndec_buf"] = "true";
-  ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), mp4_path, 30, false);
-  EXPECT_TRUE(src.Open(param));
-  EXPECT_TRUE(ffmpeg_handler->Open());
-  ffmpeg_handler->Close();
-  EXPECT_TRUE(ffmpeg_handler->PrepareResources());
-  EXPECT_TRUE(ffmpeg_handler->Process());
-
-  ffmpeg_handler->ClearResources();
-}
+//  TEST(SourceHandlerFFmpeg, ProcessMlu) {
+//    DataSource src(gname);
+//    std::string mp4_path = GetExePath() + "../../modules/unitest/source/data/img.mp4";
+//    // H264
+//    auto ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), mp4_path, 30, false);
+//    ModuleParamSet param;
+//    param["source_type"] = "ffmpeg";
+//    param["output_type"] = "mlu";
+//    param["decoder_type"] = "mlu";
+//    param["device_id"] = "0";
+//
+//    EXPECT_TRUE(src.Open(param));
+//    EXPECT_TRUE(ffmpeg_handler->Open());
+//    ffmpeg_handler->Close();
+//    EXPECT_TRUE(ffmpeg_handler->PrepareResources());
+//
+//    // img.mp4 has 5 frames
+//    for (uint32_t i = 0; i < 5; i++) {
+//      EXPECT_TRUE(ffmpeg_handler->Process());
+//    }
+//    // loop is set to false, send eos and return false
+//    EXPECT_FALSE(ffmpeg_handler->Process());
+//
+//    ffmpeg_handler->ClearResources();
+//
+//    // set loop to true
+//    ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), mp4_path, 30, true);
+//
+//    EXPECT_TRUE(ffmpeg_handler->Open());
+//    ffmpeg_handler->Close();
+//    EXPECT_TRUE(ffmpeg_handler->PrepareResources());
+//
+//    uint32_t loop = 10;
+//    while (loop--) {
+//      // img.mp4 has 5 frames
+//      for (uint32_t i = 0; i < 5; i++) {
+//        EXPECT_TRUE(ffmpeg_handler->Process());
+//      }
+//      // loop is set to true, do not send eos and return true
+//      EXPECT_TRUE(ffmpeg_handler->Process());
+//    }
+//
+//    ffmpeg_handler->ClearResources();
+//
+//    // reuse codec buffer
+//    param["reuse_cndec_buf"] = "true";
+//    ffmpeg_handler = std::make_shared<DataHandlerFFmpeg>(&src, std::to_string(0), mp4_path, 30, false);
+//    EXPECT_TRUE(src.Open(param));
+//    EXPECT_TRUE(ffmpeg_handler->Open());
+//    ffmpeg_handler->Close();
+//    EXPECT_TRUE(ffmpeg_handler->PrepareResources());
+//    EXPECT_TRUE(ffmpeg_handler->Process());
+//
+//    ffmpeg_handler->ClearResources();
+//  }
 
 TEST(SourceHandlerFFmpeg, ProcessCpu) {
   DataSource src(gname);
@@ -329,143 +329,143 @@ TEST(SourceHandlerFFmpeg, ProcessCpu) {
   ffmpeg_handler->ClearResources();
 }
 
-TEST(SourceHandlerRaw, PrepareResources) {
-  DataSource src(gname);
-  std::string h264_path = GetExePath() + "../../modules/unitest/source/data/raw.h264";
-  std::string h265_path = GetExePath() + "../../modules/unitest/source/data/raw.h265";
-  std::string mp4_path = GetExePath() + "../../modules/unitest/source/data/img.mp4";
-  // filename is empty string
-  auto raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), "", 30, false);
-  EXPECT_FALSE(raw_handler->PrepareResources());
+//  TEST(SourceHandlerRaw, PrepareResources) {
+//    DataSource src(gname);
+//    std::string h264_path = GetExePath() + "../../modules/unitest/source/data/raw.h264";
+//    std::string h265_path = GetExePath() + "../../modules/unitest/source/data/raw.h265";
+//    std::string mp4_path = GetExePath() + "../../modules/unitest/source/data/img.mp4";
+//    // filename is empty string
+//    auto raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), "", 30, false);
+//    EXPECT_FALSE(raw_handler->PrepareResources());
+//
+//    raw_handler->ClearResources();
+//
+//    // no chunk size
+//    raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, 30, false);
+//    EXPECT_FALSE(raw_handler->PrepareResources());
+//
+//    ModuleParamSet param;
+//    param["source_type"] = "raw";
+//    param["output_type"] = "cpu";
+//    param["decoder_type"] = "cpu";
+//    // chunk size 50K
+//    param["chunk_size"] = "50000";
+//    param["width"] = "256";
+//    param["height"] = "256";
+//    param["interlaced"] = "false";
+//
+//    // support mlu deccoder oly
+//    EXPECT_TRUE(src.Open(param));
+//    EXPECT_TRUE(raw_handler->Open());
+//    raw_handler->Close();
+//    EXPECT_FALSE(raw_handler->PrepareResources());
+//
+//    // h264
+//    param["output_type"] = "mlu";
+//    param["decoder_type"] = "mlu";
+//    param["device_id"] = "0";
+//    EXPECT_TRUE(src.Open(param));
+//    EXPECT_TRUE(raw_handler->Open());
+//    raw_handler->Close();
+//    EXPECT_TRUE(raw_handler->PrepareResources());
+//    raw_handler->ClearResources();
+//
+//    // h265
+//    raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h265_path, 30, false);
+//    EXPECT_TRUE(raw_handler->Open());
+//    raw_handler->Close();
+//    EXPECT_TRUE(raw_handler->PrepareResources());
+//    raw_handler->ClearResources();
+//
+//    // chunk size 1K
+//    param["chunk_size"] = "1000";
+//    EXPECT_TRUE(src.Open(param));
+//    EXPECT_TRUE(raw_handler->Open());
+//    raw_handler->Close();
+//    EXPECT_TRUE(raw_handler->PrepareResources());
+//    raw_handler->ClearResources();
+//
+//    // only support file with extension .h264 .264 and .h265
+//    raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), mp4_path, 30, false);
+//    EXPECT_FALSE(raw_handler->PrepareResources());
+//
+//    raw_handler->ClearResources();
+//  }
 
-  raw_handler->ClearResources();
+//  TEST(SourceHandlerRaw, Extract) {
+//    DataSource src(gname);
+//    std::string h264_path = GetExePath() + "../../modules/unitest/source/data/raw.h264";
+//    auto raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), "", 30, false);
+//    EXPECT_FALSE(raw_handler->Extract());
+//
+//    ModuleParamSet param;
+//    param["source_type"] = "raw";
+//    param["output_type"] = "mlu";
+//    param["decoder_type"] = "mlu";
+//    param["device_id"] = "0";
+//    // chunk size 50K
+//    param["chunk_size"] = "50000";
+//    param["width"] = "256";
+//    param["height"] = "256";
+//    param["interlaced"] = "false";
+//    raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, 30, false);
+//    EXPECT_TRUE(src.Open(param));
+//    EXPECT_TRUE(raw_handler->Open());
+//    raw_handler->Close();
+//    EXPECT_TRUE(raw_handler->PrepareResources());
+//    // valid data
+//    EXPECT_TRUE(raw_handler->Extract());
+//    // invalid data (EOF)
+//    EXPECT_FALSE(raw_handler->Extract());
+//
+//    raw_handler->ClearResources();
+//  }
 
-  // no chunk size
-  raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, 30, false);
-  EXPECT_FALSE(raw_handler->PrepareResources());
-
-  ModuleParamSet param;
-  param["source_type"] = "raw";
-  param["output_type"] = "cpu";
-  param["decoder_type"] = "cpu";
-  // chunk size 50K
-  param["chunk_size"] = "50000";
-  param["width"] = "256";
-  param["height"] = "256";
-  param["interlaced"] = "false";
-
-  // support mlu deccoder oly
-  EXPECT_TRUE(src.Open(param));
-  EXPECT_TRUE(raw_handler->Open());
-  raw_handler->Close();
-  EXPECT_FALSE(raw_handler->PrepareResources());
-
-  // h264
-  param["output_type"] = "mlu";
-  param["decoder_type"] = "mlu";
-  param["device_id"] = "0";
-  EXPECT_TRUE(src.Open(param));
-  EXPECT_TRUE(raw_handler->Open());
-  raw_handler->Close();
-  EXPECT_TRUE(raw_handler->PrepareResources());
-  raw_handler->ClearResources();
-
-  // h265
-  raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h265_path, 30, false);
-  EXPECT_TRUE(raw_handler->Open());
-  raw_handler->Close();
-  EXPECT_TRUE(raw_handler->PrepareResources());
-  raw_handler->ClearResources();
-
-  // chunk size 1K
-  param["chunk_size"] = "1000";
-  EXPECT_TRUE(src.Open(param));
-  EXPECT_TRUE(raw_handler->Open());
-  raw_handler->Close();
-  EXPECT_TRUE(raw_handler->PrepareResources());
-  raw_handler->ClearResources();
-
-  // only support file with extension .h264 .264 and .h265
-  raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), mp4_path, 30, false);
-  EXPECT_FALSE(raw_handler->PrepareResources());
-
-  raw_handler->ClearResources();
-}
-
-TEST(SourceHandlerRaw, Extract) {
-  DataSource src(gname);
-  std::string h264_path = GetExePath() + "../../modules/unitest/source/data/raw.h264";
-  auto raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), "", 30, false);
-  EXPECT_FALSE(raw_handler->Extract());
-
-  ModuleParamSet param;
-  param["source_type"] = "raw";
-  param["output_type"] = "mlu";
-  param["decoder_type"] = "mlu";
-  param["device_id"] = "0";
-  // chunk size 50K
-  param["chunk_size"] = "50000";
-  param["width"] = "256";
-  param["height"] = "256";
-  param["interlaced"] = "false";
-  raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, 30, false);
-  EXPECT_TRUE(src.Open(param));
-  EXPECT_TRUE(raw_handler->Open());
-  raw_handler->Close();
-  EXPECT_TRUE(raw_handler->PrepareResources());
-  // valid data
-  EXPECT_TRUE(raw_handler->Extract());
-  // invalid data (EOF)
-  EXPECT_FALSE(raw_handler->Extract());
-
-  raw_handler->ClearResources();
-}
-
-TEST(SourceHandlerRaw, Process) {
-  int frame_rate = 30;
-  DataSource src(gname);
-  std::string h264_path = GetExePath() + "../../modules/unitest/source/data/raw.h264";
-  auto raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, frame_rate, false);
-
-  ModuleParamSet param;
-  param["source_type"] = "raw";
-  param["output_type"] = "mlu";
-  param["decoder_type"] = "mlu";
-  param["device_id"] = "0";
-  // chunk size 50K
-  param["chunk_size"] = "50000";
-  param["width"] = "256";
-  param["height"] = "256";
-  param["interlaced"] = "false";
-  raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, frame_rate, false);
-  EXPECT_TRUE(src.Open(param));
-  EXPECT_TRUE(raw_handler->Open());
-  raw_handler->Close();
-  EXPECT_TRUE(raw_handler->PrepareResources());
-  EXPECT_TRUE(raw_handler->Process());
-  EXPECT_FALSE(raw_handler->Process());
-
-  raw_handler->ClearResources();
-
-  raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, frame_rate, true);
-  EXPECT_TRUE(src.Open(param));
-  EXPECT_TRUE(raw_handler->Open());
-  raw_handler->Close();
-  EXPECT_TRUE(raw_handler->PrepareResources());
-
-  // FIXME
-  uint32_t loop = 10;
-  while (loop--) {
-    // valid data
-    EXPECT_TRUE(raw_handler->Process());
-    std::chrono::duration<double, std::milli> dura(1000.0 / frame_rate);
-    std::this_thread::sleep_for(dura);
-    // eos
-    EXPECT_TRUE(raw_handler->Process());
-    std::this_thread::sleep_for(dura);
-  }
-
-  raw_handler->ClearResources();
-}
+//  TEST(SourceHandlerRaw, Process) {
+//    int frame_rate = 30;
+//    DataSource src(gname);
+//    std::string h264_path = GetExePath() + "../../modules/unitest/source/data/raw.h264";
+//    auto raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, frame_rate, false);
+//
+//    ModuleParamSet param;
+//    param["source_type"] = "raw";
+//    param["output_type"] = "mlu";
+//    param["decoder_type"] = "mlu";
+//    param["device_id"] = "0";
+//    // chunk size 50K
+//    param["chunk_size"] = "50000";
+//    param["width"] = "256";
+//    param["height"] = "256";
+//    param["interlaced"] = "false";
+//    raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, frame_rate, false);
+//    EXPECT_TRUE(src.Open(param));
+//    EXPECT_TRUE(raw_handler->Open());
+//    raw_handler->Close();
+//    EXPECT_TRUE(raw_handler->PrepareResources());
+//    EXPECT_TRUE(raw_handler->Process());
+//    EXPECT_FALSE(raw_handler->Process());
+//
+//    raw_handler->ClearResources();
+//
+//    raw_handler = std::make_shared<DataHandlerRaw>(&src, std::to_string(0), h264_path, frame_rate, true);
+//    EXPECT_TRUE(src.Open(param));
+//    EXPECT_TRUE(raw_handler->Open());
+//    raw_handler->Close();
+//    EXPECT_TRUE(raw_handler->PrepareResources());
+//
+//    // FIXME
+//    uint32_t loop = 10;
+//    while (loop--) {
+//      // valid data
+//      EXPECT_TRUE(raw_handler->Process());
+//      std::chrono::duration<double, std::milli> dura(1000.0 / frame_rate);
+//      std::this_thread::sleep_for(dura);
+//      // eos
+//      EXPECT_TRUE(raw_handler->Process());
+//      std::this_thread::sleep_for(dura);
+//    }
+//
+//    raw_handler->ClearResources();
+//  }
 
 }  // namespace cnstream

@@ -69,16 +69,25 @@ TEST(EncoderModule, Process) {
   frame.CopyToSyncMem();
   EXPECT_EQ(ptr->Process(data), 0);
   ptr->Close();
+
+  params["dump_type"] = "image";
+  EXPECT_TRUE(ptr->Open(params));
+  EXPECT_EQ(ptr->Process(data), 0);
+  ptr->Close();
 }
 
 TEST(EncoderModule, CheckParamSet) {
   Encoder module(gname);
   ModuleParamSet params;
   params["dump_dir"] = GetExePath();
+  params["dump_type"] = "image";
   EXPECT_TRUE(module.CheckParamSet(params));
 
   params["fake_key"] = "fake_value";
   EXPECT_TRUE(module.CheckParamSet(params));
+
+  params["dump_type"] = "fake";
+  EXPECT_FALSE(module.CheckParamSet(params));
 }
 
 }  // namespace cnstream

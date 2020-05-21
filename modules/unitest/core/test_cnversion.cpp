@@ -24,9 +24,6 @@
 #include <sstream>
 #include "cnstream_version.hpp"
 #define VERSION_STRING_LENGTH 10
-#define MAJOR_VERSION 4
-#define MINOR_VERSION 0
-#define PATCH_VERSION 0
 
 namespace cnstream {
 
@@ -35,7 +32,7 @@ TEST(CoreCnVersion, GetVersion) {
   EXPECT_GE(MinorVersion(), 0);
   EXPECT_GE(PatchVersion(), 0);
   auto version = VersionString();
-  EXPECT_STREQ(version, "v4.0.0");
+  EXPECT_STREQ(version, "v4.4.0");
 }
 
 }  // namespace cnstream

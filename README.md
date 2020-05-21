@@ -14,7 +14,30 @@ CNStream provides the following plug-in modules:
 
 ## **Cambricon Dependencies** ##
 
-You can find Cambricon dependencies, including headers and libraries in the MLU directory.
+CNStream depends on the CNCodec library and the CNRT library which are packed in Cambricon neuware package.
+Therefore, the lastest Cambricon neuware package is required. If you do not have one, please feel free to contact with us.
+Our mailbox: service@cambricon.com
+
+### Install Cambricon neuware package ###
+
+#### Ubuntu or Debian ####
+
+```bash
+  dpkg -i neuware-mluxxx-x.x.x_Ubuntuxx.xx_amd64.deb
+  cd /var/neuware-mluxxx-x.x.x
+  dpkg -i cncodec-xxx.deb cnrt_xxx.deb
+```
+
+#### Centos ####
+
+```bash
+  yum -y install neuware-mluxxx-x.x.x.el7.x86_64.rpm
+  cd /var/neuware-mluxxx-x.x.x
+  yum -y install cncodec-xxx.rpm cnrt-xxx.rpm
+```
+After that, Cambricon dependencies that CNStream needed are installed at path '/usr/loacl/neuware'.
+
+Please make sure you must ``not`` install cnstream_xxx.deb or cnstream-xxx.rpm.
 
 ### Quick Start ###
 
@@ -30,6 +53,7 @@ Before building instructions, you need to install the following software:
 - Cmake2.8.7+
 - Live555         // If WITH_RTSP=ON, please run download_live.
 - SDL22.0.4+      // If build_display=ON.
+- SQLite3         // If build_perf=ON.
 
 #### Ubuntu or Debian ####
 
@@ -41,6 +65,7 @@ If you are using Ubuntu or Debian, run the following commands:
   GLog0.3.4     >>>>>>>>>   sudo apt-get install libgoogle-glog-dev
   Cmake2.8.7+   >>>>>>>>>   sudo apt-get install cmake
   SDL22.0.4+    >>>>>>>>>   sudo apt-get install libsdl2-dev
+  SQLite3       >>>>>>>>>   sudo apt-get install libsqlite3-dev sqlite3
 ```
 
 #### Centos ####
@@ -53,6 +78,7 @@ If you are using Centos, run the following commands:
   GLog0.3.4     >>>>>>>>>   sudo yum install glog.x86_64
   Cmake2.8.7+   >>>>>>>>>   sudo yum install cmake3.x86_64
   SDL22.0.4+    >>>>>>>>>   sudo yum install SDL2_gfx-devel.x86_64
+  SQLite3       >>>>>>>>>   sudo yum install sqlite-devel
 ```
 
 ## Build Instructions Using CMake ##
@@ -78,24 +104,24 @@ After finished prerequisites, you can build instructions with the following step
 
    `${CNSTREAM_DIR}` specifies the directory where CNStream saves for.
 
-   | cmake option        | range                                    | default | description                |
-   | ------------------- | ---------------------------------------- | ------- | -------------------------- |
-   | build_display       | ON / OFF                                 | ON      | build display module       |
-   | build_encode        | ON / OFF                                 | ON      | build encode module        |
-   | build_fps_stats     | ON / OFF                                 | ON      | build fps_stats module     |
-   | build_inference     | ON / OFF                                 | ON      | build inference module     |
-   | build_osd           | ON / OFF                                 | ON      | build osd module           |
-   | build_source        | ON / OFF                                 | ON      | build source module        |
-   | build_track         | ON / OFF                                 | ON      | build track module         |
-   | build_tests         | ON / OFF                                 | ON      | build tests                |
-   | build_samples       | ON / OFF                                 | ON      | build samples              |
-   | build_test_coverage | ON / OFF                                 | OFF     | build test coverage        |
-   | MLU                 | MLU270  / MLU220_SOC                     | MLU270  | specify MLU platform       |
-   | RELEASE             | ON / OFF                                 | ON      | release / debug            |
-   | WITH_FFMPEG         | ON / OFF                                 | ON      | build with FFMPEG          |
-   | WITH_OPENCV         | ON / OFF                                 | ON      | build with OPENCV          |
-   | WITH_CHINESE        | ON / OFF                                 | OFF     | build with CHINESE         |
-   | WITH_RTSP           | ON / OFF                                 | ON      | build with RTSP            |
+   | cmake option        | range                                    | default | description                 |
+   | ------------------- | ---------------------------------------- | ------- | --------------------------- |
+   | build_display       | ON / OFF                                 | ON      | build display module        |
+   | build_encode        | ON / OFF                                 | ON      | build encode module         |
+   | build_inference     | ON / OFF                                 | ON      | build inference module      |
+   | build_osd           | ON / OFF                                 | ON      | build osd module            |
+   | build_source        | ON / OFF                                 | ON      | build source module         |
+   | build_track         | ON / OFF                                 | ON      | build track module          |
+   | build_perf          | ON / OFF                                 | ON      | build performance statistics|
+   | build_tests         | ON / OFF                                 | ON      | build tests                 |
+   | build_samples       | ON / OFF                                 | ON      | build samples               |
+   | build_test_coverage | ON / OFF                                 | OFF     | build test coverage         |
+   | MLU                 | MLU270                                   | MLU270  | specify MLU platform        |
+   | RELEASE             | ON / OFF                                 | ON      | release / debug             |
+   | WITH_FFMPEG         | ON / OFF                                 | ON      | build with FFMPEG           |
+   | WITH_OPENCV         | ON / OFF                                 | ON      | build with OPENCV           |
+   | WITH_CHINESE        | ON / OFF                                 | OFF     | build with CHINESE          |
+   | WITH_RTSP           | ON / OFF                                 | ON      | build with RTSP             |
 
 3. If you want to build CNStream samples:
    a. Run the following command:
@@ -128,9 +154,10 @@ This demo shows how to detect objects using CNStream. It includes the following 
 - **tracker**: Tracks multi-objects.
 - **encoder**: Encodes images with inference results, namely the detection result.
 - **displayer**: Displays inference results on the screen.
-- **fps** **statistics**: Prints the statistics on the terminal.
 
 In the run.sh script, ``detection_config.json`` is set as the configuration file. In this configuration file, resnet34_ssd.cambricon is the offline model used for inference, which means, the data will be fed to an SSD model after decoding. And the results will be shown on the screen.
+
+If we build with build_perf on, the performance statistics of each plug-in module and the pipeline will be printed on the terminal.
 
 In addition, see the comments in ``cnstream/samples/demo/run.sh`` for details.
 

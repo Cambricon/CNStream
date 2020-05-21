@@ -17,12 +17,15 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+#include "cnstream_module.hpp"
+
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 #include "cnstream_eventbus.hpp"
-#include "cnstream_module.hpp"
 #include "cnstream_pipeline.hpp"
+#include "threadsafe_queue.hpp"
 
 namespace cnstream {
 
@@ -73,30 +76,35 @@ bool Module::PostEvent(EventType type, const std::string& msg) const {
 }
 
 int Module::DoProcess(std::shared_ptr<CNFrameInfo> data) {
-  if (!HasTransmit()) {
-    if (!isSource_) fps_stat_.Update(data);
-    return Process(data);
-  }
   return Process(data);
 }
 
 bool Module::TransmitData(std::shared_ptr<CNFrameInfo> data) {
   if (HasTransmit()) {
     if (container_) {
-      if (!isSource_) fps_stat_.Update(data);
       return container_->ProvideData(this, data);
+    } else {
+      output_frame_queue_.Push(data);
     }
   }
   return false;
 }
 
-/**
- * Show performance statistics for this module
- */
-void Module::PrintPerfInfo() {
-  if (!isSource_ && showPerfInfo_.load()) {
-    fps_stat_.PrintFps(this->GetName());
+std::shared_ptr<CNFrameInfo> Module::GetOutputFrame()  {
+  std::shared_ptr<CNFrameInfo> output_frame = nullptr;
+  output_frame_queue_.WaitAndTryPop(output_frame, std::chrono::milliseconds(100));
+  return output_frame;
+}
+
+void Module::SetPerfManagers(const std::unordered_map<std::string, std::shared_ptr<PerfManager>>& perf_managers) {
+  perf_managers_ = perf_managers;
+}
+
+std::shared_ptr<PerfManager> Module::GetPerfManager(const std::string& stream_id) {
+  if (perf_managers_.find(stream_id) != perf_managers_.end()) {
+    return perf_managers_[stream_id];
   }
+  return nullptr;
 }
 
 ModuleFactory* ModuleFactory::factory_ = nullptr;

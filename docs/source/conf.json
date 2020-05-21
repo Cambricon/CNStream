@@ -16,7 +16,8 @@
 				"\\\\chapter{([\\s\\S].*)}": "\\\\chapter{\\1}\n\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}",
                 "\\\\footnotesize\\\\raggedright\\\\printindex": "% \\\\footnotesize\\\\raggedright\\\\printindex",
                 "\\\\begin{itemize}":"\\\\begin{itemize}[leftmargin=*]",
-                "\\\\begin{enumerate}":"\\\\begin{enumerate}[leftmargin=*]"
+                "\\\\begin{enumerate}":"\\\\begin{enumerate}[leftmargin=*]",
+				"\\\\renewcommand{\\\\releasename}{发布}":"\\\\renewcommand{\\\\releasename}{版本}"
         },
 	"customoptions": [
                 "\\\\titleformat{\\\\chapter}{\\\\raggedleft\\\\huge\\\\bfseries\\\\color{white}}{\\\\thechapter}{0.5em}{}",
@@ -29,7 +30,7 @@
 	],
         "isfiguretabletoc": {
 		"comment": "插图目录英文：List of  Figures;表格目录英文：List of Tables.",
-                "isfigurestoc": false,
+                "isfigurestoc": true,
                 "istablestoc": false,
                 "figurestoc": [
                            "\\\\renewcommand\\listfigurename{插\\ 图\\ 目\\ 录}",

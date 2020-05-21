@@ -6,9 +6,9 @@
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <string>
 #include <utility>
 #include <vector>
-
 #ifdef HAVE_OPENCV
 #include <opencv2/opencv.hpp>
 #else
@@ -37,6 +37,7 @@ class SDLVideoPlayer {  // BGR
   void SetFullScreen();
 
   bool FeedData(const UpdateData &data);
+  std::string CalculateFps(const UpdateData& data);
 
   void EventLoop(const std::function<void()> &quit_callback);
 
@@ -67,6 +68,12 @@ class SDLVideoPlayer {  // BGR
   int chn_w_, chn_h_;
   bool running_ = false;
   int click_chn_ = -1;
+  decltype(std::chrono::high_resolution_clock::now()) time_type;
+  std::vector<std::pair<decltype(time_type), int /* flag */>> stime_frameid;
+  std::vector<int> interval_count;
+  std::vector<int> fps;
+  std::vector<int> first_time_interval;
+  std::vector<int> frame_counter;
   std::vector<std::pair<std::queue<UpdateData>, std::shared_ptr<std::mutex>>> data_queues_;
   SDL_Window *window_ = nullptr;
   SDL_Renderer *renderer_ = nullptr;
@@ -85,6 +92,14 @@ class SDLVideoPlayer {  // BGR
   inline void set_frame_rate(int frame_rate) { }
   inline bool FeedData(const UpdateData &data) { return true; }
   void EventLoop(const std::function<void()> &quit_callback) { }
+  std::string CalculateFps(const UpdateData& data) { return "";}
+ private:
+  decltype(std::chrono::high_resolution_clock::now()) time_type;
+  std::vector<std::pair<decltype(time_type), int /* flag */>> stime_frameid;
+  std::vector<int> interval_count;
+  std::vector<int> fps;
+  std::vector<int> first_time_interval;
+  std::vector<int> frame_counter;
 };  // class SDLVideoPlayer
 #endif  // HAVE_SDL
 

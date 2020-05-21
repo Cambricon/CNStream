@@ -18,9 +18,12 @@
 # * THE SOFTWARE.
 # *************************************************************************/
 
-# 1. copy your neuware package into the directory of CNStream
-# 2. docker build -f docker/Dockerfile.18.04 --build-arg neuware_package=${neuware_package_name} -t ubuntu_cnstream:v1 .
-# 3. docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
+# 1. build image
+# (1) build image with neuware installed:
+#   a. copy your neuware package into the directory of CNStream
+#   b. docker build -f docker/Dockerfile.18.04 --build-arg neuware_package=${neuware_package_name} -t ubuntu_cnstream:v1 .
+# (2) build image without neuware installed: docker build -f docker/Dockerfile.18.04 --build-arg with_neuware_installed=no -t ubuntu_cnstream:v1 .
+# 2. start container: docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
 
 FROM ubuntu:18.04
 
@@ -29,6 +32,7 @@ MAINTAINER <Cambricon, Inc.>
 WORKDIR /root/CNStream
 ARG neuware_package=neuware-mlu270-1.2.5-1_Ubuntu18.04_amd64.deb
 ARG mlu_platform=MLU270
+ARG with_neuware_installed=yes
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN echo -e 'nameserver 114.114.114.114' > /etc/resolv.conf
@@ -40,17 +44,18 @@ RUN sed -i "1i deb http://mirrors.aliyun.com/ubuntu/ bionic main restricted univ
             git build-essential cmake make vim \
             libgoogle-glog-dev \
             openssh-server \
+            libsqlite3-dev sqlite3 \ 
             net-tools && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 COPY . /root/CNStream/
 
-RUN dpkg -i /root/CNStream/$neuware_package && \
+RUN if [ "$with_neuware_installed" = "yes" ]; then dpkg -i /root/CNStream/$neuware_package && \
     apt -o Accquire::AllowInsecureRepositories=true update && \
-    apt install -y cndev cnrt cncodec cnml && \
+    apt install -y cndev cnrt cncodec cnml cnplugin && \
     mkdir build && cd build && cmake .. -DMLU=$mlu_platform && make && \
-    rm -rf /root/CNStream/$neuware_package
+    rm -rf /root/CNStream/$neuware_package; fi
 
 WORKDIR /root/CNStream/samples/demo
 

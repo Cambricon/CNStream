@@ -44,10 +44,11 @@
 #include "cnstream_common.hpp"
 #include "cnstream_eventbus.hpp"
 #include "cnstream_frame.hpp"
-#include "cnstream_statistic.hpp"
-#include "cnstream_timer.hpp"
+#include "threadsafe_queue.hpp"
 
 namespace cnstream {
+
+class PerfManager;
 
 /// Module parameter set.
 using ModuleParamSet = std::unordered_map<std::string, std::string>;
@@ -95,7 +96,7 @@ class Module {
    * @brief ParamRegister
    *
    * Each module registers its own parameters and descriptions.
-   * CNStream Inspect tool uses this class to detect parameters of each module.
+   * This is used in CNStream Inspect tool to detect parameters of each module.
    *
    */
  public:
@@ -106,12 +107,12 @@ class Module {
 
    public:
     /**
-     * @brief Registers a paramter and its description.
+     * @brief Registers a parameter and its description.
      *
      * This is used in CNStream Inspect tool.
      *
      * @param key The parameter name.
-     * @param desc The description of the paramter.
+     * @param desc The description of the parameter.
      *
      * @return Void.
      */
@@ -119,15 +120,15 @@ class Module {
       module_params_.push_back(std::make_pair(key, desc));
     }
     /**
-     * @brief Gets the registered paramters and the parameter descriptions.
+     * @brief Gets the registered parameters and the parameter description.
      *
      * This is used in CNStream Inspect tool.
      *
-     * @return Returns the registered paramters and the parameter descriptions.
+     * @return Returns the registered parameters and the parameter description.
      */
     std::vector<std::pair<std::string, std::string>> GetParams() { return module_params_; }
     /**
-     * @brief Checks if the paramter is registered.
+     * @brief Checks if the parameter is registered.
      *
      * This is used in CNStream Inspect tool.
      *
@@ -185,7 +186,7 @@ class Module {
    * @return Returns true if this function has run successfully. Otherwise, returns false.
    *
    * @note You do not need to call this function by yourself. This function is called
-   *       by pipeline automatically when pipeline is started. The pipeline calls the ``Process`` function
+   *       by pipeline automatically when the pipeline is started. The pipeline calls the ``Process`` function
    *       of this module automatically after the ``Open`` function is done.
    */
   virtual bool Open(ModuleParamSet param_set) = 0;
@@ -196,7 +197,7 @@ class Module {
    * @return Void.
    *
    * @note You do not need to call this function by yourself. This function is called
-   *       by pipeline automatically when pipeline is stoped. The pipeline calls the ``Close`` function
+   *       by pipeline automatically when the pipeline is stopped. The pipeline calls the ``Close`` function
    *       of this module automatically after the ``Open`` and ``Process`` functions are done.
    */
   virtual void Close() = 0;
@@ -206,10 +207,10 @@ class Module {
    *
    * @param data The data to be processed by the module.
    *
-   * @retval 0: The data is processed successfully. But the data should be transmitted in framework then.
+   * @retval 0: The data is processed successfully. The data should be transmitted in the framework then.
    * @retval >0: The data is processed successfully. The data has been handled by this module. The ``hasTransmit_`` must be set.
    *             The Pipeline::ProvideData should be called by Module to transmit data
-   *            to the next modules in the pipeline.
+   *             to the next modules in the pipeline.
    * @retval <0: Pipeline will post an event with the EVENT_ERROR event type and return
    *             number.
    */
@@ -234,16 +235,11 @@ class Module {
   bool PostEvent(EventType type, const std::string &msg) const;
 
   /**
-   * Displays the performance statistics for this module.
-   */
-  virtual void PrintPerfInfo();
-
-  /**
    * @brief Transmits data to the following stages.
    *
-   * Valid when the module has permitssion to transmit data by itself.
+   * Valid when the module has permission to transmit data by itself.
    *
-   * @param data The pointer to the information of the frame.
+   * @param data A pointer to the information of the frame.
    *
    * @return Returns true if the data has been transmitted successfully. Otherwise, returns false.
    */
@@ -259,7 +255,6 @@ class Module {
   virtual bool CheckParamSet(const ModuleParamSet &paramSet) const { return true; }
 
  protected:
-  friend class CNDataFrame;
   friend class Pipeline;
   friend class PipelinePrivate;
 
@@ -270,7 +265,7 @@ class Module {
   /**
    * Sets a container to this module and identifies which pipeline the module is added to.
    *
-   * @param container the container of this module, which is a pipeline pointer.
+   * @param container A pipeline pointer to the container of this module.
    * 
    * @note This function is called automatically by the pipeline after this module
    *       is added into the pipeline. You do not need to call this function by yourself.
@@ -303,12 +298,12 @@ class Module {
   /**
    * @brief Processes the data.
    *
-   * This function is called by pipeline.
+   * This function is called by a pipeline.
    *
-   * @param data The pointer to the information of the frame.
+   * @param data A pointer to the information of the frame.
    *
    * @return
-   * @retval 0: The process has been run successfully. But the data should be transmitted by framework then.
+   * @retval 0: The process has been run successfully. The data should be transmitted by framework then.
    * @retval >0: The process has been run successfully. The data has been handled by this module. The ``hasTransmit_`` must be set.
    *             The Pipeline::ProvideData should be called by Module to transmit data
    *             to the next modules in the pipeline.
@@ -318,23 +313,52 @@ class Module {
   int DoProcess(std::shared_ptr<CNFrameInfo> data);
 
   /**
+   * @brief Checks if the display of performance information is enabled.
+   *
    * @return Returns true if the performance information is displayed. Otherwise, returns false.
    */
   bool ShowPerfInfo() { return showPerfInfo_.load(); }
   /**
-   * @brief Enable or disable showing performance information.
+   * @brief Enables or disables to display performance information.
    *
-   * @param enable If it is true, enbale showing performance information, otherwise, disable.
+   * @param enable If it is true, enable to display performance information, otherwise, disable to display the performance information.
    *
    * @return Void.
    */
   void ShowPerfInfo(bool enable) { showPerfInfo_.store(enable); }
 
+  /**
+   * @brief Sets PerfManagers. The module can then use PerfManagers.
+   *
+   * @param perf_managers A container instance in the unordered_map type. The key is the stream ID.
+   * The value is a shared_ptr object of PerfManager.
+   *
+   * @return Void.
+   */
+  void SetPerfManagers(const std::unordered_map<std::string, std::shared_ptr<PerfManager>>& perf_managers);
+  /**
+   * @brief Gets PerfManager by stream ID.
+   *
+   * @param stream_id The stream ID.
+   *
+   * @return Returns the shared_ptr object of PerfManager.
+   */
+  std::shared_ptr<PerfManager> GetPerfManager(const std::string& stream_id);
+  /**
+   * @brief Clears PerfManagers.
+   *
+   * @return Void.
+   */
+  void ClearPerfManagers() {
+    perf_managers_.clear();
+  }
+
+  std::shared_ptr<CNFrameInfo> GetOutputFrame();
+
  protected:
   Pipeline *container_ = nullptr;         ///< The container.
   std::string name_;                      ///< The name of the module.
-  std::atomic<bool> hasTransmit_{false};  ///< If it has permission to transmit data.
-  std::atomic<bool> isSource_{false};     ///< If it is a source module.
+  std::atomic<bool> hasTransmit_{false};  ///< Whether it has permission to transmit data.
 
  private:
   void ReturnId();
@@ -345,10 +369,11 @@ class Module {
 
   std::vector<size_t> parent_ids_;
   uint64_t mask_ = 0;
+  ThreadSafeQueue<std::shared_ptr<CNFrameInfo>> output_frame_queue_;
 
  protected:
-  StreamFpsStat fps_stat_;
   std::atomic<bool> showPerfInfo_{false};
+  std::unordered_map<std::string, std::shared_ptr<PerfManager>> perf_managers_;
 };
 
 class ModuleEx : public Module {
@@ -508,7 +533,7 @@ class ParametersChecker {
    * @brief Checks if the path exists.
    *
    * @param path The path relative to JSON file or an absolute path.
-   * @param paramSet The module parameters. The JSON file path is one of the parameters.
+   * @param paramSet The module parameters. The path of the JSON file is one of the parameters.
    *
    * @return Returns true if exists. Otherwise, returns false.
    */
@@ -526,7 +551,7 @@ class ParametersChecker {
    * @param paramSet The module parameters.
    * @param err_msg The error message.
    * @param greater_than_zero If this parameter is set to ``true``, the parameter set should be
-   * greater than or equal to zero. If this parameter is set to ``false``, the parameter set is less than zero.
+   * greater than or equal to zero. If this parameter is set to ``false``, the parameter set should be less than zero.
    *
    * @return Returns true if the parameters are number and the value is in the correct range. Otherwise, returns false.
    */

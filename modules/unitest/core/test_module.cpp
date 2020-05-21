@@ -27,9 +27,11 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "cnstream_module.hpp"
 #include "cnstream_pipeline.hpp"
+#include "perf_manager.hpp"
 
 namespace cnstream {
 
@@ -100,6 +102,31 @@ TEST(CoreModule, postevent) {
   ASSERT_TRUE(pipe.AddModule(ptr));
   pipe.Start();
   EXPECT_TRUE(ptr->PostEvent(T_type, T_messgge));
+  pipe.Stop();
+}
+
+TEST(CoreModule, SetAndGetPerfManager) {
+  Pipeline pipe("pipe");
+  std::shared_ptr<TestModuleBase> ptr(new (TestModuleBase));
+  TestModuleBase module;
+  ModuleParamSet parames;
+  ASSERT_TRUE(ptr->Open(parames));
+  ASSERT_TRUE(pipe.AddModule(ptr));
+  pipe.Start();
+  std::vector<std::string> stream_ids = {"1", "2"};
+  std::vector<std::string> m_names = {"m1", "m2"};
+
+  std::unordered_map<std::string, std::shared_ptr<PerfManager>> managers;
+  for (auto it : stream_ids) {
+    managers[it] = std::make_shared<PerfManager>();
+    EXPECT_TRUE(managers[it]->Init("test_" + it + ".db", m_names, m_names[0], {m_names[1]}));
+  }
+  ptr->SetPerfManagers(managers);
+
+  for (auto it : stream_ids) {
+    EXPECT_TRUE(ptr->GetPerfManager(it) != nullptr);
+  }
+  EXPECT_TRUE(ptr->GetPerfManager("wrong_stream") == nullptr);
   pipe.Stop();
 }
 

@@ -22,7 +22,7 @@ endif()
 
 #######################################################################
 
-set(MLU_LIBS_PATH ${PROJECT_SOURCE_DIR}/mlu/${MLU_PLATFORM}/libs/${CMAKE_SYSTEM_PROCESSOR})
+set(MLU_LIBS_PATH $ENV{NEUWARE_HOME}/lib64)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib/) 
 
 # ---[ cnrt
@@ -30,7 +30,7 @@ list(APPEND CNRT_LIBS "${MLU_LIBS_PATH}/libcnrt.so")
 
 # ---[ cncodec & kcf
 if(WITH_CODEC)
-  list(APPEND CNCODEC_LIBS "${MLU_LIBS_PATH}/libcncodec.so")
+  list(APPEND CNCODEC_LIBS "${MLU_LIBS_PATH}/libcncodec.so" "${MLU_LIBS_PATH}/libcndrv.so")
 endif()
 if(WITH_TRACKER)
   list(APPEND KCF_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/src/easytrack/kcf/libkcf_mlu270.a")

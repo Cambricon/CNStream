@@ -1,10 +1,10 @@
 #!/bin/bash
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 arch=`uname -m`
-card=$(cat /proc/driver/cambricon/mlus/*/information | grep -Eiow 'mlu-100|mlu-270|mlu-220 M2' | uniq -c | grep -Eiow 'mlu-270|mlu-100|mlu-220 M2')
+card=$(cat /proc/driver/cambricon/mlus/*/information | grep -Eiow 'mlu-100|mlu-270|mlu-220 M2|mlu-220 EVB' | uniq -c | grep -Eiow 'mlu-270|mlu-100|mlu-220 M2|mlu-220 EVB')
 if [ "${card}" == "mlu-270" ]; then
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CURRENT_DIR/../../mlu/MLU270/libs/$arch:$CURRENT_DIR/../../lib
-elif [ "${card}" == "mlu-220 M2" ]; then
+elif [ "${card}" == "mlu-220 M2" -o "${card}" == "mlu-220 EVB" ]; then
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CURRENT_DIR/../../mlu/MLU270/libs/$arch:$CURRENT_DIR/../../lib
 else
   echo "driver is not installed!!!"

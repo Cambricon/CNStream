@@ -9,19 +9,17 @@ jobs:
   job_lintgit_check:
     runs-on: self-hosted
     steps:
-    - name: output
-      run: echo $123
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Run lintgit
       run: ./tools/lintgit master $PWD
 
   build:
     runs-on: self-hosted
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: install live555
       run: ./tools/download_live.sh 
     - name: configure
       run: mkdir build && cd build && cmake -DMLU=MLU270 .. && make -j16
     - name: test
-      run: export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./mlu/MLU270/libs/x86_64/ && ./build/bin/cnstream_test
+      run: export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/neuware/lib64 && ./build/bin/cnstream_test

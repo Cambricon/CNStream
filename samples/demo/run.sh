@@ -41,3 +41,7 @@ mkdir -p output
     --loop=false \
     --config_fname "detection_config.json" \
     --alsologtostderr
+    # uncomment to stop measuring performance
+    #--perf=false \
+    # uncomment to change directory of database file
+    #--perf_db_dir="" \

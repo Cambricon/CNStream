@@ -18,9 +18,12 @@
 # * THE SOFTWARE.
 # *************************************************************************/
 
-# 1. copy your neuware package into the directory of CNStream
-# 2. docker build -f docker/Dockerfile.CentOS --build-arg neuware_package=${neuware_package_name} -t centos_cnstream:v1 .
-# 3. docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace centos_cnstream:v1
+# 1. build image
+# (1) build image with neuware installed:
+#   a. copy your neuware package into the directory of CNStream
+#   b. docker build -f docker/Dockerfile.CentOS --build-arg neuware_package=${neuware_package_name} -t centos_cnstream:v1 .
+# (2) build image without neuware installed: docker build -f docker/Dockerfile.CentOS --build-arg with_neuware_installed=no -t centos_cnstream:v1 .
+# 2. start container: docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace centos_cnstream:v1
 
 FROM centos:7.6.1810
 
@@ -30,6 +33,7 @@ WORKDIR /root/CNStream/
 
 ARG neuware_package=neuware-mlu270-1.2.5.el7.x86_64.rpm
 ARG mlu_platform=MLU270
+ARG with_neuware_installed=yes
 
 RUN echo -e 'nameserver 114.114.114.114' > /etc/resolv.conf
 
@@ -39,17 +43,17 @@ RUN  yum install -y wget && \
 	 yum clean all && yum makecache && \
 	 yum install -y epel-release && \
 	 yum install -y zlib-devel git make vim gcc gcc-c++ kernel-devel net-tools cmake && \
-	 yum install -y opencv-devel.x86_64 gflags-devel glog-devel SDL2_gfx-devel &&\
+	 yum install -y opencv-devel.x86_64 gflags-devel glog-devel SDL2_gfx-devel sqlite-devel &&\
 	 rpm --import http://li.nux.ro/download/nux/RPM-GPG-KEY-nux.ro && \
 	 rpm -Uvh http://li.nux.ro/download/nux/dextop/el7/x86_64/nux-dextop-release-0-5.el7.nux.noarch.rpm && \
 	 yum install -y ffmpeg ffmpeg-devel gstreamer*
 
 COPY . /root/CNStream/
 
-RUN yum install  -y /root/CNStream/$neuware_package && \
-    yum install  -y cnrt cnml cncodec cndev && \
+RUN if [ "$with_neuware_installed" = "yes" ]; then yum install  -y /root/CNStream/$neuware_package && \
+    yum install  -y cnrt cnml cncodec cndev cnplugin && \
     mkdir build && cd build && cmake .. -DMLU=$mlu_platform && make -j2 && \
-    rm -rf /root/CNStream/$neuware_package
+    rm -rf /root/CNStream/$neuware_package; fi
 
 WORKDIR /root/CNStream/samples/demo
 

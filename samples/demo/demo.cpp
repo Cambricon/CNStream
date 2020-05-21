@@ -30,8 +30,11 @@
 #include "cnstream_core.hpp"
 #include "data_source.hpp"
 #include "displayer.hpp"
-#include "fps_stats.hpp"
 #include "util.hpp"
+
+#ifdef BUILD_IPC
+#include "module_ipc.hpp"
+#endif
 
 DEFINE_string(data_path, "", "video file list.");
 DEFINE_int32(src_frame_rate, 25, "frame rate for send data");
@@ -39,54 +42,14 @@ DEFINE_int32(wait_time, 0, "time of one test case");
 DEFINE_bool(rtsp, false, "use rtsp");
 DEFINE_bool(loop, false, "display repeat");
 DEFINE_string(config_fname, "", "pipeline config filename");
+#ifdef HAVE_SQLITE
+DEFINE_bool(perf, true, "measure performance");
+#else
+DEFINE_bool(perf, false, "measure performance");
+#endif
+DEFINE_string(perf_db_dir, "", "directory of performance database");
 
-cnstream::FpsStats* gfps_stats = nullptr;
 cnstream::Displayer* gdisplayer = nullptr;
-
-class PipelineWatcher {
- public:
-  explicit PipelineWatcher(cnstream::Pipeline* pipeline) : pipeline_(pipeline) {
-    LOG_IF(FATAL, pipeline == nullptr) << "pipeline is null.";
-  }
-
-  void SetDuration(int ms) { duration_ = ms; }
-
-  void Start() {
-    if (thread_.joinable()) {
-      running_ = false;
-      thread_.join();
-    }
-    running_ = true;
-    thread_ = std::thread(&PipelineWatcher::ThreadFunc, this);
-  }
-
-  void Stop() {
-    running_ = false;
-    if (thread_.joinable()) {
-      thread_.join();
-    }
-  }
-
-  ~PipelineWatcher() {}
-
- private:
-  void ThreadFunc() {
-    while (running_) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(duration_));
-      std::cout << "\n\n\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-                   "%%%%\n";
-      if (gfps_stats) {
-        gfps_stats->ShowStatistics();
-      } else {
-        std::cout << "FpsStats has not been added to pipeline, fps will not be print." << std::endl;
-      }
-    }
-  }
-  bool running_ = false;
-  std::thread thread_;
-  int duration_ = 2000;  // ms
-  cnstream::Pipeline* pipeline_ = nullptr;
-};  // class Pipeline Watcher
 
 class MsgObserver : cnstream::StreamMsgObserver {
  public:
@@ -155,9 +118,32 @@ int main(int argc, char** argv) {
     find data source
    */
   cnstream::DataSource* source = dynamic_cast<cnstream::DataSource*>(pipeline.GetModule("source"));
+#ifdef BUILD_IPC
+  cnstream::ModuleIPC* ipc = dynamic_cast<cnstream::ModuleIPC*>(pipeline.GetModule("ipc"));
+  if (ipc != nullptr) {
+    ipc->SetChannelCount(video_urls.size());
+  }
+  if (nullptr == source && (nullptr == ipc)) {
+    LOG(ERROR) << "DataSource && ModuleIPC module both not found.";
+#else
   if (nullptr == source) {
     LOG(ERROR) << "DataSource module not found.";
+#endif
     return EXIT_FAILURE;
+  }
+
+  /*
+    create perf recorder
+  */
+  if (FLAGS_perf) {
+    std::vector<std::string> stream_ids;
+    for (int i = 0; i < static_cast<int>(video_urls.size()); i++) {
+      stream_ids.push_back(std::to_string(i));
+    }
+    if (!pipeline.CreatePerfManager(stream_ids, FLAGS_perf_db_dir)) {
+      LOG(ERROR) << "Pipeline Create Perf Manager failed.";
+      return EXIT_FAILURE;
+    }
   }
 
   /*
@@ -173,16 +159,14 @@ int main(int argc, char** argv) {
   */
   int streams = static_cast<int>(video_urls.size());
   auto url_iter = video_urls.begin();
+
   for (int i = 0; i < streams; i++, url_iter++) {
     const std::string& filename = *url_iter;
-    source->AddVideoSource(std::to_string(i), filename, FLAGS_src_frame_rate, FLAGS_loop);
+    if (source)
+      source->AddVideoSource(std::to_string(i), filename, FLAGS_src_frame_rate, FLAGS_loop);
   }
 
-  /* watcher, for rolling print */
-  gfps_stats = dynamic_cast<cnstream::FpsStats*>(pipeline.GetModule("fps_stats"));
   gdisplayer = dynamic_cast<cnstream::Displayer*>(pipeline.GetModule("displayer"));
-  PipelineWatcher watcher(&pipeline);
-  watcher.Start();
 
   auto quit_callback = [&pipeline, streams, &source]() {
     for (int i = 0; i < streams; i++) {
@@ -227,11 +211,6 @@ int main(int argc, char** argv) {
       }
     }
   }
-  watcher.Stop();
-  std::cout << "\n\n\n\n\n\n";
-
-  if (gfps_stats)
-    gfps_stats->ShowStatistics();
 
   google::ShutdownGoogleLogging();
   return EXIT_SUCCESS;

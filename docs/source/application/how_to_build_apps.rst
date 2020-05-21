@@ -21,7 +21,7 @@ JSON配置文件的编写
 
 JSON配置文件主要用于声明pipeline中各个模块的上下游关系及其每个模块内部的参数配置。   
 
-下面示例展示了如何使用CNStream提供的自有模块DataSource、Inferencer、Tracker、Osd、Encoder，以及ssd和track离线模型，实现一个典型的pipeline操作，并在pipeline中加入了fps统计模块统计pipeline的整体性能。
+下面示例展示了如何使用CNStream提供的自有模块DataSource、Inferencer、Tracker、Osd、Encoder，以及ssd和track离线模型，实现一个典型的pipeline操作。
 
 典型的pipeline操作为：
 
@@ -41,6 +41,7 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "class_name" : "cnstream::DataSource",
     "parallelism" : 0,
     "next_modules" : ["detector"],
+    "show_perf_info" : true,
     "custom_params" : {
       "source_type" : "ffmpeg",
       "output_type" : "mlu",
@@ -55,6 +56,7 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["tracker"],
+    "show_perf_info" : true,
     "custom_params" : {
       "model_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon",
       "func_name" : "subnet0",
@@ -69,6 +71,7 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["osd"],
+    "show_perf_info" : true,
     "custom_params" : {
       "model_path" : "../data/models/MLU100/Track/track.cambricon",
       "func_name" : "subnet0"
@@ -81,6 +84,7 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["encoder"],
+    "show_perf_info" : true,
     "custom_params" : {
       "chinese_label_flag" : "false", 
       "label_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/label_voc.txt"
@@ -92,17 +96,10 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "class_name" : "cnstream::Encoder",
     "parallelism" : 4,
     "max_input_queue_size" : 20,
-    "next_modules" : ["fps_stats"],
+    "show_perf_info" : true,
     "custom_params" : {
       "dump_dir" : "output"
     }
-  },
-
-  "fps_stats" : {  
-    // FpsStats模块。设置并行度为4，模块输入队列的max_size为20。
-    "class_name" : "cnstream::FpsStats",
-    "parallelism" : 2,
-    "max_input_queue_size" : 20
   }
  }
 
@@ -118,10 +115,11 @@ Pipeline基本骨架的构建
 整个过程主要包括下面步骤：
 
 1. 创建pipeline对象。
-2. 调用 ``Pipeline(pipeline.BuildPipelineByJSONFile`` ，使用预准备的JSON配置文件构建。
+2. 调用 ``Pipeline.BuildPipelineByJSONFile`` ，使用预准备的JSON配置文件构建。
 3. 调用 ``pipeline.SetStreamMsgObserver`` ，设置事件监听处理机制。
-4. 调用 ``pipeline.Start()`` ，启动pipeline。
-5. 调用 ``pipeline.AddVideoSource()`` 或 ``RemoveSource()`` ，动态添加或删除视频和图片源。   
+4. 调用 ``pipeline.CreatePerfManager``，创建性能统计管理器。
+5. 调用 ``pipeline.Start()`` ，启动pipeline。
+6. 调用 ``pipeline.AddVideoSource()`` 或 ``RemoveSource()`` ，动态添加或删除视频和图片源。
 
 源代码示例，可参考CNStream源码中 ``samples/demo/demo.cpp`` 。      
 

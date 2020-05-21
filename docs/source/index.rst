@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-CNStream用户手册
+寒武纪CNStream用户手册
 ===================================
 
 
@@ -20,5 +20,6 @@ CNStream用户手册
    ./customize_module/how_to_implement_module
    ./application/how_to_build_apps
    ./tool/Inspect_tool
+   ./measure_performance/measure_performance
    ./FAQ/FAQ
    ./release_notes/release_notes

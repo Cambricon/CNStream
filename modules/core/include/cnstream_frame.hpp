@@ -66,11 +66,20 @@ typedef struct {
     INVALID = -1,        ///< Invalid device type.
     CPU = 0,             ///< The data is allocated by CPU.
     MLU = 1,             ///< The data is allocated by MLU.
-    MLU_CPU = 2          ///< Both MLU and CPU. Used for M220_SOC.
+    MLU_CPU = 2          ///< The data is allocated by both MLU and CPU. Used for M220_SOC.
   } dev_type = INVALID;  ///< Device type.
   int dev_id = 0;        ///< Ordinal device ID.
   int ddr_channel = 0;   ///< Ordinal channel ID for MLU. The value should be in the range [0, 4).
 } DevContext;
+
+/**
+ * Identifies memory shared type for multi-process.
+ */
+enum MemMapType {
+  MEMMAP_INVALID = 0,   ///< Invalid memory shared type.
+  MEMMAP_CPU = 1,       ///< CPU memory is shared.
+  MEMMAP_MLU = 2        ///< MLU memory is shared.
+};
 
 /**
  * An enumerated type that specifies the mask of CNDataFrame.
@@ -104,7 +113,7 @@ inline int CNGetPlanes(CNDataFormat fmt) {
 }
 
 /**
- * Dedicated deallocator the CNDecoder buffer.
+ * Dedicated deallocator for the CNDecoder buffer.
  */
 class IDataDeallocator {
  public:
@@ -166,6 +175,7 @@ struct CNDataFrame {
   DevContext ctx;                                            ///< The device context of this frame.
   void* ptr_mlu[CN_MAX_PLANES];                              ///< The MLU data addresses for planes.
   void* ptr_cpu[CN_MAX_PLANES];                              ///< The CPU data addresses for planes.
+  void* mlu_mem_handle = nullptr;                            ///< The MLU memory handle for MLU data.
   std::shared_ptr<IDataDeallocator> deAllocator_ = nullptr;  ///< The dedicated deallocator for CNDecoder Buffer.
   std::shared_ptr<ICNMediaImageMapper> mapper_ = nullptr;    ///< The dedicated Mapper for M220 CNDecoder.
 
@@ -201,16 +211,44 @@ struct CNDataFrame {
    */
   void CopyToSyncMem();
 
+  /**
+   * @brief Maps shared memory for multi-process.
+   * @param memory The type of the mapped or shared memory.
+   * @return Void.
+   */
+  void MmapSharedMem(MemMapType type);
+
+  /**
+   * @brief Unmaps the shared memery for multi-process.
+   * @param memory The type of the mapped or shared memory.
+   * @return Void.
+   */
+  void UnMapSharedMem(MemMapType type);
+
+  /**
+   * @brief Copies source-data to shared memery for multi-process.
+   * @param memory The type of the mapped or shared memory.
+   * @return Void.
+   */
+  void CopyToSharedMem(MemMapType type);
+
+  /**
+   * @brief Releases shared memery for multi-process.
+   * @param memory The type of the mapped or shared memory.
+   * @return Void.
+   */
+  void ReleaseSharedMem(MemMapType type);
+
  public:
   void* cpu_data = nullptr;  ///< CPU data pointer. You need to allocate it by calling CNStreamMallocHost().
   void* mlu_data = nullptr;  ///< A pointer to the MLU data.
-  std::shared_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Synce data helper.
+  std::shared_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Synchronizes data helper.
 
 #ifdef HAVE_OPENCV
   /**
-   * Converts data from RGB to BGR. Called after CopyToSyncMem() is invoked.
+   * Converts data from RGB to BGR. This API should be called after CopyToSyncMem() is invoked.
    * 
-   * If data is not RGB image but BGR, YUV420NV12 or YUV420NV21 image, its color mode will not be converted.
+   * If the data is not in RGB format but in BGR, YUV420NV12, or YUV420NV21 format, its color mode will not be converted.
    * 
    * @return Returns data with opencv mat type.
    */
@@ -221,22 +259,10 @@ struct CNDataFrame {
 #endif
 
  private:
-  /**
-   * The below methods and members are used by the framework.
-   */
-  friend class Pipeline;
-  uint64_t SetModuleMask(Module* module, Module* current);  // return changed mask
-  uint64_t GetModulesMask(Module* module);
-  void ClearModuleMask(Module* module);
-  uint64_t AddEOSMask(Module* module);
-
- private:
-  CNSpinLock mask_lock_;
-  /*The mask map of the module. It identifies which modules the data can already be processed by.*/
-  std::map<unsigned int, uint64_t> module_mask_map_;
-
-  CNSpinLock eos_lock_;
-  uint64_t eos_mask = 0;
+  void* shared_mem_ptr = nullptr;           ///< A pointer to the shared memory for MLU or CPU.
+  void* map_mem_ptr = nullptr;              ///< A pointer to the mapped memory for MLU or CPU.
+  int shared_mem_fd = -1;                   ///< A pointer to the shared memory file descriptor for CPU shared memory.
+  int map_mem_fd = -1;                      ///< A pointer to the mapped memory file descriptor for CPU mapped memory.
 };  // struct CNDataFrame
 
 /**
@@ -364,7 +390,7 @@ struct CNInferObject {
    */
   std::vector<CNInferFeature> GetFeatures();
 
-  void* user_data_ = nullptr;  ///< User data. User can store their own data here.
+  void* user_data_ = nullptr;  ///< User data. You can store your own data in this parameter.
 
  private:
   // name >>> attribute
@@ -390,10 +416,28 @@ struct CNFrameInfo {
    * @return Returns ``shared_ptr`` of ``CNFrameInfo`` if this function has run successfully. Otherwise, returns NULL.
    */
   static std::shared_ptr<CNFrameInfo> Create(const std::string& stream_id, bool eos = false);
-  uint32_t channel_idx = INVALID_STREAM_IDX;              ///< The index of the channel, stream_index
+  uint32_t channel_idx = INVALID_STREAM_IDX;              ///< The index of the channel, stream_index.
   CNDataFrame frame;                                      ///< The data of the frame.
   ThreadSafeVector<std::shared_ptr<CNInferObject>> objs;  ///< Structured information of the objects for this frame.
   ~CNFrameInfo();
+
+ private:
+  /**
+   * The below methods and members are used by the framework.
+   */
+  friend class Pipeline;
+  uint64_t SetModuleMask(Module* module, Module* current);  // return changed mask
+  uint64_t GetModulesMask(Module* module);
+  void ClearModuleMask(Module* module);
+  uint64_t AddEOSMask(Module* module);
+
+ private:
+  CNSpinLock mask_lock_;
+  /*The mask map of the module. It identifies which modules the data can already be processed by.*/
+  std::map<unsigned int, uint64_t> module_mask_map_;
+
+  CNSpinLock eos_lock_;
+  uint64_t eos_mask = 0;
 
  private:
   CNFrameInfo() {}

@@ -34,6 +34,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "cnstream_eventbus.hpp"
@@ -85,7 +86,7 @@ struct StreamMsg {
 class StreamMsgObserver {
  public:
   /**
-   * Receives stream messages from a pipeline passively.
+   * Receives stream messages from a pipeline.
    *
    * @param msg The stream message from a pipeline.
    */
@@ -129,11 +130,11 @@ struct CNModuleConfig {
   std::string name;  ///< The name of the module.
   ModuleParamSet
       parameters;   ///< The key-value pairs. The pipeline passes this value to the CNModuleConfig::name module.
-  int parallelism;  ///< Module parallelism. It is equal to module thread number and the data queue for input data.
+  int parallelism;  ///< Module parallelism. The module thread number should be the same as this parameter.
   int maxInputQueueSize;          ///< The maximum size of the input data queues.
   std::string className;          ///< The class name of the module.
   std::vector<std::string> next;  ///< The name of the downstream modules.
-  bool showPerfInfo;              ///< Whether to show performance information or not.
+  bool showPerfInfo;              ///< Whether to show performance information.
 
   /**
    * Parses members from JSON string except CNModuleConfig::name.
@@ -218,7 +219,7 @@ class Pipeline : public Module {
    */
   bool Stop();
   /**
-   * Returns the running status for a pipeline.
+   * Returns the running status of a pipeline.
    *
    * @return Returns true if the pipeline is running. Returns false if the pipeline is
    *         not running.
@@ -379,11 +380,6 @@ class Pipeline : public Module {
    */
   bool QueryLinkStatus(LinkStatus* status, const std::string& link_id);
 
-  /**
-   * Prints the performance information for all modules.
-   */
-  void PrintPerformanceInformation() const;
-
   /* -----stream message methods------ */
  public:
   /**
@@ -418,6 +414,62 @@ class Pipeline : public Module {
    */
   void NotifyStreamMsg(const StreamMsg& smsg);
 
+  /**
+   * @brief Creates PerfManager to measure performance of modules and pipeline for each stream.
+   *
+   * This function creates database for each stream.
+   * One thread is for committing sqlite events to increase the speed of inserting data to the database.
+   * Another is for calculating perfomance of modules and pipepline, and printing performance statistics afterwards.
+   *
+   * @param stream_ids The stream IDs.
+   * @param db_dir The directory where database files to be saved.
+   *
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
+   */
+  bool CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir);
+  /**
+   * @brief Commits sqlite events to increase the speed of inserting data to the database.
+   *
+   * This is a thread function. The events are committed every second.
+   *
+   * @return Void.
+   */
+  void PerfSqlCommitLoop();
+  /**
+   * @brief Calculates performance of modules and pipeline, and prints performance statistics every two seconds.
+   *
+   * This is a thread function.
+   *
+   * @return Void.
+   */
+  void CalculatePerfStats();
+  /**
+   * @brief Calculates the perfomance of modules and prints the performance statistics.
+   *
+   * This is called by thread function CalculatePerfStats.
+   *
+   * @return Void.
+   */
+  void CalculateModulePerfStats();
+  /**
+   * @brief Calculates the perfomance of pipeline and prints the performance statistics.
+   *
+   * This is called by thread function CalculatePerfStats.
+   *
+   * @return Void.
+   */
+  void CalculatePipelinePerfStats();
+  /* called by pipeline */
+  /**
+   * Registers a callback to be called after the frame process is done.
+   *
+   * @return Void.
+   *
+   */
+  inline void RegistIPCFrameDoneCallBack(std::function<void(std::shared_ptr<CNFrameInfo>)> callback) {
+    frame_done_callback_ = std::move(callback);
+  }
+
  private:
   StreamMsgObserver* smsg_observer_ = nullptr;  ///< Stream message observer.
 
@@ -438,6 +490,7 @@ class Pipeline : public Module {
   std::atomic<bool> running_{false};
   EventBus* event_bus_;
   DECLARE_PRIVATE(d_ptr_, Pipeline);
+  std::function<void(std::shared_ptr<CNFrameInfo>)> frame_done_callback_ = nullptr;
 };  // class Pipeline
 
 }  // namespace cnstream

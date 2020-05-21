@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <list>
 #include <map>
@@ -39,9 +40,10 @@
 
 #include "cnstream_module.hpp"
 #include "cnstream_pipeline.hpp"
-#include "cnstream_timer.hpp"
 #include "connector.hpp"
 #include "conveyor.hpp"
+#include "perf_calculator.hpp"
+#include "perf_manager.hpp"
 #include "threadsafe_queue.hpp"
 
 namespace cnstream {
@@ -213,6 +215,14 @@ class PipelinePrivate {
   uint64_t eos_mask_ = 0;
 
  private:
+  std::unordered_map<std::string, std::shared_ptr<PerfManager>> perf_managers_;
+  std::vector<std::string> stream_ids_;
+  std::vector<std::string> end_nodes_;
+  std::thread perf_commit_thread_;
+  std::thread calculate_perf_thread_;
+  std::atomic<bool> perf_running_{false};
+
+ private:
   std::unordered_map<std::string, CNModuleConfig> modules_config_;
   std::unordered_map<std::string, std::vector<std::string>> connections_config_;
   std::map<std::string, std::shared_ptr<Module>> modules_map_;
@@ -238,7 +248,9 @@ class PipelinePrivate {
       StreamMsg msg;
       while (!exit_msg_loop_ && !msgq_.WaitAndTryPop(msg, std::chrono::microseconds(200))) {
       }
+
       if (exit_msg_loop_) return;
+
       switch (msg.type) {
         case StreamMsgType::EOS_MSG:
         case StreamMsgType::ERROR_MSG:
@@ -460,6 +472,14 @@ bool Pipeline::Start() {
     return false;
   }
 
+  if (d_ptr_->perf_running_) {
+    for (auto it : d_ptr_->perf_managers_) {
+      it.second->SqlBeginTrans();
+    }
+    d_ptr_->perf_commit_thread_ = std::thread(&Pipeline::PerfSqlCommitLoop, this);
+    d_ptr_->calculate_perf_thread_ = std::thread(&Pipeline::CalculatePerfStats, this);
+  }
+
   // start data transmit
   running_.store(true);
   event_bus_->running_.store(true);
@@ -498,6 +518,7 @@ bool Pipeline::Stop() {
   // stop data transmit
   for (const std::pair<std::string, ModuleAssociatedInfo>& it : d_ptr_->modules_) {
     if (it.second.connector) {
+      it.second.connector->EmptyDataQueue();
       it.second.connector->Stop();
     }
   }
@@ -510,9 +531,25 @@ bool Pipeline::Stop() {
   if (d_ptr_->event_thread_.joinable()) {
     d_ptr_->event_thread_.join();
   }
+
+  for (auto it : d_ptr_->perf_managers_) {
+    it.second->Stop();
+    it.second = nullptr;
+  }
+  d_ptr_->perf_running_.store(false);
+  if (d_ptr_->perf_commit_thread_.joinable()) {
+    d_ptr_->perf_commit_thread_.join();
+  }
+  if (d_ptr_->calculate_perf_thread_.joinable()) {
+    d_ptr_->calculate_perf_thread_.join();
+  }
+
+  d_ptr_->perf_managers_.clear();
+
   // close modules
   for (auto& it : d_ptr_->modules_) {
     it.second.instance->Close();
+    it.second.instance->ClearPerfManagers();
   }
 
   d_ptr_->ClearEOSMask();
@@ -551,23 +588,12 @@ void Pipeline::EventLoop() {
   LOG(INFO) << "[" << GetName() << "]: Event bus exit.";
 }
 
-void Pipeline::PrintPerformanceInformation() const {
-  std::cout << "\nPipeline Performance information:\n";
-  for (const auto& it : d_ptr_->modules_) {
-    const ModuleAssociatedInfo& module_info = it.second;
-    if (module_info.instance) {
-      module_info.instance->PrintPerfInfo();
-    }
-  }
-}
-
 void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo> data) {
   LOG_IF(FATAL, d_ptr_->modules_.find(moduleName) == d_ptr_->modules_.end());
 
   const ModuleAssociatedInfo& module_info = d_ptr_->modules_[moduleName];
 
   const uint32_t chn_idx = data->channel_idx;
-
   /*
     eos
    */
@@ -580,7 +606,7 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     e.message = module_info.instance->GetName() + " received eos from channel " + std::to_string(chn_idx);
     e.thread_id = std::this_thread::get_id();
     event_bus_->PostEvent(e);
-    const uint64_t eos_mask = data->frame.AddEOSMask(module_info.instance.get());
+    const uint64_t eos_mask = data->AddEOSMask(module_info.instance.get());
     if (eos_mask == d_ptr_->eos_mask_) {
       StreamMsg msg;
       msg.type = StreamMsgType::EOS_MSG;
@@ -588,13 +614,18 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
       msg.stream_id = data->frame.stream_id;
       d_ptr_->UpdateByStreamMsg(msg);
     }
+  } else {
+    if (d_ptr_->perf_managers_.find(data->frame.stream_id) != d_ptr_->perf_managers_.end()) {
+      PerfInfo info {true, "PROCESS", moduleName, data->frame.timestamp};
+      d_ptr_->perf_managers_[data->frame.stream_id]->RecordPerfInfo(info);
+    }
   }
 
   for (auto& down_node_name : module_info.down_nodes) {
     ModuleAssociatedInfo& down_node_info = d_ptr_->modules_.find(down_node_name)->second;
     assert(down_node_info.connector);
     assert(0 < down_node_info.input_connectors.size());
-    uint64_t frame_mask = data->frame.SetModuleMask(down_node_info.instance.get(), module_info.instance.get());
+    uint64_t frame_mask = data->SetModuleMask(down_node_info.instance.get(), module_info.instance.get());
 
     // case 1: down_node has only 1 input node: current node
     // case 2: down_node has >1 input nodes, current node has brother nodes
@@ -608,6 +639,11 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
       connector->PushDataBufferToConveyor(conveyor_idx, data);
     }
   }
+
+  // frame done
+  if (frame_done_callback_ && (0 == module_info.down_nodes.size())) {
+    frame_done_callback_(data);
+  }
 }
 
 void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
@@ -616,7 +652,9 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
   ModuleAssociatedInfo& module_info = d_ptr_->modules_[node_name];
   std::shared_ptr<Connector> connector = module_info.connector;
 
-  if (!connector) return;
+  if (!connector.get() || module_info.input_connectors.size() <= 0) {
+    return;
+  }
 
   size_t len = node_name.size() > 10 ? 10 : node_name.size();
   std::string thread_name = "cn-" + node_name.substr(0, len) + std::to_string(conveyor_idx);
@@ -637,9 +675,9 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
     }
 
     has_data = true;
-    assert(data->frame.GetModulesMask(module_info.instance.get()) == module_info.instance->GetModulesMask());
+    assert(data->GetModulesMask(module_info.instance.get()) == module_info.instance->GetModulesMask());
 
-    data->frame.ClearModuleMask(module_info.instance.get());
+    data->ClearModuleMask(module_info.instance.get());
     int flags = data->frame.flags;
 
     if (!module_info.instance->HasTransmit() && (CN_FRAME_FLAG_EOS & flags)) {
@@ -649,6 +687,11 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
     }
 
     {
+      if (d_ptr_->perf_managers_.find(data->frame.stream_id) != d_ptr_->perf_managers_.end()) {
+        PerfInfo info {false, "PROCESS", node_name, data->frame.timestamp};
+        d_ptr_->perf_managers_[data->frame.stream_id]->RecordPerfInfo(info);
+      }
+
       int ret = module_info.instance->DoProcess(data);
       /*process failed*/
       if (ret < 0) {
@@ -673,7 +716,9 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
         continue;
       }
     }
-    TransmitData(node_name, data);
+    if (!module_info.instance->HasTransmit()) {
+      TransmitData(node_name, data);
+    }
   }  // while
 }
 
@@ -735,6 +780,7 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
   }
   for (auto& v : configs) {
     if (v.className != "cnstream::DataSource" &&
+        v.className != "cnstream::ModuleIPC" &&
         !(((uint64_t)1 << d_ptr_->modules_map_[v.name]->GetId()) & linked_id_mask)) {
       LOG(ERROR) << v.name << " not linked to any module.";
       return -1;
@@ -828,6 +874,115 @@ std::vector<std::string> Pipeline::GetLinkIds() {
 void Pipeline::NotifyStreamMsg(const StreamMsg& smsg) {
   if (smsg_observer_) {
     smsg_observer_->Update(smsg);
+  }
+}
+
+bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir) {
+  if (d_ptr_->perf_running_) return false;
+  std::vector<std::string> module_names;
+  std::string start_node_name;
+  if (db_dir == "") {
+    db_dir = "perf_database";
+  }
+  d_ptr_->end_nodes_.clear();
+  for (auto& it : d_ptr_->modules_) {
+    const std::string node_name = it.first;
+    LOG(INFO) << "module name " << node_name << std::endl;
+    module_names.push_back(node_name);
+    if (it.second.input_connectors.size() == 0) {
+      start_node_name = node_name;
+    }
+    if (it.second.output_connectors.size() == 0) {
+      d_ptr_->end_nodes_.push_back(node_name);
+    }
+  }
+  for (auto it : stream_ids) {
+    LOG(INFO) << "Create PerfManager for stream " << it;
+    d_ptr_->perf_managers_[it] = std::make_shared<PerfManager>();
+    if (!d_ptr_->perf_managers_[it]->Init(db_dir + "/stream_" + it + ".db", module_names, start_node_name,
+                                          d_ptr_->end_nodes_)) {
+      return false;
+    }
+  }
+
+  for (auto& it : d_ptr_->modules_) {
+    it.second.instance->SetPerfManagers(d_ptr_->perf_managers_);
+  }
+
+  d_ptr_->stream_ids_ = stream_ids;
+  d_ptr_->perf_running_.store(true);
+  return true;
+}
+
+void Pipeline::CalculatePerfStats() {
+  while (d_ptr_->perf_running_) {
+    CalculateModulePerfStats();
+    std::cout << "\n" <<std::endl;
+    CalculatePipelinePerfStats();
+    sleep(2);
+    std::cout << "\n\n" <<std::endl;
+  }
+  std::cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+            << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%" << std::endl;
+  CalculateModulePerfStats();
+  std::cout << "\n" <<std::endl;
+  CalculatePipelinePerfStats();
+}
+
+void Pipeline::PerfSqlCommitLoop() {
+  while (d_ptr_->perf_running_) {
+    for (auto it : d_ptr_->perf_managers_) {
+      it.second->SqlCommitTrans();
+      it.second->SqlBeginTrans();
+    }
+    sleep(1);
+  }
+  for (auto it : d_ptr_->perf_managers_) {
+    it.second->SqlCommitTrans();
+  }
+}
+
+void Pipeline::CalculateModulePerfStats() {
+  for (auto& module_it : d_ptr_->modules_) {
+    std::string node_name = module_it.first;
+    const ModuleAssociatedInfo& module_info = module_it.second;
+    if (module_info.instance && module_info.instance->ShowPerfInfo()) {
+      std::cout << "---------------------------------"
+        << std::setw(15) << std::setfill('-') << "[ " + node_name << " Performance ]"
+        << "-----------------------------------" << std::endl;
+      for (auto stream_id : d_ptr_->stream_ids_) {
+        if (d_ptr_->perf_managers_.find(stream_id) != d_ptr_->perf_managers_.end()) {
+          std::cout << std::setw(2) << std::setfill(' ') << stream_id;
+          PrintPerfStats(d_ptr_->perf_managers_[stream_id]->CalculatePerfStats("PROCESS", node_name));
+        }
+      }  // for each stream
+    }
+  }  // for each module
+}
+
+void Pipeline::CalculatePipelinePerfStats() {
+  std::vector<std::pair<std::string, std::vector<std::pair<std::string, PerfStats>>>> pipeline_l;
+  std::cout << "\033[32m"
+            << "-------------------------------------[ Pipeline Performance ]"
+            << "-------------------------------------" << "\033[0m" << std::endl;
+
+  for (auto stream_id : d_ptr_->stream_ids_) {
+    if (d_ptr_->perf_managers_.find(stream_id) != d_ptr_->perf_managers_.end()) {
+      pipeline_l.push_back(std::make_pair(stream_id,
+          d_ptr_->perf_managers_[stream_id]->CalculatePipelinePerfStats("PROCESS")));
+    }
+  }
+
+  double total_fps;
+  for (uint32_t i = 0; i < d_ptr_->end_nodes_.size(); i++) {
+    total_fps = 0.f;
+    std::cout << "End node * * " << d_ptr_->end_nodes_[i] << " * *" << std::endl;
+    for (auto it : pipeline_l) {
+      std::cout << std::setw(2) << std::setfill(' ') << it.first;
+      PrintPerfStats(it.second[i].second);
+      total_fps += it.second[i].second.fps;
+    }
+    std::cout << "Total fps:" << total_fps << std::endl;
   }
 }
 

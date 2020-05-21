@@ -501,8 +501,11 @@ bool EncodeHandler::SendJpegData(const CnFrame& frame, bool eos) {
   cnjpegEncInput input;
   cnjpegEncParameters params;
   memset(&input, 0, sizeof(cnjpegEncInput));
-  int ecode = cnjpegEncWaitAvailInputBuf(reinterpret_cast<cnjpegEncoder>(handle_), &input.frame, -1);
-  if (CNCODEC_SUCCESS != ecode) {
+  int ecode = cnjpegEncWaitAvailInputBuf(reinterpret_cast<cnjpegEncoder>(handle_), &input.frame, 10000);
+  if (-CNCODEC_TIMEOUT == ecode) {
+    LOG(ERROR, "cnjpegEncWaitAvailInputBuf timeout");
+    return false;
+  } else if (CNCODEC_SUCCESS != ecode) {
     throw EasyEncodeError("Avaliable input buffer failed. Error code: " + to_string(ecode));
   }
 
@@ -526,9 +529,12 @@ bool EncodeHandler::SendJpegData(const CnFrame& frame, bool eos) {
   params.quality = attr_.jpeg_qfactor;
   params.restartInterval = 0;
   // 4. send data to codec
-  ecode = cnjpegEncFeedFrame(reinterpret_cast<cnjpegEncoder>(handle_), &input, &params, -1);
-  if (CNCODEC_SUCCESS != ecode) {
-    throw EasyEncodeError("cnvideoEncFeedFrame failed. Error code: " + to_string(ecode));
+  ecode = cnjpegEncFeedFrame(reinterpret_cast<cnjpegEncoder>(handle_), &input, &params, 10000);
+  if (-CNCODEC_TIMEOUT == ecode) {
+    LOG(ERROR, "cnjpegEncFeedData timeout");
+    return false;
+  } else if (CNCODEC_SUCCESS != ecode) {
+    throw EasyEncodeError("cnjpegEncFeedFrame failed. Error code: " + to_string(ecode));
   }
 
   return true;
@@ -537,8 +543,11 @@ bool EncodeHandler::SendJpegData(const CnFrame& frame, bool eos) {
 bool EncodeHandler::SendVideoData(const CnFrame& frame, bool eos) {
   cnvideoEncInput input;
   memset(&input, 0, sizeof(cnvideoEncInput));
-  int ecode = cnvideoEncWaitAvailInputBuf(reinterpret_cast<cnvideoEncoder>(handle_), &input.frame, -1);
-  if (CNCODEC_SUCCESS != ecode) {
+  int ecode = cnvideoEncWaitAvailInputBuf(reinterpret_cast<cnvideoEncoder>(handle_), &input.frame, 10000);
+  if (-CNCODEC_TIMEOUT == ecode) {
+    LOG(ERROR, "cnvideoEncWaitAvailInputBuf timeout");
+    return false;
+  } else if (CNCODEC_SUCCESS != ecode) {
     throw EasyEncodeError("Avaliable input buffer failed. Error code: " + to_string(ecode));
   }
 
@@ -563,8 +572,11 @@ bool EncodeHandler::SendVideoData(const CnFrame& frame, bool eos) {
     input.frame.stride[i] = frame.strides[i];
   }
   // 4. send data to codec
-  ecode = cnvideoEncFeedFrame(reinterpret_cast<cnvideoEncoder>(handle_), &input, -1);
-  if (CNCODEC_SUCCESS != ecode) {
+  ecode = cnvideoEncFeedFrame(reinterpret_cast<cnvideoEncoder>(handle_), &input, 10000);
+  if (-CNCODEC_TIMEOUT == ecode) {
+    LOG(ERROR, "cnvideoEncFeedData timeout");
+    return false;
+  } else if (CNCODEC_SUCCESS != ecode) {
     throw EasyEncodeError("cnvideoEncFeedFrame failed. Error code: " + to_string(ecode));
   }
   return true;
@@ -661,7 +673,15 @@ static int32_t EventHandler(cncodecCbEventType type, void *user_data, void *pack
       break;
     case CNCODEC_CB_EVENT_SW_RESET:
     case CNCODEC_CB_EVENT_HW_RESET:
-      LOG(ERROR, "Get cncodec event: %d", type);
+      LOG(ERROR, "Encode firmware crash event: %d", type);
+      handler->AbortEncoder();
+      break;
+    case CNCODEC_CB_EVENT_OUT_OF_MEMORY:
+      LOG(ERROR, "Out of memory error thrown from cncodec");
+      handler->AbortEncoder();
+      break;
+    case CNCODEC_CB_EVENT_ABORT_ERROR:
+      LOG(ERROR, "Abort error thrown from cncodec");
       handler->AbortEncoder();
       break;
     default:
