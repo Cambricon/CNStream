@@ -19,11 +19,11 @@
  *************************************************************************/
 
 #include <cn_codec_common.h>
+#include <glog/logging.h>
 
 #include <map>
 #include <string>
 
-#include "cxxutil/logger.h"
 #include "easycodec/easy_decode.h"
 #include "easycodec/vformat.h"
 #include "format_info.h"
@@ -78,15 +78,15 @@ static unsigned int kFrameFormatMapSize = kFrameFormatMap.size();
 
 FormatInfo::FormatInfo(PixelFmt fmt) {
   if (kFrameFormatMapSize - 1 != static_cast<int>(PixelFmt::TOTAL_COUNT)) {
-    LOG(ERROR, "%u, %d", kFrameFormatMapSize - 1, static_cast<int>(PixelFmt::TOTAL_COUNT));
+    LOG(ERROR) << kFrameFormatMapSize - 1 << static_cast<int>(PixelFmt::TOTAL_COUNT);
     std::string msg = "Format map has not cover all format";
-    LOG(ERROR, msg.c_str());
+    LOG(ERROR) << msg.c_str();
     throw EasyDecodeError(msg);
   }
   const FormatInfoPriv &info = kFrameFormatMap.at(fmt);
   if (!info.supported) {
     std::string msg = std::string("Unsupported pixel format, PixelFmt::") + info.fmt_str;
-    LOG(ERROR, msg.c_str());
+    LOG(ERROR) << msg.c_str();
     throw EasyDecodeError(msg);
   }
 
@@ -111,7 +111,7 @@ unsigned int GetPlaneSize(cncodecPixelFormat fmt, unsigned int pitch, unsigned i
   unsigned int plane_size;
   unsigned int plane_num = GetPlanesNum(fmt);
   if (plane >= plane_num) {
-    LOG(ERROR, "Plane index out of range, %d vs %d", plane, plane_num);
+    LOG(ERROR) << "Plane index out of range, " << plane <<  " vs " << plane_num;
     return 0;
   }
   if (fmt == CNCODEC_PIX_FMT_NV12 || fmt == CNCODEC_PIX_FMT_NV21 ||

@@ -97,78 +97,29 @@ size_t VideoEncoder::CircularBuffer::read(unsigned char *data, size_t bytes) {
   return bytes_to_read;
 }
 
-VideoEncoder::VideoEncoder(uint32_t input_queue_size /* = 0 */, size_t output_buffer_size /* = 0x100000 */) {
-  input_queue_size_ = input_queue_size;
+VideoEncoder::VideoEncoder(size_t output_buffer_size) {
   if (output_buffer_size > 0) output_circular_buffer_ = new CircularBuffer(output_buffer_size);
   output_frame_header_ = new EncodedFrameHeader;
 }
 
 VideoEncoder::~VideoEncoder() {
   if (sync_input_frame_) delete sync_input_frame_;
-
-  // input_mutex_.lock();
-  VideoFrame *frame;
-  while (input_data_q_.size()) {
-    frame = input_data_q_.front();
-    input_data_q_.pop();
-    delete frame;
-  }
-  while (input_free_q_.size()) {
-    frame = input_free_q_.front();
-    input_free_q_.pop();
-    delete frame;
-  }
-  // input_mutex_.unlock();
-
   if (output_circular_buffer_) delete output_circular_buffer_;
   if (output_frame_header_) delete output_frame_header_;
   if (sync_output_frame_buffer_) delete[] sync_output_frame_buffer_;
 }
 
-void VideoEncoder::Loop() {
-  VideoFrame *frame = nullptr;
-  while (running_) {
-    if (input_queue_size_ == 0) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
-      continue;
-    }
-    input_mutex_.lock();
-    if (!input_data_q_.empty()) {
-      frame = input_data_q_.front();
-      input_mutex_.unlock();
-    } else {
-      input_mutex_.unlock();
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
-      continue;
-    }
-    if (frame != nullptr) EncodeFrame(frame);
-    input_mutex_.lock();
-    input_data_q_.pop();
-    input_free_q_.push(frame);
-    input_mutex_.unlock();
-  }
-}
-
 void VideoEncoder::Start() {
   running_ = true;
-  if (input_queue_size_ > 0 && encode_thread_ == nullptr) {
-    encode_thread_ = new std::thread(std::bind(&VideoEncoder::Loop, this));
-  }
 }
 
 void VideoEncoder::Stop() {
   if (!running_) return;
   running_ = false;
-  if (encode_thread_ && encode_thread_->joinable()) {
-    encode_thread_->join();
-    delete encode_thread_;
-    encode_thread_ = nullptr;
-  }
 }
 
 bool VideoEncoder::SendFrame(uint8_t *data, int64_t timestamp) {
   if (!running_) return false;
-  VideoFrame *frame = nullptr;
   if (init_timestamp_ == -1) {
     init_timestamp_ = timestamp;
     timestamp = 0;
@@ -177,37 +128,16 @@ bool VideoEncoder::SendFrame(uint8_t *data, int64_t timestamp) {
   }
 
   input_mutex_.lock();
-  if (input_queue_size_ == 0) {
-    if (sync_input_frame_ == nullptr) {
-      sync_input_frame_ = NewFrame();
-    }
-    sync_input_frame_->Fill(data, timestamp);
-    EncodeFrame(sync_input_frame_);
-    input_mutex_.unlock();
-    return true;
-  } else {
-    if (!input_free_q_.empty()) {
-      frame = input_free_q_.front();
-      frame->Fill(data, timestamp);
-      input_free_q_.pop();
-      input_data_q_.push(frame);
-    } else {
-      if (input_data_q_.size() < input_queue_size_) {
-        frame = NewFrame();
-        frame->Fill(data, timestamp);
-        input_data_q_.push(frame);
-      } else {
-        input_frames_dropped++;
-        LOG(INFO) << "drop input frame";
-        input_mutex_.unlock();
-        return false;
-      }
-    }
-    input_mutex_.unlock();
+  if (sync_input_frame_ == nullptr) {
+    sync_input_frame_ = NewFrame();
   }
+  sync_input_frame_->Fill(data, timestamp);
+  EncodeFrame(sync_input_frame_);
+  input_mutex_.unlock();
   return true;
 }
 
+/*
 bool VideoEncoder::SendFrame(void *y, void *uv, int64_t timestamp) {
   if (!running_) return false;
   if (init_timestamp_ == -1) {
@@ -221,6 +151,7 @@ bool VideoEncoder::SendFrame(void *y, void *uv, int64_t timestamp) {
   input_mutex_.unlock();
   return true;
 }
+*/
 
 bool VideoEncoder::PushOutputBuffer(uint8_t *data, size_t size, uint32_t frame_id, int64_t timestamp) {
   if (!running_) return false;
@@ -249,7 +180,6 @@ bool VideoEncoder::PushOutputBuffer(uint8_t *data, size_t size, uint32_t frame_i
   } else {
     if (sync_output_frame_new_ == true) {
       output_frames_dropped++;
-      // std::cout << "$$$ drop output frame" << std::endl;
       return false;
     }
     if (size > sync_output_frame_buffer_length_) {

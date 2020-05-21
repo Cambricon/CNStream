@@ -27,6 +27,10 @@
  * This file contains a declaration of cnstream versions.
  */
 
+#define CNSTREAM_MAJOR_VERSION 4
+#define CNSTREAM_MINOR_VERSION 5
+#define CNSTREAM_PATCH_VERSION 0
+
 namespace cnstream {
 
 /**

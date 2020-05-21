@@ -33,7 +33,7 @@ Encoder::Encoder(const std::string &name) : Module(name) {
                            "Where to store the encoded video."
                            " For example, '.' means storing to current directory.");
   param_register_.Register("dump_type",
-                           "dump type, \"video\" or \"image\".");
+                           "dump type, \"video\" or \"image\"");
 }
 
 #ifdef CNS_MLU220_SOC
@@ -173,14 +173,6 @@ bool Encoder::CheckParamSet(const ModuleParamSet &paramSet) const {
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
       LOG(WARNING) << "[Encoder] Unknown param: " << it.first;
-    }
-  }
-
-  if (paramSet.find("dump_type") != paramSet.end()) {
-    if (paramSet.at("dump_type") != "video" && paramSet.at("dump_type") != "image") {
-      LOG(ERROR) << "[Encoder] (ERROR) unsupported dump type: \""
-          << paramSet.at("dump_type") << "\". Choose from \"video\" and \"image\".";
-      return false;
     }
   }
   return true;

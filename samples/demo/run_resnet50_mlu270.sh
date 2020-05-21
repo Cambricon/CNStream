@@ -1,17 +1,12 @@
 #!/bin/bash
 #*************************************************************************#
 # @param
-# drop_rate: Decode Drop frame rate (0~1)
 # src_frame_rate: frame rate for send data
 # data_path: Video or image list path
-# model_path: offline model path
-# label_path: label path
 # postproc_name: postproc class name (PostprocSsd)
 # wait_time: time of one test case. When set tot 0, it will automatically exit after the eos signal arrives
 # rtsp = true: use rtsp
-# dump_dir: dump result videos to this directory
 # loop = true: loop through video
-# device_id: mlu device id
 #
 # @notice: other flags see ./../bin/demo --help
 #*************************************************************************#
@@ -21,8 +16,8 @@ MODEL_PATH=$CURRENT_DIR/../../data/models/MLU270/Classification/resnet50
  mkdir -p $MODEL_PATH
 
  pushd $MODEL_PATH
-     if [ ! -f "resnet50_offline.cambricon" ]; then
-       wget -O resnet50_offline.cambricon  http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline.cambricon
+     if [ ! -f "resnet50_offline_v1.3.0.cambricon" ]; then
+       wget -O resnet50_offline_v1.3.0.cambricon  http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon
      else
        echo "resnet50 offline model exists."
      fi

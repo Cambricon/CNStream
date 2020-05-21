@@ -27,12 +27,13 @@ namespace cnstream {
 
 const char* VersionString() {
   static char version[VERSION_STRING_LENGTH];
-  snprintf(version, VERSION_STRING_LENGTH, "v%d.%d.%d", MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION);
+  snprintf(version, VERSION_STRING_LENGTH, "v%d.%d.%d", CNSTREAM_MAJOR_VERSION, CNSTREAM_MINOR_VERSION,
+           CNSTREAM_PATCH_VERSION);
   return version;
 }
 
-const int MajorVersion() { return MAJOR_VERSION; }
-const int MinorVersion() { return MINOR_VERSION; }
-const int PatchVersion() { return PATCH_VERSION; }
+const int MajorVersion() { return CNSTREAM_MAJOR_VERSION; }
+const int MinorVersion() { return CNSTREAM_MINOR_VERSION; }
+const int PatchVersion() { return CNSTREAM_PATCH_VERSION; }
 
 }  // namespace cnstream

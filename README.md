@@ -53,7 +53,6 @@ Before building instructions, you need to install the following software:
 - Cmake2.8.7+
 - Live555         // If WITH_RTSP=ON, please run download_live.
 - SDL22.0.4+      // If build_display=ON.
-- SQLite3         // If build_perf=ON.
 
 #### Ubuntu or Debian ####
 
@@ -65,7 +64,6 @@ If you are using Ubuntu or Debian, run the following commands:
   GLog0.3.4     >>>>>>>>>   sudo apt-get install libgoogle-glog-dev
   Cmake2.8.7+   >>>>>>>>>   sudo apt-get install cmake
   SDL22.0.4+    >>>>>>>>>   sudo apt-get install libsdl2-dev
-  SQLite3       >>>>>>>>>   sudo apt-get install libsqlite3-dev sqlite3
 ```
 
 #### Centos ####
@@ -78,7 +76,6 @@ If you are using Centos, run the following commands:
   GLog0.3.4     >>>>>>>>>   sudo yum install glog.x86_64
   Cmake2.8.7+   >>>>>>>>>   sudo yum install cmake3.x86_64
   SDL22.0.4+    >>>>>>>>>   sudo yum install SDL2_gfx-devel.x86_64
-  SQLite3       >>>>>>>>>   sudo yum install sqlite-devel
 ```
 
 ## Build Instructions Using CMake ##
@@ -183,10 +180,6 @@ To run the CNStream sample:
 ### **How to create an application based on CNStream?** ###
 
 You should find a sample from ``samples/example/example.cpp`` that helps developers easily understand how to develop an application based on CNStream pipeline.
-
-### **How to replace SSD offline model in a demo?** ###
-
-Modify the value of the `model_path` in `run.sh` and replace it with your own SSD offline model path.
 
 ### **How to change the input video file?** ##
 

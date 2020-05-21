@@ -173,8 +173,8 @@ int CNEncoder::Process(CNFrameInfoPtr data) {
     LOG(WARNING) << "pre_type err !!!" << pre_type_;
     return 0;
   }
-  // TransmitData(data);
-  return 0;
+  TransmitData(data);
+  return 1;
 }
 
 bool CNEncoder::CheckParamSet(const ModuleParamSet &paramSet) {

@@ -71,50 +71,6 @@ void CpuPreprocessingBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo>
   preprocessor_->Execute(net_inputs, model_, finfo);
 }
 
-YUVSplitBatchingStage::YUVSplitBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-                                             std::shared_ptr<MluInputResource> mlu_input_res)
-    : IOBatchingStage(model, batchsize, mlu_input_res) {}
-
-YUVSplitBatchingStage::~YUVSplitBatchingStage() {}
-
-void YUVSplitBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx,
-                                            const IOResValue& value) {
-  CHECK_EQ(value.datas.size(), 2) << "Internel error, yuv split model. input number not 2";
-  // copy y plane
-  void* dst_y = value.datas[0].Offset(batch_idx);
-  void* src_y = finfo->frame.data[0]->GetMutableMluData();
-  cnrtRet_t ret = cnrtMemcpy(dst_y, src_y, finfo->frame.GetPlaneBytes(0), CNRT_MEM_TRANS_DIR_DEV2DEV);
-  CHECK_EQ(ret, CNRT_RET_SUCCESS) << "memcpy d2d failed. dst, src, size:" << dst_y << ", " << src_y << ", "
-                                  << finfo->frame.GetPlaneBytes(0);
-  void* dst_uv = value.datas[1].Offset(batch_idx);
-  void* src_uv = finfo->frame.data[1]->GetMutableMluData();
-  ret = cnrtMemcpy(dst_uv, src_uv, finfo->frame.GetPlaneBytes(1), CNRT_MEM_TRANS_DIR_DEV2DEV);
-  CHECK_EQ(ret, CNRT_RET_SUCCESS) << "memcpy d2d failed. dst, src, size:" << dst_uv << ", " << src_uv << ", "
-                                  << finfo->frame.GetPlaneBytes(1);
-}
-
-YUVPackedBatchingStage::YUVPackedBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-                                               std::shared_ptr<MluInputResource> mlu_input_res)
-    : IOBatchingStage(model, batchsize, mlu_input_res) {}
-
-YUVPackedBatchingStage::~YUVPackedBatchingStage() {}
-
-void YUVPackedBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx,
-                                             const IOResValue& value) {
-  CHECK_EQ(value.datas.size(), 1) << "Internel error, yuv packed model. input number not 1";
-  // copy y plane
-  void* dst_y = value.datas[0].Offset(batch_idx);
-  void* src_y = finfo->frame.data[0]->GetMutableMluData();
-  cnrtRet_t ret = cnrtMemcpy(dst_y, src_y, finfo->frame.GetPlaneBytes(0), CNRT_MEM_TRANS_DIR_DEV2DEV);
-  CHECK_EQ(ret, CNRT_RET_SUCCESS) << "memcpy d2d failed. dst, src, size:" << dst_y << ", " << src_y << ", "
-                                  << finfo->frame.GetPlaneBytes(0);
-  void* dst_uv = reinterpret_cast<void*>(reinterpret_cast<char*>(dst_y) + value.datas[0].shape.hw() / 3 * 2);
-  void* src_uv = finfo->frame.data[1]->GetMutableMluData();
-  ret = cnrtMemcpy(dst_uv, src_uv, finfo->frame.GetPlaneBytes(1), CNRT_MEM_TRANS_DIR_DEV2DEV);
-  CHECK_EQ(ret, CNRT_RET_SUCCESS) << "memcpy d2d failed. dst, src, size, y offset:" << dst_uv << ", " << src_uv << ", "
-                                  << finfo->frame.GetPlaneBytes(1) << ", " << value.datas[0].shape.hw() / 3 * 2;
-}
-
 ResizeConvertBatchingStage::ResizeConvertBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
                                                        int dev_id, std::shared_ptr<RCOpResource> rcop_res)
     : BatchingStage(model, batchsize), rcop_res_(rcop_res), dev_id_(dev_id) {}
@@ -135,28 +91,29 @@ std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<
     throw CnstreamError("Can not handle this frame with format :" + std::to_string(static_cast<int>(finfo->frame.fmt)));
   }
   if (!rcop_res_->Initialized()) {
-    uint32_t src_w = finfo->frame.width;
-    uint32_t src_h = finfo->frame.height;
-    uint32_t src_stride = finfo->frame.stride[0];
     uint32_t dst_w = model_->InputShapes()[0].w;
     uint32_t dst_h = model_->InputShapes()[0].h;
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id_);
     mlu_ctx.ConfigureForThisThread();
     edk::CoreVersion core_ver = mlu_ctx.GetCoreVersion();
-    rcop_res_->Init(src_w, src_h, src_stride, dst_w, dst_h, cmode, core_ver);
+    rcop_res_->Init(dst_w, dst_h, cmode, core_ver);
   } else {
     edk::MluResizeConvertOp::Attr rc_attr = value->op.GetAttr();
-    if (static_cast<int>(rc_attr.src_w) != finfo->frame.width ||
-        static_cast<int>(rc_attr.src_h) != finfo->frame.height ||
-        static_cast<int>(rc_attr.src_stride) != finfo->frame.stride[0] || cmode != rc_attr.color_mode) {
+    if (cmode != rc_attr.color_mode) {
       throw CnstreamError(
           "Resize convert operator should be reinitialized, but we can not do this."
-          " Maybe you have different attributes between each frame, wo can not use mlu preprocessing to deal with "
+          " Maybe you have different pixel format between each frame, wo can not use mlu preprocessing to deal with "
           "this.");
     }
   }
-  value->op.BatchingUp(src_y, src_uv);
+  edk::MluResizeConvertOp::InputData input_data;
+  input_data.src_w = finfo->frame.width;
+  input_data.src_h = finfo->frame.height;
+  input_data.src_stride = finfo->frame.stride[0];
+  input_data.planes[0] = src_y;
+  input_data.planes[1] = src_uv;
+  value->op.BatchingUp(input_data);
   rcop_res_->DeallingDone();
   return NULL;
 }

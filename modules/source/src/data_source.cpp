@@ -119,6 +119,7 @@ bool DataSource::Open(ModuleParamSet paramSet) {
       LOG(ERROR) << "interval : invalid";
       return false;
     }
+    param_.interval_ = interval;
   }
 
   if (paramSet.find("decoder_type") != paramSet.end()) {

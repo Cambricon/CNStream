@@ -59,6 +59,8 @@ struct DetectObject {
   BoundingBox bbox;
   /// Object track identification
   int track_id;
+  /// Object index in input vector
+  int detect_id;
   /**
    * @brief Features of object extraction.
    * @attention The dimension of the feature vector is 128.

@@ -8,6 +8,7 @@ endif()
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin/)
 add_subdirectory(get_model_io)
+add_subdirectory(get_model_perfinfo)
 add_subdirectory(inspect)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/reset)
   add_subdirectory(reset)

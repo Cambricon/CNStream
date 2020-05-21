@@ -119,6 +119,9 @@ class SourceHandler {
   }
 
  protected:
+#ifdef UNIT_TEST
+ public:  // NOLINT
+#endif
   SourceModule *module_ = nullptr;
   std::string stream_id_;
   int frame_rate_ = 0;

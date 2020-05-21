@@ -25,7 +25,9 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <vector>
 
 #include "glog/logging.h"
 #include "cnstream_time_utility.hpp"
@@ -33,6 +35,9 @@
 #include "sqlite_db.hpp"
 
 namespace cnstream {
+
+std::mutex latency_mutex;
+std::mutex fps_mutex;
 
 void PrintLatency(const PerfStats& stats) {
   std::cout << " -- [latency] avg : " << stats.latency_avg / 1000 << "."
@@ -56,77 +61,155 @@ void PrintPerfStats(const PerfStats& stats) {
             << " ms, [frame cnt] : " << stats.frame_cnt << std::endl;
 }
 
-PerfCalculator::PerfCalculator() {
-  pre_time_ = TimeStamp::Current();
-}
+PerfCalculator::PerfCalculator() { }
 
 PerfCalculator::~PerfCalculator() { }
 
 #ifdef HAVE_SQLITE
-static int LatencyCallback(void *data, int argc, char **argv, char **azColName) {
-  PerfStats* stats = reinterpret_cast<PerfStats*>(data);
-  size_t &latency_total = stats->latency_avg;
-
-  size_t start_time = argv[0] ? atoll(argv[0]) : 0;
-  size_t end_time = argv[1] ? atoll(argv[1]) : 0;
-
-  if (end_time != 0 && start_time !=0 && end_time > start_time) {
-    size_t duration = end_time - start_time;
-    if (duration > stats->latency_max) {
-      stats->latency_max = duration;
+static int Callback(void *data, int argc, char **argv, char **azColName) {
+  std::vector<DbItem>* item_vec = reinterpret_cast<std::vector<DbItem>*>(data);
+  DbItem item;
+  for (int i = 0; i < argc; i++) {
+    if (argv[i]) {
+      item.second.push_back(argv[i]);
+    } else {
+      item.second.push_back("");
     }
-    latency_total += duration;
-    stats->frame_cnt += 1;
   }
+  item.first = argc;
+  item_vec->push_back(item);
   return 0;
 }
 #endif
 
-PerfStats PerfCalculator::CalcLatency(std::shared_ptr<Sqlite> sql, std::string type,
-                                      std::string start_key, std::string end_key) {
+PerfStats PerfCalculator::GetLatency() {
+  std::lock_guard<std::mutex> lg(latency_mutex);
+  return stats_latency_;
+}
+
+PerfStats PerfCalculator::GetThroughput() {
+  std::lock_guard<std::mutex> lg(fps_mutex);
+  return stats_fps_;
+}
+
+std::vector<DbItem> PerfCalculator::SearchFromDatabase(std::shared_ptr<Sqlite> sql, std::string table,
+                                                       std::string key, std::string condition) {
   if (sql == nullptr) {
     LOG(ERROR) << "sqlite is nullptr.";
-    return stats_;
+  }
+  std::vector<DbItem> item_vec;
+#ifdef HAVE_SQLITE
+  sql->Select(table, key, condition, Callback, reinterpret_cast<void*>(&item_vec));
+#endif
+  return item_vec;
+}
+
+
+PerfStats PerfCalculator::CalcLatency(std::shared_ptr<Sqlite> sql, std::string type,
+                                      std::string start_key, std::string end_key) {
+  std::lock_guard<std::mutex> lg(latency_mutex);
+  if (sql == nullptr) {
+    LOG(ERROR) << "sqlite is nullptr.";
+    return stats_latency_;
   }
 
 #ifdef HAVE_SQLITE
-  PerfStats stats = {0, 0, 0, 0.f};
   size_t now = sql->FindMax(type, end_key);
   std::string condition = end_key + " > " + std::to_string(pre_time_) + " AND " +
                           end_key + " <= " + std::to_string(now);
-  sql->Select(type, start_key + "," + end_key, condition, LatencyCallback, reinterpret_cast<void*>(&stats));
+  std::vector<DbItem> item_vec = SearchFromDatabase(sql, type, start_key + "," + end_key, condition);
 
-  if (stats.frame_cnt != 0) {
-    size_t &latency_total = stats.latency_avg;
-    stats_.latency_avg = (stats_.latency_avg * stats_.frame_cnt + latency_total) / (stats_.frame_cnt + stats.frame_cnt);
-    if (stats.latency_max > stats_.latency_max) {
-      stats_.latency_max = stats.latency_max;
+  size_t latency_total = 0;
+  size_t frame_cnt = 0;
+  for (auto it : item_vec) {
+    size_t start_time = it.second[0] != "" ? atoll(it.second[0].c_str()) : 0;
+    size_t end_time = it.second[1] != "" ? atoll(it.second[1].c_str()) : 0;
+
+    if (end_time != 0 && start_time !=0 && end_time > start_time) {
+      size_t duration = end_time - start_time;
+      if (duration > stats_latency_.latency_max) {
+        stats_latency_.latency_max = duration;
+      }
+      latency_total += duration;
+      frame_cnt += 1;
     }
-    stats_.frame_cnt += stats.frame_cnt;
+  }
+  if (frame_cnt != 0) {
+    stats_latency_.latency_avg = (stats_latency_.latency_avg * stats_latency_.frame_cnt + latency_total) /
+                                 (stats_latency_.frame_cnt + frame_cnt);
+    stats_latency_.frame_cnt += frame_cnt;
   }
   pre_time_ = now;
 #endif
-  return stats_;
+  return stats_latency_;
 }
 
-PerfStats PerfCalculator::CalcThroughput(std::shared_ptr<Sqlite> sql, std::string type,
-                                         std::string start_node, std::string end_node) {
-  PerfStats stats = {0, 0, 0, 0.f};
+PerfStats PerfCalculator::CalcThroughputByEachFrameTime(std::shared_ptr<Sqlite> sql, std::string type,
+                                                        std::string start_key, std::string end_key) {
+  std::lock_guard<std::mutex> lg(latency_mutex);
   if (sql == nullptr) {
     LOG(ERROR) << "sqlite is nullptr.";
-    return stats;
+    return stats_fps_;
+  }
+
+#ifdef HAVE_SQLITE
+  size_t now = sql->FindMax(type, end_key);
+  std::string condition = end_key + " > " + std::to_string(pre_time_) + " AND " +
+                          end_key + " <= " + std::to_string(now) + " AND " +
+                          start_key + " > 0";
+  std::vector<DbItem> item_vec = SearchFromDatabase(sql, type, start_key + "," + end_key, condition);
+  if (pre_end_time_ == 0 || pre_end_time_ == ~((size_t)0)) {
+    pre_end_time_ = sql->FindMin(type, start_key);
+  }
+
+  size_t pre_frame_end_time = pre_end_time_;
+  size_t total_time = 0;
+  size_t frame_cnt = 0;
+  for (auto it : item_vec) {
+    size_t start_time = it.second[0] != "" ? atoll(it.second[0].c_str()) : 0;
+    size_t end_time = it.second[1] != "" ? atoll(it.second[1].c_str()) : 0;
+
+    if (end_time != 0 && start_time !=0 && end_time > start_time) {
+      size_t duration = end_time - (start_time > pre_frame_end_time ? start_time : pre_frame_end_time);
+      total_time += duration;
+      frame_cnt += 1;
+      pre_frame_end_time = end_time;
+    }
+  }
+  if (frame_cnt != 0) {
+    size_t& total = stats_fps_.latency_max;
+    stats_fps_.frame_cnt += frame_cnt;
+    total += total_time;
+    if (total != 0) {
+      stats_fps_.fps = ceil(stats_fps_.frame_cnt * 1e7 / total) / 10;
+    } else {
+      stats_fps_.fps = 0;
+    }
+  }
+  pre_time_ = now;
+  pre_end_time_ = pre_frame_end_time;
+#endif
+  return stats_fps_;
+}
+
+PerfStats PerfCalculator::CalcThroughputByTotalTime(std::shared_ptr<Sqlite> sql, std::string type,
+                                                    std::string start_key, std::string end_key) {
+  std::lock_guard<std::mutex> lg(fps_mutex);
+  if (sql == nullptr) {
+    LOG(ERROR) << "sqlite is nullptr.";
+    return stats_fps_;
   }
 #ifdef HAVE_SQLITE
-  size_t frame_cnt = sql->Count(type, end_node);
-  size_t start = sql->FindMin(type, start_node);
-  size_t end = sql->FindMax(type, end_node);
+  size_t frame_cnt = sql->Count(type, end_key);
+  size_t start = sql->FindMin(type, start_key);
+  size_t end = sql->FindMax(type, end_key);
   if (end > start) {
     size_t interval =  end - start;
-    stats.fps = ceil(static_cast<double>(frame_cnt) * 1e7 / interval) / 10.0;
-    stats.frame_cnt = frame_cnt;
+    stats_fps_.fps = ceil(static_cast<double>(frame_cnt) * 1e7 / interval) / 10.0;
+    stats_fps_.frame_cnt = frame_cnt;
   }
 #endif
-  return stats;
+  return stats_fps_;
 }
 
 }  // namespace cnstream

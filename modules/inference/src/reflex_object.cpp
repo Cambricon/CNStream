@@ -56,4 +56,15 @@ bool ReflexObject::Register(const ClassInfo<ReflexObject>& info) {
 
 ReflexObject::~ReflexObject() {}
 
+#ifdef UNIT_TEST
+void ReflexObject::Remove(const std::string& name) {
+  auto& obj_map = sg_obj_map;
+  auto info_iter = obj_map.find(name);
+
+  if (obj_map.end() != info_iter) {
+    obj_map.erase(name);
+  }
+}
+#endif
+
 }  // namespace cnstream

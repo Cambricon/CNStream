@@ -28,9 +28,14 @@
 #include "opencv2/opencv.hpp"
 #endif
 
+#include "cnrt.h"
 #include "cnstream_frame.hpp"
 
 namespace cnstream {
+
+static const int width = 1280;
+static const int height = 720;
+static const int g_dev_id = 0;
 
 void InitFrame(CNDataFrame* frame, int image_type) {
   frame->ctx.dev_type = DevContext::CPU;
@@ -114,6 +119,46 @@ TEST(CoreFrameDeathTest, CopyToSyncMemFailed) {
   EXPECT_DEATH(frame.CopyToSyncMem(), "");
 
   free(frame.ptr_cpu[0]);
+}
+
+TEST(CoreFrameDeathTest, CopyToSyncMemOnDevice) {
+  CNS_CNRT_CHECK(cnrtInit(0));
+  unsigned int dev_num = 0;
+  CNS_CNRT_CHECK(cnrtGetDeviceCount(&dev_num));
+
+  size_t nbytes = width * height * 3;
+  size_t boundary = 1 << 16;
+  nbytes = (nbytes + boundary - 1) & ~(boundary - 1);
+  void* frame_data = nullptr;
+  CALL_CNRT_BY_CONTEXT(cnrtMalloc(&frame_data, nbytes), g_dev_id, 0);
+  // fake frame data
+  std::string stream_id = std::to_string(0);
+  std::shared_ptr<CNFrameInfo> data = CNFrameInfo::Create(stream_id);
+  if (data == nullptr) {
+    std::cout << "frame create error\n";
+    return;
+  }
+  data->frame.flags = 0;
+  data->channel_idx = 0;
+  data->frame.frame_id = 0;
+  data->frame.timestamp = 0;
+  data->frame.width = width;
+  data->frame.height = height;
+  data->frame.mlu_data = frame_data;
+  data->frame.stride[0] = width;
+  data->frame.stride[1] = width;
+  data->frame.ctx.ddr_channel = 0;
+  data->frame.ctx.dev_id = g_dev_id;
+  data->frame.ctx.dev_type = DevContext::MLU;
+  data->frame.fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+
+  EXPECT_DEATH(data->frame.CopyToSyncMemOnDevice(g_dev_id), "");
+  // check device num, if num > 1, do sync
+  if (dev_num > 1) data->frame.CopyToSyncMemOnDevice(1);
+
+  EXPECT_DEATH(data->frame.CopyToSyncMemOnDevice(dev_num + 1), "");
+  data->frame.ctx.dev_type = DevContext::INVALID;
+  EXPECT_DEATH(data->frame.CopyToSyncMemOnDevice(1), "");
 }
 
 TEST(CoreFrame, InferObjAddAttribute) {

@@ -257,7 +257,7 @@ class Module {
  protected:
   friend class Pipeline;
   friend class PipelinePrivate;
-
+  friend struct CNFrameInfo;
 #ifdef UNIT_TEST
 
  public:
@@ -317,6 +317,7 @@ class Module {
    *
    * @return Returns true if the performance information is displayed. Otherwise, returns false.
    */
+ public:
   bool ShowPerfInfo() { return showPerfInfo_.load(); }
   /**
    * @brief Enables or disables to display performance information.
@@ -352,7 +353,12 @@ class Module {
   void ClearPerfManagers() {
     perf_managers_.clear();
   }
-
+  /**
+   * @brief Get output frame data.
+   * This function should be used only when the module is not contained by any containers (pipelines).
+   *
+   * @return The output data.
+   */
   std::shared_ptr<CNFrameInfo> GetOutputFrame();
 
  protected:

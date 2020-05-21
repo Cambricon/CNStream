@@ -67,6 +67,9 @@ class DataHandler : public SourceHandler {
   uint32_t OutputBufNumber() { return param_.output_buf_number_; }
 
  protected:
+#ifdef UNIT_TEST
+ public:  // NOLINT
+#endif
   DataSourceParam param_;
   DevContext dev_ctx_;
   size_t interval_ = 1;

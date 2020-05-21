@@ -76,9 +76,9 @@ typedef struct {
  * Identifies memory shared type for multi-process.
  */
 enum MemMapType {
-  MEMMAP_INVALID = 0,   ///< Invalid memory shared type.
-  MEMMAP_CPU = 1,       ///< CPU memory is shared.
-  MEMMAP_MLU = 2        ///< MLU memory is shared.
+  MEMMAP_INVALID = 0,  ///< Invalid memory shared type.
+  MEMMAP_CPU = 1,      ///< CPU memory is shared.
+  MEMMAP_MLU = 2       ///< MLU memory is shared.
 };
 
 /**
@@ -162,8 +162,8 @@ class Pipeline;
 struct CNDataFrame {
   std::string stream_id;  ///< The data stream aliases where this frame is located to.
   size_t flags = 0;       ///< The mask for this frame, ``CNFrameFlag``.
-  int64_t frame_id;       ///< The frame index that incremented from 0.
-  int64_t timestamp;      ///< The time stamp of this frame.
+  int64_t frame_id = -1;       ///< The frame index that incremented from 0.
+  int64_t timestamp = -1;      ///< The time stamp of this frame.
 
   /**
    * The source data information. You need to set the information before calling CopyToSyncMem().
@@ -212,6 +212,14 @@ struct CNDataFrame {
   void CopyToSyncMem();
 
   /**
+   * @brief Syncronizes source data to specific device, and reset ctx.dev_id to device_id when synced, for multi-device
+   * case.
+   * @param device_id.
+   * @return Void.
+   */
+  void CopyToSyncMemOnDevice(int device_id);
+
+  /**
    * @brief Maps shared memory for multi-process.
    * @param memory The type of the mapped or shared memory.
    * @return Void.
@@ -247,9 +255,10 @@ struct CNDataFrame {
 #ifdef HAVE_OPENCV
   /**
    * Converts data from RGB to BGR. This API should be called after CopyToSyncMem() is invoked.
-   * 
-   * If the data is not in RGB format but in BGR, YUV420NV12, or YUV420NV21 format, its color mode will not be converted.
-   * 
+   *
+   * If the data is not in RGB format but in BGR, YUV420NV12, or YUV420NV21 format, its color mode will not be
+   * converted.
+   *
    * @return Returns data with opencv mat type.
    */
   cv::Mat* ImageBGR();
@@ -259,11 +268,11 @@ struct CNDataFrame {
 #endif
 
  private:
-  void* shared_mem_ptr = nullptr;           ///< A pointer to the shared memory for MLU or CPU.
-  void* map_mem_ptr = nullptr;              ///< A pointer to the mapped memory for MLU or CPU.
-  int shared_mem_fd = -1;                   ///< A pointer to the shared memory file descriptor for CPU shared memory.
-  int map_mem_fd = -1;                      ///< A pointer to the mapped memory file descriptor for CPU mapped memory.
-};  // struct CNDataFrame
+  void* shared_mem_ptr = nullptr;  ///< A pointer to the shared memory for MLU or CPU.
+  void* map_mem_ptr = nullptr;     ///< A pointer to the mapped memory for MLU or CPU.
+  int shared_mem_fd = -1;          ///< A pointer to the shared memory file descriptor for CPU shared memory.
+  int map_mem_fd = -1;             ///< A pointer to the mapped memory file descriptor for CPU mapped memory.
+};                                 // struct CNDataFrame
 
 /**
  * A structure holding the bounding box for detection information of an object.
@@ -327,7 +336,7 @@ struct CNInferObject {
    *
    * @param key The key of an attribute you want to query. See AddAttribute().
    *
-   * @return Returns the attribute key. If the attribute 
+   * @return Returns the attribute key. If the attribute
    *         does not exist, CNInferAttr::id will be set to -1.
    *
    * @note This is a thread-safe function.
@@ -363,7 +372,7 @@ struct CNInferObject {
    *
    * @param key The key of an identified attribute. See AddExtraAttribute().
    *
-   * @return Returns the attribute that is identified by the key. If the attribute 
+   * @return Returns the attribute that is identified by the key. If the attribute
    *         does not exist, returns NULL.
    *
    * @note This is a thread-safe function.

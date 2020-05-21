@@ -37,6 +37,7 @@ namespace cnstream {
 
 const EventType T_type = EVENT_WARNING;
 const char *T_messgge = "test_post_event";
+extern std::string gTestPerfDir;
 
 class TestModuleBase : public Module {
  public:
@@ -119,7 +120,7 @@ TEST(CoreModule, SetAndGetPerfManager) {
   std::unordered_map<std::string, std::shared_ptr<PerfManager>> managers;
   for (auto it : stream_ids) {
     managers[it] = std::make_shared<PerfManager>();
-    EXPECT_TRUE(managers[it]->Init("test_" + it + ".db", m_names, m_names[0], {m_names[1]}));
+    EXPECT_TRUE(managers[it]->Init(gTestPerfDir + "test_" + it + ".db", m_names, m_names[0], {m_names[1]}));
   }
   ptr->SetPerfManagers(managers);
 

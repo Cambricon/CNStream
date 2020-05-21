@@ -54,7 +54,7 @@ class CNVideoEncoder : public VideoEncoder {
 
   virtual VideoFrame *NewFrame();
   virtual void EncodeFrame(VideoFrame *frame);
-  virtual void EncodeFrame(void *y, void *uv, int64_t timestamp);
+  // virtual void EncodeFrame(void *y, void *uv, int64_t timestamp);
 
   void Destroy();
   void EosCallback();

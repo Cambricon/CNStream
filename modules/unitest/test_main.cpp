@@ -35,7 +35,7 @@
 
 const std::vector<std::array<std::string, 3>> model_info = {
   {"resnet50_offline.cambricon", "/Classification/resnet50/", \
-  "http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline.cambricon"},
+  "http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon"},
   {"yuv2gray.cambricon", "/KCF/", \
   "http://video.cambricon.com/models/MLU270/KCF/yuv2gray.cambricon"},
 };
