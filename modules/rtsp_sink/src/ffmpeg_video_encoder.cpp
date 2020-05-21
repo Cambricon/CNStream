@@ -23,7 +23,6 @@
 #include <glog/logging.h>
 #include <string.h>
 
-#define INPUT_QUEUE_SIZE 0
 #define OUTPUT_BUFFER_SIZE 0x200000
 
 namespace cnstream {
@@ -83,40 +82,30 @@ void FFmpegVideoEncoder::FFmpegVideoFrame::Fill(uint8_t *data, int64_t timestamp
 }
 
 FFmpegVideoEncoder::FFmpegVideoEncoder(const RtspParam& rtsp_param)
-    : VideoEncoder(INPUT_QUEUE_SIZE, OUTPUT_BUFFER_SIZE) {
+    : VideoEncoder(OUTPUT_BUFFER_SIZE) {
   switch (rtsp_param.color_format) {
     case YUV420:
-      picture_format_ = AV_PIX_FMT_YUV420P;
-      break;
+      picture_format_ = AV_PIX_FMT_YUV420P; break;
     case RGB24:
-      picture_format_ = AV_PIX_FMT_RGB24;
-      break;
+      picture_format_ = AV_PIX_FMT_RGB24; break;
     case BGR24:
-      picture_format_ = AV_PIX_FMT_BGR24;
-      break;
+      picture_format_ = AV_PIX_FMT_BGR24; break;
     case NV21:
-      picture_format_ = AV_PIX_FMT_NV21;
-      break;
+      picture_format_ = AV_PIX_FMT_NV21; break;
     case NV12:
-      picture_format_ = AV_PIX_FMT_NV12;
-      break;
+      picture_format_ = AV_PIX_FMT_NV12; break;
     default:
-      picture_format_ = AV_PIX_FMT_YUV420P;
-      break;
+      picture_format_ = AV_PIX_FMT_YUV420P; break;
   }
   switch (rtsp_param.codec_type) {
     case H264:
-      avcodec_id_ = AV_CODEC_ID_H264;
-      break;
+      avcodec_id_ = AV_CODEC_ID_H264; break;
     case HEVC:
-      avcodec_id_ = AV_CODEC_ID_HEVC;
-      break;
+      avcodec_id_ = AV_CODEC_ID_HEVC; break;
     case MPEG4:
-      avcodec_id_ = AV_CODEC_ID_MPEG4;
-      break;
+      avcodec_id_ = AV_CODEC_ID_MPEG4; break;
     default:
-      avcodec_id_ = AV_CODEC_ID_H264;
-      break;
+      avcodec_id_ = AV_CODEC_ID_H264; break;
   }
   if (rtsp_param.frame_rate > 0) {
     frame_rate_ = av_d2q(static_cast<double>(rtsp_param.frame_rate), 60000);
@@ -241,10 +230,6 @@ uint32_t FFmpegVideoEncoder::GetOffset(const uint8_t* data) {
     }
   }
   return offset;
-}
-
-void FFmpegVideoEncoder::EncodeFrame(void *y, void *uv, int64_t timestamp) {
-  return;
 }
 
 void FFmpegVideoEncoder::EncodeFrame(VideoFrame *frame) {

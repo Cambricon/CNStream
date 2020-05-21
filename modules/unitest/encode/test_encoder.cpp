@@ -85,9 +85,6 @@ TEST(EncoderModule, CheckParamSet) {
 
   params["fake_key"] = "fake_value";
   EXPECT_TRUE(module.CheckParamSet(params));
-
-  params["dump_type"] = "fake";
-  EXPECT_FALSE(module.CheckParamSet(params));
 }
 
 }  // namespace cnstream

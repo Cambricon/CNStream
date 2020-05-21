@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <utility>
@@ -38,6 +39,9 @@
 #include "threadsafe_queue.hpp"
 
 namespace cnstream {
+
+std::mutex calculator_map_mutex;
+std::mutex perf_type_set_mutex;
 
 const std::string kSTimeSuffix = "_stime";  // NOLINT
 const std::string kETimeSuffix = "_etime";  // NOLINT
@@ -60,6 +64,70 @@ PerfManager::~PerfManager() {
     sql_ = nullptr;
     is_initialized_ = false;
   }
+}
+
+bool PerfManager::SetModuleNames(std::vector<std::string> module_names) {
+  if (module_names_.size() != 0) {
+    LOG(ERROR) << "module names has been set.";
+    return false;
+  }
+
+  module_names_ = module_names;
+  return true;
+}
+
+bool PerfManager::SetStartNode(std::string start_node) {
+  if (!start_node_.empty() || start_node.empty()) {
+    LOG(ERROR) << "start node name is empty or it has been set.";
+    return false;
+  }
+  if (std::find(std::begin(module_names_), std::end(module_names_), start_node) ==
+      std::end(module_names_)) {
+    LOG(ERROR) << "Start node name [" << start_node << "] is not found in module names.";
+    return false;
+  }
+
+  start_node_ = start_node;
+  return true;
+}
+
+bool PerfManager::SetEndNodes(std::vector<std::string> end_nodes) {
+  if (end_nodes_.size() != 0) {
+    LOG(ERROR) << "end nodes has been set.";
+    return false;
+  }
+  for (auto it : end_nodes) {
+    if (it.empty() || std::find(std::begin(module_names_), std::end(module_names_), it) ==
+        std::end(module_names_)) {
+      LOG(ERROR) << "End node name [" << it << "] is not found in module names.";
+      return false;
+    }
+  }
+
+  end_nodes_ = end_nodes;
+  return true;
+}
+
+bool PerfManager::Init(std::string db_name) {
+  if (is_initialized_) {
+    LOG(ERROR) << "Should not initialize perf manager twice.";
+    return false;
+  }
+  if (!PrepareDbFileDir(db_name)) {
+    LOG(ERROR) << "Prepare database file failed.";
+    return false;
+  }
+
+  sql_ = std::make_shared<Sqlite>(db_name);
+  if (!sql_->Connect()) {
+    LOG(ERROR) << "Can not connect to sqlite db.";
+    return false;
+  }
+
+  running_.store(true);
+  thread_ = std::thread(&PerfManager::PopInfoFromQueue, this);
+  is_initialized_ = true;
+  return true;
 }
 
 bool PerfManager::Init(std::string db_name, std::vector<std::string> module_names,
@@ -97,18 +165,22 @@ bool PerfManager::Init(std::string db_name, std::vector<std::string> module_name
 
   // create tables
   std::vector<std::string> keys = GetKeys(module_names);
-  for (auto it : perf_type_) {
-    if (!sql_->CreateTable(it, kId, keys)) {
-      LOG(ERROR) << "Can not create table to sqlite db";
-      sql_->Close();
-      sql_ = nullptr;
-      return false;
+  std::lock_guard<std::mutex> lg(perf_type_set_mutex);
+  {
+    for (auto it : perf_type_) {
+      if (!sql_->CreateTable(it, kId, keys)) {
+        LOG(ERROR) << "Can not create table to sqlite db";
+        sql_->Close();
+        sql_ = nullptr;
+        return false;
+      }
     }
-  }
 
-  // create calculators
-  for (auto type : perf_type_) {
-    CreatePerfCalculator(type);
+    // create calculators
+    for (auto type : perf_type_) {
+      CreatePerfCalculatorForModules(type);
+      CreatePerfCalculatorForPipeline(type);
+    }
   }
   running_.store(true);
   thread_ = std::thread(&PerfManager::PopInfoFromQueue, this);
@@ -116,11 +188,29 @@ bool PerfManager::Init(std::string db_name, std::vector<std::string> module_name
   return true;
 }
 
-bool PerfManager::RecordPerfInfo(PerfInfo info) {
+bool PerfManager::Record(bool is_finished, std::string type, std::string module_name, int64_t pts) {
+  std::string timestamp_str = TimeStamp::CurrentToString();
+  std::string pts_str = std::to_string(pts);
+  std::string key;
+  if (is_finished) {
+    key = module_name + kETimeSuffix;
+  } else {
+    key = module_name + kSTimeSuffix;
+  }
+  return Record(type, kId, pts_str, key, timestamp_str);
+}
+
+bool PerfManager::Record(std::string type, std::string primary_key, std::string primary_value, std::string key) {
+  return Record(type, primary_key, primary_value, key, TimeStamp::CurrentToString());
+}
+
+bool PerfManager::Record(std::string type, std::string primary_key, std::string primary_value,
+                         std::string key, std::string value) {
   if (!running_) {
     return false;
   }
-  info.timestamp = TimeStamp::Current();;
+
+  PerfInfo info = {type, primary_key, primary_value, key, value};
   queue_.Push(info);
   return true;
 }
@@ -143,27 +233,37 @@ void PerfManager::InsertInfoToDb(const PerfInfo& info) {
     LOG(ERROR) << "sql pointer is nullptr";
     return;
   }
-  if (perf_type_.find(info.perf_type) == perf_type_.end()) {
-    LOG(ERROR) << "perf type [" << info.perf_type << "] is not found. Please register first.";
-    return;
+  std::lock_guard<std::mutex> lg(perf_type_set_mutex);
+  {
+    if (perf_type_.find(info.perf_type) == perf_type_.end()) {
+      LOG(ERROR) << "perf type [" << info.perf_type << "] is not found. Please register first.";
+      return;
+    }
   }
-  std::string pts_str = std::to_string(info.pts);
-  std::string timestamp_str = std::to_string(info.timestamp);
-  std::string key;
-  if (info.is_finished) {
-    key = info.module_name + kETimeSuffix;
+
+  if (sql_->Count(info.perf_type, info.primary_key, info.primary_key + "=" + info.primary_value) == 0) {
+    sql_->Insert(info.perf_type, info.primary_key + "," + info.key, info.primary_value + "," + info.value);
   } else {
-    key = info.module_name + kSTimeSuffix;
+    sql_->Update(info.perf_type, info.primary_key, info.primary_value, info.key, info.value);
   }
-  if (sql_->Count(info.perf_type, kId, kId + "=" + pts_str) == 0) {
-    sql_->Insert(info.perf_type, kId + "," + key, pts_str + "," + timestamp_str);
-  } else {
-    sql_->Update(info.perf_type, kId, pts_str, key, timestamp_str);
+}
+
+bool PerfManager::RegisterPerfType(std::string type, std::string primary_key, std::vector<std::string> keys) {
+  std::lock_guard<std::mutex> lg(perf_type_set_mutex);
+  if (type.empty() || perf_type_.find(type) != perf_type_.end() || !is_initialized_) {
+    return false;
   }
+  if (!sql_->CreateTable(type, primary_key, keys)) {
+    LOG(ERROR) << "Register perf type " << type << " failed";
+    return false;
+  }
+  perf_type_.insert(type);
+  return true;
 }
 
 bool PerfManager::RegisterPerfType(std::string type) {
   if (type.empty()) return false;
+  std::lock_guard<std::mutex> lg(perf_type_set_mutex);
   if (perf_type_.find(type) == perf_type_.end()) {
     if (is_initialized_) {
       std::vector<std::string> keys = GetKeys(module_names_);
@@ -171,7 +271,8 @@ bool PerfManager::RegisterPerfType(std::string type) {
         LOG(ERROR) << "Register perf type " << type << " failed";
         return false;
       }
-      CreatePerfCalculator(type);
+      CreatePerfCalculatorForModules(type);
+      CreatePerfCalculatorForPipeline(type);
     }
     perf_type_.insert(type);
   }
@@ -195,17 +296,25 @@ std::vector<std::string> PerfManager::GetKeys(const std::vector<std::string> &mo
   return keys;
 }
 
-void PerfManager::CreatePerfCalculator(std::string perf_type) {
+void PerfManager::CreatePerfCalculatorForModules(std::string perf_type) {
   for (auto name : module_names_) {
-    if (calculator_map_.find(perf_type + "_" + name) == calculator_map_.end()) {
-      calculator_map_[perf_type + "_" + name] = std::make_shared<PerfCalculator>();
-    }
+    CreatePerfCalculator(perf_type + "_" + name);
   }
-
+}
+void PerfManager::CreatePerfCalculatorForPipeline(std::string perf_type) {
   for (auto name : end_nodes_) {
-    if (calculator_map_.find(perf_type + "_" + name + kPipelineSuffix) == calculator_map_.end()) {
-      calculator_map_[perf_type + "_" + name + kPipelineSuffix] = std::make_shared<PerfCalculator>();
-    }
+    CreatePerfCalculator(perf_type + "_" + name + kPipelineSuffix);
+  }
+}
+
+void PerfManager::CreatePerfCalculator(std::string perf_type, std::string start_node, std::string end_node) {
+  CreatePerfCalculator(perf_type + "_" + start_node + "_" + end_node);
+}
+
+void PerfManager::CreatePerfCalculator(std::string name) {
+  std::lock_guard<std::mutex> lg(calculator_map_mutex);
+  if (calculator_map_.find(name) == calculator_map_.end()) {
+      calculator_map_[name] = std::make_shared<PerfCalculator>();
   }
 }
 
@@ -218,7 +327,10 @@ void PerfManager::SqlCommitTrans() {
 }
 
 bool PerfManager::PrepareDbFileDir(std::string file_path) {
-  if (file_path.empty()) return false;
+  if (file_path.empty()) {
+    LOG(ERROR) << "file path is empty.";
+    return false;
+  }
 
   int fd = open(file_path.c_str(), O_RDONLY);
   if (fd < 0) {
@@ -253,30 +365,64 @@ bool PerfManager::CreateDir(std::string dir) {
   return true;
 }
 
-std::shared_ptr<PerfCalculator> PerfManager::GetCalculator(std::string perf_type, std::string module_name) {
-  auto it = calculator_map_.find(perf_type + "_" + module_name);
+std::shared_ptr<PerfCalculator> PerfManager::GetCalculator(std::string name) {
+  std::lock_guard<std::mutex> lg(calculator_map_mutex);
+  auto it = calculator_map_.find(name);
   if (it != calculator_map_.end()) {
     return it->second;
   }
-  LOG(ERROR) << "Can not find perf calculator of PerfType ["<< perf_type << "] ModuleName [" << module_name << "]";
+  LOG(ERROR) << "Can not find perf calculator [" << name << "]";
   return nullptr;
 }
 
-PerfStats PerfManager::CalculatePerfStats(std::string perf_type, std::string module_name) {
+std::shared_ptr<PerfCalculator> PerfManager::GetCalculator(std::string perf_type, std::string module_name) {
+  return GetCalculator(perf_type + "_" + module_name);
+}
+
+PerfStats PerfManager::CalculatePerfStats(std::string calculator_name, std::string perf_type,
+                                          std::string start_key, std::string end_key) {
   PerfStats stats{0, 0, 0, 0.f};
   if (sql_ == nullptr) {
     LOG(ERROR) << "sql pointer is nullptr";
     return stats;
   }
 
-  std::shared_ptr<PerfCalculator> calculator = GetCalculator(perf_type, module_name);
+  std::shared_ptr<PerfCalculator> calculator = GetCalculator(calculator_name);
   if (calculator) {
-    stats = calculator->CalcLatency(sql_, perf_type, module_name + kSTimeSuffix, module_name + kETimeSuffix);
+    stats = calculator->CalcLatency(sql_, perf_type, start_key, end_key);
     if (stats.latency_avg != 0) {
       stats.fps = (1e9 / stats.latency_avg) / 1000.f;
     }
   }
   return stats;
+}
+
+PerfStats PerfManager::CalculateThroughput(std::string calculator_name, std::string perf_type,
+                                           std::string start_key, std::string end_key) {
+  PerfStats stats{0, 0, 0, 0.f};
+  if (sql_ == nullptr) {
+    LOG(ERROR) << "sql pointer is nullptr";
+    return stats;
+  }
+
+  std::shared_ptr<PerfCalculator> calculator = GetCalculator(calculator_name);
+  if (calculator) {
+    stats = calculator->CalcThroughputByEachFrameTime(sql_, perf_type, start_key, end_key);
+  }
+  return stats;
+}
+
+PerfStats PerfManager::CalculatePerfStats(std::string perf_type, std::string start_key, std::string end_key) {
+  return CalculatePerfStats(perf_type + "_" + start_key + "_" + end_key, perf_type, start_key, end_key);
+}
+
+PerfStats PerfManager::CalculatePerfStats(std::string perf_type, std::string module_name) {
+  return CalculatePerfStats(perf_type + "_" + module_name, perf_type,
+                            module_name + kSTimeSuffix, module_name + kETimeSuffix);
+}
+
+PerfStats PerfManager::CalculateThroughput(std::string perf_type, std::string start_key, std::string end_key) {
+  return CalculateThroughput(perf_type + "_" + start_key + "_" + end_key, perf_type, start_key, end_key);
 }
 
 std::vector<std::pair<std::string, PerfStats>> PerfManager::CalculatePipelinePerfStats(std::string perf_type) {
@@ -287,7 +433,8 @@ std::vector<std::pair<std::string, PerfStats>> PerfManager::CalculatePipelinePer
     calc = GetCalculator(perf_type, end_node + kPipelineSuffix);
     if (calc && sql_) {
       stats = calc->CalcLatency(sql_, perf_type, start_node_ + kSTimeSuffix, end_node + kETimeSuffix);
-      stats.fps = calc->CalcThroughput(sql_, perf_type, start_node_ + kSTimeSuffix, end_node + kETimeSuffix).fps;
+      stats.fps =
+          calc->CalcThroughputByTotalTime(sql_, perf_type, start_node_ + kSTimeSuffix, end_node + kETimeSuffix).fps;
     }
     pipeline_stats.push_back(std::make_pair(end_node, stats));
   }

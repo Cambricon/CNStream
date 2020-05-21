@@ -23,10 +23,13 @@
 
 #include <stdlib.h>
 #include <memory>
+#include <utility>
 #include <string>
 #include <vector>
 
 namespace cnstream {
+
+using DbItem = std::pair<int, std::vector<std::string>>;
 
 class Sqlite;
 
@@ -34,10 +37,10 @@ class Sqlite;
  * @brief The basic data structure of performance statistics, including latency, frame count, and throughout.
  */
 struct PerfStats {
-  size_t latency_avg;
-  size_t latency_max;
-  size_t frame_cnt;
-  double fps;
+  size_t latency_avg;    /// Average latency
+  size_t latency_max;    /// Max latency
+  size_t frame_cnt;      /// Frame count
+  double fps;            /// Throughput
 };  // struct PerfStats
 
 /**
@@ -101,14 +104,24 @@ class PerfCalculator {
    *
    * @return Returns the performance statistics.
    */
-  PerfStats CalcThroughput(std::shared_ptr<Sqlite> sql, std::string type, std::string start_node, std::string end_node);
+  PerfStats CalcThroughputByTotalTime(std::shared_ptr<Sqlite> sql, std::string type,
+                                      std::string start_key, std::string end_key);
+  PerfStats GetLatency();
+  PerfStats GetThroughput();
+
+  std::vector<DbItem> SearchFromDatabase(std::shared_ptr<Sqlite> sql, std::string table,
+                                         std::string key, std::string condition);
+  PerfStats CalcThroughputByEachFrameTime(std::shared_ptr<Sqlite> sql, std::string type,
+                                          std::string start_key, std::string end_key);
 
  private:
 #ifdef UNIT_TEST
  public:  //NOLINT
 #endif
   size_t pre_time_ = 0;
-  PerfStats stats_ = {0, 0, 0, 0.f};
+  size_t pre_end_time_ = 0;
+  PerfStats stats_latency_ = {0, 0, 0, 0.f};
+  PerfStats stats_fps_ = {0, 0, 0, 0.f};
 };  // PerfCalculator
 
 }  // namespace cnstream

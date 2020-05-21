@@ -27,7 +27,6 @@
 #include <sstream>
 #include <string>
 
-#define INPUT_QUEUE_SIZE 0
 #define OUTPUT_BUFFER_SIZE 0x200000
 
 namespace cnstream {
@@ -78,7 +77,7 @@ void CNVideoEncoder::CNVideoFrame::Fill(uint8_t *data, int64_t timestamp) {
 }
 
 CNVideoEncoder::CNVideoEncoder(const RtspParam& rtsp_param)
-    : VideoEncoder(INPUT_QUEUE_SIZE, OUTPUT_BUFFER_SIZE) {
+    : VideoEncoder(OUTPUT_BUFFER_SIZE) {
   rtsp_param_ = rtsp_param;
   switch (rtsp_param.color_format) {
     case NV21:
@@ -205,8 +204,8 @@ void CNVideoEncoder::EncodeFrame(VideoFrame *frame) {
   }
 }
 
+/*
 void CNVideoEncoder::EncodeFrame(void *y, void *uv, int64_t timestamp) {
-  /*
   edk::CnFrame *cnframe = new edk::CnFrame;
   memset(cnframe, 0, sizeof(edk::CnFrame));
   uint64_t mlu_output_y, mlu_output_uv;
@@ -234,8 +233,8 @@ void CNVideoEncoder::EncodeFrame(void *y, void *uv, int64_t timestamp) {
     LOG(INFO) << "CnEncodeError: " << err.what();
     return;
   }
-  */
 }
+*/
 
 uint32_t CNVideoEncoder::GetOffset(const uint8_t* data) {
   uint32_t offset = 0;

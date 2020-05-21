@@ -17,13 +17,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-
-#include "easyinfer/easy_infer.h"
+#include <glog/logging.h>
 
 #include <memory>
 
-#include "cxxutil/logger.h"
-#include "mlu_task_queue.h"
+#include "easyinfer/easy_infer.h"
+#include "easyinfer/mlu_task_queue.h"
 #include "model_loader_internal.h"
 
 namespace edk {
@@ -32,7 +31,7 @@ namespace edk {
   do {                                                                          \
     int ret = (func);                                                           \
     if (0 != ret) {                                                             \
-      LOG(ERROR, "%s, error code: %d", (msg), ret);                             \
+      LOG(ERROR) << (msg) << " error code: " << ret;                            \
       throw EasyInferError(msg " error code : " + std::to_string(ret));         \
     }                                                                           \
   } while (0)
@@ -76,7 +75,7 @@ void EasyInfer::Init(std::shared_ptr<ModelLoader> ploader, int batch_size, int d
   d_ptr_->ploader_ = ploader;
   ModelLoaderInternalInterface interface(d_ptr_->ploader_.get());
 
-  LOG(INFO, "Init inference context, batch size: %d, device id: %d", batch_size, dev_id);
+  LOG(INFO) << "Init inference context, batch size: " << batch_size << " device id: " << dev_id;
 
   // init function
   CALL_CNRT_FUNC(cnrtCreateFunction(&d_ptr_->function_), "Create function failed.");
@@ -94,7 +93,7 @@ void EasyInfer::Init(std::shared_ptr<ModelLoader> ploader, int batch_size, int d
                  "Set Runtime Context Device Id failed!");
   CALL_CNRT_FUNC(cnrtInitRuntimeContext(d_ptr_->runtime_context_, NULL), "Init runtime context failed!");
 
-  LOG(INFO, "Create MLU task queue from runtime context");
+  LOG(INFO) << "Create MLU task queue from runtime context";
   CALL_CNRT_FUNC(cnrtRuntimeContextCreateQueue(d_ptr_->runtime_context_, &d_ptr_->queue_->queue),
                  "Runtime Context Create Queue failed");
   // init param
@@ -108,8 +107,8 @@ void EasyInfer::Run(void** input, void** output, float* hw_time) const {
   int i_num = d_ptr_->ploader_->InputNum();
   int o_num = d_ptr_->ploader_->OutputNum();
 
-  LOG(TRACE, "Process inference on one frame, input num: %d, output num: %d", i_num, o_num);
-  LOG(TRACE, "Inference, input: %p, output: %p", input, output);
+  DLOG(INFO) << "Process inference on one frame, input num: " << i_num << " output num: " << o_num;
+  DLOG(INFO) << "Inference, input: " << input << " output: " << output;
   // prepare params for invokefunction
   for (int i = 0; i < i_num; ++i) {
     d_ptr_->param_[i] = input[i];
@@ -134,7 +133,7 @@ void EasyInfer::Run(void** input, void** output, float* hw_time) const {
     CALL_CNRT_FUNC(cnrtNotifierDuration(d_ptr_->notifier_start_, d_ptr_->notifier_end_, hw_time),
                    "Calculate elapsed time failed.");
     *hw_time /= 1000.0f;
-    LOG(TRACE, "Inference hardware time %f ms", *hw_time);
+    DLOG(INFO) << "Inference hardware time " << *hw_time << " ms";
   }
 }
 
@@ -146,9 +145,9 @@ MluTaskQueue_t EasyInfer::GetMluQueue() const { return d_ptr_->queue_; }
 
 MluTaskQueue::~MluTaskQueue() {
   if (queue) {
-    LOG(INFO, "Destroy MLU task queue");
+    LOG(INFO) << "Destroy MLU task queue";
     cnrtRet_t ret = cnrtDestroyQueue(queue);
-    if (ret != CNRT_RET_SUCCESS) LOG(ERROR, "Destroy cnrtQueue failed");
+    if (ret != CNRT_RET_SUCCESS) LOG(ERROR) << "Destroy cnrtQueue failed";
   }
 }
 

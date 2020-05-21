@@ -35,6 +35,9 @@
 #include "test_base.hpp"
 
 namespace cnstream {
+
+extern std::string gTestPerfDir;
+
 /*
   1. check frame count after processing
   2. check frame.flags do not have EOS mask during processing
@@ -1147,8 +1150,7 @@ TEST(CorePipeline, CreatePerfManager) {
   std::string link_id = pipeline.LinkModules(up_node, down_node);
 
   std::vector<std::string> stream_ids = {"0", "1", "2", "3"};
-  std::string db_dir = "perf_dir";
-  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, db_dir));
+  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, gTestPerfDir));
 
   EXPECT_TRUE(pipeline.Start());
   EXPECT_TRUE(pipeline.Stop());
@@ -1180,16 +1182,15 @@ TEST(CorePipeline, CreatePerfManagerFailedCase) {
   pipeline2.LinkModules(up_node, down_node);
 
   std::vector<std::string> stream_ids = {"0", "1", "2", "3"};
-  std::string db_dir = "perf_dir";
-  EXPECT_TRUE(pipeline1.CreatePerfManager(stream_ids, db_dir));
+  EXPECT_TRUE(pipeline1.CreatePerfManager(stream_ids, gTestPerfDir));
 
   EXPECT_TRUE(pipeline1.Start());
 
 #ifdef HAVE_SQLITE
   // failed as the db file is opened by pipeline1
-  EXPECT_FALSE(pipeline2.CreatePerfManager(stream_ids, db_dir));
+  EXPECT_FALSE(pipeline2.CreatePerfManager(stream_ids, gTestPerfDir));
 #else
-  EXPECT_TRUE(pipeline2.CreatePerfManager(stream_ids, db_dir));
+  EXPECT_TRUE(pipeline2.CreatePerfManager(stream_ids, gTestPerfDir));
 #endif
 
   EXPECT_TRUE(pipeline1.Stop());
@@ -1208,8 +1209,7 @@ TEST(CorePipeline, PerfTaskLoop) {
   // two linked modules are added to the pipeline
   EXPECT_TRUE(pipeline.Start());
   std::vector<std::string> stream_ids = {"0", "1", "2", "3"};
-  std::string db_dir = "perf_dir";
-  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, db_dir));
+  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, gTestPerfDir));
 
   uint32_t data_num = 10;
   uint32_t id = 0;

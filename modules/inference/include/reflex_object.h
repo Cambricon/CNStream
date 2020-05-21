@@ -88,6 +88,9 @@ class ReflexObject {
   static bool Register(const ClassInfo<ReflexObject>& info);
 
   virtual ~ReflexObject() = 0;
+#ifdef UNIT_TEST
+  static void Remove(const std::string& name);
+#endif
 };  // class reflexobject<void>
 
 template <typename T>

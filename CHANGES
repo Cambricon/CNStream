@@ -1,3 +1,8 @@
+changes for 4.5.0
+* Inferencer support infer detection objects
+* fix dead-lock in Inferencer
+* add demo for infer detection objects, see samples/demo/run_ssd_and_resnet50_mlu270_config.json
+
 changes for 4.4.0
 * add Ubuntu 18.04 CentOS dockerfile
 * add performance statistics mechanism

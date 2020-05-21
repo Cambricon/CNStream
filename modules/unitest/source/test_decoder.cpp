@@ -63,8 +63,7 @@ class PrepareEnv {
       param["device_id"] = "0";
 
       src->Open(param);
-      ffmpeg_handler->Open();
-      ffmpeg_handler->Close();
+      OpenHandler(0);
       ffmpeg_mlu_decoder = std::make_shared<FFmpegMluDecoder>(*ffmpeg_handler);
     } else {
       ModuleParamSet param;
@@ -73,8 +72,7 @@ class PrepareEnv {
       param["decoder_type"] = "cpu";
 
       src->Open(param);
-      ffmpeg_handler->Open();
-      ffmpeg_handler->Close();
+      OpenHandler(1);
       ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>(*ffmpeg_handler);
     }
     st = new AVStream();
@@ -93,6 +91,18 @@ class PrepareEnv {
     st->codec->height = 256;
 #endif
   }
+
+  void OpenHandler(int device) {
+    if (device == 0) {
+      ffmpeg_handler->dev_ctx_.dev_type = DevContext::MLU;
+      ffmpeg_handler->dev_ctx_.dev_id = 0;
+    } else {
+      ffmpeg_handler->dev_ctx_.dev_type = DevContext::CPU;
+      ffmpeg_handler->dev_ctx_.dev_id = -1;
+    }
+    ffmpeg_handler->dev_ctx_.ddr_channel = ffmpeg_handler->stream_index_ % 4;
+  }
+
   ~PrepareEnv() {
     delete av_pkt;
 #if LIBAVFORMAT_VERSION_INT >= TEST_FFMPEG_VERSION_3_1
@@ -135,15 +145,26 @@ class PrepareEnvRaw {
     param["width"] = "256";
     param["height"] = "256";
     param["interlaced"] = "false";
+
     src->Open(param);
-    raw_handler->Open();
-    raw_handler->Close();
+    OpenHandler(0);
 
     raw_mlu_decoder = std::make_shared<RawMluDecoder>(*raw_handler);
     decoder_ctx.height = 256;
     decoder_ctx.width = 256;
     decoder_ctx.codec_id = DecoderContext::CN_CODEC_ID_H264;
     raw_pkt = new RawPacket();
+  }
+
+  void OpenHandler(int device) {
+    if (device == 0) {
+      raw_handler->dev_ctx_.dev_type = DevContext::MLU;
+      raw_handler->dev_ctx_.dev_id = 0;
+    } else {
+      raw_handler->dev_ctx_.dev_type = DevContext::CPU;
+      raw_handler->dev_ctx_.dev_id = -1;
+    }
+    raw_handler->dev_ctx_.ddr_channel = raw_handler->stream_index_ % 4;
   }
   ~PrepareEnvRaw() {
     delete raw_pkt;
@@ -158,105 +179,109 @@ class PrepareEnvRaw {
   RawPacket *raw_pkt;
 };  // PrepareEnvRaw
 
+/*
 // Mlu FFmpeg Decoder
-//  TEST(SourceMluFFmpegDecoder, CreateDestroy) {
-//    PrepareEnv env(0);
-//
-//    // h264
-//    EXPECT_TRUE(env.ffmpeg_mlu_decoder->Create(env.st));
-//    env.ffmpeg_mlu_decoder->Destroy();
-//
-//    // h265
-//  #if LIBAVFORMAT_VERSION_INT >= TEST_FFMPEG_VERSION_3_1
-//    env.st->codecpar->codec_id = AV_CODEC_ID_HEVC;
-//  #else
-//    env.st->codec->codec_id = AV_CODEC_ID_HEVC;
-//  #endif
-//    EXPECT_TRUE(env.ffmpeg_mlu_decoder->Create(env.st));
-//    env.ffmpeg_mlu_decoder->Destroy();
-//
-//    // invalid
-//  #if LIBAVFORMAT_VERSION_INT >= TEST_FFMPEG_VERSION_3_1
-//    env.st->codecpar->codec_id = AV_CODEC_ID_NONE;
-//  #else
-//    env.st->codec->codec_id = AV_CODEC_ID_NONE;
-//  #endif
-//    EXPECT_FALSE(env.ffmpeg_mlu_decoder->Create(env.st));
-//    env.ffmpeg_mlu_decoder->Destroy();
-//
-//    env.ffmpeg_mlu_decoder->Destroy();
-//  }
-//
-//  TEST(SourceMluFFmpegDecoder, CreateDestroyJpeg) {
-//    PrepareEnv env(0, true);
-//    // mjpeg
-//  #if LIBAVFORMAT_VERSION_INT >= TEST_FFMPEG_VERSION_3_1
-//    env.st->codecpar->codec_id = AV_CODEC_ID_MJPEG;
-//  #else
-//    env.st->codec->codec_id = AV_CODEC_ID_MJPEG;
-//  #endif
-//
-//    EXPECT_TRUE(env.ffmpeg_mlu_decoder->Create(env.st));
-//
-//    env.ffmpeg_mlu_decoder->Destroy();
-//  }
-//
-//  TEST(SourceMluFFmpegDecoder, Process) {
-//    PrepareEnv env(0);
-//
-//    EXPECT_TRUE(env.ffmpeg_mlu_decoder->Create(env.st));
-//
-//    EXPECT_TRUE(env.ffmpeg_mlu_decoder->Process(env.av_pkt, false));
-//    // eos
-//    EXPECT_TRUE(env.ffmpeg_mlu_decoder->Process(env.av_pkt, true));
-//    env.ffmpeg_mlu_decoder->Destroy();
-//  }
-//
-//  TEST(SourceMluFFmpegDecoder, ProcessEmptyFrame) {
-//    PrepareEnv env(0);
-//
-//    delete env.ffmpeg_handler;
-//    env.ffmpeg_handler = new DataHandlerFFmpeg(env.src, "", "", 30, false);
-//    env.ffmpeg_mlu_decoder = std::make_shared<FFmpegMluDecoder>(*env.ffmpeg_handler);
-//    edk::CnFrame frame;
-//    bool reused = false;
-//    uint32_t loop_num = 5;
-//    // stream id is empty string, discard frame 5 times
-//    while (loop_num--) {
-//      EXPECT_EQ(env.ffmpeg_mlu_decoder->ProcessFrame(frame, &reused), -1);
-//      EXPECT_FALSE(reused);
-//    }
-//    env.ffmpeg_mlu_decoder->Destroy();
-//  }
-//
-//  TEST(SourceMluFFmpegDecoder, ProcessFrame) {
-//    PrepareEnv env(0);
-//
-//    edk::CnFrame frame;
-//    frame.buf_id = 1;
-//    frame.height = 256;
-//    frame.width = 256;
-//    frame.pformat = edk::PixelFmt::NV12;
-//    frame.strides[0] = 256;
-//    frame.strides[1] = 256;
-//    void *mlu_ptr = nullptr;
-//    cnrtMalloc(&mlu_ptr, 256 * 256 * 3 / 2);
-//    frame.ptrs[0] = mlu_ptr;
-//    frame.ptrs[1] = reinterpret_cast<void *>(reinterpret_cast<char *>(mlu_ptr) + 256 * 256);
-//    bool reused = false;
-//    EXPECT_EQ(env.ffmpeg_mlu_decoder->ProcessFrame(frame, &reused), 0);
-//    EXPECT_FALSE(reused);
-//
-//    env.ffmpeg_mlu_decoder->Destroy();
-//
-//    // create eos frame for clear stream idx
-//    CNFrameInfo::Create("0", true);
-//    cnrtFree(mlu_ptr);
-//  }
+TEST(SourceMluFFmpegDecoder, CreateDestroy) {
+  PrepareEnv env(0);
+  // h264
+  EXPECT_TRUE(env.ffmpeg_mlu_decoder->Create(env.st));
+  env.ffmpeg_mlu_decoder->Destroy();
+
+  // h265
+#if LIBAVFORMAT_VERSION_INT >= TEST_FFMPEG_VERSION_3_1
+  env.st->codecpar->codec_id = AV_CODEC_ID_HEVC;
+#else
+  env.st->codec->codec_id = AV_CODEC_ID_HEVC;
+#endif
+  EXPECT_TRUE(env.ffmpeg_mlu_decoder->Create(env.st));
+  env.ffmpeg_mlu_decoder->Destroy();
+
+  // invalid
+#if LIBAVFORMAT_VERSION_INT >= TEST_FFMPEG_VERSION_3_1
+  env.st->codecpar->codec_id = AV_CODEC_ID_NONE;
+#else
+  env.st->codec->codec_id = AV_CODEC_ID_NONE;
+#endif
+  EXPECT_FALSE(env.ffmpeg_mlu_decoder->Create(env.st));
+  env.ffmpeg_mlu_decoder->Destroy();
+
+  env.ffmpeg_mlu_decoder->Destroy();
+}
+*/
+
+TEST(SourceMluFFmpegDecoder, CreateDestroyJpeg) {
+  PrepareEnv env(0, true);
+  // mjpeg
+#if LIBAVFORMAT_VERSION_INT >= TEST_FFMPEG_VERSION_3_1
+  env.st->codecpar->codec_id = AV_CODEC_ID_MJPEG;
+#else
+  env.st->codec->codec_id = AV_CODEC_ID_MJPEG;
+#endif
+
+  EXPECT_TRUE(env.ffmpeg_mlu_decoder->Create(env.st));
+
+  env.ffmpeg_mlu_decoder->Destroy();
+}
+
+/*
+TEST(SourceMluFFmpegDecoder, Process) {
+  PrepareEnv env(0);
+
+  EXPECT_TRUE(env.ffmpeg_mlu_decoder->Create(env.st));
+
+  EXPECT_TRUE(env.ffmpeg_mlu_decoder->Process(env.av_pkt, false));
+  // eos
+  EXPECT_TRUE(env.ffmpeg_mlu_decoder->Process(env.av_pkt, true));
+  env.ffmpeg_mlu_decoder->Destroy();
+}
+*/
+
+TEST(SourceMluFFmpegDecoder, ProcessEmptyFrame) {
+  PrepareEnv env(0);
+
+  delete env.ffmpeg_handler;
+  env.ffmpeg_handler = new DataHandlerFFmpeg(env.src, "", "", 30, false);
+  env.ffmpeg_mlu_decoder = std::make_shared<FFmpegMluDecoder>(*env.ffmpeg_handler);
+  edk::CnFrame frame;
+  bool reused = false;
+  uint32_t loop_num = 5;
+  // stream id is empty string, discard frame 5 times
+  while (loop_num--) {
+    EXPECT_EQ(env.ffmpeg_mlu_decoder->ProcessFrame(frame, &reused), -1);
+    EXPECT_FALSE(reused);
+  }
+  env.ffmpeg_mlu_decoder->Destroy();
+}
+
+TEST(SourceMluFFmpegDecoder, ProcessFrame) {
+  PrepareEnv env(0);
+
+  edk::CnFrame frame;
+  frame.buf_id = 1;
+  frame.height = 256;
+  frame.width = 256;
+  frame.pformat = edk::PixelFmt::NV12;
+  frame.strides[0] = 256;
+  frame.strides[1] = 256;
+  void *mlu_ptr = nullptr;
+  cnrtMalloc(&mlu_ptr, 256 * 256 * 3 / 2);
+  frame.ptrs[0] = mlu_ptr;
+  frame.ptrs[1] = reinterpret_cast<void *>(reinterpret_cast<char *>(mlu_ptr) + 256 * 256);
+  bool reused = false;
+  EXPECT_EQ(env.ffmpeg_mlu_decoder->ProcessFrame(frame, &reused), 0);
+  EXPECT_FALSE(reused);
+
+  env.ffmpeg_mlu_decoder->Destroy();
+
+  // create eos frame for clear stream idx
+  CNFrameInfo::Create("0", true);
+  cnrtFree(mlu_ptr);
+}
 
 // Cpu FFmpeg Decoder
 TEST(SourceCpuFFmpegDecoder, CreateDestroy) {
-  PrepareEnv env(1);
+  int device_type = 1;
+  PrepareEnv env(device_type);
 
   // h264
   EXPECT_TRUE(env.ffmpeg_cpu_decoder->Create(env.st));
@@ -281,8 +306,8 @@ TEST(SourceCpuFFmpegDecoder, CreateDestroy) {
 
   std::string image_path = GetExePath() + gimage_path;
   env.ffmpeg_handler = new DataHandlerFFmpeg(env.src, "0", image_path, 30, false);
-  env.ffmpeg_handler->Open();
-  env.ffmpeg_handler->Close();
+
+  env.OpenHandler(device_type);
   env.ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>(*env.ffmpeg_handler);
   EXPECT_TRUE(env.ffmpeg_cpu_decoder->Create(env.st));
   env.ffmpeg_cpu_decoder->Destroy();
@@ -350,90 +375,93 @@ TEST(SourceCpuFFmpegDecoder, ProcessFrameInvalidContext) {
   CNFrameInfo::Create("0", true);
 }
 
+/*
 // Mlu Raw Decoder
-//  TEST(SourceMluRawDecoder, CreateDestroy) {
-//    PrepareEnvRaw env;
-//
-//    // h264
-//    EXPECT_TRUE(env.raw_mlu_decoder->Create(&env.decoder_ctx));
-//    env.raw_mlu_decoder->Destroy();
-//
-//    // destroy twice, the function will return directly.
-//    env.raw_mlu_decoder->Destroy();
-//
-//    // h265
-//    env.decoder_ctx.codec_id = DecoderContext::CN_CODEC_ID_HEVC;
-//    EXPECT_TRUE(env.raw_mlu_decoder->Create(&env.decoder_ctx));
-//    env.raw_mlu_decoder->Destroy();
-//
-//    // jpeg
-//    delete env.raw_handler;
-//
-//    std::string image_path = GetExePath() + gimage_path;
-//    env.raw_handler = new DataHandlerRaw(env.src, "0", image_path, 30, false);
-//    env.raw_handler->Open();
-//    env.raw_handler->Close();
-//    env.raw_mlu_decoder = std::make_shared<RawMluDecoder>(*env.raw_handler);
-//    env.decoder_ctx.codec_id = DecoderContext::CN_CODEC_ID_JPEG;
-//    EXPECT_TRUE(env.raw_mlu_decoder->Create(&env.decoder_ctx));
-//    env.raw_mlu_decoder->Destroy();
-//
-//    // unsupported
-//    env.decoder_ctx.codec_id = DecoderContext::CN_CODEC_ID_RAWVIDEO;
-//    EXPECT_FALSE(env.raw_mlu_decoder->Create(&env.decoder_ctx));
-//  }
-//
-//  TEST(SourceMluRawDecoder, Process) {
-//    PrepareEnvRaw env;
-//
-//    EXPECT_TRUE(env.raw_mlu_decoder->Create(&env.decoder_ctx));
-//
-//    EXPECT_TRUE(env.raw_mlu_decoder->Process(env.raw_pkt, false));
-//    // eos
-//    EXPECT_TRUE(env.raw_mlu_decoder->Process(env.raw_pkt, true));
-//    env.raw_mlu_decoder->Destroy();
-//  }
-//
-//  TEST(SourceMluRawDecoder, ProcessEmptyFrame) {
-//    PrepareEnvRaw env;
-//
-//    delete env.raw_handler;
-//    env.raw_handler = new DataHandlerRaw(env.src, "", "", 30, false);
-//    env.raw_mlu_decoder = std::make_shared<RawMluDecoder>(*env.raw_handler);
-//    edk::CnFrame frame;
-//    bool reused = false;
-//    uint32_t loop_num = 5;
-//    // stream id is empty string, discard frame 5 times
-//    while (loop_num--) {
-//      EXPECT_EQ(env.raw_mlu_decoder->ProcessFrame(frame, &reused), -1);
-//      EXPECT_FALSE(reused);
-//    }
-//    env.raw_mlu_decoder->Destroy();
-//  }
-//
-//  TEST(SourceMluRawDecoder, ProcessFrame) {
-//    PrepareEnvRaw env;
-//
-//    edk::CnFrame frame;
-//    frame.buf_id = 1;
-//    frame.height = 256;
-//    frame.width = 256;
-//    frame.pformat = edk::PixelFmt::NV21;
-//    frame.strides[0] = 256;
-//    frame.strides[1] = 256;
-//    void *mlu_ptr = nullptr;
-//    cnrtMalloc(&mlu_ptr, 256 * 256 * 3 / 2);
-//    frame.ptrs[0] = mlu_ptr;
-//    frame.ptrs[1] = reinterpret_cast<void *>(reinterpret_cast<char *>(mlu_ptr) + 256 * 256);
-//    bool reused = false;
-//    EXPECT_EQ(env.raw_mlu_decoder->ProcessFrame(frame, &reused), 0);
-//    EXPECT_FALSE(reused);
-//
-//    env.raw_mlu_decoder->Destroy();
-//
-//    // create eos frame for clear stream idx
-//    CNFrameInfo::Create("0", true);
-//    cnrtFree(mlu_ptr);
-//  }
+TEST(SourceMluRawDecoder, CreateDestroy) {
+  PrepareEnvRaw env;
+
+  // h264
+  EXPECT_TRUE(env.raw_mlu_decoder->Create(&env.decoder_ctx));
+  env.raw_mlu_decoder->Destroy();
+
+  // destroy twice, the function will return directly.
+  env.raw_mlu_decoder->Destroy();
+
+  // h265
+  env.decoder_ctx.codec_id = DecoderContext::CN_CODEC_ID_HEVC;
+  EXPECT_TRUE(env.raw_mlu_decoder->Create(&env.decoder_ctx));
+  env.raw_mlu_decoder->Destroy();
+
+  // jpeg
+  delete env.raw_handler;
+
+  std::string image_path = GetExePath() + gimage_path;
+  env.raw_handler = new DataHandlerRaw(env.src, "0", image_path, 30, false);
+  env.OpenHandler(0);
+  env.raw_mlu_decoder = std::make_shared<RawMluDecoder>(*env.raw_handler);
+  env.decoder_ctx.codec_id = DecoderContext::CN_CODEC_ID_JPEG;
+  EXPECT_TRUE(env.raw_mlu_decoder->Create(&env.decoder_ctx));
+  env.raw_mlu_decoder->Destroy();
+
+  // unsupported
+  env.decoder_ctx.codec_id = DecoderContext::CN_CODEC_ID_RAWVIDEO;
+  EXPECT_FALSE(env.raw_mlu_decoder->Create(&env.decoder_ctx));
+}
+*/
+
+/*
+TEST(SourceMluRawDecoder, Process) {
+  PrepareEnvRaw env;
+
+  EXPECT_TRUE(env.raw_mlu_decoder->Create(&env.decoder_ctx));
+
+  EXPECT_TRUE(env.raw_mlu_decoder->Process(env.raw_pkt, false));
+  // eos
+  EXPECT_TRUE(env.raw_mlu_decoder->Process(env.raw_pkt, true));
+  env.raw_mlu_decoder->Destroy();
+}
+*/
+
+TEST(SourceMluRawDecoder, ProcessEmptyFrame) {
+  PrepareEnvRaw env;
+
+  delete env.raw_handler;
+  env.raw_handler = new DataHandlerRaw(env.src, "", "", 30, false);
+  env.raw_mlu_decoder = std::make_shared<RawMluDecoder>(*env.raw_handler);
+  edk::CnFrame frame;
+  bool reused = false;
+  uint32_t loop_num = 5;
+  // stream id is empty string, discard frame 5 times
+  while (loop_num--) {
+    EXPECT_EQ(env.raw_mlu_decoder->ProcessFrame(frame, &reused), -1);
+    EXPECT_FALSE(reused);
+  }
+  env.raw_mlu_decoder->Destroy();
+}
+
+TEST(SourceMluRawDecoder, ProcessFrame) {
+  PrepareEnvRaw env;
+
+  edk::CnFrame frame;
+  frame.buf_id = 1;
+  frame.height = 256;
+  frame.width = 256;
+  frame.pformat = edk::PixelFmt::NV21;
+  frame.strides[0] = 256;
+  frame.strides[1] = 256;
+  void *mlu_ptr = nullptr;
+  cnrtMalloc(&mlu_ptr, 256 * 256 * 3 / 2);
+  frame.ptrs[0] = mlu_ptr;
+  frame.ptrs[1] = reinterpret_cast<void *>(reinterpret_cast<char *>(mlu_ptr) + 256 * 256);
+  bool reused = false;
+  EXPECT_EQ(env.raw_mlu_decoder->ProcessFrame(frame, &reused), 0);
+  EXPECT_FALSE(reused);
+
+  env.raw_mlu_decoder->Destroy();
+
+  // create eos frame for clear stream idx
+  CNFrameInfo::Create("0", true);
+  cnrtFree(mlu_ptr);
+}
 
 }  // namespace cnstream

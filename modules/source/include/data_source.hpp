@@ -100,19 +100,25 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
    
    * @param paramSet
    * @verbatim
-   * source_type: Required. The demuxer type. Supported values are ``raw`` and ``ffmpeg``.
-   * output_type: Required. The output type. Supported values are ``mlu`` and ``cpu``.
-   * interval: Optional. The interval during which the data is handled.
-   * decoder_type : Required. The decoder type. Supported values are ``mlu`` and ``cpu``.
-   * reuse_cndec_buf: Optional. This parameter should be set when MLU decoder is used. Supported values are ``true`` and ``false``.
-   * device_id: Required when MLU is used. Set the value to -1 for CPU. Set the value for MLU in the range 0 - N.
-   * chunk_size: Required when ``source_type`` is set to ``raw``.
-   * width: Required when ``source_type`` is set to ``raw``.
-   * height: Required when ``source_type`` is set to ``raw``.
-   * interlaced: Required when ``source_type`` is set to ``raw``.
-   * input_buf_number: Optional. The input buffer number.
-   * output_buf_number: Optional. The output buffer number.
-   *@endverbatim
+   *   source_type: Optional. The demuxer type. The default value is SOURCE_RAW.
+   *                Supported values are ``raw`` and ``ffmpeg``.
+   *   output_type: Optional. The output type. The default output_type is cpu.
+   *                Supported values are ``mlu`` and ``cpu``.
+   *   interval: Optional. Process one frame for every ``interval`` frames. Process every frame by default.
+   *   decoder_type : Optional. The decoder type. The default decoder_type is cpu.
+   *                  Supported values are ``mlu`` and ``cpu``.
+   *   reuse_cndec_buf: Optional. Whether the codec buffer will be reused. The default value is false.
+                        This parameter is used when decoder type is ``mlu``.
+                        Supported values are ``true`` and ``false``.
+   *   device_id: Required when MLU is used. Device id. Set the value to -1 for CPU.
+                  Set the value for MLU in the range 0 - N.
+   *   chunk_size: Required when ``source_type`` is set to ``raw``. The size of the input data chunk.
+   *   width: Required when ``source_type`` is set to ``raw``. The width of the frame.
+   *   height: Required when ``source_type`` is set to ``raw``. The height of the frame.
+   *   interlaced: Required when ``source_type`` is set to ``raw``. Interlaced mode.
+   *   input_buf_number: Optional. The input buffer number. The default value is 2.
+   *   output_buf_number: Optional. The output buffer number. The default value is 3.
+   * @endverbatim
    *
    * @return
    *    Returns true if ``paramSet`` are supported and valid. Otherwise, returns false.

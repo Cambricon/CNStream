@@ -95,16 +95,11 @@ bool SDLVideoPlayer::Init(int max_chn) {
   chn_w_ = window_w_ / cols_;
   chn_h_ = window_h_ / rows_;
   data_queues_.resize(max_chn_);
-  stime_frameid.resize(max_chn_);
-  interval_count.resize(max_chn_, 0);
-  first_time_interval.resize(max_chn_, 0);
-  frame_counter.resize(max_chn_, 0);
-  fps.resize(max_chn_, 0);
+  flags_.resize(max_chn_, 2);
+  ticker_.resize(max_chn_);
+  fps_.resize(max_chn_, 0);
   for (int i = 0; i < max_chn_; ++i) {
     data_queues_[i].second = std::make_shared<std::mutex>();
-  }
-  for (int i = 0; i < max_chn_; i++) {
-    stime_frameid[i].second = 1;
   }
   return true;
 }
@@ -170,8 +165,8 @@ void SDLVideoPlayer::Refresh() {
   int pitch = 0;
   SDL_LockTexture(texture_, NULL, reinterpret_cast<void**>(&texture_data), &pitch);
   for (auto& it : datas) {
-    std::string fps_info = CalculateFps(it);
-    cv::Point font_point(0.8*chn_w_, 0.1*chn_h_);
+    std::string fps_info = CalcFps(it);
+    cv::Point font_point(0.6*chn_w_, 0.1*chn_h_);
     cv::putText(it.img, fps_info, font_point, CV_FONT_HERSHEY_SIMPLEX, 0.5, cvScalar(255, 0, 0));
 
     auto len = it.img.cols * 3;
@@ -216,50 +211,26 @@ std::vector<UpdateData> SDLVideoPlayer::PopDataBatch() {
   return ret;
 }
 
-std::string SDLVideoPlayer::CalculateFps(const UpdateData& data) {
-  auto time = std::chrono::high_resolution_clock::now();
-  // one channel's first frame
-  if (stime_frameid[data.chn_idx].second == 1) {
-    stime_frameid[data.chn_idx].second  = 2;
-    auto frame1_time = std::chrono::high_resolution_clock::now();
-    stime_frameid[data.chn_idx].first = frame1_time;
-    return "";
-  } else if (stime_frameid[data.chn_idx].second  == 2) {
-    frame_counter[data.chn_idx]++;
-    stime_frameid[data.chn_idx].second  = 3;
-    auto frame2_time = std::chrono::high_resolution_clock::now();
-    auto interval_time_count = std::chrono::duration<double, std::milli>\
-    (frame2_time-stime_frameid[data.chn_idx].first).count();
-    fps[data.chn_idx] = 1000 / interval_time_count;
-    stime_frameid[data.chn_idx].first = frame2_time;
-    return "fps : " + std::to_string(fps[data.chn_idx]);
+std::string SDLVideoPlayer::CalcFps(const UpdateData& data) {
+  ticker_[data.chn_idx].Tick();
+  --flags_[data.chn_idx];
+  if (flags_[data.chn_idx] == 0) {
+    int elapsed = ticker_[data.chn_idx].ElapsedAverage().count();
+    fps_[data.chn_idx] = 1000000.f / elapsed;
+    ticker_[data.chn_idx].Clear();
+    return "fps : " + std::to_string(fps_[data.chn_idx]);
   }
-
-  auto interval_time_count = std::chrono::duration<double, std::milli>(time-stime_frameid[data.chn_idx].first).count();
-  frame_counter[data.chn_idx]++;
-  interval_count[data.chn_idx] += interval_time_count;
-  if (first_time_interval[data.chn_idx] == 0) {
-    if (interval_count[data.chn_idx] < 300) {
-      stime_frameid[data.chn_idx].first = time;
-      return "fps : " + std::to_string(fps[data.chn_idx]);
+  if (flags_[data.chn_idx] < 0) {
+    flags_[data.chn_idx] = 0;
+    if (ticker_[data.chn_idx].ElapsedTotal() > milliseconds(300)) {
+      auto elapsed = ticker_[data.chn_idx].ElapsedAverage().count();
+      fps_[data.chn_idx] = 1000000.f / elapsed;
+      ticker_[data.chn_idx].Clear();
     }
-    first_time_interval[data.chn_idx] = 1;
-    fps[data.chn_idx] = interval_count[data.chn_idx] * 1000 / frame_counter[data.chn_idx];
-    frame_counter[data.chn_idx] = 0;
-    interval_count[data.chn_idx] = 0;
-  } else {  // not the first time_interval
-    if (interval_count[data.chn_idx] < 300) {
-      stime_frameid[data.chn_idx].first = time;
-      return "fps : " + std::to_string(fps[data.chn_idx]);
-    } else {
-      stime_frameid[data.chn_idx].first = time;
-      fps[data.chn_idx] = interval_count[data.chn_idx] * 1000 / frame_counter[data.chn_idx];
-      interval_count[data.chn_idx] = 0;
-      frame_counter[data.chn_idx] = 0;
-      return "fps : " + std::to_string(fps[data.chn_idx]);
-    }
+    return "fps : " + std::to_string(fps_[data.chn_idx]);
   }
   return "";
 }
 #endif  // HAVE_SDL
+
 }  // namespace cnstream

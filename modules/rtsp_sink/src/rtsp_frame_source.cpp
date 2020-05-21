@@ -96,6 +96,7 @@ void RtspFrameSource::DeliverFrame() {
   if (fFrameSize > 0) {
     FramedSource::afterGetting(this);
   }
+  // nextTask() = envir().taskScheduler().scheduleDelayedTask(0, (TaskFunc*)FramedSource::afterGetting, this);
 }
 
 }  // namespace RtspStreaming

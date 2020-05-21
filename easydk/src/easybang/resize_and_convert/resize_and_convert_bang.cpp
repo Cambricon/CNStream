@@ -33,14 +33,13 @@ using std::to_string;
 struct KernelParam {
   half* consts_mlu = nullptr;
   // half* maskUV_mlu = nullptr;
+  uint8_t* fill_color = nullptr;  // pad value
   half* yuvFilter = nullptr;
   half* yuvBias = nullptr;
-  int s_row, s_col, d_row, d_col;
-  int roi_x, roi_y, roi_w, roi_h;
-  int channelIn, channelOut, layerIn, layerOut;
-  int input2half, output2uint;
-  int scaleX, scaleY, batchNum;
-  uint32_t* cycles = nullptr;
+  int d_row, d_col;
+  int input2half = 1, output2uint = 1;
+  int batchNum = 1;
+  int keep_aspect_ratio = 0;
   cnrtKernelInitParam_t init_param = nullptr;
   void *kernel_func = nullptr;
 };
@@ -50,8 +49,8 @@ void FreeKernelParam(KernelParam* param) {
     if (param->consts_mlu) {
       cnrtFree(param->consts_mlu);
     }
-    if (param->cycles) {
-      cnrtFree(param->cycles);
+    if (param->fill_color) {
+      cnrtFree(param->fill_color);
     }
     if (param->init_param) {
       cnrtDestroyKernelInitParamAndMemory(param->init_param);
@@ -123,8 +122,8 @@ static uint16_t float2half(const float f) {
     }                                                         \
   } while (0)
 
-bool PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h,
-                        int color_mode, int data_type, int batchsize, KernelParam** param, int dev_type, string* estr) {
+bool PrepareKernelParam(int d_row, int d_col, int color_mode, int data_type,
+  int batchsize, bool keep_aspect_ratio, KernelParam** param, int dev_type, string* estr) {
   const int CI = 64;
   const int CO = 256;
   const int LT_NUM = 64;
@@ -177,33 +176,31 @@ bool PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, i
   }
 
   // parse inputType
-  int channelIn = 1;   // ch in NCHW mode
-  int channelOut = 1;  // ch in NCHW mode
+  // int channelIn = 1;   // ch in NCHW mode
+  // int channelOut = 1;  // ch in NCHW mode
   int layerIn = 1;     // ch in NHWC mode
-  int layerOut = 1;    // ch in HHWC mode
+  // int layerOut = 1;    // ch in HHWC mode
   int reverseChannel = 0;
   int input2half = 0;
   int output2uint = 0;
-
-  int scaleX = (roi_w << 16) / (d_col);
-  int scaleY = (roi_h << 16) / (d_row);
 
   if (inputType == YUVNV21) {
     inputType = YUVNV12;
     reverseChannel = true;
   }
+
   switch (inputType) {
     case RGB:
-      channelIn = 3;
+      // channelIn = 3;
       break;
     case RGBA:
-      channelIn = 4;
+      // channelIn = 4;
       break;
     case GRAY:
-      channelIn = 1;
+      // channelIn = 1;
       break;
     case YUVNV12:
-      channelIn = 1;
+      // channelIn = 1;
       layerIn = 3;
       break;
     default:
@@ -212,26 +209,26 @@ bool PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, i
       return false;
   }
 
-  // parse outputType
-  switch (outputType) {
-    case RGB:
-    case BGR:
-      channelOut = 3;
-      break;
-    case RGBA:
-    case BGRA:
-    case ARGB:
-    case ABGR:
-      channelOut = 4;
-      break;
-    case GRAY:
-      channelOut = 1;
-      break;
-    default:
-      std::cout << "OUTPUT COLOR_TYPE NOT SURPPORTED!" << std::endl;
-      assert(0);
-      return false;
-  }
+  // // parse outputType
+  // switch (outputType) {
+  //   case RGB:
+  //   case BGR:
+  //     channelOut = 3;
+  //     break;
+  //   case RGBA:
+  //   case BGRA:
+  //   case ARGB:
+  //   case ABGR:
+  //     channelOut = 4;
+  //     break;
+  //   case GRAY:
+  //     channelOut = 1;
+  //     break;
+  //   default:
+  //     std::cout << "OUTPUT COLOR_TYPE NOT SURPPORTED!" << std::endl;
+  //     assert(0);
+  //     return false;
+  // }
 
   // input2half = 1 when in_datatype = uint8
   input2half = 1 - sizeof(IN_DATA_TYPE) / 2;
@@ -378,9 +375,9 @@ bool PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, i
                  false);
   free(consts);
 
-  ecode = cnrtMalloc((void**)&((*param)->cycles), sizeof(uint32_t));
-  CHECK_CNRT_RET(ecode, estr, "cnrt malloc FAILED! ERRCODE:" + to_string(ecode), { FreeKernelParam(*param); }, false);
-
+  ecode = cnrtMalloc(reinterpret_cast<void**>(&((*param)->fill_color)), sizeof(uint8_t) * 4);
+  CHECK_CNRT_RET(ecode, estr, "cnrtm malloc FAILED! ERRCODE:" + std::to_string(ecode), {FreeKernelParam(*param); }, false);
+  cnrtMemset((*param)->fill_color, 0, sizeof(uint8_t) * 4);
   // // malloc and copy maskUV_mlu
   // if (CNRT_RET_SUCCESS !=
   //   cnrtMalloc((void**)&maskUV_mlu, CI * CI * total * sizeof(half))) {
@@ -395,11 +392,11 @@ bool PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, i
   // }
   
   if (1 == dev_type) {
-    (*param)->kernel_func = reinterpret_cast<void*>(&ResizeAndConvertKernelMlu220);
+    (*param)->kernel_func = reinterpret_cast<void*>(&ResizeYuvToRgbaKernel_V2_MLU220);
   } else if (2 == dev_type) {
-    (*param)->kernel_func = reinterpret_cast<void*>(&ResizeAndConvertKernelMlu270);
+    (*param)->kernel_func = reinterpret_cast<void*>(&ResizeYuvToRgbaKernel_V2_MLU270);
   } else {
-    (*param)->kernel_func = reinterpret_cast<void*>(&ResizeAndConvertKernelMlu270);
+    (*param)->kernel_func = reinterpret_cast<void*>(&ResizeYuvToRgbaKernel_V2_MLU270);
   }
   cnrtCreateKernelInitParam(&(*param)->init_param);
   cnrtInitKernelMemory((*param)->kernel_func, (*param)->init_param);
@@ -407,50 +404,37 @@ bool PrepareKernelParam(int s_row, int s_col, int d_row, int d_col, int roi_x, i
   // params.
   (*param)->yuvFilter = (*param)->consts_mlu;
   (*param)->yuvBias = (*param)->consts_mlu + 2 * CI * CO;
-  (*param)->s_row = s_row;
-  (*param)->s_col = s_col;
   (*param)->d_row = d_row;
   (*param)->d_col = d_col;
-  (*param)->roi_x = roi_x;
-  (*param)->roi_y = roi_y;
-  (*param)->roi_w = roi_w;
-  (*param)->roi_h = roi_h;
-  (*param)->channelIn = channelIn;
-  (*param)->channelOut = channelOut;
-  (*param)->layerIn = layerIn;
-  (*param)->layerOut = layerOut;
   (*param)->input2half = input2half;
   (*param)->output2uint = output2uint;
-  (*param)->scaleX = scaleX;
-  (*param)->scaleY = scaleY;
   (*param)->batchNum = batchsize;
+  (*param)->keep_aspect_ratio = keep_aspect_ratio ? 1 : 0;
   return true;
 }
 
-float reSizedConvert(half* dst, half* srcY, half* srcUV, KernelParam* kparam, cnrtFunctionType_t func_type,
-                     cnrtDim3_t dim, cnrtQueue_t queue, int dev_type, string* estr) {
-  int pad = 0;  // useless, make no difference
+float ResizeAndConvert(void* dst, void** y_plane_addrs, void** uv_plane_addrs,
+                       int **src_whs, int** src_rois,
+                       KernelParam* kparam, cnrtFunctionType_t func_type,
+                       cnrtDim3_t dim, cnrtQueue_t queue, int dev_type,
+                       string* estr) {
   cnrtKernelParamsBuffer_t params;
   cnrtGetKernelParamsBuffer(&params);
   cnrtKernelParamsBufferAddParam(params, &dst, sizeof(half*));
-  cnrtKernelParamsBufferAddParam(params, &srcY, sizeof(half*));
-  cnrtKernelParamsBufferAddParam(params, &srcUV, sizeof(half*));
+  cnrtKernelParamsBufferAddParam(params, reinterpret_cast<void*>(&y_plane_addrs), sizeof(half*));
+  cnrtKernelParamsBufferAddParam(params, reinterpret_cast<void*>(&uv_plane_addrs), sizeof(half*));
+  cnrtKernelParamsBufferAddParam(params, reinterpret_cast<void*>(&src_whs), sizeof(int**));
+  cnrtKernelParamsBufferAddParam(params, reinterpret_cast<void*>(&src_rois), sizeof(int**));
+  cnrtKernelParamsBufferAddParam(params, &kparam->fill_color, sizeof(half*));
   cnrtKernelParamsBufferAddParam(params, &kparam->yuvFilter, sizeof(half*));
   cnrtKernelParamsBufferAddParam(params, &kparam->yuvBias, sizeof(half*));
   // cnrtKernelParamsBufferAddParam(params, &kparam->maskUV_mlu, sizeof(half *));
-  cnrtKernelParamsBufferAddParam(params, &kparam->s_row, sizeof(int));
-  cnrtKernelParamsBufferAddParam(params, &kparam->s_col, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &kparam->d_row, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &kparam->d_col, sizeof(int));
-  cnrtKernelParamsBufferAddParam(params, &kparam->roi_x, sizeof(int));
-  cnrtKernelParamsBufferAddParam(params, &kparam->roi_y, sizeof(int));
-  cnrtKernelParamsBufferAddParam(params, &kparam->roi_w, sizeof(int));
-  cnrtKernelParamsBufferAddParam(params, &kparam->roi_h, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &kparam->input2half, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &kparam->output2uint, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &kparam->batchNum, sizeof(int));
-  cnrtKernelParamsBufferAddParam(params, &pad, sizeof(int));
-  cnrtKernelParamsBufferAddParam(params, &kparam->cycles, sizeof(uint32_t*));
+  cnrtKernelParamsBufferAddParam(params, &kparam->keep_aspect_ratio, sizeof(int));
 
   int ecode;
 
@@ -460,12 +444,6 @@ float reSizedConvert(half* dst, half* srcY, half* srcUV, KernelParam* kparam, cn
                  { cnrtDestroyKernelParamsBuffer(params); }, -1);
 
   float _time = 0;
-
-  uint32_t cycles = 0;
-  ecode = cnrtMemcpy(&cycles, srcY, 1 * sizeof(uint32_t), CNRT_MEM_TRANS_DIR_DEV2HOST);
-  CHECK_CNRT_RET(ecode, estr, "[ResizeAndConvert] memcpy cycles FAILED. ERRCODE:" + to_string(ecode),
-                 { cnrtDestroyKernelParamsBuffer(params); }, -1);
-  _time = cycles * 0.04 / 1000;
 
   // free resources
   //  if (CNRT_RET_SUCCESS != cnrtFree(consts_mlu)) {
@@ -484,8 +462,3 @@ float reSizedConvert(half* dst, half* srcY, half* srcUV, KernelParam* kparam, cn
   return _time;
 }
 
-float ResizeAndConvert(void* dst, void* srcY, void* srcUV, KernelParam* param, cnrtFunctionType_t func_type,
-                       cnrtDim3_t dim, cnrtQueue_t queue, int dev_type, string* estr) {
-  return reSizedConvert(reinterpret_cast<half*>(dst), reinterpret_cast<half*>(srcY), reinterpret_cast<half*>(srcUV),
-                        param, func_type, dim, queue, dev_type, estr);
-}

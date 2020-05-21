@@ -29,4 +29,8 @@ namespace cnstream {
 
 Preproc* Preproc::Create(const std::string& proc_name) { return ReflexObjectEx<Preproc>::CreateObject(proc_name); }
 
+ObjPreproc* ObjPreproc::Create(const std::string& proc_name) {
+  return ReflexObjectEx<ObjPreproc>::CreateObject(proc_name);
+}
+
 }  // namespace cnstream

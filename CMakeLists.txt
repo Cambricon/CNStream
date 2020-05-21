@@ -66,11 +66,11 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_REENTRANT")
 if(MLU STREQUAL MLU270)
   message("generate MLU270/MLU220 M.2 Makefile")
   set(MLU_PLATFORM MLU270)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCNS_MLU270 -DCNSTK_MLU270")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCNS_MLU270")
 else()
   message("generate default(MLU270) Makefile")
   set(MLU_PLATFORM MLU270)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCNS_MLU270 -DCNSTK_MLU270")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCNS_MLU270")
 endif()
 
 # -- Build Flags
@@ -156,14 +156,7 @@ endif()
 
 ## perf
 if(build_perf)
-  set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-  find_package(SQLite3 REQUIRED)
-  if(SQLITE3_FOUND)
-    link_libraries(sqlite3)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_SQLITE")
-  else()
-    message("Can not find sqlite3 libs.")
-  endif()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_SQLITE")
 endif()
 
 ##Chinses label

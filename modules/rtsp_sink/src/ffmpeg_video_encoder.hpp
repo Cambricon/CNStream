@@ -68,7 +68,7 @@ class FFmpegVideoEncoder : public VideoEncoder {
   virtual VideoFrame *NewFrame();
   uint32_t GetOffset(const uint8_t* data);
   virtual void EncodeFrame(VideoFrame *frame);
-  virtual void EncodeFrame(void *y, void *uv, int64_t timestamp);
+  // virtual void EncodeFrame(void *y, void *uv, int64_t timestamp) {return;};
   void Destroy();
 
   AVPixelFormat picture_format_;

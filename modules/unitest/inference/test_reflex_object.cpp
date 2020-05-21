@@ -69,6 +69,7 @@ TEST(Inferencer, ReflexObject_CreateObject) {
   ClassInfo<ReflexObject> base_info(info.name(), base_constructor);
   EXPECT_EQ(ReflexObject::Register(base_info), true);
   EXPECT_NE(ReflexObject::CreateObject("ReflexObject"), nullptr);
+  ReflexObject::Remove("ReflexObject");
 }
 
 TEST(Inferencer, ReflexObject_Register) {
@@ -83,6 +84,7 @@ TEST(Inferencer, ReflexObject_Register) {
   base_constructor = [info1]() { return reinterpret_cast<ReflexObject*>(info1.constructor()()); };
   ClassInfo<ReflexObject> base_info(info1.name(), base_constructor);
   EXPECT_EQ(ReflexObject::Register(base_info), true);
+  ReflexObject::Remove("ReflexObject_test");
 }
 
 TEST(Inferencer, ReflexObjectEx_CreateObject) {

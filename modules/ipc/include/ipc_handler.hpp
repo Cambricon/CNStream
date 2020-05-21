@@ -175,6 +175,7 @@ class IPCHandler {
    */
   inline void SetDeviceId(const int device_id) {
     dev_ctx_.dev_id = device_id;
+    dev_ctx_.dev_type = DevContext::MLU;    // by default: if set device id, use MLU  device type
   }
 
  protected:
@@ -202,7 +203,7 @@ class IPCHandler {
   */
   void WaitSemphore();
 
- private:
+ protected:
 #ifdef UNIT_TEST
  public:  // NOLINT
 #endif
