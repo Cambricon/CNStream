@@ -46,12 +46,11 @@ class PerfStats;
  * Records performance information at the start-time point and end-time point.
  */
 struct PerfInfo {
-  /// If the value is true, it represents the start time. If the value is false, it represents the end time.
-  bool is_finished;
-  std::string perf_type;    /// The type of perf.
-  std::string module_name;  /// The module name.
-  int64_t pts;              /// The pts (Presentation Time Stamp) of each data frame.
-  size_t timestamp;         /// The time stamp.
+  std::string perf_type;          /// perf type
+  std::string primary_key;        /// pts of each data frame
+  std::string primary_value;      /// pts of each data frame
+  std::string key;
+  std::string value;
 };  // struct PerfInfo
 
 /**
@@ -98,7 +97,11 @@ class PerfManager {
   *
   * @return Returns true if the information is recorded successfully, otherwise returns false.
   */
-  bool RecordPerfInfo(PerfInfo info);
+  bool Record(bool is_finished, std::string type, std::string module_name, int64_t pts);
+  bool Record(std::string type, std::string primary_key, std::string primary_value, std::string key);
+  bool Record(std::string type, std::string primary_key, std::string primary_value,
+              std::string key, std::string value);
+  bool RegisterPerfType(std::string type, std::string primary_key, std::vector<std::string> keys);
   /**
   * @brief Registers performance type.
   *
@@ -138,6 +141,20 @@ class PerfManager {
   */
   std::vector<std::pair<std::string, PerfStats>> CalculatePipelinePerfStats(std::string perf_type);
 
+  bool Init(std::string db_name);
+  void CreatePerfCalculator(std::string perf_type);
+  void CreatePerfCalculator(std::string perf_type, std::string start_node, std::string end_node);
+  std::shared_ptr<PerfCalculator> GetCalculator(std::string name);
+  PerfStats CalculatePerfStats(std::string calculator_name, std::string perf_type,
+                               std::string start_key, std::string end_key);
+  PerfStats CalculatePerfStats(std::string perf_type, std::string start_key, std::string end_key);
+  bool SetModuleNames(std::vector<std::string> module_names);
+  bool SetStartNode(std::string start_node);
+  bool SetEndNodes(std::vector<std::string> end_nodes);
+  PerfStats CalculateThroughput(std::string calculator_name, std::string perf_type,
+                                std::string start_key, std::string end_key);
+  PerfStats CalculateThroughput(std::string perf_type, std::string start_key, std::string end_key);
+
  private:
 #ifdef UNIT_TEST
  public:  // NOLINT
@@ -145,7 +162,8 @@ class PerfManager {
   std::vector<std::string> GetKeys(const std::vector<std::string>& module_names);
   void PopInfoFromQueue();
   void InsertInfoToDb(const PerfInfo& info);
-  void CreatePerfCalculator(std::string perf_type);
+  void CreatePerfCalculatorForModules(std::string perf_type);
+  void CreatePerfCalculatorForPipeline(std::string perf_type);
   bool PrepareDbFileDir(std::string file_dir);
   bool CreateDir(std::string dir);
   std::shared_ptr<PerfCalculator> GetCalculator(std::string perf_type, std::string module_name);

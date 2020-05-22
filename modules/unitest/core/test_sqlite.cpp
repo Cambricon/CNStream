@@ -26,21 +26,29 @@
 #include <string>
 
 #include "sqlite_db.hpp"
+#include "test_base.hpp"
 
 namespace cnstream {
 
+std::string gTestPerfDir = GetExePath() + "../test_perf_tmp/";  // NOLINT
+std::string gTestPerfFile = gTestPerfDir + "test.db";  // NOLINT
+
+bool CreateDir(std::string path) {
+  return access(path.c_str(), 0) == 0 || mkdir(path.c_str(), 00700) == 0;
+}
+
 #ifdef HAVE_SQLITE
 TEST(PerfSqlite, ConnectAndClose) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, ConnectAndCloseFailedCase) {
-  std::string db_name = "not_exist/test_db";
+  std::string db_name = gTestPerfDir + "not_exist/test_db";
   remove(db_name.c_str());
   Sqlite sql(db_name);
   EXPECT_FALSE(sql.Connect());
@@ -49,23 +57,23 @@ TEST(PerfSqlite, ConnectAndCloseFailedCase) {
 }
 
 TEST(PerfSqlite, SetGetDbName) {
-  std::string db_name = "test.db";
-  Sqlite sql(db_name);
-  EXPECT_TRUE(db_name == sql.GetDbName());
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  Sqlite sql(gTestPerfFile);
+  EXPECT_TRUE(gTestPerfFile == sql.GetDbName());
 
-  db_name = "test1.db";
+  std::string db_name = gTestPerfDir + "test1.db";
   EXPECT_TRUE(sql.SetDbName(db_name));
   EXPECT_TRUE(db_name == sql.GetDbName());
 }
 
 TEST(PerfSqlite, SetGetDbNameFailedCase) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   // cannot change database name, until the sqlite connection is closed
-  db_name = "test2.db";
+  std::string db_name = gTestPerfDir + "test2.db";
   EXPECT_FALSE(sql.SetDbName(db_name));
   EXPECT_TRUE(sql.Close());
   EXPECT_TRUE(sql.SetDbName(db_name));
@@ -78,9 +86,9 @@ TEST(PerfSqlite, SetGetDbNameFailedCase) {
 }
 
 TEST(PerfSqlite, Execution) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string statement = "CREATE TABLE COMPANY("  \
@@ -105,26 +113,26 @@ TEST(PerfSqlite, Execution) {
   EXPECT_FALSE(sql.Execution(statement));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, ExecutionFailedCase) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string statement = "this is a wrong sql statement";
   EXPECT_FALSE(sql.Execution(statement));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, CreateTable) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string primary_key = "id";
@@ -136,14 +144,14 @@ TEST(PerfSqlite, CreateTable) {
   EXPECT_TRUE(sql.CreateTable("my_table3", "", keys));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, CreateTableFailedCase) {
-  std::string db_name = "test.db";
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
   {
-    remove(db_name.c_str());
-    Sqlite sql(db_name);
+    remove(gTestPerfFile.c_str());
+    Sqlite sql(gTestPerfFile);
     EXPECT_TRUE(sql.Connect());
 
     std::vector<std::string> keys = {"key1", "key2", "key3"};
@@ -154,25 +162,25 @@ TEST(PerfSqlite, CreateTableFailedCase) {
     EXPECT_FALSE(sql.CreateTable("my_table", "id", keys));
 
     EXPECT_TRUE(sql.Close());
-    remove(db_name.c_str());
+    remove(gTestPerfFile.c_str());
   }
 
   {
     // same key
-    Sqlite sql(db_name);
+    Sqlite sql(gTestPerfFile);
     EXPECT_TRUE(sql.Connect());
 
     std::vector<std::string> keys = {"key1", "key1"};
     EXPECT_FALSE(sql.CreateTable("my_table", "id", keys));
     EXPECT_TRUE(sql.Close());
-    remove(db_name.c_str());
+    remove(gTestPerfFile.c_str());
   }
 }
 
 TEST(PerfSqlite, Insert) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -192,13 +200,13 @@ TEST(PerfSqlite, Insert) {
   EXPECT_EQ(sql.FindMin(table_name, "key2"), unsigned(1));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, InsertFailedCase) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -215,13 +223,13 @@ TEST(PerfSqlite, InsertFailedCase) {
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(1));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, Update) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -239,13 +247,13 @@ TEST(PerfSqlite, Update) {
   EXPECT_EQ(sql.FindMax(table_name, "key2"), unsigned(20));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, UpdateFailedCase) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -260,13 +268,13 @@ TEST(PerfSqlite, UpdateFailedCase) {
   EXPECT_FALSE(sql.Update(table_name, primary_key, "1", "wrong_key", "10"));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, Delete) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -286,13 +294,13 @@ TEST(PerfSqlite, Delete) {
   EXPECT_EQ(sql.Count(table_name, "key1"), unsigned(1));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, DeleteFailedCase) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -306,7 +314,7 @@ TEST(PerfSqlite, DeleteFailedCase) {
   EXPECT_FALSE(sql.Delete(table_name, "wrong_key", "1"));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 static int Callback(void *data, int argc, char **argv, char **azColName) {
@@ -320,9 +328,9 @@ static int Callback(void *data, int argc, char **argv, char **azColName) {
 }
 
 TEST(PerfSqlite, Select) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -343,13 +351,13 @@ TEST(PerfSqlite, Select) {
   EXPECT_EQ(data, 2);
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, SelectFailedCase) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -370,13 +378,13 @@ TEST(PerfSqlite, SelectFailedCase) {
   EXPECT_FALSE(sql.Select("wrong_table", "*", "", Callback, reinterpret_cast<void*>(&data)));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, FindMin) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -394,13 +402,13 @@ TEST(PerfSqlite, FindMin) {
   EXPECT_EQ(sql.FindMin(table_name, "key3"), unsigned(3));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, FindMinInvalid) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -412,13 +420,13 @@ TEST(PerfSqlite, FindMinInvalid) {
   EXPECT_EQ(sql.FindMin(table_name, "wrong_key"), ~(size_t(0)));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, FindMax) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -436,13 +444,13 @@ TEST(PerfSqlite, FindMax) {
   EXPECT_EQ(sql.FindMax(table_name, "key3"), unsigned(23));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, FindMaxInvalid) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -454,13 +462,13 @@ TEST(PerfSqlite, FindMaxInvalid) {
   EXPECT_EQ(sql.FindMax(table_name, "wrong_key"), unsigned(0));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, Count) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -477,13 +485,13 @@ TEST(PerfSqlite, Count) {
   EXPECT_EQ(sql.Count(table_name, primary_key, primary_key + ">=300 and " + primary_key + "<800"), cnt - 500);
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, CountInvalid) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -496,13 +504,13 @@ TEST(PerfSqlite, CountInvalid) {
   EXPECT_EQ(sql.Count(table_name, "wrong_key"), unsigned(0));
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfSqlite, BeginCommit) {
-  std::string db_name = "test.db";
-  remove(db_name.c_str());
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  remove(gTestPerfFile.c_str());
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
 
   std::string table_name = "my_table";
@@ -519,7 +527,7 @@ TEST(PerfSqlite, BeginCommit) {
   EXPECT_EQ(sql.Count(table_name, primary_key), cnt);
 
   EXPECT_TRUE(sql.Close());
-  remove(db_name.c_str());
+  remove(gTestPerfFile.c_str());
 }
 
 #else
@@ -529,8 +537,8 @@ static int Callback(void *data, int argc, char **argv, char **azColName) {
 }
 
 TEST(PerfSqlite, sqlite) {
-  std::string db_name = "test.db";
-  Sqlite sql(db_name);
+  EXPECT_TRUE(CreateDir(gTestPerfDir));
+  Sqlite sql(gTestPerfFile);
   EXPECT_TRUE(sql.Connect());
   EXPECT_TRUE(sql.Close());
   EXPECT_TRUE(sql.Execution(""));

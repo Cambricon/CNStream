@@ -74,12 +74,12 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
    *  @brief Called by pipeline when pipeline is started.
    *
    *  @param paramSet:
-   * @verbatim
-   * track_name: The class name for track. The "FeatureMatch" is provided.
-   * model_path: The path of the offline model.
-   * func_name:  Function name defined in the offline model. This can be found in the Cambricon twins description file.
-                 It is "subnet0" for the most cases.
-   * @endverbatim
+   *  @verbatim
+   *    track_name: Optional. The algorithm name for track. It is "FeatureMatch" by default.
+   *    model_path: Optional. The path of the offline model.
+   *    func_name:  Optional. The function name defined in the offline model. It can be found in
+                    the Cambricon twins description file. It is "subnet0" for the most cases.
+   *  @endverbatim
    *  @return Returns true if the module has been opened successfully.
    */
   bool Open(cnstream::ModuleParamSet paramSet) override;

@@ -616,8 +616,7 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     }
   } else {
     if (d_ptr_->perf_managers_.find(data->frame.stream_id) != d_ptr_->perf_managers_.end()) {
-      PerfInfo info {true, "PROCESS", moduleName, data->frame.timestamp};
-      d_ptr_->perf_managers_[data->frame.stream_id]->RecordPerfInfo(info);
+      d_ptr_->perf_managers_[data->frame.stream_id]->Record(true, "PROCESS", moduleName, data->frame.timestamp);
     }
   }
 
@@ -687,9 +686,9 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
     }
 
     {
-      if (d_ptr_->perf_managers_.find(data->frame.stream_id) != d_ptr_->perf_managers_.end()) {
-        PerfInfo info {false, "PROCESS", node_name, data->frame.timestamp};
-        d_ptr_->perf_managers_[data->frame.stream_id]->RecordPerfInfo(info);
+      if (!(data->frame.flags & CN_FRAME_FLAG_EOS)
+          && d_ptr_->perf_managers_.find(data->frame.stream_id) != d_ptr_->perf_managers_.end()) {
+        d_ptr_->perf_managers_[data->frame.stream_id]->Record(false, "PROCESS", node_name, data->frame.timestamp);
       }
 
       int ret = module_info.instance->DoProcess(data);

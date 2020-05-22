@@ -28,7 +28,6 @@ namespace cnstream {
 
 RtspSinkContext RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {
   RtspSinkContext ctx = nullptr;
-
   if (is_mosaic_style_) {
     if (data->channel_idx >= static_cast<uint32_t>(params_.view_cols * params_.view_rows)) {
       LOG(INFO) << "================================================================================";
@@ -73,6 +72,30 @@ RtspSinkContext RtspSink::CreateRtspSinkContext(CNFrameInfoPtr data, int channel
 }
 
 RtspParam RtspSink::GetRtspParam(CNFrameInfoPtr data) {
+  switch (data->frame.fmt) {
+    case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
+      params_.color_format = BGR24;
+      if (params_.color_mode != "bgr") {
+        params_.color_mode = "bgr";
+        LOG(WARNING) << "Color mode should be bgr.";
+      }
+      break;
+    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
+      params_.color_format = NV12;
+      break;
+    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
+      params_.color_format = NV21;
+      break;
+    default:
+      LOG(WARNING) << "[CNEncoder] unsuport color format.";
+      params_.color_format = BGR24;
+      if (params_.color_mode != "bgr") {
+        params_.color_mode = "bgr";
+        LOG(WARNING) << "Color mode should be bgr.";
+      }
+      break;
+  }
+
   RtspParam rtsp_params;
   rtsp_params = params_;
   if (!is_mosaic_style_) {
@@ -88,21 +111,6 @@ RtspParam RtspSink::GetRtspParam(CNFrameInfoPtr data) {
 
   rtsp_params.src_width = data->frame.width;
   rtsp_params.src_height = data->frame.height;
-
-  switch (data->frame.fmt) {
-    case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
-      rtsp_params.color_format = BGR24;
-      break;
-    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
-      rtsp_params.color_format = NV12;
-      break;
-    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
-      rtsp_params.color_format = NV21;
-      break;
-    default:
-      LOG(ERROR) << "[CNEncoder] unsuport color format.";
-      break;
-  }
 
   return rtsp_params;
 }
@@ -153,6 +161,7 @@ bool RtspSink::Open(ModuleParamSet paramSet) {
     SetParam(paramSet, "view_cols", &params_.view_cols, 4);
     SetParam(paramSet, "view_rows", &params_.view_rows, 4);
   }
+
   return true;
 }
 
@@ -170,9 +179,9 @@ int RtspSink::Process(CNFrameInfoPtr data) {
   RtspSinkContext ctx = GetRtspSinkContext(data);
   if (!ctx) return -1;
   if ("cpu" == params_.preproc_type) {
-    if ("bgr" == params_.color_mode) {
+    if ("bgr" == params_.color_mode || params_.color_format == BGR24) {
       cv::Mat image = *data->frame.ImageBGR();
-      ctx->Update(image, data->frame.timestamp, data->channel_idx);
+      ctx->UpdateBGR(image, data->frame.timestamp, data->channel_idx);
     } else if ("nv" == params_.color_mode) {
       uint8_t *image_data = nullptr;
       image_data = new uint8_t[data->frame.GetBytes()];
@@ -182,7 +191,7 @@ int RtspSink::Process(CNFrameInfoPtr data) {
       memcpy(image_data + data->frame.GetPlaneBytes(0), plane_1,
                           data->frame.GetPlaneBytes(1)*sizeof(uint8_t));
       data->frame.deAllocator_.reset();
-      ctx->Update(image_data, data->frame.timestamp);
+      ctx->UpdateYUV(image_data, data->frame.timestamp);
       delete []image_data;
       image_data = nullptr;
     } else {
@@ -191,7 +200,7 @@ int RtspSink::Process(CNFrameInfoPtr data) {
     }
   /*
   } else if ("mlu" == preproc_type_) {
-    ctx->Update(data->frame.data[0]->GetMutableMluData(), 
+    ctx->UpdateYUVs(data->frame.data[0]->GetMutableMluData(),
                   data->frame.data[1]->GetMutableMluData(), data->frame.timestamp);
     data->frame.deAllocator_.reset();
   */
@@ -248,10 +257,10 @@ bool RtspSink::CheckParamSet(const ModuleParamSet& paramSet) const {
         LOG(WARNING) << "[RtspSink] (WARNING) view mode is \"mosaic\". Only support plane type \"bgr\"!";
       }
       if (paramSet.find("view_cols") == paramSet.end()) {
-        LOG(WARNING) << "[RtspSink] (WARNING) View *column* number is not given. Default 6.";
+        LOG(WARNING) << "[RtspSink] (WARNING) View *column* number is not given. Default 4.";
       }
       if (paramSet.find("view_rows") == paramSet.end()) {
-        LOG(WARNING) << "[RtspSink] (WARNING) View *row* number is not given. Default 6.";
+        LOG(WARNING) << "[RtspSink] (WARNING) View *row* number is not given. Default 4.";
       }
     }
   }

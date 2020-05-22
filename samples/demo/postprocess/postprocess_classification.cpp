@@ -66,3 +66,47 @@ int PostprocClassification::Execute(const std::vector<float*>& net_outputs,
   return 0;
 }
 
+class ObjPostprocClassification : public cnstream::ObjPostproc {
+ public:
+  int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
+              const cnstream::CNFrameInfoPtr& finfo, const std::shared_ptr<cnstream::CNInferObject>& obj) override;
+
+  DECLARE_REFLEX_OBJECT_EX(ObjPostprocClassification, cnstream::ObjPostproc)
+};  // classd ObjPostprocClassification
+
+IMPLEMENT_REFLEX_OBJECT_EX(ObjPostprocClassification, cnstream::ObjPostproc)
+
+int ObjPostprocClassification::Execute(const std::vector<float*>& net_outputs,
+                                       const std::shared_ptr<edk::ModelLoader>& model,
+                                       const cnstream::CNFrameInfoPtr& finfo,
+                                       const std::shared_ptr<cnstream::CNInferObject>& obj) {
+  if (net_outputs.size() != 1) {
+    LOG(ERROR) << "[Warning] classification neuron network only has one output,"
+                  " but get " + std::to_string(net_outputs.size());
+    return -1;
+  }
+
+  auto data = net_outputs[0];
+  auto len = model->OutputShapes()[0].hwc();
+  auto pscore = data;
+
+  float mscore = 0;
+  int label = 0;
+  for (decltype(len) i = 0; i < len; ++i) {
+    auto score = *(pscore + i);
+    if (score > mscore) {
+      mscore = score;
+      label = i;
+    }
+  }
+
+  if (0 == label) return -1;
+  DLOG(INFO) << "label = " << label + 1 << " score = " << mscore;
+  cnstream::CNInferAttr attr;
+  attr.id = 0;
+  attr.value = label;
+  attr.score = mscore;
+  obj->AddAttribute("classification", attr);
+  return 0;
+}
+

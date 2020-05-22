@@ -24,8 +24,7 @@
 #include <memory>
 #include <string>
 #include <utility>
-
-#include "../../easyinfer/mlu_task_queue.h"
+#include "cnrt.h"
 
 using std::string;
 
@@ -41,28 +40,45 @@ namespace edk {
 
 class MluResizePrivate {
  public:
-  MluResize::Attr attr_;
+  bool queue_is_exclusive_ = true;
   cnrtFunctionType_t ftype_ = CNRT_FUNC_TYPE_BLOCK;
-  MluTaskQueue_t queue_ = nullptr;
+  cnrtQueue_t queue_ = nullptr;
   ResizeKernelParam* kparam_ = nullptr;
-  std::deque<std::pair<void*, void*>> yuv_ptrs_cache_;
   void **y_ptrs_cpu_ = nullptr, **uv_ptrs_cpu_ = nullptr;
   void **y_ptrs_mlu_ = nullptr, **uv_ptrs_mlu_ = nullptr;
   std::string estr_;
+  std::deque<std::pair<void*, void*>> yuv_ptrs_cache_;
+  MluResize::Attr attr_;
 };  // MluResziePrivate
 
 MluResize::MluResize() { d_ptr_ = new MluResizePrivate; }
 
 MluResize::~MluResize() {
-  delete d_ptr_;
-  d_ptr_ = nullptr;
+  if (d_ptr_) {
+    Destroy();
+    delete d_ptr_;
+    d_ptr_ = nullptr;
+  }
 }
 
 const MluResize::Attr& MluResize::GetAttr() { return d_ptr_->attr_; }
 
-MluTaskQueue_t MluResize::GetMluQueue() const { return d_ptr_->queue_; }
+cnrtQueue_t MluResize::GetMluQueue() const { return d_ptr_->queue_; }
 
-void MluResize::SetMluQueue(MluTaskQueue_t queue) { d_ptr_->queue_ = queue; }
+void MluResize::SetMluQueue(cnrtQueue_t queue, bool exclusive) {
+  if (d_ptr_->queue_is_exclusive_) {
+    DestroyMluQueue();
+  }
+  d_ptr_->queue_is_exclusive_ = exclusive;
+  d_ptr_->queue_ = queue;
+}
+
+void MluResize::DestroyMluQueue() {
+  if (d_ptr_->queue_ != nullptr) {
+    cnrtDestroyQueue(d_ptr_->queue_);
+  }
+  d_ptr_->queue_ = nullptr;
+}
 
 std::string MluResize::GetLastError() const { return d_ptr_->estr_; }
 
@@ -103,11 +119,28 @@ bool MluResize::Init(const MluResize::Attr& attr) {
       return false;
   }
 
-  d_ptr_->queue_ = std::make_shared<edk::MluTaskQueue>();
-  cnret = cnrtCreateQueue(&d_ptr_->queue_->queue);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "cnrtCreateQueue failed. Error code:" + std::to_string(cnret), {}, false);
-  return 0 == ::PrepareKernelParam(d_ptr_->attr_.src_h, d_ptr_->attr_.src_w, d_ptr_->attr_.dst_h, d_ptr_->attr_.dst_w,
-                                   d_ptr_->attr_.batch_size, d_ptr_->attr_.channel_id, &d_ptr_->kparam_);
+  if (CNRT_RET_SUCCESS != cnrtCreateQueue(&d_ptr_->queue_)) {
+    d_ptr_->estr_ = "cnrtCreateQueue failed";
+    return false;
+  }
+  return 0 == ::PrepareKernelParam(d_ptr_->attr_.src_h, d_ptr_->attr_.src_w, d_ptr_->attr_.dst_h,
+      d_ptr_->attr_.dst_w, d_ptr_->attr_.batch_size, d_ptr_->attr_.channel_id, &d_ptr_->kparam_);
+}
+
+int MluResize::InvokeOp(void* dst, void* srcY, void* srcUV) {
+  if (nullptr == d_ptr_->queue_) {
+    throw MluResizeError("cnrt queue is null.");
+  }
+  if (d_ptr_->attr_.batch_size != 1) {
+    throw MluResizeError(
+        "InvokeOp is vaild only if the batchsize is 1. Please Use BatchingUp "
+        "and SyncOneOutput to replase InvokeOp.");
+  }
+  BatchingUp(srcY, srcUV);
+  if (!SyncOneOutput(dst)) {
+    return -1;
+  }
+  return 0;
 }
 
 void MluResize::BatchingUp(void* src_y, void* src_uv) {
@@ -115,7 +148,7 @@ void MluResize::BatchingUp(void* src_y, void* src_uv) {
 }
 
 bool MluResize::SyncOneOutput(void* dst) {
-  if (nullptr == d_ptr_->queue_ || nullptr == d_ptr_->queue_->queue) {
+  if (nullptr == d_ptr_->queue_) {
     throw MluResizeError("cnrt queue is null.");
   }
   CHECK_CONDITION_WITH_CODE(static_cast<int>(d_ptr_->yuv_ptrs_cache_.size()) >= d_ptr_->attr_.batch_size, d_ptr_->estr_,
@@ -143,7 +176,7 @@ bool MluResize::SyncOneOutput(void* dst) {
   dim.y = 1;
   dim.z = 1;
   return -1 != ::Resize(dst, d_ptr_->y_ptrs_mlu_, d_ptr_->uv_ptrs_mlu_, d_ptr_->kparam_, d_ptr_->ftype_, dim,
-                        d_ptr_->queue_->queue, &d_ptr_->estr_);
+                        d_ptr_->queue_, &d_ptr_->estr_);
 }
 
 void MluResize::Destroy() {
@@ -168,6 +201,9 @@ void MluResize::Destroy() {
     d_ptr_->uv_ptrs_mlu_ = nullptr;
   }
   d_ptr_->yuv_ptrs_cache_.clear();
+  if (d_ptr_->queue_is_exclusive_) {
+    DestroyMluQueue();
+  }
 }
 
 }  // namespace edk

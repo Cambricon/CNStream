@@ -76,26 +76,6 @@ class CpuPreprocessingBatchingStage : public IOBatchingStage {
   std::shared_ptr<Preproc> preprocessor_;
 };  // class CpuPreprocessingBatchingStage
 
-class YUVSplitBatchingStage : public IOBatchingStage {
- public:
-  YUVSplitBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-                        std::shared_ptr<MluInputResource> mlu_input_res);
-  ~YUVSplitBatchingStage();
-
- private:
-  void ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx, const IOResValue& value) override;
-};  // class YUVSplitBatchingStage
-
-class YUVPackedBatchingStage : public IOBatchingStage {
- public:
-  YUVPackedBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-                         std::shared_ptr<MluInputResource> mlu_input_res);
-  ~YUVPackedBatchingStage();
-
- private:
-  void ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx, const IOResValue& value) override;
-};  // class YUVPackedBatchingStage
-
 class ResizeConvertBatchingStage : public BatchingStage {
  public:
   ResizeConvertBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, int dev_id,

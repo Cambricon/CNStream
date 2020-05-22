@@ -37,6 +37,10 @@ class TimeoutHelper {
 
   ~TimeoutHelper();
 
+  void LockOperator() { mtx_.lock(); }
+
+  void UnlockOperator() { mtx_.unlock(); }
+
   int SetTimeout(float timeout);
 
   int Reset(const std::function<void()>& func);

@@ -143,8 +143,7 @@ bool DataHandlerRaw::Process() {
   bool ret = Extract();
 
   if (perf_manager_ != nullptr) {
-    PerfInfo info {false, "PROCESS", module_->GetName(), packet_.pts};
-    perf_manager_->RecordPerfInfo(info);
+    perf_manager_->Record(false, "PROCESS", module_->GetName(), packet_.pts);
   }
 
   if (!ret) {

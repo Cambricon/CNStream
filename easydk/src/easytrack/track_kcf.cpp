@@ -20,17 +20,19 @@
 
 #ifdef ENABLE_KCF
 
+#include <glog/logging.h>
+
 #include <algorithm>
 #include <cstring>
 #include <memory>
 #include <set>
 #include <utility>
+#include <vector>
 
-#include "../easyinfer/mlu_task_queue.h"
-#include "cxxutil/logger.h"
 #include "easyinfer/easy_infer.h"
 #include "easyinfer/mlu_context.h"
 #include "easyinfer/mlu_memory_op.h"
+#include "easyinfer/mlu_task_queue.h"
 #include "easytrack/easy_track.h"
 #include "kcf/kcf.h"
 #include "match.h"
@@ -167,7 +169,7 @@ void KcfTrackPrivate::KcfUpdate(void *mlu_gray, uint32_t frame_index, uint32_t f
         //    obj.label, obj.score, obj.x, obj.y, obj.w, obj.h);
       }
     } else {
-      LOG(INFO, "@@@@@@ no detect result");
+      LOG(INFO) << "@@@@@@ no detect result";
       memset(detect_float_output_, 0, 6 * DETECT_OUT_SIZE * sizeof(float));
     }
 

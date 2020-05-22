@@ -203,6 +203,55 @@ void CNDataFrame::CopyToSyncMem() {
   }
 }
 
+void CNDataFrame::CopyToSyncMemOnDevice(int device_id) {
+  // only support mlu memory sync between different devices
+  if (this->ctx.dev_id != device_id && this->ctx.dev_type == DevContext::MLU) {
+    unsigned int can_peer = 0;
+    CALL_CNRT_BY_CONTEXT(cnrtGetPeerAccessibility(&can_peer, device_id, this->ctx.dev_id), this->ctx.dev_id,
+                         this->ctx.ddr_channel);
+    if (1 != can_peer) {
+      LOG(FATAL) << "dst device: " << device_id << " is not peerable to src device: " << this->ctx.dev_id;
+    }
+
+    // malloc memory on device_id
+    void* peerdev_data = nullptr;
+    size_t bytes = GetBytes();
+    bytes = ROUND_UP(bytes, 64 * 1024);
+    CALL_CNRT_BY_CONTEXT(cnrtMalloc(&peerdev_data, bytes), device_id, ctx.ddr_channel);
+
+    // copy data to mlu memory on device_id
+    if (deAllocator_ != nullptr) {
+      mlu_data = peerdev_data;
+      void* dst = mlu_data;
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        CNS_CNRT_CHECK(cnrtMemcpy(peerdev_data, ptr_mlu[i], plane_size, CNRT_MEM_TRANS_DIR_PEER2PEER));
+        this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, device_id, ctx.ddr_channel));
+        this->data[i]->SetMluData(dst);
+        dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+      }
+    } else if (nullptr != mlu_data) {
+      CNS_CNRT_CHECK(cnrtMemcpy(peerdev_data, mlu_data, bytes, CNRT_MEM_TRANS_DIR_PEER2PEER));
+      CALL_CNRT_BY_CONTEXT(cnrtFree(mlu_data), this->ctx.dev_id, this->ctx.ddr_channel);
+      mlu_data = peerdev_data;
+      void* dst = mlu_data;
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, device_id, ctx.ddr_channel));
+        this->data[i]->SetMluData(dst);
+        dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+      }
+    } else {
+      LOG(FATAL) << "invalid mlu data.";
+    }
+  } else {
+    LOG(FATAL) << "only support mlu memory sync between different devices.";
+  }
+
+  // reset ctx.dev_id to device_id
+  this->ctx.dev_id = device_id;
+}
+
 void CNDataFrame::MmapSharedMem(MemMapType type) {
   if (!GetBytes()) {
     LOG(ERROR) << "GetByte() is 0.";

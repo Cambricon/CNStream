@@ -38,7 +38,7 @@
 
 namespace cnstream {
 
-static const char *g_model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
+static const char *g_model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon";
 static const char *g_func_name = "subnet0";
 static const char *g_postproc_name = "PostprocClassification";
 

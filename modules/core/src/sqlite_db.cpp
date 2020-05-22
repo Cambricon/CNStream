@@ -33,9 +33,11 @@ namespace cnstream {
 bool Sqlite::Connect() {
   if (sqlite3_open_v2(db_name_.c_str(), &db_, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE |
                       SQLITE_OPEN_FULLMUTEX, NULL) != SQLITE_OK) {
+    connected_ = false;
     LOG(ERROR) << "Open " << db_name_ << " failed.";
     return false;
   }
+  connected_ = true;
   if (!Execution("PRAGMA synchronous = OFF;")) {
     LOG(ERROR) << "Set PRAGMA synchronous to normal falied.";
     return false;
@@ -50,6 +52,7 @@ bool Sqlite::Connect() {
 
 bool Sqlite::Close() {
   if (sqlite3_close_v2(db_) == SQLITE_OK) {
+    connected_ = false;
     db_ = nullptr;
     return true;
   }
@@ -57,6 +60,10 @@ bool Sqlite::Close() {
 }
 
 bool Sqlite::Execution(std::string sql) {
+  if (!connected_) {
+    LOG(ERROR) << "SQL is not connected.";
+    return false;
+  }
   char* err_msg;
   if (sqlite3_exec(db_, sql.c_str(), 0, 0, &err_msg) != SQLITE_OK) {
     LOG(ERROR) << "(" << db_name_ << ") execute statement falied.\nSQL STATEMENT:\n  "
@@ -68,9 +75,9 @@ bool Sqlite::Execution(std::string sql) {
 
 bool Sqlite::CreateTable(std::string table_name, std::string primary_key, std::vector<std::string> key_names) {
   std::string sql;
-  sql = "CREATE TABLE " + table_name + "(" + primary_key + " INT PRIMARY KEY NOT NULL,";
+  sql = "CREATE TABLE " + table_name + "(" + primary_key + " STRING PRIMARY KEY NOT NULL,";
   for (auto it : key_names) {
-    sql += it + " INT,";
+    sql += it + " STRING,";
   }
   sql.pop_back();
   sql += " );";
@@ -97,6 +104,10 @@ bool Sqlite::Delete(std::string table_name, std::string key_name, std::string va
 
 bool Sqlite::Select(std::string table_name, std::string key_name, std::string condition,
                     int (*callback)(void*, int, char**, char**), void* data) {
+  if (!connected_) {
+    LOG(ERROR) << "SQL is not connected.";
+    return false;
+  }
   char* err_msg;
   std::string sql_statement = "SELECT " + key_name + " from " + table_name;
   if (condition != "") {

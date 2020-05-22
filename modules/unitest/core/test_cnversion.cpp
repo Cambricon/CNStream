@@ -32,7 +32,7 @@ TEST(CoreCnVersion, GetVersion) {
   EXPECT_GE(MinorVersion(), 0);
   EXPECT_GE(PatchVersion(), 0);
   auto version = VersionString();
-  EXPECT_STREQ(version, "v4.4.0");
+  EXPECT_STREQ(version, "v4.5.0");
 }
 
 }  // namespace cnstream

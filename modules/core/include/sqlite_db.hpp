@@ -60,6 +60,7 @@ class Sqlite {
   sqlite3 *db_ = nullptr;
 #endif
   std::string db_name_;
+  bool connected_ = false;
 };  // class Sqlite
 
 }  // namespace cnstream

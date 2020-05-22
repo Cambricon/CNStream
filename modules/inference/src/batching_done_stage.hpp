@@ -23,6 +23,7 @@
 
 #include <future>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -35,6 +36,7 @@ class MluTaskQueue;
 namespace cnstream {
 
 class Postproc;
+class ObjPostproc;
 class CpuInputResource;
 class CpuOutputResource;
 class MluInputResource;
@@ -42,9 +44,17 @@ class MluOutputResource;
 class RCOpResource;
 class InferTask;
 class CNFrameInfo;
+class CNInferObject;
 class FrameInfoResource;
+class PerfManager;
 
-using BatchingDoneInput = std::vector<std::pair<std::shared_ptr<CNFrameInfo>, std::shared_ptr<std::promise<void>>>>;
+struct AutoSetDone {
+  explicit AutoSetDone(const std::shared_ptr<std::promise<void>>& p) : p_(p) {}
+  ~AutoSetDone() { p_->set_value(); }
+  std::shared_ptr<std::promise<void>> p_;
+};  // struct AutoSetDone
+
+using BatchingDoneInput = std::vector<std::pair<std::shared_ptr<CNFrameInfo>, std::shared_ptr<AutoSetDone>>>;
 
 class BatchingDoneStage {
  public:
@@ -54,11 +64,17 @@ class BatchingDoneStage {
   virtual ~BatchingDoneStage() {}
 
   virtual std::vector<std::shared_ptr<InferTask>> BatchingDone(const BatchingDoneInput& finfos) = 0;
+  inline void SetPerfContext(std::shared_ptr<PerfManager> manager, std::string type) {
+    perf_manager_ = manager;
+    perf_type_ = type;
+  }
 
  protected:
   std::shared_ptr<edk::ModelLoader> model_;
   uint32_t batchsize_ = 0;
   int dev_id_ = -1;  // only for EasyInfer::Init
+  std::shared_ptr<PerfManager> perf_manager_ = nullptr;
+  std::string perf_type_;
 };                   // class BatchingDoneStage
 
 class H2DBatchingDoneStage : public BatchingDoneStage {
@@ -130,6 +146,22 @@ class PostprocessingBatchingDoneStage : public BatchingDoneStage {
 
  private:
   std::shared_ptr<Postproc> postprocessor_;
+  std::shared_ptr<CpuOutputResource> cpu_output_res_;
+};  // class PostprocessingBatchingDoneStage
+
+class ObjPostprocessingBatchingDoneStage : public BatchingDoneStage {
+ public:
+  ObjPostprocessingBatchingDoneStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, int dev_id,
+                                  std::shared_ptr<ObjPostproc> postprocessor,
+                                  std::shared_ptr<CpuOutputResource> cpu_output_res)
+      : BatchingDoneStage(model, batchsize, dev_id), postprocessor_(postprocessor), cpu_output_res_(cpu_output_res) {}
+
+  std::vector<std::shared_ptr<InferTask>> BatchingDone(const BatchingDoneInput& finfos) { return {}; }
+  std::vector<std::shared_ptr<InferTask>> ObjBatchingDone(const BatchingDoneInput& finfos,
+                                                          const std::vector<std::shared_ptr<CNInferObject>>& objs);
+
+ private:
+  std::shared_ptr<ObjPostproc> postprocessor_;
   std::shared_ptr<CpuOutputResource> cpu_output_res_;
 };  // class PostprocessingBatchingDoneStage
 

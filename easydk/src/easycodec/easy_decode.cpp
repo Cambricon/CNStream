@@ -18,10 +18,12 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <cnrt.h>
+
 #include <cn_codec_common.h>
 #include <cn_jpeg_dec.h>
 #include <cn_video_dec.h>
+#include <cnrt.h>
+#include <glog/logging.h>
 
 #include <condition_variable>
 #include <cstring>
@@ -31,7 +33,7 @@
 #include <thread>
 #include <unordered_map>
 #include <utility>
-#include "cxxutil/logger.h"
+
 #include "easycodec/easy_decode.h"
 #include "easyinfer/mlu_context.h"
 #include "format_info.h"
@@ -47,7 +49,7 @@ using std::unique_lock;
   do {                                                                        \
     int ret = (func);                                                         \
     if (0 != ret) {                                                           \
-      LOG(ERROR, "%s, error code: %d", (msg), ret);                           \
+      LOG(ERROR) << msg << " error code: " << ret;                            \
       throw EasyDecodeError(msg " error code : " + std::to_string(ret));      \
     }                                                                         \
   } while (0)
@@ -152,19 +154,19 @@ static i32_t EventHandler(cncodecCbEventType type, void *user_data, void *packag
       break;
     case CNCODEC_CB_EVENT_SW_RESET:
     case CNCODEC_CB_EVENT_HW_RESET:
-      LOG(ERROR, "Decode firmware crash event: %d", type);
+      LOG(ERROR) << "Decode firmware crash event: " << type;
       handler->AbortDecoder();
       break;
     case CNCODEC_CB_EVENT_OUT_OF_MEMORY:
-      LOG(ERROR, "Out of memory error thrown from cncodec");
+      LOG(ERROR) << "Out of memory error thrown from cncodec";
       handler->AbortDecoder();
       break;
     case CNCODEC_CB_EVENT_ABORT_ERROR:
-      LOG(ERROR, "Abort error thrown from cncodec");
+      LOG(ERROR) << "Abort error thrown from cncodec";
       handler->AbortDecoder();
       break;
     default:
-      LOG(ERROR, "Unknown event type");
+      LOG(ERROR) << "Unknown event type";
       handler->AbortDecoder();
       break;
   }
@@ -186,7 +188,7 @@ DecodeHandler::~DecodeHandler() {
   if (!got_eos_) {
     if (!send_eos_ && handle_) {
       eos_mtx_.unlock();
-      LOG(INFO, "Send EOS in destruct");
+      LOG(INFO) << "Send EOS in destruct";
       CnPacket packet;
       memset(&packet, 0, sizeof(CnPacket));
       decoder_->SendData(packet, true);
@@ -200,30 +202,30 @@ DecodeHandler::~DecodeHandler() {
   }
 
   if (!got_eos_) {
-    LOG(INFO, "Wait EOS in destruct");
+    LOG(INFO) << "Wait EOS in destruct";
     eos_cond_.wait(eos_lk, [this]() -> bool { return got_eos_; });
   }
 
   if (handle_) {
     if (jpeg_decode_) {
       // Destroy jpu decoder
-      LOG(INFO, "Destroy jpeg decoder channel");
+      LOG(INFO) << "Destroy jpeg decoder channel";
       auto ecode = cnjpegDecDestroy(handle_);
       if (CNCODEC_SUCCESS != ecode) {
-        LOG(ERROR, "Decoder destroy failed Error Code: %d", ecode);
+        LOG(ERROR) << "Decoder destroy failed Error Code: " << ecode;
       }
     } else {
       // destroy vpu decoder
-      LOG(INFO, "Stop video decoder channel");
+      LOG(INFO) << "Stop video decoder channel";
       auto ecode = cnvideoDecStop(handle_);
       if (CNCODEC_SUCCESS != ecode) {
-        LOG(ERROR, "Decoder stop failed Error Code: %d", ecode);
+        LOG(ERROR) << "Decoder stop failed Error Code: " << ecode;
       }
 
-      LOG(INFO, "Destroy video decoder channel");
+      LOG(INFO) << "Destroy video decoder channel";
       ecode = cnvideoDecDestroy(handle_);
       if (CNCODEC_SUCCESS != ecode) {
-        LOG(ERROR, "Decoder destroy failed Error Code: %d", ecode);
+        LOG(ERROR) << "Decoder destroy failed Error Code: " << ecode;
       }
     }
     handle_ = nullptr;
@@ -240,7 +242,7 @@ DecodeHandler::~DecodeHandler() {
 }
 
 void DecodeHandler::AbortDecoder() {
-  LOG(WARNING, "Abort decoder");
+  LOG(WARNING) << "Abort decoder";
   if (handle_) {
     if (jpeg_decode_) {
       cnjpegDecAbort(handle_);
@@ -259,7 +261,7 @@ void DecodeHandler::AbortDecoder() {
     got_eos_ = true;
     eos_cond_.notify_one();
   } else {
-    LOG(ERROR, "Won't do abort, since cndecode handler has not been initialized");
+    LOG(ERROR) << "Won't do abort, since cndecode handler has not been initialized";
   }
 }
 
@@ -293,7 +295,7 @@ std::pair<bool, std::string> DecodeHandler::Init(const EasyDecode::Attr& attr) {
     memset(&vparams_, 0, sizeof(cnvideoDecCreateInfo));
     vparams_.deviceId = attr.dev_id;
     if (const char* turbo_env_p = std::getenv("VPU_TURBO_MODE")) {
-      LOG(INFO, "VPU Turbo mode : %s", turbo_env_p);
+      LOG(INFO) << "VPU Turbo mode : " << turbo_env_p;
       std::unique_lock<std::mutex> lk(g_vpu_instance_mutex);
       static int _vpu_inst_cnt = 0;
       static cnvideoDecInstance _instances[] = {  // 100 channels:20+14+15+15+14+22
@@ -382,15 +384,15 @@ void DecodeHandler::ReceiveFrame(void* out) {
     auto o = reinterpret_cast<cnjpegDecOutput*>(out);
     finfo.pts = o->pts;
     frame = &o->frame;
-    LOG(TRACE, "Receive one jpeg frame, %p", frame);
+    DLOG(INFO) << "Receive one jpeg frame, " << frame;
   } else {
     auto o = reinterpret_cast<cnvideoDecOutput*>(out);
     finfo.pts = o->pts;
     frame = &o->frame;
-    LOG(TRACE, "Receive one video frame, %p", frame);
+    DLOG(INFO) << "Receive one video frame, " << frame;
   }
   if (frame->width == 0 || frame->height == 0 || frame->planeNum == 0) {
-    LOG(WARNING, "Receive empty frame");
+    LOG(WARNING) << "Receive empty frame";
     return;
   }
   finfo.device_id = attr_.dev_id;
@@ -408,10 +410,11 @@ void DecodeHandler::ReceiveFrame(void* out) {
   finfo.pformat = attr_.pixel_format;
   finfo.color_std = attr_.color_std;
 
-  LOG(TRACE, "Frame: width %d, height %d, planes %d, frame size %d", finfo.width, finfo.height, finfo.n_planes, finfo.frame_size);
+  DLOG(INFO) << "Frame: width " << finfo.width << " height " << finfo.height << " planes "
+             << finfo.n_planes << " frame size " << finfo.frame_size;
 
   if (NULL != attr_.frame_callback) {
-    LOG(TRACE, "Add decode buffer Reference %lu", finfo.buf_id);
+    DLOG(INFO) << "Add decode buffer Reference " << finfo.buf_id;
     if (jpeg_decode_) {
       cnjpegDecAddReference(handle_, frame);
     } else {
@@ -423,7 +426,7 @@ void DecodeHandler::ReceiveFrame(void* out) {
 }
 
 int DecodeHandler::ReceiveSequence(cnvideoDecSequenceInfo* info) {
-  LOG(INFO, "Receive sequence");
+  LOG(INFO) << "Receive sequence";
 
   vparams_.codec = info->codec;
   vparams_.pixelFmt = PixelFormatCast(attr_.pixel_format);
@@ -458,7 +461,7 @@ int DecodeHandler::ReceiveSequence(cnvideoDecSequenceInfo* info) {
 
   int ecode = cnvideoDecStart(handle_, &vparams_);
   if (ecode != CNCODEC_SUCCESS) {
-    LOG(ERROR, "Start Decoder failed.");
+    LOG(ERROR) << "Start Decoder failed.";
     return -1;
   }
   return 0;
@@ -467,7 +470,7 @@ int DecodeHandler::ReceiveSequence(cnvideoDecSequenceInfo* info) {
 void DecodeHandler::ReceiveEOS() {
   std::ostringstream ss;
   ss << "Thread id: " << std::this_thread::get_id() << ",Received EOS from cncodec";
-  LOG(INFO, ss.str());
+  LOG(INFO) << ss.str();
 
   if (attr_.eos_callback) {
     attr_.eos_callback();
@@ -488,11 +491,12 @@ bool DecodeHandler::SendJpegData(const CnPacket &packet, bool eos) {
     input.streamLength = packet.length;
     input.pts = packet.pts;
     input.flags = CNJPEGDEC_FLAG_TIMESTAMP;
-    LOG(TRACE, "Feed stream info) data: %p, length: %lu, pts: %lu", input.streamBuffer, input.streamLength, input.pts);
+    DLOG(INFO) << "Feed stream info, data: " << input.streamBuffer << " ,length: "
+               << input.streamLength << " ,pts: " << input.pts;
 
     auto ecode = cnjpegDecFeedData(handle_, &input, 10000);
     if (-CNCODEC_TIMEOUT == ecode) {
-      LOG(ERROR, "cnjpegDecFeedData timeout");
+      LOG(ERROR) << "cnjpegDecFeedData timeout";
       return false;
     } else if (CNCODEC_SUCCESS != ecode) {
       throw EasyDecodeError("Send data failed. Error code: " + to_string(ecode));
@@ -509,10 +513,10 @@ bool DecodeHandler::SendJpegData(const CnPacket &packet, bool eos) {
     input.flags = CNJPEGDEC_FLAG_EOS;
     std::ostringstream ss;
     ss << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
-    LOG(INFO, ss.str());
+    LOG(INFO) << ss.str();
     auto ecode = cnjpegDecFeedData(handle_, &input, 10000);
     if (-CNCODEC_TIMEOUT == ecode) {
-      LOG(ERROR, "cnjpegDecFeedData send EOS timeout");
+      LOG(ERROR) << "cnjpegDecFeedData send EOS timeout";
       return false;
     } else if (CNCODEC_SUCCESS != ecode) {
       throw EasyDecodeError("Send EOS failed. Error code: " + to_string(ecode));
@@ -532,11 +536,12 @@ bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos) {
     input.streamLength = packet.length;
     input.pts = packet.pts;
     input.flags = CNVIDEODEC_FLAG_TIMESTAMP;
-    LOG(TRACE, "Feed stream info) data: %p, length: %lu, pts: %lu", input.streamBuf, input.streamLength, input.pts);
+    DLOG(INFO) << "Feed stream info, data: " << input.streamBuf << " ,length: "
+               << input.streamLength << " ,pts: " << input.pts;
 
     auto ecode = cnvideoDecFeedData(handle_, &input, 10000);
     if (-CNCODEC_TIMEOUT == ecode) {
-      LOG(ERROR, "cnvideoDecFeedData timeout");
+      LOG(ERROR) << "cnvideoDecFeedData timeout";
       return false;
     } else if (CNCODEC_SUCCESS != ecode) {
       throw EasyDecodeError("Send data failed. Error code: " + to_string(ecode));
@@ -553,10 +558,10 @@ bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos) {
     input.flags = CNVIDEODEC_FLAG_EOS;
     std::ostringstream ss;
     ss << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
-    LOG(INFO, ss.str());
+    LOG(INFO) << ss.str();
     auto ecode = cnvideoDecFeedData(handle_, &input, 10000);
     if (-CNCODEC_TIMEOUT == ecode) {
-      LOG(ERROR, "cnvideoDecFeedData send EOS timeout");
+      LOG(ERROR) << "cnvideoDecFeedData send EOS timeout";
       return false;
     } else if (CNCODEC_SUCCESS != ecode) {
       throw EasyDecodeError("Send EOS failed. Error code: " + to_string(ecode));
@@ -570,7 +575,7 @@ bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos) {
 
 #ifdef ALLOC_BUFFER
 void DecodeHandler::AllocInputBuffer(cnvideoDecCreateInfo *params) {
-  LOG(INFO, "Alloc Input Buffer");
+  LOG(INFO) << "Alloc Input Buffer";
   for (unsigned int i = 0; i < params->inputBufNum; i++) {
     CALL_CNRT_FUNC(cnrtMalloc(reinterpret_cast<void**>(&params->inputBuf[i].addr), g_decode_input_buffer_size),
                    "Malloc decode input buffer failed");
@@ -579,7 +584,7 @@ void DecodeHandler::AllocInputBuffer(cnvideoDecCreateInfo *params) {
 }
 
 void DecodeHandler::AllocOutputBuffer(cnvideoDecCreateInfo *params) {
-  LOG(INFO, "Alloc Output Buffer");
+  LOG(INFO) << "Alloc Output Buffer";
   uint64_t size = 0;
   const unsigned int width = params->width;
   const unsigned int stride = ALIGN(width, 128);
@@ -610,14 +615,14 @@ void DecodeHandler::AllocOutputBuffer(cnvideoDecCreateInfo *params) {
 }
 
 void DecodeHandler::FreeInputBuffer(const cnvideoDecCreateInfo &params) {
-  LOG(INFO, "Free Input Buffer");
+  LOG(INFO) << "Free Input Buffer";
   for (unsigned int i = 0; i < params.inputBufNum; ++i) {
     CALL_CNRT_FUNC(cnrtFree(reinterpret_cast<void*>(params.inputBuf[i].addr)), "Free decode input buffer failed");
   }
 }
 
 void DecodeHandler::FreeOutputBuffer(const cnvideoDecCreateInfo &params) {
-  LOG(INFO, "Free Output Buffer");
+  LOG(INFO) << "Free Output Buffer";
   for (unsigned int i = 0; i < params.outputBufNum; ++i) {
     for (unsigned int j = 0; j < params.outputBuf[i].planeNum; ++j) {
       CALL_CNRT_FUNC(cnrtFree(reinterpret_cast<void*>(params.outputBuf[i].plane[j].addr)),
@@ -687,11 +692,11 @@ EasyDecode::Status EasyDecode::GetStatus() const {
 
 bool EasyDecode::SendData(const CnPacket& packet, bool eos) {
   if (!handler_->handle_) {
-    LOG(ERROR, "Decoder has not been init");
+    LOG(ERROR) << "Decoder has not been init";
     return false;
   }
   if (handler_->send_eos_) {
-    LOG(WARNING, "EOS had been sent, won't feed data or EOS");
+    LOG(WARNING) << "EOS had been sent, won't feed data or EOS";
     return false;
   }
   // check status
@@ -702,7 +707,7 @@ bool EasyDecode::SendData(const CnPacket& packet, bool eos) {
   }
 
   if (packet.length == 0 && !eos) {
-    LOG(ERROR, "Packet length is equal to 0. The packet will not be sent.");
+    LOG(ERROR) << "Packet length is equal to 0. The packet will not be sent.";
     return true;
   }
 
@@ -718,7 +723,7 @@ bool EasyDecode::SendData(const CnPacket& packet, bool eos) {
 }
 
 void EasyDecode::ReleaseBuffer(uint64_t buf_id) {
-  LOG(TRACE, "Release decode buffer reference %lu", buf_id);
+  DLOG(INFO) << "Release decode buffer reference " << buf_id;
   if (handler_->jpeg_decode_) {
     cnjpegDecReleaseReference(handler_->handle_, reinterpret_cast<cncodecFrame*>(buf_id));
   } else {
@@ -739,9 +744,9 @@ bool EasyDecode::CopyFrameD2H(void* dst, const CnFrame& frame) {
     pixel_fmt = handler_->vparams_.pixelFmt;
   }
 
-  LOG(TRACE, "Copy codec frame from device to host");
-  LOG(TRACE, "device address: (plane 0) %p, (plane 1) %p", frame.ptrs[0], frame.ptrs[1]);
-  LOG(TRACE, "host address: %p", odata);
+  DLOG(INFO) << "Copy codec frame from device to host";
+  DLOG(INFO) << "device address: (plane 0) " << frame.ptrs[0] << ", (plane 1) " << frame.ptrs[1];
+  DLOG(INFO) << "host address: " << odata;
 
   switch (pixel_fmt) {
     case CNCODEC_PIX_FMT_NV21:
@@ -770,7 +775,7 @@ bool EasyDecode::CopyFrameD2H(void* dst, const CnFrame& frame) {
       break;
     }
     default:
-      LOG(ERROR, "don't support format: %d", pixel_fmt);
+      LOG(ERROR) << "don't support format: " << pixel_fmt;
       break;
   }
 

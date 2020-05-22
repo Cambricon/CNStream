@@ -45,8 +45,8 @@ namespace cnstream {
 #define TEST_SHARED_MEM_SZIE 128
 #define ALIGN_(addr, boundary) (((u32_t)(addr) + (boundary)-1) & ~((boundary)-1))
 
-const int width = 1280;
-const int height = 720;
+static const int width = 1280;
+static const int height = 720;
 
 static const int g_dev_id = 0;
 static const int g_ddr_channel = 0;
