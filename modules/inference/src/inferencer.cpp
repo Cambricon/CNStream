@@ -72,6 +72,7 @@ class InferencerPrivate {
   std::shared_ptr<ObjPreproc> obj_preproc_ = nullptr;
   std::shared_ptr<ObjPostproc> obj_postproc_ = nullptr;
   std::shared_ptr<ObjFilter> obj_filter_ = nullptr;
+  bool keep_aspect_ratio_ = false;  // mlu preprocessing, keep aspect ratio
 
   void InferEngineErrorHnadleFunc(const std::string& err_msg) {
     LOG(FATAL) << err_msg;
@@ -93,6 +94,7 @@ class InferencerPrivate {
           device_id_, model_loader_, preproc_, postproc_, bsize_, batching_timeout_, use_scaler_,
           infer_perf_manager_, tid_str,
           std::bind(&InferencerPrivate::InferEngineErrorHnadleFunc, this, std::placeholders::_1),
+          keep_aspect_ratio_,
           obj_infer_, obj_preproc_, obj_postproc_, obj_filter_);
       ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_);
       ctxs_[tid] = ctx;
@@ -186,6 +188,8 @@ Inferencer::Inferencer(const std::string& name) : Module(name) {
   param_register_.Register("threshold", "The threshold of the results.");
   param_register_.Register("object_infer", "Whether to infer with frame or detection object.");
   param_register_.Register("obj_filter_name", "The object filter method name.");
+  param_register_.Register("keep_aspect_ratio", "As the mlu is used for image processing, "
+                            "the scale remains constant.");
 }
 
 Inferencer::~Inferencer() {}
@@ -280,6 +284,11 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
   if (!postproc_name_found) {
     LOG(ERROR) << "[Inferencer] Can not find Postproc implemention by name: " << postproc_name;
     return false;
+  }
+
+  if (paramSet.find("keep_aspect_ratio") != paramSet.end() && paramSet["keep_aspect_ratio"] == "true") {
+    LOG(INFO) << "[Inferencer] Keep aspect ratio has been set.";
+    d_ptr_->keep_aspect_ratio_ = true;
   }
 
   if (paramSet.find("threshold") != paramSet.end()) {

@@ -130,13 +130,16 @@ struct RCOpValue {
 
 class RCOpResource : public InferResource<std::shared_ptr<RCOpValue>> {
  public:
-  RCOpResource(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize);
+  RCOpResource(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, bool keep_aspect_ratio);
   ~RCOpResource();
   bool Initialized() const { return value_->initialized; }
   void SetMluQueue(std::shared_ptr<edk::MluTaskQueue> mlu_queue) { value_->op.SetMluQueue(mlu_queue); }
   void Init(uint32_t dst_w, uint32_t dst_h,
             edk::MluResizeConvertOp::ColorMode cmode, edk::CoreVersion core_ver);
   void Destroy();
+
+ private:
+  bool keep_aspect_ratio_ = false;
 };  // class ResizeOpResource
 
 }  // namespace cnstream

@@ -102,6 +102,7 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
                      False by default.
    *   obj_filter_name: Optional. The class name for object filter. See cnstream::ObjFilter. This parameter is valid when
                      object_infer is true. When this parameter not set, no object will be filtered.
+   *   keep_aspect_ratio: Optional. As the mlu is used for image processing, the scale remains constant.
    *  
    * @endverbatim
    *
