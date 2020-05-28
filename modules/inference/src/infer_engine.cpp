@@ -43,6 +43,7 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
                          std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, float batching_timeout,
                          bool use_scaler, std::shared_ptr<PerfManager> perf_manager, std::string infer_thread_id,
                          const std::function<void(const std::string& err_msg)>& error_func,
+                         bool keep_aspect_ratio,
                          bool batching_by_obj, const std::shared_ptr<ObjPreproc>& obj_preprocessor,
                          const std::shared_ptr<ObjPostproc>& obj_postprocessor,
                          const std::shared_ptr<ObjFilter>& obj_filter)
@@ -74,7 +75,7 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
     if (mlu_ctx.GetCoreVersion() == edk::CoreVersion::MLU270) {
       use_scaler_ = false;
     }
-    if (!use_scaler_) rcop_res_ = std::make_shared<RCOpResource>(model, batchsize);
+    if (!use_scaler_) rcop_res_ = std::make_shared<RCOpResource>(model, batchsize, keep_aspect_ratio);
     cpu_input_res_->Init();
     cpu_output_res_->Init();
     mlu_input_res_->Init();
