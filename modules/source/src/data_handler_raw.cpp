@@ -106,7 +106,6 @@ bool DataHandlerRaw::PrepareResources(bool demux_only) {
 
 void DataHandlerRaw::ClearResources(bool demux_only) {
   if (!demux_only && decoder_.get()) {
-    EnableFlowEos(true);
     decoder_->Destroy();
   }
   if (fd_ > 0) {
@@ -151,14 +150,12 @@ bool DataHandlerRaw::Process() {
     demux_eos_.store(1);
     if (this->loop_) {
       LOG(INFO) << "Clear resources and restart";
-      EnableFlowEos(false);
       ClearResources(true);
       PrepareResources(true);
       demux_eos_.store(0);
       LOG(INFO) << "Loop...";
       return true;
     } else {
-      EnableFlowEos(true);
       decoder_->Process(nullptr, true);
       return false;
     }

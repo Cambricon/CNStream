@@ -81,7 +81,7 @@ cv::Mat* CNDataFrame::ImageBGR() {
   }
   switch (fmt) {
     case CNDataFormat::CN_PIXEL_FORMAT_BGR24: {
-      bgr = cv::Mat(height, stride_, CV_8UC3, img_data).clone();
+      bgr = cv::Mat(height, stride_, CV_8UC3, img_data);
     } break;
     case CNDataFormat::CN_PIXEL_FORMAT_RGB24: {
       cv::Mat src = cv::Mat(height, stride_, CV_8UC3, img_data);
@@ -101,6 +101,7 @@ cv::Mat* CNDataFrame::ImageBGR() {
       return nullptr;
     }
   }
+  bgr = bgr(cv::Rect(0, 0, width, height));
   delete[] img_data;
   bgr_mat = new (std::nothrow) cv::Mat();
   LOG_IF(FATAL, nullptr == bgr_mat) << "CNDataFrame::ImageBGR() failed to alloc cv::Mat";

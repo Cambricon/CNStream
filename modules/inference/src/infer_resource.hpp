@@ -139,6 +139,7 @@ class RCOpResource : public InferResource<std::shared_ptr<RCOpValue>> {
   void Destroy();
 
  private:
+  int core_number_ = 0;
   bool keep_aspect_ratio_ = false;
 };  // class ResizeOpResource
 

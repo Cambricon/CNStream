@@ -200,7 +200,7 @@ CNStream提供的run.sh示例脚本位于 ``${CNSTREAM_PATH}/samples/demo`` 目�
 
 用户需要按照 :ref:`programmingguide` 的步骤构建pipeline。但在动态增加数据源之前，需要调用 ``CreatePerfManager`` 函数创建 ``PerfManager``，并在函数中传入所有数据流的唯一标识 ``stream_id`` 和希望保存数据库文件的路径。
 
-创建``PerfManager`` 源代码示例如下，详情可参考 ``samples/demo/demo.cpp`` 文件的CNStream源码。
+创建 ``PerfManager`` 源代码示例如下，详情可参考 ``samples/demo/demo.cpp`` 文件的CNStream源码。
 
 ::
 

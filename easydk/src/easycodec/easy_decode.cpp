@@ -28,6 +28,7 @@
 #include <condition_variable>
 #include <cstring>
 #include <mutex>
+#include <queue>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -94,12 +95,9 @@ static void PrintCreateAttr(cnjpegDecCreateInfo* p_attr) {
 
 class DecodeHandler {
  public:
-  explicit DecodeHandler(EasyDecode* decoder) : decoder_(decoder), packets_count_(0), frames_count_(0) {}
+  explicit DecodeHandler(EasyDecode* decoder);
   ~DecodeHandler();
   std::pair<bool, std::string> Init(const EasyDecode::Attr& attr);
-  void ReceiveFrame(void* out);
-  int ReceiveSequence(cnvideoDecSequenceInfo* info);
-  void ReceiveEOS();
 
   bool SendJpegData(const CnPacket &packet, bool eos);
   bool SendVideoData(const CnPacket &packet, bool eos);
@@ -113,9 +111,21 @@ class DecodeHandler {
   void FreeOutputBuffer(const cnvideoDecCreateInfo &params);
 #endif
 
+  void ReceiveEvent(cncodecCbEventType type);
+  void ReceiveFrame(void* out);
+  int ReceiveSequence(cnvideoDecSequenceInfo* info);
+  void ReceiveEOS();
+
   friend class EasyDecode;
 
  private:
+  void EventTaskRunner();
+
+  std::queue<cncodecCbEventType> event_queue_;
+  std::mutex event_mtx_;
+  std::condition_variable event_cond_;
+  std::thread event_loop_;
+
   EasyDecode* decoder_ = nullptr;
   // cncodec handle
   void* handle_ = nullptr;
@@ -123,7 +133,7 @@ class DecodeHandler {
   EasyDecode::Attr attr_;
   cnvideoDecCreateInfo vparams_;
   cnjpegDecCreateInfo jparams_;
-  /* std::unique_ptr<FormatInfo> pixel_fmt_info_; */
+  const FormatInfo* pixel_fmt_info_;
 
   uint32_t packets_count_ = 0;
   uint32_t frames_count_ = 0;
@@ -142,36 +152,28 @@ class DecodeHandler {
 
 static i32_t EventHandler(cncodecCbEventType type, void *user_data, void *package) {
   auto handler = reinterpret_cast<DecodeHandler*>(user_data);
-  switch (type) {
-    case CNCODEC_CB_EVENT_NEW_FRAME:
-      handler->ReceiveFrame(package);
-      break;
-    case CNCODEC_CB_EVENT_SEQUENCE:
-      handler->ReceiveSequence(reinterpret_cast<cnvideoDecSequenceInfo*>(package));
-      break;
-    case CNCODEC_CB_EVENT_EOS:
-      handler->ReceiveEOS();
-      break;
-    case CNCODEC_CB_EVENT_SW_RESET:
-    case CNCODEC_CB_EVENT_HW_RESET:
-      LOG(ERROR) << "Decode firmware crash event: " << type;
-      handler->AbortDecoder();
-      break;
-    case CNCODEC_CB_EVENT_OUT_OF_MEMORY:
-      LOG(ERROR) << "Out of memory error thrown from cncodec";
-      handler->AbortDecoder();
-      break;
-    case CNCODEC_CB_EVENT_ABORT_ERROR:
-      LOG(ERROR) << "Abort error thrown from cncodec";
-      handler->AbortDecoder();
-      break;
-    default:
-      LOG(ERROR) << "Unknown event type";
-      handler->AbortDecoder();
-      break;
+  // [ACQUIRED BY CNCODEC]
+  // NEW_FRAME and SEQUENCE event must handled in callback thread,
+  // The other events must handled in a different thread.
+  if (handler != nullptr) {
+    switch (type) {
+      case CNCODEC_CB_EVENT_NEW_FRAME:
+        handler->ReceiveFrame(package);
+        break;
+      case CNCODEC_CB_EVENT_SEQUENCE:
+        handler->ReceiveSequence(reinterpret_cast<cnvideoDecSequenceInfo*>(package));
+        break;
+      default:
+        handler->ReceiveEvent(type);
+        break;
+    }
   }
-
   return 0;
+}
+
+DecodeHandler::DecodeHandler(EasyDecode* decoder)
+  :decoder_(decoder) {
+  event_loop_ = std::thread(&DecodeHandler::EventTaskRunner, this);
 }
 
 DecodeHandler::~DecodeHandler() {
@@ -205,6 +207,9 @@ DecodeHandler::~DecodeHandler() {
     LOG(INFO) << "Wait EOS in destruct";
     eos_cond_.wait(eos_lk, [this]() -> bool { return got_eos_; });
   }
+
+  event_cond_.notify_all();
+  event_loop_.join();
 
   if (handle_) {
     if (jpeg_decode_) {
@@ -241,6 +246,54 @@ DecodeHandler::~DecodeHandler() {
 #endif
 }
 
+void DecodeHandler::ReceiveEvent(cncodecCbEventType type) {
+  std::lock_guard<std::mutex> lock(event_mtx_);
+  event_queue_.push(type);
+  event_cond_.notify_one();
+}
+
+void DecodeHandler::EventTaskRunner() {
+  unique_lock<std::mutex> lock(event_mtx_);
+  while (!event_queue_.empty() || !got_eos_) {
+    event_cond_.wait(lock, [this] {
+        return !event_queue_.empty() || got_eos_; });
+
+    if (event_queue_.empty()) {
+      // notified by eos
+      continue;
+    }
+
+    cncodecCbEventType type = event_queue_.front();
+    event_queue_.pop();
+    lock.unlock();
+
+    switch (type) {
+      case CNCODEC_CB_EVENT_EOS:
+        ReceiveEOS();
+        break;
+      case CNCODEC_CB_EVENT_SW_RESET:
+      case CNCODEC_CB_EVENT_HW_RESET:
+        LOG(ERROR) << "Decode firmware crash event: " << type;
+        AbortDecoder();
+        break;
+      case CNCODEC_CB_EVENT_OUT_OF_MEMORY:
+        LOG(ERROR) << "Out of memory error thrown from cncodec";
+        AbortDecoder();
+        break;
+      case CNCODEC_CB_EVENT_ABORT_ERROR:
+        LOG(ERROR) << "Abort error thrown from cncodec";
+        AbortDecoder();
+        break;
+      default:
+        LOG(ERROR) << "Unknown event type";
+        AbortDecoder();
+        break;
+    }
+
+    lock.lock();
+  }
+}
+
 void DecodeHandler::AbortDecoder() {
   LOG(WARNING) << "Abort decoder";
   if (handle_) {
@@ -250,7 +303,6 @@ void DecodeHandler::AbortDecoder() {
       cnvideoDecAbort(handle_);
     }
     handle_ = nullptr;
-
     if (attr_.eos_callback) {
       attr_.eos_callback();
     }
@@ -269,11 +321,12 @@ std::pair<bool, std::string> DecodeHandler::Init(const EasyDecode::Attr& attr) {
   attr_ = attr;
   // 1. decoder create parameters.
   jpeg_decode_ = attr.codec_type == CodecType::JPEG || attr.codec_type == CodecType::MJPEG;
+  pixel_fmt_info_ = FormatInfo::GetFormatInfo(attr.pixel_format);
   if (jpeg_decode_) {
     memset(&jparams_, 0, sizeof(cnjpegDecCreateInfo));
     jparams_.deviceId = attr.dev_id;
     jparams_.instance = CNJPEGDEC_INSTANCE_AUTO;
-    jparams_.pixelFmt = PixelFormatCast(attr.pixel_format);
+    jparams_.pixelFmt = pixel_fmt_info_->cncodec_fmt;
     jparams_.colorSpace = CNCODEC_COLOR_SPACE_BT_709;
     jparams_.width = attr.frame_geometry.w;
     jparams_.height = attr.frame_geometry.h;
@@ -329,7 +382,7 @@ std::pair<bool, std::string> DecodeHandler::Init(const EasyDecode::Attr& attr) {
       vparams_.instance = CNVIDEODEC_INSTANCE_AUTO;
     }
     vparams_.codec = CodecTypeCast(attr.codec_type);
-    vparams_.pixelFmt = PixelFormatCast(attr.pixel_format);
+    vparams_.pixelFmt = pixel_fmt_info_->cncodec_fmt;
     vparams_.colorSpace = ColorStdCast(attr.color_std);
     vparams_.width = attr.frame_geometry.w;
     vparams_.height = attr.frame_geometry.h;
@@ -405,7 +458,7 @@ void DecodeHandler::ReceiveFrame(void* out) {
   for (uint32_t pi = 0; pi < frame->planeNum; ++pi) {
     finfo.strides[pi] = frame->stride[pi];
     finfo.ptrs[pi] = reinterpret_cast<void*>(frame->plane[pi].addr);
-    finfo.frame_size += GetPlaneSize(PixelFormatCast(attr_.pixel_format), frame->stride[pi], frame->height, pi);
+    finfo.frame_size += pixel_fmt_info_->GetPlaneSize(frame->stride[pi], frame->height, pi);
   }
   finfo.pformat = attr_.pixel_format;
   finfo.color_std = attr_.color_std;
@@ -429,7 +482,7 @@ int DecodeHandler::ReceiveSequence(cnvideoDecSequenceInfo* info) {
   LOG(INFO) << "Receive sequence";
 
   vparams_.codec = info->codec;
-  vparams_.pixelFmt = PixelFormatCast(attr_.pixel_format);
+  vparams_.pixelFmt = pixel_fmt_info_->cncodec_fmt;
   vparams_.width = info->width;
   vparams_.height = info->height;
 
@@ -589,7 +642,7 @@ void DecodeHandler::AllocOutputBuffer(cnvideoDecCreateInfo *params) {
   const unsigned int width = params->width;
   const unsigned int stride = ALIGN(width, 128);
   const unsigned int height = params->height;
-  const unsigned int plane_num = pixel_fmt_info_->GetPlanesNum();
+  const unsigned int plane_num = pixel_fmt_info_->plane_num;
 
   for (unsigned int i = 0; i < params->outputBufNum; ++i) {
     for (unsigned int j = 0; j < plane_num; ++j) {
@@ -719,6 +772,13 @@ bool EasyDecode::SendData(const CnPacket& packet, bool eos) {
     ret = handler_->SendVideoData(packet, eos);
   }
 
+  // timeout
+  if (!ret) {
+    lock.unlock();
+    handler_->AbortDecoder();
+    throw EasyDecodeError("cndecode timeout");
+  }
+
   return ret;
 }
 
@@ -746,7 +806,7 @@ bool EasyDecode::CopyFrameD2H(void* dst, const CnFrame& frame) {
 
   DLOG(INFO) << "Copy codec frame from device to host";
   DLOG(INFO) << "device address: (plane 0) " << frame.ptrs[0] << ", (plane 1) " << frame.ptrs[1];
-  DLOG(INFO) << "host address: " << odata;
+  DLOG(INFO) << "host address: " << reinterpret_cast<int64_t>(odata);
 
   switch (pixel_fmt) {
     case CNCODEC_PIX_FMT_NV21:

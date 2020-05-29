@@ -3,6 +3,6 @@
 SphinxBuildDir="_build"
 make clean
 make latex
-python parsejson.py $SphinxBuildDir
+python parsejson.py 
 cd $SphinxBuildDir/latex/
 make all-pdf

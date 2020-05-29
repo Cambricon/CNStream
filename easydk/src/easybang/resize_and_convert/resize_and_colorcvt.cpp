@@ -137,7 +137,9 @@ bool MluResizeConvertOp::Init(const MluResizeConvertOp::Attr& attr) {
   delete[] wh_mlu_ptrs_tmp;
   delete[] roi_mlu_ptrs_tmp;
 
-  switch (attr.batch_size) {
+  int core_number = attr.core_number == 0 ? attr.batch_size : attr.core_number;
+
+  switch (core_number) {
     case 1:
       d_ptr_->ftype_ = CNRT_FUNC_TYPE_BLOCK;
       break;
@@ -150,15 +152,15 @@ bool MluResizeConvertOp::Init(const MluResizeConvertOp::Attr& attr) {
     case 16:
       d_ptr_->ftype_ = CNRT_FUNC_TYPE_UNION4;
       break;
-    case 32:
-      d_ptr_->ftype_ = CNRT_FUNC_TYPE_UNION8;
-      break;
     default:
-      d_ptr_->estr_ = "Unsupport batchsize. Only support 1, 4, 8, 16, 32";
+      d_ptr_->estr_ = "Unsupport core number. Only support 1, 4, 8, 16";
       return false;
   }
 
-  LOG(INFO) << "Init ResizeAndConvert Operator";
+  d_ptr_->attr_.core_number = core_number;
+
+  LOG(INFO) << "Init ResizeAndConvert Operator, [batchsize: " + std::to_string(d_ptr_->attr_.batch_size) +
+               "], [core_number: " + std::to_string(d_ptr_->attr_.core_number) + "].";
 
   return ::PrepareKernelParam(d_ptr_->attr_.dst_h, d_ptr_->attr_.dst_w,
                               static_cast<int>(d_ptr_->attr_.color_mode),
@@ -291,7 +293,7 @@ bool MluResizeConvertOp::SyncOneOutput(void* dst) {
                      CNRT_MEM_TRANS_DIR_HOST2DEV);
   CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy rois failed. Error code:" + std::to_string(cnret), {}, false);
   cnrtDim3_t dim;
-  dim.x = d_ptr_->attr_.batch_size;  // TODO(lmx): U1 is 4, U2 is 8, U4 is 16, not equal to batchsize.
+  dim.x = d_ptr_->attr_.core_number;
   dim.y = 1;
   dim.z = 1;
 

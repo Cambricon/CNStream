@@ -136,7 +136,20 @@ void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, ui
   memset(&src_frame, 0, sizeof(src_frame));
   memset(&dst_frame, 0, sizeof(dst_frame));
 
-  src_frame.pixelFmt = CNCODEC_PIX_FMT_NV21;
+  cncodecPixelFormat fmt = CNCODEC_PIX_FMT_NV12;
+  switch (finfo->frame.fmt) {
+    case CN_PIXEL_FORMAT_YUV420_NV21:
+      fmt = CNCODEC_PIX_FMT_NV21;
+      break;
+    case CN_PIXEL_FORMAT_YUV420_NV12:
+      fmt = CNCODEC_PIX_FMT_NV12;
+      break;
+    default:
+      LOG(ERROR) << "Scaler: unsupport fmt: " + std::to_string(finfo->frame.fmt);
+      break;
+  }
+
+  src_frame.pixelFmt = fmt;
   src_frame.colorSpace = CNCODEC_COLOR_SPACE_BT_709;
   src_frame.width = finfo->frame.width;
   src_frame.height = finfo->frame.height;

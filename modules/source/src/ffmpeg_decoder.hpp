@@ -47,7 +47,7 @@ namespace cnstream {
 
 class FFmpegDecoder {
  public:
-  explicit FFmpegDecoder(DataHandler &handler) : handler_(handler) {
+  explicit FFmpegDecoder(DataHandler *handler) : handler_(*handler) {
     stream_id_ = handler_.GetStreamId();
     stream_idx_ = handler_.GetStreamIndex();
     dev_ctx_ = handler_.GetDevContext();
@@ -75,7 +75,8 @@ class FFmpegDecoder {
 
 class FFmpegMluDecoder : public FFmpegDecoder {
  public:
-  explicit FFmpegMluDecoder(DataHandler &handler) : FFmpegDecoder(handler) {}
+  explicit FFmpegMluDecoder(DataHandler *handler, bool apply_stride_align_for_scaler = false)
+      : FFmpegDecoder(handler), apply_stride_align_for_scaler_(apply_stride_align_for_scaler) {}
   ~FFmpegMluDecoder() {
     edk::MluContext env;
     env.SetDeviceId(dev_ctx_.dev_id);
@@ -90,6 +91,7 @@ class FFmpegMluDecoder : public FFmpegDecoder {
   edk::CnPacket cn_packet_;
   std::atomic<int> eos_got_{0};
   std::atomic<int> cndec_buf_ref_count_{0};
+  bool apply_stride_align_for_scaler_ = false;
   void FrameCallback(const edk::CnFrame &frame);
   void EOSCallback();
 #ifdef UNIT_TEST
@@ -121,7 +123,7 @@ class FFmpegMluDecoder : public FFmpegDecoder {
 
 class FFmpegCpuDecoder : public FFmpegDecoder {
  public:
-  explicit FFmpegCpuDecoder(DataHandler &handler) : FFmpegDecoder(handler) {}
+  explicit FFmpegCpuDecoder(DataHandler *handler) : FFmpegDecoder(handler) {}
   ~FFmpegCpuDecoder() {}
   bool Create(AVStream *st) override;
   void Destroy() override;

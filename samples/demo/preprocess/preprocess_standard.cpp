@@ -21,6 +21,7 @@
 #include <opencv2/opencv.hpp>
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "easyinfer/model_loader.h"
@@ -121,6 +122,50 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
   img.convertTo(dst, CV_32F);
 
   delete[] img_data;
+  return 0;
+}
+
+/**
+ * @brief standard object pre process
+ */
+class ObjPreprocCpu : public cnstream::ObjPreproc {
+ public:
+  int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
+              const cnstream::CNFrameInfoPtr& finfo, const std::shared_ptr<cnstream::CNInferObject>& pobj) override;
+
+  DECLARE_REFLEX_OBJECT_EX(ObjPreprocCpu, cnstream::ObjPreproc);
+};  // class ObjPreprocCpu
+
+IMPLEMENT_REFLEX_OBJECT_EX(ObjPreprocCpu, cnstream::ObjPreproc)
+
+int ObjPreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
+                           const cnstream::CNFrameInfoPtr& finfo,
+                           const std::shared_ptr<cnstream::CNInferObject>& pobj) {
+  // origin frame
+  cv::Mat frame_bgr = *finfo->frame.ImageBGR();
+
+  // crop objct from frame
+  int w = finfo->frame.width;
+  int h = finfo->frame.height;
+  cv::Rect obj_roi(pobj->bbox.x * w, pobj->bbox.y * h, pobj->bbox.w * w, pobj->bbox.h * h);
+  cv::Mat obj_bgr = frame_bgr(obj_roi);
+
+  // resize
+  int input_w = model->InputShapes()[0].w;
+  int input_h = model->InputShapes()[0].h;
+  cv::Mat obj_bgr_resized;
+  cv::resize(obj_bgr, obj_bgr_resized, cv::Size(input_w, input_h));
+
+  // bgr2bgra
+  cv::Mat obj_bgra;
+  cv::Mat a(input_h, input_w, CV_8UC1, cv::Scalar(0.0));
+  std::vector<cv::Mat> vec_mat = {obj_bgr_resized, a};
+  cv::merge(std::move(vec_mat), obj_bgra);
+
+  // convert to float32, required by inferencer module
+  cv::Mat obj_bgra_float32(input_h, input_w, CV_32FC4, net_inputs[0]);
+  obj_bgra.convertTo(obj_bgra_float32, CV_32FC4);
+
   return 0;
 }
 

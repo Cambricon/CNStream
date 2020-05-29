@@ -18,6 +18,7 @@
  * THE SOFTWARE.
  *************************************************************************/
 #include "data_handler_ffmpeg.hpp"
+#include <memory>
 #include <sstream>
 #include <thread>
 #include <utility>
@@ -134,9 +135,9 @@ bool DataHandlerFFmpeg::PrepareResources(bool demux_only) {
   if (demux_only) return true;
 
   if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
-    decoder_ = std::make_shared<FFmpegMluDecoder>(*this);
+    decoder_ = std::make_shared<FFmpegMluDecoder>(this, param_.apply_stride_align_for_scaler_);
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
-    decoder_ = std::make_shared<FFmpegCpuDecoder>(*this);
+    decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
   } else {
     LOG(ERROR) << "unsupported decoder_type";
     return false;
@@ -154,7 +155,6 @@ bool DataHandlerFFmpeg::PrepareResources(bool demux_only) {
 
 void DataHandlerFFmpeg::ClearResources(bool demux_only) {
   if (!demux_only && decoder_.get()) {
-    EnableFlowEos(true);
     decoder_->Destroy();
   }
   if (p_format_ctx_) {
@@ -244,7 +244,6 @@ bool DataHandlerFFmpeg::Process() {
     demux_eos_.store(1);
     if (this->loop_) {
       LOG(INFO) << "Clear resources and restart";
-      EnableFlowEos(false);
       ClearResources(true);
       if (!PrepareResources(true)) {
         if (nullptr != module_)
@@ -255,7 +254,6 @@ bool DataHandlerFFmpeg::Process() {
       LOG(INFO) << "Loop...";
       return true;
     } else {
-      EnableFlowEos(true);
       decoder_->Process(nullptr, true);
       return false;
     }

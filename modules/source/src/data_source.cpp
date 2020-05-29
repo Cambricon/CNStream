@@ -62,6 +62,12 @@ DataSource::DataSource(const std::string &name) : SourceModule(name) {
   param_register_.Register("output_buf_number",
                            "Codec buffer number for storing output data."
                            " Basically, we do not need to set it, as it will be allocated automatically.");
+  param_register_.Register("apply_stride_align_for_scaler",
+                           "Specify that the output is aligned to the size which is scaler need."
+                           "This parameter can not influences the alignment when doing jpeg decoding."
+                           "When doing jpeg decoding, output images are going to keep the same alignment"
+                           " as scaler anyway."
+                           " Basically, this parameter is valid on MLU220 platform, and set true by default.");
 }
 
 DataSource::~DataSource() {}
@@ -206,6 +212,17 @@ bool DataSource::Open(ModuleParamSet paramSet) {
     std::stringstream ss;
     ss << paramSet["output_buf_number"];
     ss >> param_.output_buf_number_;
+  }
+
+  if (paramSet.find("apply_stride_align_for_scaler") != paramSet.end()) {
+    std::string apply_stride_align_for_scaler_str = paramSet["apply_stride_align_for_scaler"];
+    if (apply_stride_align_for_scaler_str == "true" || apply_stride_align_for_scaler_str == "false") {
+      LOG(INFO) << "[Source] output buffer will be align to 128 pixel per line. Valid in MLU220 platform.";
+      param_.apply_stride_align_for_scaler_ = apply_stride_align_for_scaler_str == "true";
+    } else {
+      LOG(ERROR) << "apply_stride_align_for_scaler must be a bool.";
+      return false;
+    }
   }
 
   return true;

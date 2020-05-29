@@ -174,6 +174,7 @@ class EncodeHandler {
   cnjpegEncCreateInfo jcreate_params_;
   EasyEncode::Attr attr_;
   EasyEncode* encoder_ = nullptr;
+  const FormatInfo* pixel_fmt_info_ = nullptr;
 
   void* handle_ = nullptr;
   uint64_t packet_cnt_ = 0;
@@ -189,6 +190,7 @@ static int32_t EventHandler(cncodecCbEventType type, void *user_data, void *pack
 EncodeHandler::EncodeHandler(EasyEncode *encoder, const EasyEncode::Attr &attr)
                              : attr_(attr), encoder_(encoder) {
   jpeg_encode_ = CodecType::JPEG == attr.codec_type;
+  pixel_fmt_info_ = FormatInfo::GetFormatInfo(attr.pixel_format);
   if (jpeg_encode_) {
     InitJpegEncode();
   } else {
@@ -201,7 +203,7 @@ void EncodeHandler::InitVideoEncode() {
   vcreate_params_.width = attr_.frame_geometry.w;
   vcreate_params_.height = attr_.frame_geometry.h;
   vcreate_params_.deviceId = attr_.dev_id;
-  vcreate_params_.pixelFmt = PixelFormatCast(attr_.pixel_format);
+  vcreate_params_.pixelFmt = pixel_fmt_info_->cncodec_fmt;
   vcreate_params_.colorSpace = ColorStdCast(attr_.color_std);
   vcreate_params_.codec = CodecTypeCast(attr_.codec_type);
   vcreate_params_.instance = CNVIDEOENC_INSTANCE_AUTO;
@@ -313,7 +315,7 @@ void EncodeHandler::InitJpegEncode() {
   // 1. create params
   jcreate_params_.deviceId = attr_.dev_id;
   jcreate_params_.instance = CNVIDEOENC_INSTANCE_AUTO;
-  jcreate_params_.pixelFmt = PixelFormatCast(attr_.pixel_format);
+  jcreate_params_.pixelFmt = pixel_fmt_info_->cncodec_fmt;
   jcreate_params_.colorSpace = ColorStdCast(attr_.color_std);
   jcreate_params_.width = attr_.frame_geometry.w;
   jcreate_params_.height = attr_.frame_geometry.h;
@@ -471,7 +473,7 @@ void EncodeHandler::CopyFrame(cncodecFrame *dst, const CnFrame& input) {
       {
         DLOG(INFO) << "Copy frame luminance";
         mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[0].addr), input.ptrs[0], frame_size, 1);
-        LOG(INFO) << "Copy frame chroma";
+        DLOG(INFO) << "Copy frame chroma";
         mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[1].addr), input.ptrs[1], frame_size >> 1, 1);
         break;
       }
@@ -622,7 +624,7 @@ void EncodeHandler::AllocOutputBuffer(cnvideoEncCreateInfo *params) {
   const unsigned int width = params->width;
   const unsigned int stride = ALIGN(width, 128);
   const unsigned int height = params->height;
-  const unsigned int plane_num = pixel_fmt_info_->GetPlanesNum();
+  const unsigned int plane_num = pixel_fmt_info_->plane_num;
 
   for (unsigned int i = 0; i < params->outputBufNum; ++i) {
     for (unsigned int j = 0; j < plane_num; ++j) {

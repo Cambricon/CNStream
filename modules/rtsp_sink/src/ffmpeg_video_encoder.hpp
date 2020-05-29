@@ -42,7 +42,7 @@ class FFmpegVideoEncoder : public VideoEncoder {
   ~FFmpegVideoEncoder();
 
   uint32_t GetBitRate() {
-    if (!avcodec_ctx_) {
+    if (avcodec_ctx_ != nullptr) {
       return avcodec_ctx_->bit_rate;
     } else {
       LOG(ERROR) << "avcodec_ctx_ is nullptr.";

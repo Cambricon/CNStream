@@ -39,25 +39,16 @@ class DataHandler : public SourceHandler {
 
  public:
   DevContext GetDevContext() const { return dev_ctx_; }
-  void EnableFlowEos(bool enable) {
-    if (enable)
-      send_flow_eos_.store(1);
-    else
-      send_flow_eos_.store(0);
-  }
   void SendFlowEos() {
     if (eos_sent_) return;
-    if (send_flow_eos_.load()) {
-      auto data = CNFrameInfo::Create(stream_id_, true);
-      if (!data) {
-        LOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
-        return;
-      }
-      data->channel_idx = stream_index_;
-
-      SendData(data);
-      eos_sent_ = true;
+    auto data = CNFrameInfo::Create(stream_id_, true);
+    if (!data) {
+      LOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
+      return;
     }
+    data->channel_idx = stream_index_;
+    SendData(data);
+    eos_sent_ = true;
   }
   bool GetDemuxEos() const { return demux_eos_.load() ? true : false; }
   bool ReuseCNDecBuf() const { return param_.reuse_cndec_buf; }
@@ -74,9 +65,10 @@ class DataHandler : public SourceHandler {
   DevContext dev_ctx_;
   size_t interval_ = 1;
   std::atomic<int> demux_eos_{0};
+  std::atomic<int> running_{0};
 
  private:
-  std::atomic<int> running_{0};
+  // std::atomic<int> running_{0};
   std::thread thread_;
   void Loop();
   /*the below three funcs are in the same thread*/
@@ -84,7 +76,6 @@ class DataHandler : public SourceHandler {
   virtual void ClearResources(bool demux_only = false) = 0;
   virtual bool Process() = 0;
   /**/
-  std::atomic<int> send_flow_eos_{0};
   bool eos_sent_ = false;
 };
 

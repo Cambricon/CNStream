@@ -151,6 +151,7 @@ void MluOutputResource::Deallocate(std::shared_ptr<edk::ModelLoader> model, uint
 RCOpResource::RCOpResource(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, bool keep_aspect_ratio)
     : InferResource(model, batchsize), keep_aspect_ratio_(keep_aspect_ratio) {
   value_ = std::make_shared<RCOpValue>();
+  core_number_ = model_->ModelParallelism();
 }
 
 RCOpResource::~RCOpResource() {
@@ -171,6 +172,7 @@ void RCOpResource::Init(uint32_t dst_w, uint32_t dst_h,
   op_attr.batch_size = batchsize_;
   op_attr.core_version = core_ver;
   op_attr.keep_aspect_ratio = keep_aspect_ratio_;
+  op_attr.core_number = core_number_;
   value_->op.Init(op_attr);
   value_->initialized = true;
 }

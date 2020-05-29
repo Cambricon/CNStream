@@ -64,7 +64,7 @@ class PrepareEnv {
 
       src->Open(param);
       OpenHandler(0);
-      ffmpeg_mlu_decoder = std::make_shared<FFmpegMluDecoder>(*ffmpeg_handler);
+      ffmpeg_mlu_decoder = std::make_shared<FFmpegMluDecoder>(ffmpeg_handler);
     } else {
       ModuleParamSet param;
       param["source_type"] = "ffmpeg";
@@ -73,7 +73,7 @@ class PrepareEnv {
 
       src->Open(param);
       OpenHandler(1);
-      ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>(*ffmpeg_handler);
+      ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>(ffmpeg_handler);
     }
     st = new AVStream();
     av_pkt = new AVPacket();
@@ -241,7 +241,7 @@ TEST(SourceMluFFmpegDecoder, ProcessEmptyFrame) {
 
   delete env.ffmpeg_handler;
   env.ffmpeg_handler = new DataHandlerFFmpeg(env.src, "", "", 30, false);
-  env.ffmpeg_mlu_decoder = std::make_shared<FFmpegMluDecoder>(*env.ffmpeg_handler);
+  env.ffmpeg_mlu_decoder = std::make_shared<FFmpegMluDecoder>(env.ffmpeg_handler);
   edk::CnFrame frame;
   bool reused = false;
   uint32_t loop_num = 5;
@@ -308,7 +308,7 @@ TEST(SourceCpuFFmpegDecoder, CreateDestroy) {
   env.ffmpeg_handler = new DataHandlerFFmpeg(env.src, "0", image_path, 30, false);
 
   env.OpenHandler(device_type);
-  env.ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>(*env.ffmpeg_handler);
+  env.ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>(env.ffmpeg_handler);
   EXPECT_TRUE(env.ffmpeg_cpu_decoder->Create(env.st));
   env.ffmpeg_cpu_decoder->Destroy();
 
@@ -338,7 +338,7 @@ TEST(SourceCpuFFmpegDecoder, ProcessEmptyFrame) {
 
   delete env.ffmpeg_handler;
   env.ffmpeg_handler = new DataHandlerFFmpeg(env.src, "", "", 30, false);
-  env.ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>(*env.ffmpeg_handler);
+  env.ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>(env.ffmpeg_handler);
   AVFrame *frame = nullptr;
   env.ffmpeg_cpu_decoder->ResetCount(3);
   EXPECT_FALSE(env.ffmpeg_cpu_decoder->ProcessFrame(frame));
@@ -346,7 +346,7 @@ TEST(SourceCpuFFmpegDecoder, ProcessEmptyFrame) {
   EXPECT_TRUE(env.ffmpeg_cpu_decoder->ProcessFrame(frame));
   EXPECT_FALSE(env.ffmpeg_cpu_decoder->ProcessFrame(frame));
 
-  env.ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>(*env.ffmpeg_handler);
+  env.ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>(env.ffmpeg_handler);
   uint32_t loop_num = 5;
   // stream id is empty string, discard frame 5 times
   while (loop_num--) {

@@ -213,15 +213,14 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
   for (int i = 0; i < input_num; ++i) {
     error_code = cnrtGetInputDataShape(&input_dim_values, &dim_num, i, function_);
     CHECK_CNRT_RET(error_code, "Get input data size failed, error code : " + std::to_string(error_code));
-    CHECK_CONDITION(dim_num == 4, "Unable to process a model of which input is not 4-dimensional data.");
+    CHECK_CONDITION(dim_num <= 4, "Unable to process a model of which input is greater than 4-dimensional.");
     // nhwc shape
-    Shape sp;
-    sp.n = input_dim_values[0];
-    sp.h = input_dim_values[1];
-    sp.w = input_dim_values[2];
-    sp.c = input_dim_values[3];
+    std::vector<uint32_t> dim_value(4, 1);
+    for (int i = 0; i < dim_num; ++i) {
+      dim_value[i] = input_dim_values[i];
+    }
     free(input_dim_values);
-    input_shapes_.push_back(sp);
+    input_shapes_.push_back(Shape(dim_value[0], dim_value[1], dim_value[2], dim_value[3]));
   }
 
   int* output_dim_values = nullptr;
@@ -229,19 +228,15 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
   for (int i = 0; i < output_num; ++i) {
     error_code = cnrtGetOutputDataShape(&output_dim_values, &dim_num, i, function_);
     CHECK_CNRT_RET(error_code, "Get output data shape failed, error code : " + std::to_string(error_code));
-    CHECK_CONDITION(dim_num <= 4, "Not yet process a model of which output is lagger than 4-dimensional data.");
+    CHECK_CONDITION(dim_num <= 4, "Unable to process a model of which output is greater than 4-dimensional.");
     // nhwc shape
     Shape sp;
-    std::vector<int> dim_value(4, 1);
+    std::vector<uint32_t> dim_value(4, 1);
     for (int i = 0; i < dim_num; ++i) {
       dim_value[i] = output_dim_values[i];
     }
     free(output_dim_values);
-    sp.n = dim_value[0];
-    sp.h = dim_value[1];
-    sp.w = dim_value[2];
-    sp.c = dim_value[3];
-    output_shapes_.push_back(sp);
+    output_shapes_.push_back(Shape(dim_value[0], dim_value[1], dim_value[2], dim_value[3]));
   }
 
   // 2.3 get mlu io data type

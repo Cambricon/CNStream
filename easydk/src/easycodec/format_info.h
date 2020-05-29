@@ -22,33 +22,25 @@
 #define FORMAT_INFO_H_
 
 #include <cn_codec_common.h>
+#include <string>
 
 #include "easycodec/vformat.h"
 
 namespace edk {
 
-#if 0
-class FormatInfo {
- public:
-  explicit FormatInfo(PixelFmt fmt);
-  inline cncodecPixelFormat GetCncodecFormat() {
-    return cncodec_fmt_;
-  }
-  inline unsigned int GetPlanesNum() {
-    return plane_num_;
-  }
-  unsigned int GetPlaneSize(unsigned int pitch, unsigned int height, unsigned int plane);
- private:
-  PixelFmt edk_fmt_;
-  cncodecPixelFormat cncodec_fmt_;
-  unsigned int plane_num_;
+struct FormatInfo {
+  PixelFmt edk_fmt;
+  cncodecPixelFormat cncodec_fmt;
+  unsigned int plane_num;
+  std::string fmt_str;
+  bool supported;
+
+  static const FormatInfo* GetFormatInfo(PixelFmt fmt);
+  unsigned int GetPlaneSize(unsigned int pitch, unsigned int height, unsigned int plane) const;
 };
-#endif
 
 cncodecType CodecTypeCast(CodecType type);
 cncodecColorSpace ColorStdCast(ColorStd color_std);
-cncodecPixelFormat PixelFormatCast(const PixelFmt& pixel_format);
-unsigned int GetPlaneSize(cncodecPixelFormat fmt, unsigned int pitch, unsigned int height, unsigned int plane);
 
 }  // namespace edk
 

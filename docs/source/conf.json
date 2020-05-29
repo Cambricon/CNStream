@@ -1,27 +1,34 @@
 {
 	"package": [
+        "\\\\usepackage{amsmath}",
 		"\\\\usepackage[table]{xcolor}",
 		"\\\\usepackage{eso-pic}",
 		"\\\\usepackage{wallpaper}",
-                "\\\\usepackage{titlesec}",
-                "\\\\usepackage{tocbibind}",
-		"% \\\\usepackage{draftwatermark}"
+        "%\\\\usepackage{titlesec}",
+        "\\\\usepackage{tocbibind}",
+		"% \\\\usepackage{draftwatermark}",
+        "\\\\usepackage{enumitem}"
 	],
-        "replacepackage":{
+    "replacepackage":{
                 "comment": "该章节内容是为了替换现有tex里面包的配置，左边为tex文件现有内容，右边是替换内容。",
                 "\\\\usepackage{hyperref}": "\\\\usepackage[bookmarksnumbered=true]{hyperref}",
                 "\\\\sphinxtableofcontents" : "\\\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}\n\\\\sphinxtableofcontents",           
-                "\\\\listoffigures" : "\\\\clearpage\n\\\\clearpage\n\\\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}\n\\\\listoffigures",           
-                "\\\\listoftables" : "\\\\clearpage\n\\\\clearpage\n\\\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}\n\\\\listoftables",
-				"\\\\chapter{([\\s\\S].*)}": "\\\\chapter{\\1}\n\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}",
-                "\\\\footnotesize\\\\raggedright\\\\printindex": "% \\\\footnotesize\\\\raggedright\\\\printindex",
-                "\\\\begin{itemize}":"\\\\begin{itemize}[leftmargin=*]",
-                "\\\\begin{enumerate}":"\\\\begin{enumerate}[leftmargin=*]",
-				"\\\\renewcommand{\\\\releasename}{发布}":"\\\\renewcommand{\\\\releasename}{版本}"
+                "\\\\chapter{([\\s\\S].*)}": "\\\\chapter{\\1}\n\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}",
+                "\\\\listoffigures" : "\\\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}\n\\\\listoffigures",           
+                "\\\\listoftables" : "\\\\listoftables\n\\\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}",
+                "\\\\footnotesize\\\\raggedright\\\\printindex": "% \\\\footn    otesize\\\\raggedright\\\\printindex",
+                "\\\\begin{itemize}" : "\\\\begin{itemize}[leftmargin=*]",
+                "\\\\begin{enumerate}" : "\\\\begin{enumerate}[leftmargin=*]",
+                "\\\\renewcommand{\\\\releasename}{发布}":"\\\\renewcommand{\\\\releasename}{版本}",
+                "\\\\setmainfont{FreeSerif}\\[[\\s\\S]*?\\]":"",
+                "\\\\setsansfont{FreeSans}\\[[\\s\\S]*?\\]":"",
+                "\\\\setmonofont{FreeMono}\\[[\\s\\S]*?\\]":""
         },
 	"customoptions": [
-                "\\\\titleformat{\\\\chapter}{\\\\raggedleft\\\\huge\\\\bfseries\\\\color{white}}{\\\\thechapter}{0.5em}{}",
-				"\\\\titlespacing{\\\\chapter}{0pt}{50pt}{25pt}",
+        "\\\\numberwithin{figure}{chapter}",
+        "\\\\numberwithin{table}{chapter}",
+        "\\\\titleformat{\\\\chapter}{\\\\raggedleft\\\\huge\\\\bfseries\\\\color{white}}{\\\\thechapter}{0.5em}{}",
+		"\\\\titlespacing{\\\\chapter}{0pt}{50pt}{25pt}",
 		"\\\\definecolor{camblue}{RGB}{0,89,196}",
 		"% \\\\SetWatermarkText{Cambricon}",
 		"% \\\\SetWatermarkLightness{0.9}",
@@ -30,8 +37,8 @@
 	],
         "isfiguretabletoc": {
 		"comment": "插图目录英文：List of  Figures;表格目录英文：List of Tables.",
-                "isfigurestoc": true,
-                "istablestoc": false,
+                "isfigurestoc": false,
+                "istablestoc": true,
                 "figurestoc": [
                            "\\\\renewcommand\\listfigurename{插\\ 图\\ 目\\ 录}",
                            "\\listoffigures"
@@ -47,7 +54,7 @@
 		"headfontcolor": "\\textbf{\\textcolor{white}{}}",
 		"styles": [{
 			"align": "centering",
-			"caption": "MLU特殊算子",
+			"caption": "cnmon info回显信息说明",
 			"captionalign": "left",
 			"isLongTable": true,
 			"isVertical": true

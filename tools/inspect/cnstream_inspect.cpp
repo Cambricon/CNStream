@@ -141,8 +141,38 @@ static void PrintAllModulesDesc() {
 
     PrintDesc(desc, width, sub_str_len);
 
+    std::cout << std::endl;
+
     delete module;
   }
+}
+
+static void PrintModuleCommonParameters() {
+  const uint32_t width = 30;
+  const uint32_t sub_str_len = 80;
+
+  std::cout << "\033[01;32m" << "  " << std::left << std::setw(width) << "Common Parameter"
+            << "Description" << "\033[0m" << std::endl;
+
+  std::cout << "\033[01;1m" << "  " << std::left << std::setw(width) << "class_name" << "\033[0m";
+  PrintDesc("Module class name.", width + 2, sub_str_len);
+  std::cout << std::endl;
+
+  std::cout << "\033[01;1m" << "  " << std::left << std::setw(width) << "parallelism" << "\033[0m";
+  PrintDesc("Module parallelism.", width + 2, sub_str_len);
+  std::cout << std::endl;
+
+  std::cout << "\033[01;1m" << "  " << std::left << std::setw(width) << "max_input_queue_size" << "\033[0m";
+  PrintDesc("Max size of module input queue.", width + 2, sub_str_len);
+  std::cout << std::endl;
+
+  std::cout << "\033[01;1m" << "  " << std::left << std::setw(width) << "next_modules" << "\033[0m";
+  PrintDesc("Next modules.", width + 2, sub_str_len);
+  std::cout << std::endl;
+
+  std::cout << "\033[01;1m" << "  " << std::left << std::setw(width) << "show_perf_info" << "\033[0m";
+  PrintDesc("Show module performance info.", width + 2, sub_str_len);
+  std::cout << std::endl;
 }
 
 static void PrintModuleParameters(const std::string& module_name) {
@@ -162,7 +192,10 @@ static void PrintModuleParameters(const std::string& module_name) {
   }
   auto module_params = module->param_register_.GetParams();
   std::cout <<"\033[01;33m" <<  module_name << " Details:" << "\033[0m" << std::endl;
-  std::cout << "\033[01;32m" << "  " << std::left << std::setw(width) << "Parameter"
+
+  PrintModuleCommonParameters();
+
+  std::cout << "\033[01;32m" << "  " << std::left << std::setw(width) << "Custom Parameter"
             << "Description" << "\033[0m" << std::endl;
   for (auto& it : module_params) {
     std::cout << "\033[01;1m" << "  " << std::left << std::setw(width) << it.first << "\033[0m";
@@ -205,38 +238,38 @@ static void CheckConfigFile(const std::string& config_file) {
       return;
     }
     namelist.push_back(mconf.name);
-    try {
-      rapidjson::StringBuffer sbuf;
-      rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
-      iter->value.Accept(jwriter);
-      mconf.ParseByJSONStr(std::string(sbuf.GetString()));
 
-      /***************************************************
-       * add config file path to custom parameters
-       ***************************************************/
-
-      std::string jf_dir = "";
-      auto slash_pos = config_file.rfind("/");
-      if (slash_pos == std::string::npos) {
-        jf_dir = ".";
-      } else {
-        jf_dir = config_file.substr(0, slash_pos);
-      }
-      jf_dir += '/';
-
-      if (mconf.parameters.end() != mconf.parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
-        std::cout
-            << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
-            << "up by cnstream as the directory where the configuration file is located and passed to the module.";
-        return;
-      }
-
-      mconf.parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;
-    } catch (std::string e) {
-      std::string err_str = "Check module config failed. Module name : [" + mconf.name + "]" + ". Error message: " + e;
+    rapidjson::StringBuffer sbuf;
+    rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
+    iter->value.Accept(jwriter);
+    if (!mconf.ParseByJSONStr(std::string(sbuf.GetString()))) {
+      std::string err_str = "Check module configuration failed, Module name : [" + mconf.name + "].";
       std::cout << err_str << std::endl;
       return;
     }
+
+    /***************************************************
+     * add config file path to custom parameters
+     ***************************************************/
+
+    std::string jf_dir = "";
+    auto slash_pos = config_file.rfind("/");
+    if (slash_pos == std::string::npos) {
+      jf_dir = ".";
+    } else {
+      jf_dir = config_file.substr(0, slash_pos);
+    }
+    jf_dir += '/';
+
+    if (mconf.parameters.end() != mconf.parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
+      std::cout
+        << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
+        << "up by cnstream as the directory where the configuration file is located and passed to the module.";
+      return;
+    }
+
+    mconf.parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;
+
     mconfs.push_back(mconf);
   }
 

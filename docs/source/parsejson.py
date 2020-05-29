@@ -101,7 +101,7 @@ class clsModifyTex:
         self.content = re.sub(searchstr, replacestr, self.content, 1, re.M | re.I|re.U)
         return True
 
-    #加入其它包
+    #加入自定义选项,包放在了sphinx包的前面，因此选项放在sphinx包的后面
     def AddCustormOptionsToTex(self):
         #得到需要包的数组
         packarr = GetCustomOptions()
@@ -109,16 +109,16 @@ class clsModifyTex:
             return  False;
 
         #如果数组有内容，就需要将包添加到latex文件的导言区
-        #搜索\usepackage{sphinx}，将包加在它的前面，用正则表达式搜索它的位置
+        #搜索\usepackage{sphinx}，将自定义参数放在它的后面，用正则表达式搜索它的位置
         #采用正则表达式替换的方式，替换搜索到的字符串，因此需要先构建字符串
         #python认为\u后面为unicode字符，因此需要多加一个转义字符\，python才认为是整个的字符串
-        searchstr = r'\\usepackage{xeCJK}'
+        searchstr = r'\\usepackage(\[\S*\]*)?{sphinx}'
         matchstr = re.search(searchstr,self.content)
 
         replacestr=""
         for package in packarr:
              replacestr  += package+'\n'
-        replacestr += matchstr.group(0)
+        replacestr = matchstr.group(0)+'\n'+replacestr
 
         self.content = re.sub(searchstr, replacestr, self.content, 1, re.M | re.I|re.U)
         return True
@@ -332,7 +332,7 @@ def OpenMakefile():
         searchstr = r"BUILDDIR *= *(\S+)"
         m = re.search(searchstr, fstr, re.M|re.I|re.U )
         build_dir = m.group(1) #匹配到的第一个即为源所在目录
-        print(build_dir) #该行输出，为了在makelatexpdf.sh脚本中直接使用build文件夹的值，因此该行绝对不能删除，否则会导致脚本失败。
+        #print(build_dir) 
     except Exception as e:
         print(e)
         return
@@ -359,15 +359,30 @@ def GetLatex_documents():
     #拆分二维数组，兼容多个情况
     list = latex_documents.split(")")
     for i in range(len(list)):
-        list[i]= list[i].split(",")
-    list.pop() #删除第一个无效内容
+        if IsComment(list[i]):
+            list[i]= list[i].split(",")
+    list.pop()
     return list
+
+#判断是否为注释行
+def IsComment(instr):
+
+    if instr.strip() is None:
+        return False
+
+    rule = re.compile('^#.*$')
+    if rule.match(instr.strip()) is None:
+        return True;
+    else:
+        return False;
 
 #根据正则表达式取单引号和双引号中的内容
 def getquomarkcontent(strarr):
     #根据正则表达式，找出双引号和单引号中的内容
     searchstr = r"[\"|'](.*?)[\"|']"
     m = re.search(searchstr, strarr, re.M|re.I|re.U )
+    if m is None:
+        return None
     return m.group(1).strip() #匹配到的第一个即为源所在目录
 
 source_dir = '' #保存源文件所在目录
@@ -392,9 +407,13 @@ if __name__ == '__main__':
         if os.path.exists('./chapterbkpaper.pdf'):
             shutil.copy('./chapterbkpaper.pdf',latexpath)
         #得到相对路径
+        if getquomarkcontent(latex_documents[i][1]) is None:
+            continue
         texfilepath = latexpath + getquomarkcontent(latex_documents[i][1])
         #相对路径转绝对路径
         texfile = os.path.abspath(texfilepath)
+        if not os.path.exists(texfile):
+            continue
         fo = codecs.open(texfile, "r+",encoding = 'utf-8')
         texcontent = fo.read()
         fo.close

@@ -89,7 +89,17 @@ bool FFmpegMluDecoder::Create(AVStream *st) {
   }
   instance_attr.dev_id = dev_ctx_.dev_id;
   instance_attr.silent = false;
+
   instance_attr.stride_align = 1;
+
+  cnrtDeviceInfo_t device_info;
+  cnrtRet_t err_code = cnrtGetDeviceInfo(&device_info, dev_ctx_.dev_id);
+  LOG_IF(ERROR, err_code != CNRT_RET_SUCCESS) << "Get device info failed, device id : "
+    + std::to_string(dev_ctx_.dev_id);
+
+  if (CNRT_MLU220 == device_info.core_version && apply_stride_align_for_scaler_)
+    instance_attr.stride_align = 128;
+
   // callbacks
 
   instance_attr.frame_callback = std::bind(&FFmpegMluDecoder::FrameCallback, this, std::placeholders::_1);

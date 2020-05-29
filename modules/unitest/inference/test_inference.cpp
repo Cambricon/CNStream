@@ -104,7 +104,7 @@ static const char *g_image_path = "../../data/images/3.jpg";
 #ifdef CNS_MLU100
 static const char *g_model_path = "../../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon";
 #elif CNS_MLU270
-static const char *g_model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon";
+static const char *g_model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
 #endif
 static const char *g_func_name = "subnet0";
 static const char *g_postproc_name = "FakePostproc";
@@ -243,6 +243,32 @@ TEST(Inferencer, ProcessFrame) {
     ASSERT_TRUE(infer->Open(param));
 
     // test nv21
+    {
+      auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
+      CNDataFrame &frame = data->frame;
+      frame.frame_id = 1;
+      frame.timestamp = 1000;
+      frame.width = width;
+      frame.height = height;
+      frame.ptr_mlu[0] = planes[0];
+      frame.ptr_mlu[1] = planes[1];
+      frame.stride[0] = frame.stride[1] = width;
+      frame.ctx.ddr_channel = g_channel_id;
+      frame.ctx.dev_id = g_dev_id;
+      frame.ctx.dev_type = DevContext::DevType::MLU;
+      frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+      frame.CopyToSyncMem();
+      int ret = infer->Process(data);
+      EXPECT_EQ(ret, 1);
+      // create eos frame for clearing stream idx
+      cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
+    }
+
+    ASSERT_NO_THROW(infer->Close());
+    param["keep_aspect_ratio"] = "true";
+    ASSERT_TRUE(infer->Open(param));
+
+    // test nv21 with keep_aspect_ratio
     {
       auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
       CNDataFrame &frame = data->frame;

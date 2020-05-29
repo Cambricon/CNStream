@@ -41,7 +41,7 @@ Debian或Ubuntu环境配置
 
 #.  安装寒武纪Neuware安装包。详情查看 :ref:`寒武纪依赖库` 。
 
-#.  运行下面指令安装环境依赖。CNStream依赖OpenCV2.4.9+、GFlags2.1.2、GLog0.3.4、Cmake2.8.7+、Live555、SDL22.0.4+、SQLite3。详情查看 :ref:`环境依赖`。
+#.  运行下面指令安装环境依赖。CNStream依赖的环境详情，查看 :ref:`环境依赖`。
 
     用户可通过 ``${CNSTREAM_DIR}/tools`` 下的 ``pre_required_helper.sh`` 脚本进行安装：
 
@@ -97,7 +97,7 @@ CentOS环境配置
 
 #.  安装寒武纪Neuware安装包。详情查看 :ref:`寒武纪依赖库`。
 
-#.  运行下面指令安装环境依赖。CNStream依赖OpenCV2.4.9+、GFlags2.1.2、GLog0.3.4、Cmake2.8.7+、Live555、SDL22.0.4+、SQLite3。详情查看 :ref:`环境依赖`。
+#.  运行下面指令安装环境依赖。CNStream依赖的环境详情，查看 :ref:`环境依赖`。
 
     用户可通过 ``${CNSTREAM_DIR}/tools`` 下的 ``pre_required_helper.sh`` 脚本进行安装：
 

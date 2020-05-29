@@ -21,11 +21,11 @@ CNStream作为寒武纪视频结构化分析特定领域的框架，在整个寒
 
 在CNStream SDK目录下，主要由以下部分组成：
 
-* 头文件：CNStream头文件存放在 ``include`` 文件夹下，包含所有的数据类型和接口。
-* 动态库：CNStream动态库存放在 ``libcnstream.so`` 文件中，位于 ``lib64`` 目录下。
+* 头文件：CNStream头文件存放在 ``modules`` 文件夹下，包含所有的数据类型和接口。
+* 动态库：编译成功后，CNStream动态库存放在 ``libcnstream.so`` 文件中，位于 ``lib`` 目录下。
 * 示例程序源码：一系列示例程序存放在 ``samples`` 文件夹下。
 
-CNStream文件目录结构如下图所示：
+CNStream文件位于CNStream仓库下，目录结构如下图所示：
 
     .. figure::  ../images/dir.*
        :align: center

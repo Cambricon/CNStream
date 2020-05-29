@@ -100,6 +100,9 @@ class MluResizeConvertOp {
     CoreVersion core_version = CoreVersion::MLU270;
     /// keep aspec ratio
     bool keep_aspect_ratio = false;
+    /// the number of ipu cores used per execution.
+    /// When this value is 0, the number of cores used per execution is equal to batch_size
+    int core_number = 0;
   };
 
   /**

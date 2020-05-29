@@ -61,7 +61,8 @@ else()
 endif()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_REENTRANT")
-
+#set runtime path
+SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 #######################################################################
 if(MLU STREQUAL MLU270)
   message("generate MLU270/MLU220 M.2 Makefile")

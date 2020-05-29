@@ -25,7 +25,7 @@
  */
 
 #ifdef __GNUC__
-#define attribute_deprecated __attribute__ ((deprecated))
+#define attribute_deprecated __attribute__((deprecated))
 #elif defined(_MSC_VER)
 #define attribute_deprecated __declspec(deprecated)
 #endif
