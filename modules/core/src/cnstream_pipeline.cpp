@@ -952,7 +952,7 @@ void Pipeline::CalculateModulePerfStats() {
       for (auto stream_id : d_ptr_->stream_ids_) {
         if (d_ptr_->perf_managers_.find(stream_id) != d_ptr_->perf_managers_.end()) {
           std::cout << std::setw(2) << std::setfill(' ') << stream_id;
-          PrintPerfStats(d_ptr_->perf_managers_[stream_id]->CalculatePerfStats("PROCESS", node_name));
+          PrintLatency(d_ptr_->perf_managers_[stream_id]->CalculatePerfStats("PROCESS", node_name));
         }
       }  // for each stream
     }

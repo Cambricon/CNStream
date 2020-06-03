@@ -129,8 +129,8 @@ void InferencerPrivate::PrintPerf(std::string start, std::string end) {
       stats = infer_perf_manager_->CalculatePerfStats(it, start, end);
     }
 
-    stats.frame_cnt *= 16;
-    stats.fps *= 16;
+    stats.frame_cnt *= bsize_;
+    stats.fps *= bsize_;
     std::cout << it;
     if (start == "batching_done_time" && end == "end_time") {
       PrintThroughput(stats);
@@ -147,7 +147,7 @@ void InferencerPrivate::PrintPerf(std::string start, std::string end) {
 void InferencerPrivate::CalcPerf() {
   while (perf_th_running_) {
     std::cout << "************************************** Inferencer Statistics ************************************\n";
-    std::cout << "                              (Average and Max Latency is for one batch.)" << std::endl;
+    std::cout << "             (Average and Max Latency is for one batch. batch size is " << bsize_ << ")"<< std::endl;
     {
       std::lock_guard<std::mutex> lg(th_ids_mutex);
       std::cout << "---------- [resize and convert] ---------------------------------------------------------------\n";

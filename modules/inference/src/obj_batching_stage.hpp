@@ -46,6 +46,7 @@ class ObjBatchingStage {
   virtual ~ObjBatchingStage() {}
   virtual std::shared_ptr<InferTask> Batching(std::shared_ptr<CNFrameInfo> finfo,
                                               std::shared_ptr<CNInferObject> obj) = 0;
+  virtual void Reset() {}
 
  protected:
   std::shared_ptr<edk::ModelLoader> model_;
@@ -60,6 +61,7 @@ class IOObjBatchingStage : public ObjBatchingStage {
   virtual ~IOObjBatchingStage() {}
   std::shared_ptr<InferTask> Batching(std::shared_ptr<CNFrameInfo> finfo,
                                       std::shared_ptr<CNInferObject> obj) override;
+  void Reset() override { batch_idx_ = 0; }
 
  protected:
   virtual void ProcessOneObject(std::shared_ptr<CNFrameInfo> finfo, std::shared_ptr<CNInferObject> obj,

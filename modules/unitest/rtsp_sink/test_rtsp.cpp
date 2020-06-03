@@ -151,7 +151,7 @@ bool PullRtspStreamFFmpeg() {
   int cnt = 0;
   AVPacket pkt;
   while (1) {
-    if (++cnt > 10) break;
+    if (++cnt > 5) break;
 
     ret = av_read_frame(format_ctx, &pkt);
     if (ret < 0) {
@@ -164,6 +164,7 @@ bool PullRtspStreamFFmpeg() {
     }
     av_packet_unref(&pkt);
   }
+  avformat_close_input(&format_ctx);
   avformat_free_context(format_ctx);
 
   return true;

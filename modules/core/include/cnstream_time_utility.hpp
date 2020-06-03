@@ -83,7 +83,7 @@ class TimeStampBase {
 /**
  * @brief simplified interface
  */
-class TimeStamp final : public TimeStampBase<> {};
+using TimeStamp = TimeStampBase<>;
 
 /// Clock utilities
 /****************************************************************************
@@ -274,7 +274,7 @@ class Timer {
    * @param task deffered task
    * @return void
    */
-  void StartOne(microseconds interval, ExpiryAction task) {
+  void Start(ExpiryAction task, microseconds interval = microseconds(0))  {
     std::lock_guard<std::mutex> lock(task_mtx_);
     tasks_.push_back(std::make_pair(interval, task));
   }

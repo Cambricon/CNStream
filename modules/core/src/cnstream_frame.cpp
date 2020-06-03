@@ -81,7 +81,7 @@ cv::Mat* CNDataFrame::ImageBGR() {
   }
   switch (fmt) {
     case CNDataFormat::CN_PIXEL_FORMAT_BGR24: {
-      bgr = cv::Mat(height, stride_, CV_8UC3, img_data);
+      bgr = cv::Mat(height, stride_, CV_8UC3, img_data).clone();
     } break;
     case CNDataFormat::CN_PIXEL_FORMAT_RGB24: {
       cv::Mat src = cv::Mat(height, stride_, CV_8UC3, img_data);

@@ -21,6 +21,7 @@
 #include <gtest/gtest.h>
 #include <atomic>
 #include <chrono>
+#include <future>
 #include <string>
 #include "cnstream_time_utility.hpp"
 
@@ -42,10 +43,13 @@ TEST(TimeUtilityTest, TimeStampTest) {
       break;
     }
   }
-  // inaccurate rate < 1/100
-  EXPECT_NEAR(ts2 - ts1, 1E5, 1E3);
-  EXPECT_NEAR(std::stoll(ts2_str), ts2, 1E3);
-  EXPECT_NEAR(std::stoll(ts2_str) - ts1, 1E5, 1E3);
+
+  // Accurary depends on the current usage of CPU core.
+  // The accuracy can reach to 1 in 100,000 when monopolize the core,
+  // but also can less than 1 in 100 when the core is very heavy.
+  // So do not test accuracy anymore in below unit tests.
+  EXPECT_GE(ts2 - ts1, 1E5);
+  EXPECT_GE(std::stoll(ts2_str) - ts1, 1E5);
 }
 
 TEST(TimeUtilityTest, TickClockTest) {
@@ -60,10 +64,9 @@ TEST(TimeUtilityTest, TickClockTest) {
     }
   }
   double avg_time = tick_clock.ElapsedAverageAsDouble();
-  // inaccurate rate < 1/100
-  EXPECT_NEAR(avg_time, 1E4, 1E2);
+  EXPECT_GE(avg_time, 1E4);
   double total_time = tick_clock.ElapsedTotalAsDouble();
-  EXPECT_NEAR(total_time, 1E5, 1E3);
+  EXPECT_GE(total_time, 1E5);
 
   tick_clock.Clear();
   avg_time = tick_clock.ElapsedAverageAsDouble();
@@ -80,10 +83,9 @@ TEST(TimeUtilityTest, TickTockClockTest) {
   }
 
   double avg_duration = duration_recorder.ElapsedAverageAsDouble();
-  // inaccurate rate < 1/100
-  EXPECT_NEAR(avg_duration, 1E4, 1E2);
+  EXPECT_GE(avg_duration, 1E4);
   double total_time = duration_recorder.ElapsedTotalAsDouble();
-  EXPECT_NEAR(total_time, 1E5, 1E3);
+  EXPECT_GE(total_time, 1E5);
 
   duration_recorder.Clear();
   avg_duration = duration_recorder.ElapsedAverageAsDouble();
@@ -93,13 +95,20 @@ TEST(TimeUtilityTest, TickTockClockTest) {
 TEST(TimeUtilityTest, TimerCallbackTimes) {
   // ensure every event will be triggered
   std::atomic<int> call_times{10};
-  auto action = [&call_times] { --call_times; };
+  std::promise<void> prom;
+  std::future<void> fut = prom.get_future();
+  auto action = [&call_times, &prom] {
+    if (--call_times == 0) {
+      prom.set_value();
+    }
+  };
 
   Timer timer(microseconds(100));
   for (int i = call_times; i > 0; --i) {
-    timer.StartOne(milliseconds(0), action);
+    timer.Start(action);
   }
-  std::this_thread::sleep_for(milliseconds(100));
+
+  fut.wait();
   EXPECT_EQ(call_times, 0);
 }
 
@@ -107,14 +116,22 @@ TEST(TimeUtilityTest, TimerBlockAction) {
   // will not blocked by a long term action
   std::atomic<bool> block{true};
   auto block_action = [&block] { while (block) {} };
-
   Timer timer(microseconds(100));
-  timer.StartOne(microseconds(0), block_action);
-  auto another_action = [] { SUCCEED(); };
+  timer.Start(block_action);
+
+  std::atomic<int> call_times{10};
+  std::promise<void> prom;
+  std::future<void> fut = prom.get_future();
+  auto another_action = [&call_times, &prom] {
+    if (--call_times == 0) {
+      prom.set_value();
+    }
+  };
   for (int i = 0; i < 10; ++i) {
-    timer.StartOne(microseconds(100), another_action);
+    timer.Start(another_action, microseconds(100));
   }
-  std::this_thread::sleep_for(milliseconds(100));
+
+  fut.wait();
   block = false;
   SUCCEED();
 }

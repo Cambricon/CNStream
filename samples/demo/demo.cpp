@@ -77,8 +77,12 @@ class MsgObserver : cnstream::StreamMsgObserver {
     pipeline_->Stop();
   }
 
+  void SetChnCnt(int chn_cnt) {
+    chn_cnt_ = chn_cnt;
+  }
+
  private:
-  const int chn_cnt_ = 0;
+  int chn_cnt_ = 0;
   cnstream::Pipeline* pipeline_ = nullptr;
   bool stop_ = false;
   std::vector<int> eos_chn_;
@@ -160,10 +164,18 @@ int main(int argc, char** argv) {
   int streams = static_cast<int>(video_urls.size());
   auto url_iter = video_urls.begin();
 
+  int invalid_stream_num = 0;
   for (int i = 0; i < streams; i++, url_iter++) {
     const std::string& filename = *url_iter;
-    if (source)
-      source->AddVideoSource(std::to_string(i), filename, FLAGS_src_frame_rate, FLAGS_loop);
+    if (source) {
+      if (-1 == source->AddVideoSource(std::to_string(i), filename, FLAGS_src_frame_rate, FLAGS_loop)) {
+        LOG(ERROR) << "Add video source failed. stream_id : " << i;
+        invalid_stream_num++;
+      }
+    }
+  }
+  if (invalid_stream_num > 0) {
+    msg_observer.SetChnCnt(video_urls.size() - invalid_stream_num);
   }
 
   gdisplayer = dynamic_cast<cnstream::Displayer*>(pipeline.GetModule("displayer"));

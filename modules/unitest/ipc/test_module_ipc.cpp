@@ -62,6 +62,7 @@ static void ClientProcess(ModuleParamSet param) {
   nbytes = ALIGN_(nbytes, 64 * 1024);  // align to 64kb
   void* frame_data = nullptr;
   CALL_CNRT_BY_CONTEXT(cnrtMalloc(&frame_data, nbytes), g_dev_id, g_ddr_channel);
+  CALL_CNRT_BY_CONTEXT(cnrtMemset(frame_data, 0, nbytes), g_dev_id, g_ddr_channel);
   CALL_CNRT_BY_CONTEXT(cnrtMemcpy(frame_data, reinterpret_cast<void*>(const_cast<char*>(fake_str)), strlen(fake_str),
                                   CNRT_MEM_TRANS_DIR_HOST2DEV),
                        g_dev_id, g_ddr_channel);
@@ -124,6 +125,7 @@ static void ServerProcess(ModuleParamSet param, std::string* recvd_string) {
   size_t nbytes = width * height * 3;
   nbytes = ALIGN_(nbytes, 64 * 1024);  // align to 64kb
   frame_data = malloc(nbytes);
+  memset(frame_data, 0, nbytes);
 
   std::shared_ptr<ModuleIPC> server = std::make_shared<ModuleIPC>("server");
   server->SetChannelCount(1);
@@ -161,7 +163,7 @@ static void ServerProcess(ModuleParamSet param, std::string* recvd_string) {
   free(frame_data);
 }
 
-TEST(ModelIPC, Construct) {
+TEST(ModuleIPC, Construct) {
   std::shared_ptr<Module> ipc = std::make_shared<ModuleIPC>("ipc-test");
   EXPECT_STREQ(ipc->GetName().c_str(), "ipc-test");
 }
@@ -327,6 +329,9 @@ TEST(ModuleIPC, Process) {
   if (shared_memory == NULL) {
     std::cout << "mmap shared memory faild.\n";
   }
+
+  // set shared_memory to 0
+  memset(shared_memory, 0, TEST_SHARED_MEM_SZIE);
 
   sem_id = sem_open(sem_name, O_CREAT, 0644, 0);
   if (sem_id == SEM_FAILED) {

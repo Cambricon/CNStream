@@ -248,6 +248,11 @@ void InferEngine::StageAssemble() {
 }
 
 void InferEngine::BatchingDone() {
+  if (batching_by_obj_) {
+    obj_batching_stage_->Reset();
+  } else {
+    batching_stage_->Reset();
+  }
   if (!batched_finfos_.empty()) {
     if (infer_perf_manager_) {
       std::shared_ptr<CNFrameInfo> last_finfo = batched_finfos_.back().first;

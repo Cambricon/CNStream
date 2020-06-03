@@ -199,7 +199,11 @@ TEST(Source, AddVideoSource) {
   auto src = std::make_shared<DataSource>(gname);
   std::string stream_id1 = "1";
   std::string stream_id2 = "2";
+  std::string stream_id3 = "3";
+  std::string stream_id4 = "4";
   std::string video_path = GetExePath() + gvideo_path;
+  std::string rtsp_path = "rtsp://test";
+
   ModuleParamSet param;
   param["source_type"] = "ffmpeg";
   param["output_type"] = "mlu";
@@ -210,6 +214,8 @@ TEST(Source, AddVideoSource) {
   // successfully add video source
   EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24, true), 0);
   EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 24, false), 0);
+  EXPECT_EQ(src->AddVideoSource(stream_id3, rtsp_path, 24, true), 0);
+  EXPECT_EQ(src->AddVideoSource(stream_id4, rtsp_path, 0, true), 0);
 
   // repeadly add video source, wrong!
   EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), -1);

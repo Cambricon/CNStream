@@ -236,6 +236,16 @@ std::shared_ptr<SourceHandler> DataSource::CreateSource(const std::string &strea
     LOG(ERROR) << "invalid stream_id or filename";
     return nullptr;
   }
+  const char* p_rtmp_start_str = "rtmp://";
+  const char* p_rtsp_start_str = "rtsp://";
+  if (0 == strncasecmp(filename.c_str(), p_rtmp_start_str, strlen(p_rtmp_start_str)) ||
+      0 == strncasecmp(filename.c_str(), p_rtsp_start_str, strlen(p_rtsp_start_str))) {
+    if (framerate > 0) {
+      LOG(WARNING) << "The 'src frame rate' flag does not take effect when using live streaming as source.";
+    }
+    framerate = -1;
+  }
+
   SourceHandler *ptr = nullptr;
   if (param_.source_type_ == SOURCE_RAW) {
     DataHandlerRaw *DataHandlerRaw_ptr = new (std::nothrow) DataHandlerRaw(this, stream_id, filename, framerate, loop);
