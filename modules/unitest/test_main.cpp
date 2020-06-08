@@ -34,10 +34,11 @@
 #define PATH_MAX_SIZE 1024
 
 const std::vector<std::array<std::string, 3>> model_info = {
-  {"resnet50_offline.cambricon", "/Classification/resnet50/", \
-  "http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon"},
-  {"yuv2gray.cambricon", "/KCF/", \
-  "http://video.cambricon.com/models/MLU270/KCF/yuv2gray.cambricon"},
+    {"resnet50_offline.cambricon", "/Classification/resnet50/",
+     "http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline.cambricon"},
+    {"resnet50_offline_v1.3.0.cambricon", "/Classification/resnet50/",
+     "http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon"},
+    {"yuv2gray.cambricon", "/KCF/", "http://video.cambricon.com/models/MLU270/KCF/yuv2gray.cambricon"},
 };
 
 class TestEnvironment : public testing::Environment {
@@ -51,7 +52,7 @@ class TestEnvironment : public testing::Environment {
   }
 };
 
-inline bool check_file_existence(const std::string &name) { return (access(name.c_str(), F_OK) != -1); }
+inline bool check_file_existence(const std::string &name) { return (access(name.c_str(), F_OK) == 0); }
 
 std::string GetExecPath() {
   char path[PATH_MAX_SIZE];
@@ -64,7 +65,7 @@ std::string GetExecPath() {
 }
 
 // split the path for make it
-std::vector<std::string> split_path(const std::string&s, char c) {
+std::vector<std::string> split_path(const std::string &s, char c) {
   std::stringstream ss(s);
   std::string piece;
   std::vector<std::string> chip_path;
@@ -99,14 +100,14 @@ void GetModuleExists(const std::vector<std::array<std::string, 3>> model_info) {
     if (!check_file_existence(model_file_path)) {
       // std::vector<std::string> chip_path = split_path(model_pair.find(model_name)->second.first);
       std::vector<std::string> chip_path = split_path(model_info[i][1], '/');
-      for (unsigned i = 0; i< chip_path.size(); i++) {
+      for (unsigned i = 0; i < chip_path.size(); i++) {
         tmp_path = tmp_path + "/" + chip_path[i];
         if (access(tmp_path.c_str(), F_OK) != 0) {
           mkdir(tmp_path.c_str(), 0777);
         }
       }
       // std::string cmd ="wget -P " + model_path + " " + model_pair.find(model_name)->second.second;
-      std::string cmd ="wget -P " + model_path + " " + model_info[i][2];
+      std::string cmd = "wget -P " + model_path + " " + model_info[i][2];
       if (system(cmd.c_str()) != 0) {
         std::cerr << "shell execute failed" << std::endl;
       }

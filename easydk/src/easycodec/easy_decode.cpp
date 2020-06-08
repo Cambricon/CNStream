@@ -437,12 +437,12 @@ void DecodeHandler::ReceiveFrame(void* out) {
     auto o = reinterpret_cast<cnjpegDecOutput*>(out);
     finfo.pts = o->pts;
     frame = &o->frame;
-    DLOG(INFO) << "Receive one jpeg frame, " << frame;
+    VLOG(5) << "Receive one jpeg frame, " << frame;
   } else {
     auto o = reinterpret_cast<cnvideoDecOutput*>(out);
     finfo.pts = o->pts;
     frame = &o->frame;
-    DLOG(INFO) << "Receive one video frame, " << frame;
+    VLOG(5) << "Receive one video frame, " << frame;
   }
   if (frame->width == 0 || frame->height == 0 || frame->planeNum == 0) {
     LOG(WARNING) << "Receive empty frame";
@@ -463,11 +463,11 @@ void DecodeHandler::ReceiveFrame(void* out) {
   finfo.pformat = attr_.pixel_format;
   finfo.color_std = attr_.color_std;
 
-  DLOG(INFO) << "Frame: width " << finfo.width << " height " << finfo.height << " planes "
+  VLOG(5) << "Frame: width " << finfo.width << " height " << finfo.height << " planes "
              << finfo.n_planes << " frame size " << finfo.frame_size;
 
   if (NULL != attr_.frame_callback) {
-    DLOG(INFO) << "Add decode buffer Reference " << finfo.buf_id;
+    VLOG(4) << "Add decode buffer Reference " << finfo.buf_id;
     if (jpeg_decode_) {
       cnjpegDecAddReference(handle_, frame);
     } else {
@@ -521,9 +521,7 @@ int DecodeHandler::ReceiveSequence(cnvideoDecSequenceInfo* info) {
 }
 
 void DecodeHandler::ReceiveEOS() {
-  std::ostringstream ss;
-  ss << "Thread id: " << std::this_thread::get_id() << ",Received EOS from cncodec";
-  LOG(INFO) << ss.str();
+  LOG(INFO) << "Thread id: " << std::this_thread::get_id() << ",Received EOS from cncodec";
 
   if (attr_.eos_callback) {
     attr_.eos_callback();
@@ -544,7 +542,7 @@ bool DecodeHandler::SendJpegData(const CnPacket &packet, bool eos) {
     input.streamLength = packet.length;
     input.pts = packet.pts;
     input.flags = CNJPEGDEC_FLAG_TIMESTAMP;
-    DLOG(INFO) << "Feed stream info, data: " << input.streamBuffer << " ,length: "
+    VLOG(5) << "Feed stream info, data: " << input.streamBuffer << " ,length: "
                << input.streamLength << " ,pts: " << input.pts;
 
     auto ecode = cnjpegDecFeedData(handle_, &input, 10000);
@@ -564,9 +562,7 @@ bool DecodeHandler::SendJpegData(const CnPacket &packet, bool eos) {
     input.streamLength = 0;
     input.pts = 0;
     input.flags = CNJPEGDEC_FLAG_EOS;
-    std::ostringstream ss;
-    ss << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
-    LOG(INFO) << ss.str();
+    LOG(INFO) << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
     auto ecode = cnjpegDecFeedData(handle_, &input, 10000);
     if (-CNCODEC_TIMEOUT == ecode) {
       LOG(ERROR) << "cnjpegDecFeedData send EOS timeout";
@@ -589,7 +585,7 @@ bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos) {
     input.streamLength = packet.length;
     input.pts = packet.pts;
     input.flags = CNVIDEODEC_FLAG_TIMESTAMP;
-    DLOG(INFO) << "Feed stream info, data: " << input.streamBuf << " ,length: "
+    VLOG(5) << "Feed stream info, data: " << input.streamBuf << " ,length: "
                << input.streamLength << " ,pts: " << input.pts;
 
     auto ecode = cnvideoDecFeedData(handle_, &input, 10000);
@@ -609,9 +605,7 @@ bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos) {
     input.streamLength = 0;
     input.pts = 0;
     input.flags = CNVIDEODEC_FLAG_EOS;
-    std::ostringstream ss;
-    ss << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
-    LOG(INFO) << ss.str();
+    LOG(INFO) << "Thread id: " << std::this_thread::get_id() << ",Feed EOS data";
     auto ecode = cnvideoDecFeedData(handle_, &input, 10000);
     if (-CNCODEC_TIMEOUT == ecode) {
       LOG(ERROR) << "cnvideoDecFeedData send EOS timeout";
@@ -783,7 +777,7 @@ bool EasyDecode::SendData(const CnPacket& packet, bool eos) {
 }
 
 void EasyDecode::ReleaseBuffer(uint64_t buf_id) {
-  DLOG(INFO) << "Release decode buffer reference " << buf_id;
+  VLOG(4) << "Release decode buffer reference " << buf_id;
   if (handler_->jpeg_decode_) {
     cnjpegDecReleaseReference(handler_->handle_, reinterpret_cast<cncodecFrame*>(buf_id));
   } else {
@@ -804,9 +798,9 @@ bool EasyDecode::CopyFrameD2H(void* dst, const CnFrame& frame) {
     pixel_fmt = handler_->vparams_.pixelFmt;
   }
 
-  DLOG(INFO) << "Copy codec frame from device to host";
-  DLOG(INFO) << "device address: (plane 0) " << frame.ptrs[0] << ", (plane 1) " << frame.ptrs[1];
-  DLOG(INFO) << "host address: " << reinterpret_cast<int64_t>(odata);
+  VLOG(5) << "Copy codec frame from device to host";
+  VLOG(5) << "device address: (plane 0) " << frame.ptrs[0] << ", (plane 1) " << frame.ptrs[1];
+  VLOG(5) << "host address: " << reinterpret_cast<int64_t>(odata);
 
   switch (pixel_fmt) {
     case CNCODEC_PIX_FMT_NV21:

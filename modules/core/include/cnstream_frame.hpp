@@ -27,7 +27,11 @@
  *  This file contains a declaration of the CNFrameInfo struct and its subtructure.
  */
 #ifdef HAVE_OPENCV
-#include "opencv2/opencv.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#if (CV_MAJOR_VERSION >= 3)
+#include "opencv2/imgcodecs/imgcodecs.hpp"
+#endif
 #endif
 
 #include <map>
@@ -160,10 +164,10 @@ class Pipeline;
  * The structure holding a data frame and the frame description.
  */
 struct CNDataFrame {
-  std::string stream_id;  ///< The data stream aliases where this frame is located to.
-  size_t flags = 0;       ///< The mask for this frame, ``CNFrameFlag``.
-  int64_t frame_id = -1;       ///< The frame index that incremented from 0.
-  int64_t timestamp = -1;      ///< The time stamp of this frame.
+  std::string stream_id;   ///< The data stream aliases where this frame is located to.
+  size_t flags = 0;        ///< The mask for this frame, ``CNFrameFlag``.
+  int64_t frame_id = -1;   ///< The frame index that incremented from 0.
+  int64_t timestamp = -1;  ///< The time stamp of this frame.
 
   /**
    * The source data information. You need to set the information before calling CopyToSyncMem().

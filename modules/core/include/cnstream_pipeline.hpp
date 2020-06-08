@@ -28,6 +28,7 @@
  */
 
 #include <atomic>
+#include <iostream>
 #include <future>
 #include <memory>
 #include <mutex>

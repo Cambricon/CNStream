@@ -161,7 +161,7 @@ ModelLoader::ModelLoader(const char* model_path, const char* function_name) : d_
     throw ModelLoaderError("Model file not exist. Please check model path");
   }
 
-  DLOG(INFO) << "Load model from file: " << model_path;
+  VLOG(3) << "Load model from file: " << model_path;
   // 1. get cnrtModel and cnrtFunction
   cnrtRet_t error_code = cnrtLoadModel(&d_ptr_->model_, model_path);
   CHECK_CNRT_RET(error_code, "Load model failed, error code : " + std::to_string(error_code));
@@ -342,8 +342,8 @@ void ModelLoader::SetCpuInputLayout(DataLayout layout, int data_index) {
 
   d_ptr_->i_cpu_layouts_[data_index] = layout;
 
-  LOG(INFO) << "Set CPU input data layout";
-  LOG(INFO) << DataTypeStr(layout.dtype) << "\t" << DimOrderStr(layout.order);
+  VLOG(4) << "Set CPU input data layout";
+  VLOG(4) << DataTypeStr(layout.dtype) << "\t" << DimOrderStr(layout.order);
 }
 
 void ModelLoader::SetCpuOutputLayout(DataLayout layout, int data_index) {
@@ -354,8 +354,8 @@ void ModelLoader::SetCpuOutputLayout(DataLayout layout, int data_index) {
 
   d_ptr_->o_cpu_layouts_[data_index] = layout;
 
-  LOG(INFO) << "Set CPU output data layout";
-  LOG(INFO) << DataTypeStr(layout.dtype) <<"\t" << DimOrderStr(layout.order);
+  VLOG(4) << "Set CPU output data layout";
+  VLOG(4) << DataTypeStr(layout.dtype) <<"\t" << DimOrderStr(layout.order);
 }
 
 DataLayout ModelLoader::GetCpuInputLayout(int data_index) const {
@@ -374,11 +374,11 @@ bool ModelLoader::AdjustStackMemory() {
 
   cnrtRet_t error_code = cnrtQueryModelStackSize(d_ptr_->model_, &stack_size);
   CHECK_CNRT_RET(error_code, "Query model stack size failed. error_code : " + std::to_string(error_code));
-  LOG(INFO) << "Model stack size is " << stack_size << " MB";
+  VLOG(3) << "Model stack size is " << stack_size << " MB";
 
   error_code = cnrtGetStackMem(&current_device_size);
   CHECK_CNRT_RET(error_code, "Get current device stack size failed. error_code : " + std::to_string(error_code));
-  LOG(INFO) << "Current MLU stack size is " << current_device_size <<" MB";
+  VLOG(3) << "Current MLU stack size is " << current_device_size <<" MB";
 
   if (stack_size > current_device_size) {
     error_code = cnrtSetStackMem(stack_size + 50);

@@ -30,6 +30,7 @@
 #include <unistd.h>
 
 #include <glog/logging.h>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -88,12 +89,30 @@ cv::Mat* CNDataFrame::ImageBGR() {
       cv::cvtColor(src, bgr, cv::COLOR_RGB2BGR);
     } break;
     case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12: {
-      cv::Mat src = cv::Mat(height * 3 / 2, stride_, CV_8UC1, img_data);
-      cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV12);
+      if (height%2 != 0) {
+        uint8_t* p = new uint8_t[(height+1) * stride_ * 3 / 2];
+        std::memcpy(p, img_data, height * stride_);
+        std::memcpy(p + (height+1) * stride_, img_data + height * stride_, (height*stride_)/2);
+        cv::Mat src = cv::Mat((height+1) * 3 / 2, stride_, CV_8UC1, p);
+        cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV12);
+        delete p;
+      } else {
+        cv::Mat src = cv::Mat(height * 3 / 2, stride_, CV_8UC1, img_data);
+        cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV12);
+      }
     } break;
     case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21: {
-      cv::Mat src = cv::Mat(height * 3 / 2, stride_, CV_8UC1, img_data);
-      cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV21);
+      if (height%2 != 0) {
+        uint8_t* p = new uint8_t[(height+1) * stride_ * 3 / 2];
+        std::memcpy(p, img_data, height * stride_);
+        std::memcpy(p + (height+1) * stride_, img_data + height * stride_, (height*stride_)/2);
+        cv::Mat src = cv::Mat((height+1) * 3 / 2, stride_, CV_8UC1, p);
+        cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV21);
+        delete p;
+      } else {
+        cv::Mat src = cv::Mat(height * 3 / 2, stride_, CV_8UC1, img_data);
+        cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV21);
+      }
     } break;
     default: {
       LOG(WARNING) << "Unsupport pixel format.";

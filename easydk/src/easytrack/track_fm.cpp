@@ -99,12 +99,12 @@ FeatureMatchTrack::~FeatureMatchTrack() {
 
 void FeatureMatchTrack::SetParams(float max_cosine_distance, int nn_budget, float max_iou_distance, int max_age,
                                   int n_init) {
-  LOG(INFO) << "FeatureMatchTrack Params -----";
-  LOG(INFO) << "   max cosine distance: " << max_cosine_distance;
-  LOG(INFO) << "   max IoU distance: " << max_iou_distance;
-  LOG(INFO) << "   max age: " << max_age;
-  LOG(INFO) << "   nn budget: " << nn_budget;
-  LOG(INFO) << "   n_init: " << n_init;
+  VLOG(3) << "FeatureMatchTrack Params -----";
+  VLOG(3) << "   max cosine distance: " << max_cosine_distance;
+  VLOG(3) << "   max IoU distance: " << max_iou_distance;
+  VLOG(3) << "   max age: " << max_age;
+  VLOG(3) << "   nn budget: " << nn_budget;
+  VLOG(3) << "   n_init: " << n_init;
   max_cosine_distance_ = max_cosine_distance;
   max_iou_distance_ = max_iou_distance;
   nn_budget_ = nn_budget;
@@ -125,11 +125,9 @@ MatchResult &FeatureMatchPrivate::MatchCascade() {
 
   std::set<int> remained_detections;
   remained_detections.insert(res.unmatched_detections.begin(), res.unmatched_detections.end());
-  DLOG(INFO) << "MatchCascade) Match scale, detects " << det_objs.size() << " tracks " << confirmed_track_.size();
+  VLOG(5) << "MatchCascade) Match scale, detects " << det_objs.size() << " tracks " << confirmed_track_.size();
   for (int age = 0; age < fm_->max_age_; ++age) {
-#ifdef TRACE_RESULT
-    DLOG(INFO) << "Cascade: Number of remained detections ----- " << remained_detections.size();
-#endif
+    VLOG(6) << "Cascade: Number of remained detections ----- " << remained_detections.size();
     // no remained detections or no confirmed tracks, end match
     if (remained_detections.empty() || confirmed_track_.empty()) break;
 
@@ -140,7 +138,7 @@ MatchResult &FeatureMatchPrivate::MatchCascade() {
       }
     }
     if (track_indices.empty()) {
-      LOG(INFO) << "Cascade: No tracks for age " << age << " round, continue";
+      VLOG(4) << "Cascade: No tracks for age " << age << " round, continue";
       continue;
     }
     size_t det_num = res.unmatched_detections.size();
@@ -159,7 +157,7 @@ MatchResult &FeatureMatchPrivate::MatchCascade() {
         cost_matrix[i][j] = match_algo_->Distance("Cosine", tracks_[track_indices[i]].features,
                                                   det_objs[res.unmatched_detections[j]].feature);
         if (cost_matrix[i][j] > fm_->max_cosine_distance_ || gating_dist[0][j] > gating_threshold) {
-          LOG(INFO) << "object " << i << " - " << j << " feature distance is larger than max_cosine_distance";
+          VLOG(4) << "object " << i << " - " << j << " feature distance is larger than max_cosine_distance";
           cost_matrix[i][j] = fm_->max_cosine_distance_ + 1e-5;
         }
       }
@@ -197,7 +195,7 @@ MatchResult &FeatureMatchPrivate::MatchIou(std::vector<int> detect_indices, std:
   }
   uint32_t detect_num = detect_indices.size();
   uint32_t track_num = track_indices.size();
-  DLOG(INFO) << "MatchIoU) Match scale, detects " << detect_num << "tracks " <<track_num;
+  VLOG(4) << "MatchIoU) Match scale, detects " << detect_num << "tracks " <<track_num;
   std::vector<Rect> det_rects, tra_rects;
   const Objects &det_objs = *detects_;
   std::set<int> remained_detections;
@@ -233,7 +231,7 @@ MatchResult &FeatureMatchPrivate::MatchIou(std::vector<int> detect_indices, std:
 }
 
 void FeatureMatchPrivate::InitNewTrack(const DetectObject &det) {
-  DLOG(INFO) << "new track: %lu" << next_id_;
+  VLOG(4) << "new track: %lu" << next_id_;
   FeatureMatchTrackObject obj;
   obj.age = 1;
   obj.class_id = det.label;
@@ -250,7 +248,6 @@ void FeatureMatchPrivate::InitNewTrack(const DetectObject &det) {
       }
     }
   }
-  obj.track_id = next_id_++;
   obj.kf = new KalmanFilter;
   obj.kf->Initiate(to_xyah(det.bbox));
   tracks_.push_back(obj);
@@ -272,14 +269,15 @@ void FeatureMatchTrack::UpdateFrame(const TrackFrame &frame, const Objects &dete
 
   uint32_t detect_num = detects.size();
   uint32_t track_num = fm_p_->tracks_.size();
-  DLOG(INFO) << "FeatureMatch) Track scale, detects " << detect_num << " tracks " << track_num;
+  VLOG(4) << "FeatureMatch) Track scale, detects " << detect_num << " tracks " << track_num;
   // no tracks, first enter
   if (fm_p_->tracks_.empty()) {
     fm_p_->tracks_.reserve(detect_num);
-    for (auto &det : detects) {
-      fm_p_->InitNewTrack(det);
-      tracks->push_back(det);
-      tracks->rbegin()->track_id = fm_p_->tracks_.rbegin()->track_id;
+    for (size_t i = 0; i < detect_num; ++i) {
+      fm_p_->InitNewTrack(detects[i]);
+      tracks->emplace_back(detects[i]);
+      tracks->rbegin()->track_id = -1;
+      tracks->rbegin()->detect_id = i;
     }
   } else {
     fm_p_->detects_ = &detects;
@@ -299,10 +297,8 @@ void FeatureMatchTrack::UpdateFrame(const TrackFrame &frame, const Objects &dete
 
     // match with features
     MatchResult &res_f = fm_p_->MatchCascade();
-#ifdef TRACE_RESULT
-    DLOG(INFO) << "FeatureMatch) Cascade result, matched " << res_f.matches.size() << " unmatched detects " \
+    VLOG(6) << "FeatureMatch) Cascade result, matched " << res_f.matches.size() << " unmatched detects " \
                << res_f.unmatched_detections.size() << " unmatched tracks " <<res_f.unmatched_tracks.size();
-#endif
 
     // give first missed object a chance
     std::vector<int> match_iou_track;
@@ -313,17 +309,15 @@ void FeatureMatchTrack::UpdateFrame(const TrackFrame &frame, const Objects &dete
       if (fm_p_->tracks_[idx].time_since_last_update == 1) {
         match_iou_track.push_back(idx);
       } else {
-        DLOG(INFO) << "Object " << idx << " missed";
+        VLOG(5) << "Object " << idx << " missed";
         fm_p_->MarkMiss(&(fm_p_->tracks_[idx]));
       }
     }
 
     // match with iou
     MatchResult &res_iou = fm_p_->MatchIou(res_f.unmatched_detections, match_iou_track);
-#ifdef TRACE_RESULT
-    DLOG(INFO) << "FeatureMatch) IoU result, matched " << res_iou.matches.size() << " unmatched detects " \
+    VLOG(6) << "FeatureMatch) IoU result, matched " << res_iou.matches.size() << " unmatched detects " \
                << res_iou.unmatched_detections.size() << " unmatched tracks " << res_iou.unmatched_tracks.size();
-#endif
 
     // update matched
     DetectObject tmp_obj;
@@ -348,6 +342,7 @@ void FeatureMatchTrack::UpdateFrame(const TrackFrame &frame, const Objects &dete
       ptrack_obj->age++;
       if (ptrack_obj->state == TrackState::TENTATIVE && ptrack_obj->age > n_init_) {
         ptrack_obj->state = TrackState::CONFIRMED;
+        ptrack_obj->track_id = fm_p_->next_id_++;
       }
     }
 
@@ -360,14 +355,14 @@ void FeatureMatchTrack::UpdateFrame(const TrackFrame &frame, const Objects &dete
 
     // unmatched tracks: mark missed
     for (auto idx : res_iou.unmatched_tracks) {
-      DLOG(INFO) << "Object " << idx << " missed";
+      VLOG(5) << "Object " << idx << " missed";
       fm_p_->MarkMiss(&(fm_p_->tracks_[idx]));
     }
 
     // erase dead track object
     for (auto iter = fm_p_->tracks_.begin(); iter != fm_p_->tracks_.end();) {
       if (iter->state == TrackState::DELETED || iter->time_since_last_update > max_age_) {
-        DLOG(INFO) << "delete track: " << iter->track_id;
+        VLOG(4) << "delete track: " << iter->track_id;
         delete iter->kf;
         iter = fm_p_->tracks_.erase(iter);
       } else {

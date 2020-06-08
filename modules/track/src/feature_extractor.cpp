@@ -21,10 +21,17 @@
 #include "feature_extractor.h"
 
 #include <glog/logging.h>
-#include <opencv2/core/core.hpp>
+
+#ifdef HAVE_OPENCV
 #include <opencv2/features2d/features2d.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#if (CV_MAJOR_VERSION >= 3)
+#include "opencv2/imgcodecs/imgcodecs.hpp"
+#endif
+#else
+#error OpenCV required
+#endif
 
 #include <algorithm>
 #include <fstream>

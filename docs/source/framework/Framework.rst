@@ -49,7 +49,7 @@ cnstream::Pipeline类
 .. attention::
   |  Pipeline的source module是没有输入队列，pipeline中不会为source module启动线程，也就是说pipeline不会调度source module。source module通过pipeline的 ``ProvideData`` 接口向下游模块发送数据和启动内部线程。
 
-**cnstream::Pipeline** 类在 ``cnstream_pipeline.hpp`` 文件内定义，主要接口如下。 ``cnstream_pipeline.hpp`` 文件存放于 ``modules/core/include`` 目录下。源代码中有详细的注释，这里仅给出必要的说明。
+**cnstream::Pipeline** 类在 ``cnstream_pipeline.hpp`` 文件内定义，主要接口如下。 ``cnstream_pipeline.hpp`` 文件存放于 ``modules/core/include`` 目录下。源代码中有详细的注释，这里仅给出必要的说明。接口详情，查看《CNStream Developer Guide》。
 
 ::
 
@@ -60,7 +60,7 @@ cnstream::Pipeline类
     //  实现这两者前提是能够根据类名字创建类实例即反射(reflection)机制。
     //  在cnstream::Module类介绍中会进行描述。
     int BuildPipeline(const std::vector<CNModuleConfig>& configs);
-    int BuildPipelineByJSONFile(const std::string& config_file) noexcept(false);
+    int BuildPipelineByJSONFile(const std::string& config_file);
 
     ...
 
@@ -131,7 +131,7 @@ CNStream SDK要求所有的Module类使用统一接口和数据结构 **cnstream
 
 一个module的实例，会使用一个或者多个线程对多路数据流进行处理，每一路数据流使用pipeline范围内唯一的 ``stream_id`` 进行标识。
 
-**cnstream::Module** 类在 ``cnstream_module.hpp`` 文件定义，主要接口如下。``cnstream_module.hpp`` 文件存放在 ``modules/core/include`` 文件夹下。源代码中有详细的注释，这里仅给出必要的说明。
+**cnstream::Module** 类在 ``cnstream_module.hpp`` 文件定义，主要接口如下。``cnstream_module.hpp`` 文件存放在 ``modules/core/include`` 文件夹下。源代码中有详细的注释，这里仅给出必要的说明。接口详情，查看《CNStream Developer Guide》。
 
 ::
 
@@ -139,7 +139,7 @@ CNStream SDK要求所有的Module类使用统一接口和数据结构 **cnstream
    public:
 
     // 一个pipeline中，每个module名字必须唯一。
-    explicit Module(const std::string &name);
+    explicit Module(const std::string &name) : name_(name) { this->GetId(); }
     ...
 
     // 必须实现Open、Close和Process接口。这三个接口会被pipeline调用。
@@ -194,7 +194,7 @@ cnstream::EventBus类
 
 每条pipeline有一条事件总线及对应的一个默认事件监听器。pipeline会对事件总线进行轮询，收到事件后分发给监听器。
 
-**cnstream::EventBus** 类在 ``cnstream_eventbus.hpp`` 文件中定义，主要接口如下。``cnstream_eventbus.hpp`` 文件存放在 ``modules/core/include`` 文件夹下。源代码中有详细的注释，这里仅给出必要的说明。
+**cnstream::EventBus** 类在 ``cnstream_eventbus.hpp`` 文件中定义，主要接口如下。``cnstream_eventbus.hpp`` 文件存放在 ``modules/core/include`` 文件夹下。源代码中有详细的注释，这里仅给出必要的说明。接口详情，查看《CNStream Developer Guide》。
 
 ::
 
@@ -206,6 +206,7 @@ cnstream::EventBus类
 
     // 添加事件总线的监听器。
     uint32_t AddBusWatch(BusWatcher func, Module *watch_module);
+    ......
   };
 
 cnstream::Event类
@@ -213,22 +214,5 @@ cnstream::Event类
 
 **cnstream::Event** 类是模块和piepline之间通信的基本单元，即事件。事件由四个部分组成：事件类型、消息、发布事件的模块、发布事件的线程号。消息类型包括：无效、错误、警告、EOS(End of Stream)、停止，以及一个预留类型。
 
-**cnstream::Event** 类在 ``cnstream_eventbus.hpp`` 文件定义，``cnstream_eventbus.hpp`` 文件存放在 ``modules/core/include`` 文件夹下。
+**cnstream::Event** 类在 ``cnstream_eventbus.hpp`` 文件定义，``cnstream_eventbus.hpp`` 文件存放在 ``modules/core/include`` 文件夹下。接口详情，查看《CNStream Developer Guide》。
 
-::
-
-  struct Event {
-    EventType type;             // 事件类型。
-    std::string message;        // 消息。
-    const Module *module;       // 发布事件的模块。
-    std::thread::id thread_id;  // 发布事件的线程号。
-  };
-
-  enum EventType {
-    EVENT_INVALID,  // 无效消息。
-    EVENT_ERROR,    // 错误消息。
-    EVENT_WARNING,  // 警告消息。
-    EVENT_EOS,      // EOS消息。
-    EVENT_STOP,     // 停止消息。
-    EVENT_TYPE_END  // 预留位。
-  };

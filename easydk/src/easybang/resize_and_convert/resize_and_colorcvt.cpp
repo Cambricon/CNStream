@@ -222,7 +222,7 @@ void MluResizeConvertOp::BatchingUp(void* src_y, void* src_uv) {
 }
 
 void MluResizeConvertOp::BatchingUp(const InputData& input_data) {
-  DLOG(INFO) << "Store resize and convert operator input for batching, "
+  VLOG(5) << "Store resize and convert operator input for batching, "
              << input_data.planes[0] << ", " << input_data.planes[1];
   uint32_t src_stride = input_data.src_w > input_data.src_stride ? input_data.src_w : input_data.src_stride;
   uint32_t crop_x = input_data.crop_x >= input_data.src_w ? 0 : input_data.crop_x;
@@ -297,7 +297,7 @@ bool MluResizeConvertOp::SyncOneOutput(void* dst) {
   dim.y = 1;
   dim.z = 1;
 
-  DLOG(INFO) << "Do resize and convert process, dst: " << dst;
+  VLOG(5) << "Do resize and convert process, dst: " << dst;
   bool ret =
       -1 != ::ResizeAndConvert(dst, d_ptr_->y_ptrs_mlu_, d_ptr_->uv_ptrs_mlu_,
                                d_ptr_->src_whs_mlu_, d_ptr_->src_rois_mlu_,
