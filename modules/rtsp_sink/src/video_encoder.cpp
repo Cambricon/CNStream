@@ -160,6 +160,8 @@ bool VideoEncoder::PushOutputBuffer(uint8_t *data, size_t size, uint32_t frame_i
     return false;
   }
 
+  if (!is_client_running_) return false;
+
   std::lock_guard<std::mutex> lk(output_mutex_);
   if (output_circular_buffer_) {
     EncodedFrameHeader efh;
@@ -204,7 +206,7 @@ bool VideoEncoder::GetFrame(uint8_t *data, uint32_t max_size, uint32_t *size, in
     LOG(ERROR) << "GetFrame(): invalid parameters!";
     return false;
   }
-
+  is_client_running_ = true;
   std::lock_guard<std::mutex> lk(output_mutex_);
 
   if (output_circular_buffer_) {

@@ -140,7 +140,7 @@ bool MluResizeYuv2Rgba::Init(const MluResizeAttr& attr) {
     return false;
   }
 
-  DLOG(INFO) <<  "Init ResizeYuv2Rgba Operator";
+  VLOG(4) <<  "Init ResizeYuv2Rgba Operator";
 
   bool success = ::CreateResizeYuv2Rgba(d_ptr_->attr_, &d_ptr_->yuv2rgba_, &d_ptr_->estr_);
   if (!success) {
@@ -177,7 +177,7 @@ int MluResizeYuv2Rgba::InvokeOp(void* dst, void* srcY, void* srcUV) {
 }
 
 void MluResizeYuv2Rgba::BatchingUp(void* src_y, void* src_uv) {
-  DLOG(INFO) << "Store resize and convert operator input for batching, " << src_y << " , " << src_uv;
+  VLOG(5) << "Store resize and convert operator input for batching, " << src_y << " , " << src_uv;
   d_ptr_->yuv_ptrs_cache_.push_back(std::make_pair(src_y, src_uv));
 }
 
@@ -207,7 +207,7 @@ bool MluResizeYuv2Rgba::SyncOneOutput(void* dst) {
     d_ptr_->estr_ = "Memcpy host to device failed. Error code: " + std::to_string(cnret);
     return false;
   }
-  DLOG(INFO) << "Do resize and convert process, dst: " << dst;
+  VLOG(5) << "Do resize and convert process, dst: " << dst;
 
   return ::ComputeResizeYuv2Rgba(dst, d_ptr_->y_ptrs_mlu_, d_ptr_->uv_ptrs_mlu_, d_ptr_->yuv2rgba_,
                                  d_ptr_->queue_, &d_ptr_->estr_);

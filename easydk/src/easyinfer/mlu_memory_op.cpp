@@ -139,12 +139,12 @@ void **MluMemoryOp::AllocCpuInput(uint32_t batch_size) const {
   auto &shapes = ploader_->InputShapes();
   uint32_t num = ploader_->InputNum();
 
-  DLOG(INFO) << "Alloc memory on CPU for model input";
+  VLOG(4) << "Alloc memory on CPU for model input";
 
   void **ret = new void *[num];
   for (uint32_t i = 0; i < num; ++i) {
     uint64_t data_size = shapes[i].DataCount() * batch_size;
-    DLOG(INFO) << "Alloc CPU input memory (" << i <<") on CPU in " << data_size << " bytes";
+    VLOG(4) << "Alloc CPU input memory (" << i <<") on CPU in " << data_size << " bytes";
     ret[i] = reinterpret_cast<void *>(new float[data_size]);
   }
   return ret;
@@ -156,12 +156,12 @@ void **MluMemoryOp::AllocCpuOutput(uint32_t batch_size) const {
   auto &shapes = ploader_->OutputShapes();
   uint32_t num = shapes.size();
 
-  DLOG(INFO) << "Alloc memory on CPU for model output";
+  VLOG(4) << "Alloc memory on CPU for model output";
 
   void **ret = new void *[num];
   for (uint32_t i = 0; i < num; ++i) {
     uint64_t data_size = shapes[i].DataCount() * batch_size;
-    DLOG(INFO) << "Alloc output memory (" << i << ")" << "on CPU in " << data_size;
+    VLOG(4) << "Alloc output memory (" << i << ")" << "on CPU in " << data_size;
     ret[i] = reinterpret_cast<void *>(new float[data_size]);
   }
   return ret;
@@ -174,13 +174,13 @@ void **MluMemoryOp::AllocMluInput(uint32_t batch_size) const {
   uint32_t num = ploader_->InputNum();
   ModelLoaderInternalInterface interface(ploader_.get());
 
-  DLOG(INFO) << "Alloc memory on MLU for model input";
+  VLOG(4) << "Alloc memory on MLU for model input";
 
   ret = new void *[num];
   for (uint32_t i = 0; i < num; ++i) {
     void *t = nullptr;
     int64_t size = interface.InputDataSize(i);
-    DLOG(INFO) << "Alloc input memory (" << i << ") on MLU in " << size << " bytes";
+    VLOG(4) << "Alloc input memory (" << i << ") on MLU in " << size << " bytes";
     error_code = cnrtMalloc(&t, size);
     CHECK_CNRT_RET(error_code, "Mlu malloc failed.");
     ret[i] = t;
@@ -195,13 +195,13 @@ void **MluMemoryOp::AllocMluOutput(uint32_t batch_size) const {
   uint32_t num = ploader_->OutputNum();
   ModelLoaderInternalInterface interface(ploader_.get());
 
-  DLOG(INFO) << "Alloc memory on MLU for model output";
+  VLOG(4) << "Alloc memory on MLU for model output";
 
   ret = new void *[num];
   for (uint32_t i = 0; i < num; ++i) {
     void *t = nullptr;
     int64_t size = interface.OutputDataSize(i);
-    DLOG(INFO) << "Alloc output memory (" << i << ") on MLU in " << size << " bytes";
+    VLOG(4) << "Alloc output memory (" << i << ") on MLU in " << size << " bytes";
     error_code = cnrtMalloc(&t, size);
     CHECK_CNRT_RET(error_code, "Mlu malloc failed.");
     ret[i] = t;
@@ -212,7 +212,7 @@ void **MluMemoryOp::AllocMluOutput(uint32_t batch_size) const {
 void *MluMemoryOp::AllocMlu(size_t nBytes, uint32_t batch_size) const {
   void *ret = nullptr;
   cnrtRet_t error_code;
-  DLOG(INFO) << "Alloc memory on MLU in " << nBytes * batch_size << " bytes";
+  VLOG(4) << "Alloc memory on MLU in " << nBytes * batch_size << " bytes";
   error_code = cnrtMalloc(&ret, nBytes * batch_size);
   CHECK_CNRT_RET(error_code, "Mlu malloc failed.");
   return ret;
@@ -220,7 +220,7 @@ void *MluMemoryOp::AllocMlu(size_t nBytes, uint32_t batch_size) const {
 
 void MluMemoryOp::FreeCpuInput(void **ptr) const {
   CHECK_MODEL_LOADER;
-  DLOG(INFO) << "Free input memory on CPU";
+  VLOG(4) << "Free input memory on CPU";
   uint32_t num = ploader_->InputNum();
   for (uint32_t i = 0; i < num; ++i) {
     delete[] reinterpret_cast<float *>(ptr[i]);
@@ -230,7 +230,7 @@ void MluMemoryOp::FreeCpuInput(void **ptr) const {
 
 void MluMemoryOp::FreeCpuOutput(void **ptr) const {
   CHECK_MODEL_LOADER;
-  DLOG(INFO) << "Free output memory on CPU";
+  VLOG(4) << "Free output memory on CPU";
   uint32_t num = ploader_->OutputNum();
   for (uint32_t i = 0; i < num; ++i) {
     delete[] reinterpret_cast<float *>(ptr[i]);
@@ -239,7 +239,7 @@ void MluMemoryOp::FreeCpuOutput(void **ptr) const {
 }
 
 void MluMemoryOp::FreeArrayMlu(void **ptr, uint32_t mem_num) const {
-  DLOG(INFO) << "Free memory array on MLU";
+  VLOG(4) << "Free memory array on MLU";
   for (uint32_t i = 0; i < mem_num; ++i) {
     cnrtFree(ptr[i]);
   }
@@ -247,7 +247,7 @@ void MluMemoryOp::FreeArrayMlu(void **ptr, uint32_t mem_num) const {
 }
 
 void MluMemoryOp::FreeMlu(void *ptr) const {
-  DLOG(INFO) << "Free memory on MLU";
+  VLOG(4) << "Free memory on MLU";
   cnrtFree(ptr);
 }
 
@@ -256,7 +256,7 @@ void MluMemoryOp::MemcpyInputH2D(void **mlu_dst, void **cpu_src, uint32_t batch_
   ONLY_SUPPORT_FLOAT32_ON_CPU;
   ModelLoaderInternalInterface interface(ploader_.get());
   cnrtRet_t error_code;
-  DLOG(INFO) << "copy input memory from host to device";
+  VLOG(5) << "copy input memory from host to device";
 
   int64_t num = ploader_->InputNum();
   for (int i = 0; i < num; ++i) {
@@ -273,7 +273,7 @@ void MluMemoryOp::MemcpyInputH2D(void **mlu_dst, void **cpu_src, uint32_t batch_
       throw MluMemoryOpError("Malloc temp data on cpu failed.");
     }
     TransLayout(cpu_layout, mlu_layout, src, temp_data, sp);
-    DLOG(INFO) << "MemcpyInputH2D in size " << size << ", dst: " << dst << ", src: " << src << ", tmp: " << temp_data;
+    VLOG(5) << "MemcpyInputH2D in size " << size << ", dst: " << dst << ", src: " << src << ", tmp: " << temp_data;
     error_code = cnrtMemcpy(dst, temp_data, size, CNRT_MEM_TRANS_DIR_HOST2DEV);
     CHECK_CNRT_RET(error_code, "Memcpy host to device failed.");
     free(temp_data);
@@ -284,7 +284,7 @@ void MluMemoryOp::MemcpyOutputD2H(void **cpu_dst, void **mlu_src, uint32_t batch
   CHECK_MODEL_LOADER;
   ONLY_SUPPORT_FLOAT32_ON_CPU;
   ModelLoaderInternalInterface interface(ploader_.get());
-  DLOG(INFO) << "copy output memory from device to host";
+  VLOG(5) << "copy output memory from device to host";
 
   int64_t num = ploader_->OutputNum();
   for (int i = 0; i < num; ++i) {
@@ -295,7 +295,7 @@ void MluMemoryOp::MemcpyOutputD2H(void **cpu_dst, void **mlu_src, uint32_t batch
     if (nullptr == temp_data) {
       throw MluMemoryOpError("Malloc temp data on cpu failed.");
     }
-    DLOG(INFO) << "MemcpyOutputD2H in size " << size << ", dst: " << dst << ", src: " << src << ", tmp: " << temp_data;
+    VLOG(5) << "MemcpyOutputD2H in size " << size << ", dst: " << dst << ", src: " << src << ", tmp: " << temp_data;
     auto error_code = cnrtMemcpy(temp_data, src, size, CNRT_MEM_TRANS_DIR_DEV2HOST);
     CHECK_CNRT_RET(error_code, "Memcpy device to host failed.");
     // format data
@@ -309,7 +309,7 @@ void MluMemoryOp::MemcpyOutputD2H(void **cpu_dst, void **mlu_src, uint32_t batch
 
 void MluMemoryOp::MemcpyH2D(void *mlu_dst, void *cpu_src, size_t nBytes, uint32_t batch_size) const {
   cnrtRet_t error_code;
-  DLOG(INFO) << "copy memory from host to device in size " \
+  VLOG(5) << "copy memory from host to device in size " \
              << nBytes * batch_size << ", dst: " << mlu_dst << ", src: " << cpu_src;
   error_code = cnrtMemcpy(mlu_dst, cpu_src, nBytes * batch_size, CNRT_MEM_TRANS_DIR_HOST2DEV);
   CHECK_CNRT_RET(error_code, "Memcpy host to device failed.");
@@ -317,7 +317,7 @@ void MluMemoryOp::MemcpyH2D(void *mlu_dst, void *cpu_src, size_t nBytes, uint32_
 
 void MluMemoryOp::MemcpyD2H(void *cpu_dst, void *mlu_src, size_t nBytes, uint32_t batch_size) const {
   cnrtRet_t error_code;
-  DLOG(INFO) << "copy memory from device to host in size " \
+  VLOG(5) << "copy memory from device to host in size " \
              << nBytes * batch_size << ", dst: " << cpu_dst << ", src: " << mlu_src;
   error_code = cnrtMemcpy(cpu_dst, mlu_src, nBytes * batch_size, CNRT_MEM_TRANS_DIR_DEV2HOST);
   CHECK_CNRT_RET(error_code, "Memcpy host to device failed.");
@@ -325,7 +325,7 @@ void MluMemoryOp::MemcpyD2H(void *cpu_dst, void *mlu_src, size_t nBytes, uint32_
 
 void MluMemoryOp::MemcpyD2D(void *mlu_dst, void *mlu_src, size_t nBytes) const {
   cnrtRet_t error_code;
-  DLOG(INFO) << "copy memory from device to device in size " << nBytes << ", dst: " << mlu_dst << ", src: " << mlu_src;
+  VLOG(5) << "copy memory from device to device in size " << nBytes << ", dst: " << mlu_dst << ", src: " << mlu_src;
   error_code = cnrtMemcpy(mlu_dst, mlu_src, nBytes, CNRT_MEM_TRANS_DIR_DEV2DEV);
   CHECK_CNRT_RET(error_code, "Memcpy device to device failed.");
 }

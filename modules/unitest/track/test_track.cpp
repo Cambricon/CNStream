@@ -20,10 +20,19 @@
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <opencv2/opencv.hpp>
 
 #include <memory>
 #include <string>
+
+#ifdef HAVE_OPENCV
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#if (CV_MAJOR_VERSION >= 3)
+#include "opencv2/imgcodecs/imgcodecs.hpp"
+#endif
+#else
+#error OpenCV required
+#endif
 
 #include "cnstream_module.hpp"
 #include "easyinfer/mlu_memory_op.h"

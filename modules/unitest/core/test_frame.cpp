@@ -25,7 +25,11 @@
 
 #include "gtest/gtest.h"
 #ifdef HAVE_OPENCV
-#include "opencv2/opencv.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#if (CV_MAJOR_VERSION >= 3)
+#include "opencv2/imgcodecs/imgcodecs.hpp"
+#endif
 #endif
 
 #include "cnrt.h"
@@ -44,10 +48,15 @@ void InitFrame(CNDataFrame* frame, int image_type) {
   frame->stride[0] = 1920;
   if (image_type == 0) {  // RGB or BGR
     frame->ptr_cpu[0] = malloc(sizeof(uint32_t) * frame->height * frame->stride[0] * 3);
-  } else if (image_type == 1) {  // YUV
+  } else if (image_type == 1) {  // YUV and height % 2 == 0
     frame->stride[1] = 1920;
     frame->ptr_cpu[0] = malloc(sizeof(uint32_t) * frame->height * frame->stride[0]);
     frame->ptr_cpu[1] = malloc(sizeof(uint32_t) * frame->height * frame->stride[1] * 0.5);
+  } else if (image_type == 2) {  // YUV and height % 2 != 0
+    frame->stride[1] = 1920;
+    frame->height -= 1;
+    frame->ptr_cpu[0] = malloc(sizeof(uint32_t) * (frame->height) * frame->stride[0]);
+    frame->ptr_cpu[1] = malloc(sizeof(uint32_t) * (frame->height) * frame->stride[1] * 0.5);
   }
 }
 
@@ -55,7 +64,7 @@ void RunConvertImageTest(CNDataFrame* frame, int image_type) {
   frame->CopyToSyncMem();
   EXPECT_NE(frame->ImageBGR(), nullptr);
   free(frame->ptr_cpu[0]);
-  if (image_type == 1) {  // YUV
+  if (image_type == 1|| image_type == 2) {  // YUV
     free(frame->ptr_cpu[1]);
   }
 }
@@ -86,12 +95,28 @@ TEST(CoreFrame, ConvertYUV12ImageToBGR) {
   RunConvertImageTest(&frame, 1);
 }
 
+TEST(CoreFrame, ConvertYUV12ImageToBGR2) {  // height % 2 != 0
+  CNDataFrame frame;
+  InitFrame(&frame, 2);
+  frame.fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+
+  RunConvertImageTest(&frame, 2);
+}
+
 TEST(CoreFrame, ConvertYUV21ImageToBGR) {
   CNDataFrame frame;
   InitFrame(&frame, 1);
   frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
 
   RunConvertImageTest(&frame, 1);
+}
+
+TEST(CoreFrame, ConvertYUV21ImageToBGR2) {
+  CNDataFrame frame;
+  InitFrame(&frame, 2);
+  frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+
+  RunConvertImageTest(&frame, 2);
 }
 
 TEST(CoreFrame, ConvertImageToBGRFailed) {

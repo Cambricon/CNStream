@@ -3,49 +3,47 @@
 性能统计
 =============
 
-介绍
--------
+CNStream提供性能统计机制，帮助用户统计各模块及整条pipeline的性能，其中包括时延及吞吐量等。用户也可以自定义想要统计的信息，详情查看 注册信息类型_ 。
 
-CNStream提供性能统计机制，帮助用户统计各模块及整条pipeline的性能，包括时延及吞吐量等。用户也可以自定义想要统计的信息，例如所有模块open的时间等，详情查看 注册信息类型_ 。
-
-每一帧数据将会被打上一系列的时间戳，即数据进入每个模块的开始时间和结束时间。再根据该时间戳序列计算相应各模块和pipeline的性能数据。CNStream使用SQLite3数据库保存时间戳序列。
-
-性能统计机制的实现主要在 ``PerfManager`` 类中定义。``PerfManager`` 类实现了自身初始化、记录信息、注册信息类型、计算模块性能和计算pipeline性能等功能。类的声明在 ``modules/core/include/perf_manager.hpp`` 文件的源码中。初始化时会创建数据库和实例化 ``PerfCalculator`` 类。 ``PerfCalculator`` 类主要用于性能计算。
+性能统计机制的实现主要在 **PerfManager** 类中定义。**PerfManager** 类实现了自身初始化、记录信息、注册信息类型、计算模块性能和计算pipeline性能等功能。类的声明在 ``modules/core/include/perf_manager.hpp`` 文件的源码中。此外，初始化时会创建数据库和实例化 **PerfCalculator** 类。 **PerfCalculator** 类主要用于性能计算。
 
 .. attention::
-    |  统计性能依赖于pts，需要保证视频流中每帧的pts的唯一性,否则CNStream不能保证提供信息的准确性。
+    |  统计性能依赖于pts，需要保证视频流中每帧的pts的唯一性，否则CNStream不能保证提供信息的准确性。
 
 
 实现机制
 ----------
 
-每个数据流都需要创建一个 ``PerfManager`` 进行性能统计。``PerfManager`` 的实现机制如下图所示：
+性能统计的实现机制如下图所示：
 
     .. figure::  ../images/performance_mech.png
 
        性能统计实现机制
 
+每个数据流都需要创建一个 ``PerfManager`` 进行性能统计。初始化 ``PerfManager`` 后，数据库文件将被创建。每一帧数据将会被记录下来，并保存到创建的数据库中。基于数据库中的数据，计算相应各模块和pipeline的性能数据。
+
+数据库文件
+<<<<<<<<<<<<
+
+CNStream使用SQLite3数据库保存用户想要计算的性能数据。
+
+用户在初始化 ``PerfManager`` 时，可以通过 ``Init`` 函数传入数据库文件名以及数据库中的字段名称。再通过调用 ``Record`` 函数将相关数据记录到数据库中。最后CNStream调用该数据库的数据对模块和pipeline进行性能计算。
 
 初始化PerfManager
 <<<<<<<<<<<<<<<<<<<
 
-初始化 ``PerfManager`` 时，需要传入pipeline中所有节点（模块）、开始节点和所有结束节点的名字。
+根据perf类型的不同，初始化PerfManager的方法也会有所不同。主要分为：
 
-``PerfInfo`` 结构体记录了当前时间戳的信息，如类型、模块名称、数据帧的pts等。``PerfManager`` 默认使用 ``PROCESS`` 类型（PerfType）对模块及pipeline的性能做统计。在初始化时将以 ``PROCESS`` 作为表格名生成数据库表格。用户也可以自定义想要统计的其他方面的信息，详情查看 注册信息类型_ 。
+- 使用CNStream预定义的perf类型 ``PROCESS`` 做性能统计。
+- 使用自定义的perf类型做性能统计。
 
-``PerfInfo`` 结构体如下：
+**使用CNStream预定义的perf类型**
 
-::
+寒武纪CNStream提供 ``PROCESS`` perf类型对模块及pipeline的性能做统计。用户需要调用 ``Init`` 函数传入数据库文件名（包括数据库文件的所在路径）、pipeline中所有节点（模块）、开始节点和所有结束节点的名字，初始化PerfManager。
 
-  struct PerfInfo {
-    bool is_finished;           // 模块开始或结束。
-    std::string perf_type;      // 类型。
-    std::string module_name;    // 模块名字。
-    int64_t pts;                // 数据库表格的主索引pts。
-    size_t timestamp;           // 时间戳，记录此信息时刻的时间。
-  };  // struct PerfInfo
+初始化PerfManager后，CNStream将以 ``PROCESS`` 作为表格名生成数据库表格。使用CNStream预定义的 ``PROCESS`` 类型生成的数据库表格，主索引为pts，其他索引为节点名字加 ``_stime`` 和 ``_etime`` 后缀，分别代表开始和结束时间，开始节点索引始终紧随主索引pts。
 
-数据库表格的主索引为pts, 其他索引为节点名字加 ``_stime`` 和 ``_etime`` 后缀，分别代表开始和结束时间。开始节点索引始终紧随主索引pts。
+用户也可以自定义想要统计的其他方面的信息，详情查看 注册信息类型_ 。
 
 以下面pipeline为例：
 
@@ -53,7 +51,7 @@ CNStream提供性能统计机制，帮助用户统计各模块及整条pipeline�
 
     ModuleA------ModuleB------ModuleC
 
-``PerfManager`` 初始化调用函数如下：
+``PerfManager`` 初始化调用 ``Init`` 函数，示例如下：
 
 ::
 
@@ -62,27 +60,84 @@ CNStream提供性能统计机制，帮助用户统计各模块及整条pipeline�
   // 初始化数据库名字、所有节点名字、开始节点、所有结束节点。
   perf_manager.Init("db_name.db", {"ModuleA", "ModuleB", "ModuleC"}, ModuleA, {ModuleC});
 
-  PerfInfo info {false, "PROCESS", node_name, pts};  // 模块开始，类型，节点名字，pts。
+生成数据库表格如下：
+
+::
+
+  TABLE PROCESS
+
+    pts     ModuleA_stime   ModuleA_etime   ModuleB_stime   ModuleB_etime    ModuleC_stime    ModuleC_etime
+   -------  -------------   -------------   -------------   -------------    -------------    -------------
+
+**使用自定义的perf类型**
+
+如果想要使用自定义的perf类型，需要创建数据库文件，并连接数据库。使用此方法，用户需要调用 ``Init`` 函数传入数据库文件名（包括数据库文件的所在路径），并调用 ``RegisterPerfType`` 函数自定义per类型。
+
+调用 ``Init`` 函数初始化``PerfManager``，示例如下：
+
+::
+
+  PerfManager perf_manager;
+
+  // 初始化数据库名字
+  perf_manager.Init("db_name.db");
+
+随后可以通过 ``RegisterPerfType`` 函数创建perf类型，并生成表格。以记录模块ModuleA的开始和结束时间为例，依次传入perf类型、主索引和其他索引（即ModuleA的开始时间和结束时间）。
+
+::
+
+  perf_manager.RegisterPerfType("TEST", "pts", {"ModuleA_stime", "ModuleA_etime"})
 
 生成表格如下：
 
 ::
 
+  TABLE TEST
+
+    pts     ModuleA_stime   ModuleA_etime
+   -------  -------------   -------------
+
+记录相关数据
+<<<<<<<<<<<<<<
+
+每帧数据在流过每个模块时相关数据都会分别被记录下来，并储存到数据库中。用户可以通过调用 ``Record`` 函数实现。根据用户需要，有以下几种方式：
+
+- 仅记录模块的开始和结束时间。
+- 记录模块的其他信息的时间戳。
+- 记录模块除时间戳外的其他信息。
+
+**仅记录模块的开始和结束时间**
+
+使用这种方法，用户需调用 ``Record`` 函数来依次传入参数：是否为结束帧、perf类型、模块名字以及pts。
+
+例如：记录pts为100的一帧数据进入ModuleA模块的开始时间戳，perf类型是 ``PROCESS``。
+
+::
+
+  // 初始化数据库名字、所有节点名字、开始节点、所有结束节点。
+  PerfManager perf_manager;
+  perf_manager.Init("db_name.db", {"ModuleA", "ModuleB", "ModuleC"}, ModuleA, {ModuleC});
+
+  //记录新信息。
+  perf_manager.Record(false, "PROCESS", "ModuleA", 100);
+
+在数据库中记录情况如下，其中xxxx代表当前时间的时间戳。
+
+::
+
   TABLE PROCESS
 
     pts     ModuleA_stime   ModuleA_etime   ModuleB_stime   ModuleB_etime    ModuleC_stime    ModuleC_etime
    -------  -------------   -------------   -------------   -------------    -------------    -------------
+    100      xxxx
 
-记录时间戳
-<<<<<<<<<<<
-
-每帧数据在流过每个模块的开始和结束时都会分别生成时间戳，并储存到数据库中。用户可以通过调用 ``RecordPerfInfo`` 函数实现。例如：
+随后，记录pts为100的一帧数据ModuleA模块的结束时间戳，perf类型是 ``PROCESS``。
 
 ::
 
-  perf_manager.RecordPerfInfo(info); 
+  perf_manager.Record(true, "PROCESS", "ModuleA", 100);
 
-记录一段时间后，数据库将被填入时间戳信息，例如：
+在数据库中记录情况如下：
 
 ::
 
@@ -90,12 +145,62 @@ CNStream提供性能统计机制，帮助用户统计各模块及整条pipeline�
 
     pts     ModuleA_stime   ModuleA_etime   ModuleB_stime   ModuleB_etime    ModuleC_stime    ModuleC_etime
    -------  -------------   -------------   -------------   -------------    -------------    -------------
-    0        xxxx            xxxx            xxxx            xxxx             xxxx             xxxx
-    1        xxxx            xxxx            xxxx            xxxx             xxxx             xxxx
-    ...
+    100      xxxx            xxxx
 
-性能计算
-<<<<<<<<<
+**记录模块的其他信息的时间戳**
+
+使用这种方法，用来记录其他信息的时间戳。用户需调用 ``Record`` 函数来依次传入参数：perf类型、主索引、主索引值、索引。
+
+例如：某一帧的一个log信息的时间戳，记录perf类型是LOG，主索引为pts，其值100，索引为ModuleA_log。
+
+::
+
+  // 初始化，注册perf type LOG，主索引pts，其他索引ModuleA_log
+  PerfManager perf_manager;
+  perf_manager.Init("db_name.db");
+  perf_manager.RegisterPerfType("LOG", "pts", {"ModuleA_log"});
+
+  // 记录信息
+  perf_manager.Record("LOG", "pts", "100", "ModuleA_log");
+
+在数据库中记录情况如下：
+
+::
+
+  TABLE LOG
+
+    pts     ModuleA_log
+   -------  -------------
+    100      xxxx
+
+**记录模块除时间戳外的其他信息**
+
+使用这种方法，用来记录其他信息，不仅仅是当前时间的时间戳。用户需调用 ``Record`` 函数来依次传入参数：perf类型、主索引、主索引值、索引、索引值。
+
+例如：某一帧的frame id信息。记录perf类型是INFO，主索引为pts，其值1000，索引为frame_id，其值为300。
+
+::
+
+  // 初始化，注册perf type INFO，主索引pts，其他索引frame_id
+  PerfManager perf_manager;
+  perf_manager.Init("db_name.db");
+  perf_manager.RegisterPerfType("INFO", "pts", {"frame_id"});
+
+  // 记录信息
+  perf_manager.Record("INFO", "pts", "1000", "frame_id"， "300");
+
+在数据库中记录情况如下：
+
+::
+
+  TABLE INFO
+
+    pts      frame_id
+   -------  ------------
+    1000      300
+
+计算模块和Pipeline的性能
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 每隔一段时间各模块及整条pipeline的性能就会被统计一次。性能指标主要包括时延和吞吐量。
 
@@ -110,7 +215,7 @@ CNStream提供性能统计机制，帮助用户统计各模块及整条pipeline�
     PerfStats statsB = perf_manager.CalculatePerfStats("PROCESS", ModuleB);
     PerfStats statsC = perf_manager.CalculatePerfStats("PROCESS", ModuleC);
 
-如需打印模块性能信息，调用 ``PrintPerfStats`` 函数。详情参见 ``modules/core/include/perf_calculator.hpp`` 文件。
+如需打印模块性能信息，可以调用 **PerfCalculator** 类的 ``PrintPerfStats`` 函数实现。详情参见 ``modules/core/include/perf_calculator.hpp`` 文件。
 
 ::
 
@@ -135,7 +240,7 @@ Pipeline的性能计算
 
     std::vector<PerfStats> stats = perf_manager.CalculatePipelinePerfStats("PROCESS");
 
-如需打印模块性能信息，调用 ``PrintPerfStats`` 函数，详情见 ``modules/core/include/perf_calculator.hpp`` 文件。
+如需打印模块性能信息，可以调用 **PerfCalculator** 类的 ``PrintPerfStats`` 函数实现，详情见 ``modules/core/include/perf_calculator.hpp`` 文件。
 
 ::
 
@@ -143,7 +248,7 @@ Pipeline的性能计算
       PrintPerfStats(it);
     }
 
-除此之外，如果只打印时延或吞吐量信息，用户可以 ``PrintLatency`` 或 ``PrintThroughput`` 函数。
+除此之外，如果只打印时延或吞吐量信息，用户可以调用 **PerfCalculator** 类的 ``PrintLatency`` 或 ``PrintThroughput`` 函数来实现。
 
 开发样例介绍
 ---------------
@@ -153,7 +258,9 @@ Pipeline的性能计算
 示例脚本说明
 <<<<<<<<<<<<<<<<<<
 
-CNStream提供的run.sh示例脚本位于 ``${CNSTREAM_PATH}/samples/demo`` 目录下，其中 ``${CNSTREAM_DIR}`` 是指CNStream源码目录。数据库文件默认保存到 ``perf_database`` 文件夹下。如果希望更改生成的数据库文件的储存路径，设置参数 ``perf_db_dir`` 即可。此外，CNStream提供的示例默认开启性能统计功能。如需关闭，可在脚本中设置 ``perf`` 参数为 **false**。
+用户通过运行 ``run.sh`` 示例脚本来运行示例。示例位于 ``${CNSTREAM_PATH}/samples/demo`` 目录下，其中 ``${CNSTREAM_DIR}`` 是指CNStream源码目录。
+
+数据库文件默认保存到 ``perf_database`` 文件夹下。如果希望更改生成的数据库文件的储存路径，只需设置示例脚本中的参数 ``perf_db_dir`` 即可。此外，CNStream提供的示例默认开启性能统计功能。如需关闭，可在脚本中设置 ``perf`` 参数为 **false**。
 
 ::
 
@@ -171,7 +278,7 @@ CNStream提供的run.sh示例脚本位于 ``${CNSTREAM_PATH}/samples/demo`` 目�
 配置文件说明
 <<<<<<<<<<<<<<<<<<<<
 
-示例脚本run.sh对应的JSON配置文件 ``detection_config.json`` 位于 ``${CNSTREAM_PATH}/samples/demo`` 目录下，其中 ``${CNSTREAM_DIR}`` 是指CNStream源码目录。模块参数 ``show_perf_info`` 表示是否显示模块性能。设为 **true** 时将显示该模块的性能，设为 **false** 时则不显示该模块的性能。
+示例脚本 ``run.sh`` 对应的JSON配置文件 ``detection_config.json`` 位于 ``${CNSTREAM_PATH}/samples/demo`` 目录下，其中 ``${CNSTREAM_DIR}`` 是指CNStream源码目录。模块参数 ``show_perf_info`` 表示是否显示模块性能。设为 **true** 时将显示该模块的性能，设为 **false** 时则不显示该模块的性能。
 
 例如显示source模块的性能数据，JSON配置文件配置如下：
 
@@ -205,7 +312,7 @@ CNStream提供的run.sh示例脚本位于 ``${CNSTREAM_PATH}/samples/demo`` 目�
 ::
 
    /*
-      创建perf recorder。
+      创建perf manager。
    */
    if (FLAGS_perf) {
      std::vector<std::string> stream_ids;
@@ -215,6 +322,9 @@ CNStream提供的run.sh示例脚本位于 ``${CNSTREAM_PATH}/samples/demo`` 目�
      // 创建PerfManager。
      pipeline.CreatePerfManager(stream_ids, FLAGS_perf_db_dir);  // 传入stream_id和数据库文件储存路径。
    }
+
+.. attention::
+    |  用户需要在pipeline开始之前，调用 ``CreatePerfManager`` 函数。
 
 自定义性能统计
 ----------------
@@ -226,31 +336,26 @@ CNStream提供的run.sh示例脚本位于 ``${CNSTREAM_PATH}/samples/demo`` 目�
 自定义性能统计信息
 <<<<<<<<<<<<<<<<<<<<
 
-如果想要对其他方面信息进行统计，用户需要调用 ``RegisterPerf()`` 函数注册一个信息类型，即PerfType。在调用 ``RecordPerfInfo`` 函数记录 ``PerfInfo`` 时，需将定义的信息类型传入到函数中。用户可以在 ``PerfManager`` 初始化之前注册信息类型，所有已经注册的PerfType的表格在初始化时统一生成。如果 ``PerfManager`` 已经初始化，则在注册时生成对应的表格。
+如果想要对其他方面信息进行统计，用户需要调用 ``RegisterPerfType`` 函数注册一个perf类型。随后可通过调用 ``Record`` 函数记录信息。
 
-.. attention::
-    |  如果需要在模块的 ``Open`` 函数中注册信息类型，注意搭建pipeline时一定要在 ``pipeline.Start()`` 函数前创建 ``PerfManager``。详情参考 自定义构建pipeline_ 。
-	
 例如，注册TEST1类型和TEST2类型。
 
 ::
 
   PerfManager perf_manager;
 
-  // 注册TEST1类型。
-  perf_manager.RegisterPerf("TEST1");
-
   // 初始化PerfManager。
   perf_manager.Init("db_nam.db", {"ModuleA", "ModuleB", "ModuleC"}, ModuleA, {ModuleC});
 
+  // 注册TEST1类型。
+  perf_manager.RegisterPerfType("TEST1");
+
   // 注册TEST2类型。
-  perf_manager.RegisterPerf("TEST2");
+  perf_manager.RegisterPerfType("TEST2");
 
-  PerfInfo info1 {false, "TEST1", node_name, pts};
-  perf_manager.RecordPerfInfo(info1);
-
-  PerfInfo info2 {false, "TEST2", node_name, pts};
-  perf_manager.RecordPerfInfo(info2);
+  int64_t pts = 1;
+  perf_manager.Record(false, "TEST1", "ModuleA", pts);
+  perf_manager.Record(false, "TEST2", "ModuleB", pts);
 
 
 自定义计时
@@ -260,7 +365,7 @@ CNStream提供的run.sh示例脚本位于 ``${CNSTREAM_PATH}/samples/demo`` 目�
 
 ::
 
-  // 每个视频流的PerfManager。key为stream_id。
+  // 每个视频流的PerfManager, key为stream_id。
   std::unordered_map<std::string, std::shared_ptr<PerfManager>> perf_managers_;
 
 

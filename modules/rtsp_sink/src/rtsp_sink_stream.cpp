@@ -25,10 +25,6 @@
 
 #include "easyinfer/mlu_context.h"
 
-#ifdef HAVE_OPENCV
-#include "opencv2/opencv.hpp"
-#endif
-
 #include "rtsp_sink.hpp"
 #include "rtsp_stream_pipe.hpp"
 

@@ -150,9 +150,9 @@ Docker环境配置
 
 1.  安装Docker。宿主机需要预先安装Docker。详情请查看Docker官网主页：https://docs.docker.com/    
 
-2.  制作Docker镜像。
+2.  运行下面命令制作Docker镜像。
 
-    ``${board_series}`` 为用户使用板卡的型号，即MLU270或MLU220SOC。
+    其中``${neuware_package}`` 为寒武纪Neuware安装包及其存放路径。``${board_series}`` 为用户使用板卡的型号，即MLU270或MLU220SOC。
 
     ::
 

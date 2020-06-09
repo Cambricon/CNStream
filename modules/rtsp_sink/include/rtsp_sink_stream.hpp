@@ -22,7 +22,11 @@
 #define MODULES_RTSP_SINK_INCLUDE_RTSP_SINK_STREAM_HPP_
 
 #ifdef HAVE_OPENCV
-#include <opencv2/opencv.hpp>
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#if (CV_MAJOR_VERSION >= 3)
+#include "opencv2/imgcodecs/imgcodecs.hpp"
+#endif
 #else
 #error OpenCV required
 #endif

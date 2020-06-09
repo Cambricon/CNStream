@@ -404,7 +404,7 @@ EncodeHandler::~EncodeHandler() {
 }
 
 void EncodeHandler::ReceivePacket(void* _packet) {
-  DLOG(INFO) << "Encode receive packet " << _packet;
+  VLOG(5) << "Encode receive packet " << _packet;
   // packet callback
   if (attr_.packet_callback) {
     CnPacket cn_packet;
@@ -471,19 +471,19 @@ void EncodeHandler::CopyFrame(cncodecFrame *dst, const CnFrame& input) {
       case PixelFmt::NV12:
       case PixelFmt::NV21:
       {
-        DLOG(INFO) << "Copy frame luminance";
+        VLOG(5) << "Copy frame luminance";
         mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[0].addr), input.ptrs[0], frame_size, 1);
-        DLOG(INFO) << "Copy frame chroma";
+        VLOG(5) << "Copy frame chroma";
         mem_op.MemcpyH2D(reinterpret_cast<void*>(dst->plane[1].addr), input.ptrs[1], frame_size >> 1, 1);
         break;
       }
       case PixelFmt::I420:
       {
-        DLOG(INFO) << "Copy frame luminance";
+        VLOG(5) << "Copy frame luminance";
         mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[0].addr), input.ptrs[0], frame_size, 1);
-        DLOG(INFO) << "Copy frame chroma 0";
+        VLOG(5) << "Copy frame chroma 0";
         mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[1].addr), input.ptrs[1], frame_size >> 2, 1);
-        DLOG(INFO) << "Copy frame chroma 1";
+        VLOG(5) << "Copy frame chroma 1";
         mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[2].addr), input.ptrs[2], frame_size >> 2, 1);
         break;
       }
@@ -491,7 +491,7 @@ void EncodeHandler::CopyFrame(cncodecFrame *dst, const CnFrame& input) {
       case PixelFmt::ABGR:
       case PixelFmt::RGBA:
       case PixelFmt::BGRA:
-        DLOG(INFO) << "Copy frame RGB family";
+        VLOG(5) << "Copy frame RGB family";
         mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[0].addr), input.ptrs[0], frame_size << 2, 1);
         break;
       default:
@@ -507,7 +507,7 @@ bool EncodeHandler::SendJpegData(const CnFrame& frame, bool eos) {
   memset(&input, 0, sizeof(cnjpegEncInput));
   int ecode = cnjpegEncWaitAvailInputBuf(reinterpret_cast<cnjpegEncoder>(handle_), &input.frame, 10000);
   if (-CNCODEC_TIMEOUT == ecode) {
-    DLOG(INFO) << "cnjpegEncWaitAvailInputBuf timeout";
+    VLOG(5) << "cnjpegEncWaitAvailInputBuf timeout";
     return false;
   } else if (CNCODEC_SUCCESS != ecode) {
     throw EasyEncodeError("Avaliable input buffer failed. Error code: " + to_string(ecode));
@@ -523,7 +523,7 @@ bool EncodeHandler::SendJpegData(const CnFrame& frame, bool eos) {
   } else {
     input.flags &= (~CNJPEGENC_FLAG_EOS);
   }
-  DLOG(INFO) << "Feed jpeg frame info) data: " << frame.ptrs[0] << " length: " << frame.frame_size;
+  VLOG(5) << "Feed jpeg frame info) data: " << frame.ptrs[0] << " length: " << frame.frame_size;
 
   input.frame.pixelFmt = jcreate_params_.pixelFmt;
   input.frame.colorSpace = jcreate_params_.colorSpace;
@@ -565,7 +565,7 @@ bool EncodeHandler::SendVideoData(const CnFrame& frame, bool eos) {
   } else {
     input.flags &= (~CNVIDEOENC_FLAG_EOS);
   }
-  DLOG(INFO) << "Feed video frame info) data: " << frame.ptrs[0] << " length: " \
+  VLOG(5) << "Feed video frame info) data: " << frame.ptrs[0] << " length: " \
              << frame.frame_size << " pts: " << frame.pts;
 
   input.frame.pixelFmt = vcreate_params_.pixelFmt;
@@ -727,7 +727,7 @@ void EasyEncode::AbortEncoder() {
 EasyEncode::Attr EasyEncode::GetAttr() const { return handler_->attr_; }
 
 void EasyEncode::ReleaseBuffer(uint64_t buf_id) {
-  DLOG(INFO) << "Release buffer, " << reinterpret_cast<uint8_t*>(buf_id);
+  VLOG(4) << "Release buffer, " << reinterpret_cast<uint8_t*>(buf_id);
   delete []reinterpret_cast<uint8_t*>(buf_id);
 }
 

@@ -107,8 +107,8 @@ void EasyInfer::Run(void** input, void** output, float* hw_time) const {
   int i_num = d_ptr_->ploader_->InputNum();
   int o_num = d_ptr_->ploader_->OutputNum();
 
-  DLOG(INFO) << "Process inference on one frame, input num: " << i_num << " output num: " << o_num;
-  DLOG(INFO) << "Inference, input: " << input << " output: " << output;
+  VLOG(5) << "Process inference on one frame, input num: " << i_num << " output num: " << o_num;
+  VLOG(5) << "Inference, input: " << input << " output: " << output;
   // prepare params for invokefunction
   for (int i = 0; i < i_num; ++i) {
     d_ptr_->param_[i] = input[i];
@@ -133,7 +133,7 @@ void EasyInfer::Run(void** input, void** output, float* hw_time) const {
     CALL_CNRT_FUNC(cnrtNotifierDuration(d_ptr_->notifier_start_, d_ptr_->notifier_end_, hw_time),
                    "Calculate elapsed time failed.");
     *hw_time /= 1000.0f;
-    DLOG(INFO) << "Inference hardware time " << *hw_time << " ms";
+    VLOG(3) << "Inference hardware time " << *hw_time << " ms";
   }
 }
 

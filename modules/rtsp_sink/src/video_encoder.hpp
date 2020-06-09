@@ -98,6 +98,7 @@ class VideoEncoder {
   int64_t init_timestamp_ = -1;
 
   bool running_ = false;
+  bool is_client_running_ = false;
   std::thread *encode_thread_ = nullptr;
 
   std::mutex input_mutex_;

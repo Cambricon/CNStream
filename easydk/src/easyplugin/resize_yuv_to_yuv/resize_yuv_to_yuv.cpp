@@ -132,7 +132,7 @@ bool MluResizeYuv2Yuv::Init(const MluResizeAttr& attr) {
   cnret = cnrtMalloc(&d_ptr_->dst_uv_ptrs_mlu_, sizeof(void*) * attr.batch_size);
   if (!CnrtCheck(cnret, &d_ptr_->estr_, "Malloc dst uv mlu buffer failed.")) return false;
 
-  DLOG(INFO) <<  "Init ResizeYuvToYuv Operator";
+  VLOG(4) <<  "Init ResizeYuvToYuv Operator";
 
   bool success = ::CreateResizeYuv2Yuv(d_ptr_->attr_, &d_ptr_->yuv2yuv_, &d_ptr_->estr_);
   if (!success) {
@@ -172,12 +172,12 @@ int MluResizeYuv2Yuv::InvokeOp(void* dst_y, void* dst_uv, void* src_y, void* src
 }
 
 void MluResizeYuv2Yuv::SrcBatchingUp(void* y, void* uv) {
-  DLOG(INFO) << "Store resize yuv2yuv input for batching, " << y << ", " <<  uv;
+  VLOG(5) << "Store resize yuv2yuv input for batching, " << y << ", " <<  uv;
   d_ptr_->src_yuv_ptrs_cache_.push_back(std::make_pair(y, uv));
 }
 
 void MluResizeYuv2Yuv::DstBatchingUp(void* y, void* uv) {
-  DLOG(INFO) << "Store resize yuv2yuv output for batching, " << y << ", " <<  uv;
+  VLOG(5) << "Store resize yuv2yuv output for batching, " << y << ", " <<  uv;
   d_ptr_->dst_yuv_ptrs_cache_.push_back(std::make_pair(y, uv));
 }
 
@@ -213,7 +213,7 @@ bool MluResizeYuv2Yuv::SyncOneOutput() {
                      CNRT_MEM_TRANS_DIR_HOST2DEV);
   if (!CnrtCheck(cnret, &d_ptr_->estr_, "Memcpy dst uv from host to device failed.")) return false;
 
-  DLOG(INFO) << "Do resize yuv2yuv process, dst_y: " << d_ptr_->dst_y_ptrs_mlu_
+  VLOG(5) << "Do resize yuv2yuv process, dst_y: " << d_ptr_->dst_y_ptrs_mlu_
              << ", dst_uv: " << d_ptr_->dst_y_ptrs_mlu_;
   return ::ComputeResizeYuv2Yuv(d_ptr_->dst_y_ptrs_mlu_, d_ptr_->dst_uv_ptrs_mlu_,
                                 d_ptr_->src_y_ptrs_mlu_, d_ptr_->src_uv_ptrs_mlu_,

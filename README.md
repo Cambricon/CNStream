@@ -127,12 +127,12 @@ After finished prerequisites, you can build instructions with the following step
       cmake -Dbuild_samples=ON ${CNSTREAM_DIR}
       ```
 
-   b. Run the following command to add the MLU platform definition. If you are using MLU220 SOC:
+   b. If wanna cross compile, please follow command to:
 
       ```bash
-   -DMLU=MLU220_SOC  // build the software support MLU220 soc
+      cmake -DCMAKE_TOOLCHAIN_FILE=${CNSTREAM_DIR}/cmake/cross-compile.cmake ${CNSTREAM_DIR}
       ```
-   
+      Note: you need to configure toolchain by yourself in cross-compile.cmake
 4. Run the following command to build instructions:
 
       ```bash
