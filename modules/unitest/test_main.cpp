@@ -39,6 +39,8 @@ const std::vector<std::array<std::string, 3>> model_info = {
     {"resnet50_offline_v1.3.0.cambricon", "/Classification/resnet50/",
      "http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon"},
     {"yuv2gray.cambricon", "/KCF/", "http://video.cambricon.com/models/MLU270/KCF/yuv2gray.cambricon"},
+    {"feature_extract_v1.3.0.cambricon", "/feature_extract/",
+     "http://video.cambricon.com/models/MLU270/feature_extract/feature_extract_v1.3.0.cambricon"},
 };
 
 class TestEnvironment : public testing::Environment {

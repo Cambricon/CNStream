@@ -43,12 +43,9 @@ namespace cnstream {
 
 static constexpr const char *gname = "track";
 static constexpr const char *gfunc_name = "subnet0";
-static constexpr const char *g_dsmodel_path = "../../data/models/MLU100/Track/track.cambricon";
-#ifdef CNS_MLU100
-static constexpr const char *g_kcfmodel_path = "../../data/models/MLU100/KCF/yuv2gray.cambricon";
-#elif CNS_MLU270
+static constexpr const char *g_dsmodel_path =
+    "../../data/models/MLU270/feature_extract/feature_extract_v1.3.0.cambricon";
 static constexpr const char *g_kcfmodel_path = "../../data/models/MLU270/KCF/yuv2gray.cambricon";
-#endif
 static constexpr const char *ds_track = "FeatureMatch";
 static constexpr const char *kcf_track = "KCF";
 static constexpr const char *img_path = "../../data/images/19.jpg";
@@ -58,24 +55,6 @@ static constexpr int g_channel_id = 0;
 TEST(Tracker, Construct) {
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   EXPECT_STREQ(track->GetName().c_str(), gname);
-}
-
-TEST(Tracker, CheckParamSet) {
-  std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
-  ModuleParamSet param;
-  EXPECT_FALSE(track->CheckParamSet(param));
-
-  param["model_path"] = "fake_path";
-  param["func_name"] = "fake_name";
-  EXPECT_FALSE(track->CheckParamSet(param));
-
-  param["model_path"] = GetExePath() + g_kcfmodel_path;
-  param["func_name"] = gfunc_name;
-  param["track_name"] = "fake_name";
-  EXPECT_FALSE(track->CheckParamSet(param));
-
-  param["track_name"] = kcf_track;
-  EXPECT_TRUE(track->CheckParamSet(param));
 }
 
 TEST(Tracker, OpenClose) {
@@ -90,17 +69,11 @@ TEST(Tracker, OpenClose) {
   // Defaul param
   param.clear();
   EXPECT_TRUE(track->Open(param));
-#ifdef CNS_MLU100
   // FeatureMatch On MLU
   param["track_name"] = ds_track;
   param["model_path"] = GetExePath() + g_dsmodel_path;
   param["func_name"] = gfunc_name;
   EXPECT_TRUE(track->Open(param));
-#endif
-  // KCF no model and func
-  param.clear();
-  param["track_name"] = kcf_track;
-  EXPECT_FALSE(track->Open(param));
   // KCF has model and wrong func
   param.clear();
   param["track_name"] = kcf_track;
@@ -197,7 +170,6 @@ std::shared_ptr<CNFrameInfo> GenTestImageData() {
   return data;
 }
 
-#ifdef CNS_MLU100
 TEST(Tracker, ProcessMluFeature) {
   // create track
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
@@ -218,7 +190,6 @@ TEST(Tracker, ProcessMluFeature) {
     }
   }
 }
-#endif
 
 TEST(Tracker, ProcessCpuFeature) {
   // create track
@@ -226,10 +197,10 @@ TEST(Tracker, ProcessCpuFeature) {
   ModuleParamSet param;
   ASSERT_TRUE(track->Open(param));
 
-  int repeat_time = 10;
+  int repeat_time = 1;
 
+  auto data = GenTestImageData();
   for (int n = 0; n < repeat_time; ++n) {
-    auto data = GenTestImageData();
     EXPECT_EQ(track->Process(data), 0);
     for (auto &obj : data->objs) {
       EXPECT_FALSE(obj->track_id.empty());
@@ -261,26 +232,27 @@ TEST(Tracker, ProcessFeatureMatchCPU1) {
   EXPECT_EQ(track->Process(data), 0);
   // Illegal width and height
   data->frame.width = -1;
-  EXPECT_NO_THROW(track->Process(data));
+  EXPECT_EQ(track->Process(data), -1);
   data->frame.width = 1920;
   EXPECT_EQ(track->Process(data), 0);
 
   data->frame.height = -1;
-  EXPECT_NO_THROW(track->Process(data));
+  EXPECT_EQ(track->Process(data), -1);
   data->frame.height = 1080;
   EXPECT_EQ(track->Process(data), 0);
 
   data->frame.width = 5096;
   data->frame.height = 3160;
-  EXPECT_NO_THROW(track->Process(data));
+  EXPECT_EQ(track->Process(data), -1);
+
   data->frame.width = 1920;
   data->frame.height = 1080;
   EXPECT_EQ(track->Process(data), 0);
-  // Illegal fmt ???
-  /* data->frame.fmt = CN_PIXEL_FORMAT_RGB24; */
-  /* EXPECT_ANY_THROW(track->Process(data)); */
-  data->frame.fmt = CN_PIXEL_FORMAT_BGR24;
-  EXPECT_EQ(track->Process(data), 0);
+  // Illegal fmt ??
+  // data->frame.fmt = CN_PIXEL_FORMAT_RGB24; //
+  // EXPECT_ANY_THROW(track->Process(data)); //
+  // data->frame.fmt = CN_PIXEL_FORMAT_BGR24;
+  // EXPECT_EQ(track->Process(data), 0);
 }
 
 TEST(Tracker, ProcessFeatureMatchCPU2) {
@@ -288,6 +260,7 @@ TEST(Tracker, ProcessFeatureMatchCPU2) {
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   ModuleParamSet param;
   param["track_name"] = "FeatureMatch";
+  param["moduel_path"] = "";
   ASSERT_TRUE(track->Open(param));
   int iter = 0;
   int obj_num = 3;
@@ -319,25 +292,7 @@ TEST(Tracker, ProcessFeatureMatchCPU3) {
   EXPECT_EQ(track->Process(data), 0);
 }
 
-/*******************************************
- * this case can not pass. this problem maybe
- * the same with Inferencer, cased by use thread local variables,
- * can not use open>>>close>>>open or open>>>open in the same thread.
- *******************************************/
-// TEST(Tracker, ProcessFeatureMatchCPU4) {
-//   // create track
-//   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
-//   ModuleParamSet param;
-//   param["track_name"] = "FeatureMatch";
-//   ASSERT_TRUE(track->Open(param));
-//   int iter = 0;
-//   int obj_num = 3;
-//   auto data = GenTestData(iter, obj_num);
-//   EXPECT_EQ(track->Process(data), 0);
-//   size_t zero = 0;
-//   EXPECT_EQ(data->objs.size(), zero);
-// }
-TEST(Tracker, ProcessFeatureMatchCPU5) {
+TEST(Tracker, ProcessFeatureMatchCPU4) {
   // create track
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   ModuleParamSet param;
@@ -354,7 +309,7 @@ TEST(Tracker, ProcessFeatureMatchCPU5) {
     }
   }
 }
-#ifdef CNS_MLU100
+
 TEST(Tracker, ProcessFeatureMatchMLU1) {
   // create track
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
@@ -369,26 +324,26 @@ TEST(Tracker, ProcessFeatureMatchMLU1) {
   EXPECT_EQ(track->Process(data), 0);
   // Illegal width and height
   data->frame.width = -1;
-  EXPECT_ANY_THROW(track->Process(data));
+  EXPECT_EQ(track->Process(data), -1);
   data->frame.width = 1920;
   EXPECT_EQ(track->Process(data), 0);
 
   data->frame.height = -1;
-  EXPECT_ANY_THROW(track->Process(data));
+  EXPECT_EQ(track->Process(data), -1);
   data->frame.height = 1080;
   EXPECT_EQ(track->Process(data), 0);
 
   data->frame.width = 5096;
   data->frame.height = 3160;
-  EXPECT_ANY_THROW(track->Process(data));
+  EXPECT_EQ(track->Process(data), -1);
   data->frame.width = 1920;
   data->frame.height = 1080;
   EXPECT_EQ(track->Process(data), 0);
   // Illegal fmt ???
-  /* data->frame.fmt = CN_PIXEL_FORMAT_RGB24; */
-  /* EXPECT_ANY_THROW(track->Process(data)); */
-  /* data->frame.fmt = CN_PIXEL_FORMAT_BGR24; */
-  /* EXPECT_EQ(track->Process(data), 0); */
+  // data->frame.fmt = CN_PIXEL_FORMAT_RGB24; //
+  // EXPECT_ANY_THROW(track->Process(data)); //
+  // data->frame.fmt = CN_PIXEL_FORMAT_BGR24; //
+  // EXPECT_EQ(track->Process(data), 0); //
 }
 
 TEST(Tracker, ProcessFeatureMatchMLU2) {
@@ -420,33 +375,13 @@ TEST(Tracker, ProcessFeatureMatchMLU3) {
   param["func_name"] = gfunc_name;
   ASSERT_TRUE(track->Open(param));
   int iter = 0;
-  int obj_num = 3;
-  auto data = GenTestData(iter, obj_num);
-  EXPECT_EQ(track->Process(data), 0);
-  auto obj = std::make_shared<CNInferObject>();
-  obj->id = std::to_string(6);
-  CNInferBoundingBox bbox = {0.6, 0.6, 0.6, 0.6};
-  obj->bbox = bbox;
-  data->objs.push_back(obj);
-  EXPECT_ANY_THROW(track->Process(data));
-}
-
-TEST(Tracker, ProcessFeatureMatchMLU4) {
-  // create track
-  std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
-  ModuleParamSet param;
-  param["track_name"] = "FeatureMatch";
-  param["model_path"] = GetExePath() + g_dsmodel_path;
-  param["func_name"] = gfunc_name;
-  ASSERT_TRUE(track->Open(param));
-  int iter = 0;
   int obj_num = 0;
   auto data = GenTestData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
   size_t zero = 0;
   EXPECT_EQ(data->objs.size(), zero);
 }
-TEST(Tracker, ProcessFeatureMatchMLU5) {
+TEST(Tracker, ProcessFeatureMatchMLU4) {
   // create track
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   ModuleParamSet param;
@@ -465,8 +400,8 @@ TEST(Tracker, ProcessFeatureMatchMLU5) {
     }
   }
 }
-#endif
 
+#ifdef ENABLE_KCF
 std::shared_ptr<CNFrameInfo> GenTestYUVMLUData(int iter, int obj_num) {
   const int width = 1920, height = 1080;
   size_t nbytes = width * height * sizeof(uint8_t) * 3;
@@ -508,8 +443,6 @@ std::shared_ptr<CNFrameInfo> GenTestYUVMLUData(int iter, int obj_num) {
   return data;
 }
 
-// Test KCF failed because of thread local context won't destruct
-
 TEST(Tracker, ProcessKCFMLU0) {
   // create track
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
@@ -520,9 +453,14 @@ TEST(Tracker, ProcessKCFMLU0) {
   ASSERT_TRUE(track->Open(param));
   int iter = 0;
   int obj_num = 0;
+  edk::MluMemoryOp mem_op;
   auto data = GenTestYUVMLUData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
+
+  // free MLUmemory
+  mem_op.FreeMlu(data->frame.ptr_mlu[0]);
 }
+
 TEST(Tracker, ProcessKCFMLU1) {
   // create track
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
@@ -533,30 +471,34 @@ TEST(Tracker, ProcessKCFMLU1) {
   ASSERT_TRUE(track->Open(param));
   int iter = 0;
   int obj_num = 0;
+  edk::MluMemoryOp mem_op;
   auto data = GenTestYUVMLUData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
   // Illegal width and height
   data->frame.width = -1;
-  EXPECT_NO_THROW(track->Process(data));
+  EXPECT_EQ(track->Process(data), -1);
   data->frame.width = 1920;
   EXPECT_EQ(track->Process(data), 0);
 
   data->frame.height = -1;
-  EXPECT_NO_THROW(track->Process(data));
+  EXPECT_EQ(track->Process(data), -1);
   data->frame.height = 1080;
   EXPECT_EQ(track->Process(data), 0);
 
   data->frame.width = 5096;
   data->frame.height = 3160;
-  EXPECT_NO_THROW(track->Process(data));
+  EXPECT_EQ(track->Process(data), -1);
   data->frame.width = 1920;
   data->frame.height = 1080;
   EXPECT_EQ(track->Process(data), 0);
   // Illegal fmt
   data->frame.fmt = CN_PIXEL_FORMAT_RGB24;
-  EXPECT_NO_THROW(track->Process(data));
+  EXPECT_ANY_THROW(track->Process(data));
   data->frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
   EXPECT_EQ(track->Process(data), 0);
+
+  // free MLUmemory
+  mem_op.FreeMlu(data->frame.ptr_mlu[0]);
 }
 
 TEST(Tracker, ProcessKCFMLU2) {
@@ -569,6 +511,7 @@ TEST(Tracker, ProcessKCFMLU2) {
   ASSERT_TRUE(track->Open(param));
   int iter = 0;
   int obj_num = 0;
+  edk::MluMemoryOp mem_op;
   auto data = GenTestYUVMLUData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
   auto obj = std::make_shared<CNInferObject>();
@@ -577,6 +520,9 @@ TEST(Tracker, ProcessKCFMLU2) {
   obj->bbox = bbox;
   data->objs.push_back(obj);
   EXPECT_EQ(track->Process(data), 0);
+
+  // free MLUmemory
+  mem_op.FreeMlu(data->frame.ptr_mlu[0]);
 }
 
 TEST(Tracker, ProcessKCFMLU3) {
@@ -589,6 +535,7 @@ TEST(Tracker, ProcessKCFMLU3) {
   ASSERT_TRUE(track->Open(param));
   int iter = 0;
   int obj_num = 0;
+  edk::MluMemoryOp mem_op;
   auto data = GenTestYUVMLUData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
   auto obj = std::make_shared<CNInferObject>();
@@ -597,6 +544,9 @@ TEST(Tracker, ProcessKCFMLU3) {
   obj->bbox = bbox;
   data->objs.push_back(obj);
   EXPECT_EQ(track->Process(data), 0);
+
+  // free MLUmemory
+  mem_op.FreeMlu(data->frame.ptr_mlu[0]);
 }
 
 TEST(Tracker, ProcessKCFMLU4) {
@@ -609,13 +559,16 @@ TEST(Tracker, ProcessKCFMLU4) {
   ASSERT_TRUE(track->Open(param));
   int iter = 0;
   int obj_num = 0;
+  edk::MluMemoryOp mem_op;
   auto data = GenTestYUVMLUData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
   size_t zero = 0;
   EXPECT_EQ(data->objs.size(), zero);
+
+  // free MLUmemory
+  mem_op.FreeMlu(data->frame.ptr_mlu[0]);
 }
 
-#ifdef CNS_MLU100
 TEST(Tracker, ProcessKCFMLU5) {
   // create track
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
@@ -626,14 +579,16 @@ TEST(Tracker, ProcessKCFMLU5) {
   ASSERT_TRUE(track->Open(param));
 
   int obj_num = 3;
-
   int repeat_time = 3;
+  edk::MluMemoryOp mem_op;
   for (int n = 0; n < repeat_time; ++n) {
     auto data = GenTestYUVMLUData(n, obj_num);
     EXPECT_EQ(track->Process(data), 0);
     for (auto &obj : data->objs) {
       EXPECT_FALSE(obj->track_id.empty());
     }
+    // free MLUmemory
+    mem_op.FreeMlu(data->frame.ptr_mlu[0]);
   }
 }
 #endif
