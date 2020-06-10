@@ -339,7 +339,9 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
         LOG(ERROR) << "Must set Inferencer custom parameter [stats_db_name] in config file.";
         return false;
     }
-    if (!d_ptr_->infer_perf_manager_->Init(paramSet["stats_db_name"])) {
+    std::string stats_db_path = paramSet["stats_db_name"];
+    stats_db_path = GetPathRelativeToTheJSONFile(stats_db_path, paramSet);
+    if (!d_ptr_->infer_perf_manager_->Init(stats_db_path)) {
         LOG(ERROR) << "Init infer perf manager failed.";
         return false;
     }
