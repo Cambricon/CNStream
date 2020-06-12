@@ -1206,10 +1206,15 @@ TEST(CorePipeline, PerfTaskLoop) {
   EXPECT_TRUE(pipeline.AddModule(end_node));
   pipeline.LinkModules(up_node, down_node);
   pipeline.LinkModules(down_node, end_node);
+
+  up_node->ShowPerfInfo(true);
+  down_node->ShowPerfInfo(true);
+  end_node->ShowPerfInfo(true);
+
   // two linked modules are added to the pipeline
-  EXPECT_TRUE(pipeline.Start());
   std::vector<std::string> stream_ids = {"0", "1", "2", "3"};
   EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, gTestPerfDir));
+  EXPECT_TRUE(pipeline.Start());
 
   uint32_t data_num = 10;
   uint32_t id = 0;
@@ -1226,7 +1231,7 @@ TEST(CorePipeline, PerfTaskLoop) {
     EXPECT_NO_THROW(pipeline.TransmitData("up_node", eos_data));
     id++;
   }
-  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  std::this_thread::sleep_for(std::chrono::milliseconds(400));
   EXPECT_TRUE(pipeline.Stop());
 }
 

@@ -123,6 +123,24 @@ bool Sqlite::Select(std::string table_name, std::string key_name, std::string co
   return false;
 }
 
+bool Sqlite::Select(std::string condition, int (*callback)(void*, int, char**, char**), void* data) {
+  if (!connected_) {
+    LOG(ERROR) << "SQL is not connected.";
+    return false;
+  }
+  char* err_msg;
+  if (condition == "") {
+    return false;
+  }
+
+  if (sqlite3_exec(db_, condition.c_str(), callback, data, &err_msg) == SQLITE_OK) {
+    return true;
+  }
+  LOG(ERROR) << "Select data falied.\nSQL STATEMENT:\n  "
+    << condition << "\nError message: " << err_msg;
+  return false;
+}
+
 static int SingleValueCallback(void *data, int argc, char **argv, char **azColName) {
   if (argv[0]) {
     *reinterpret_cast<size_t*>(data) = atoll(argv[0]);
@@ -130,16 +148,22 @@ static int SingleValueCallback(void *data, int argc, char **argv, char **azColNa
   return 0;
 }
 
-size_t Sqlite::FindMin(std::string table_name, std::string key_name) {
+size_t Sqlite::FindMin(std::string table_name, std::string key_name, std::string condition) {
   size_t min = ~((size_t)0);
   std::string sql_statement = "SELECT MIN(" + key_name + ") from " + table_name;
+  if (!condition.empty()) {
+    sql_statement += " where " + condition + "; ";
+  }
   sqlite3_exec(db_, sql_statement.c_str(), SingleValueCallback, reinterpret_cast<void*>(&min), 0);
   return min;
 }
 
-size_t Sqlite::FindMax(std::string table_name, std::string key_name) {
+size_t Sqlite::FindMax(std::string table_name, std::string key_name, std::string condition) {
   size_t max = 0;
   std::string sql_statement = "SELECT MAX(" + key_name + ") from " + table_name;
+  if (!condition.empty()) {
+    sql_statement += " where " + condition + "; ";
+  }
   sqlite3_exec(db_, sql_statement.c_str(), SingleValueCallback, reinterpret_cast<void*>(&max), 0);
   return max;
 }
@@ -194,9 +218,12 @@ bool Sqlite::Delete(std::string table_name, std::string key_names, std::string v
 
 bool Sqlite::Select(std::string table_name, std::string key_name, std::string condition,
             int (*callback)(void*, int, char**, char**), void* data) { return true;}
-size_t Sqlite::FindMin(std::string table_name, std::string key_name) { return 0; }
 
-size_t Sqlite::FindMax(std::string table_name, std::string key_name) { return 0; }
+bool Sqlite::Select(std::string condition, int (*callback)(void*, int, char**, char**), void* data) { return true; }
+
+size_t Sqlite::FindMin(std::string table_name, std::string key_name, std::string condition) { return 0; }
+
+size_t Sqlite::FindMax(std::string table_name, std::string key_name, std::string condition) { return 0; }
 
 size_t Sqlite::Count(std::string table_name, std::string key_name, std::string condition) { return 0; }
 

@@ -223,6 +223,8 @@ TEST(PerfSqlite, InsertFailedCase) {
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(1));
 
   EXPECT_TRUE(sql.Close());
+
+  EXPECT_FALSE(sql.Insert(table_name, "key1", "1"));
   remove(gTestPerfFile.c_str());
 }
 
@@ -347,7 +349,14 @@ TEST(PerfSqlite, Select) {
   EXPECT_TRUE(sql.Select(table_name, "*", "", Callback, reinterpret_cast<void*>(&data)));
   EXPECT_EQ(data, 3);
   data = 0;
+  EXPECT_TRUE(sql.Select("select * from " + table_name + ";", Callback, reinterpret_cast<void*>(&data)));
+  EXPECT_EQ(data, 3);
+  data = 0;
   EXPECT_TRUE(sql.Select(table_name, "*", "key1=1 or key2=2", Callback, reinterpret_cast<void*>(&data)));
+  EXPECT_EQ(data, 2);
+  data = 0;
+  EXPECT_TRUE(sql.Select("select * from " + table_name + " where key1=1 or key2=2;",
+              Callback, reinterpret_cast<void*>(&data)));
   EXPECT_EQ(data, 2);
 
   EXPECT_TRUE(sql.Close());
@@ -377,7 +386,12 @@ TEST(PerfSqlite, SelectFailedCase) {
   EXPECT_FALSE(sql.Select(table_name, "", "", Callback, reinterpret_cast<void*>(&data)));
   EXPECT_FALSE(sql.Select("wrong_table", "*", "", Callback, reinterpret_cast<void*>(&data)));
 
+  EXPECT_FALSE(sql.Select("select * from wrong_table;", Callback, reinterpret_cast<void*>(&data)));
+
   EXPECT_TRUE(sql.Close());
+  EXPECT_FALSE(sql.Select(table_name, "*", "key1=1 or key2=2", Callback, reinterpret_cast<void*>(&data)));
+  EXPECT_FALSE(sql.Select("select * from " + table_name + " where key1=1 or key2=2;",
+               Callback, reinterpret_cast<void*>(&data)));
   remove(gTestPerfFile.c_str());
 }
 
@@ -400,6 +414,8 @@ TEST(PerfSqlite, FindMin) {
   EXPECT_EQ(sql.FindMin(table_name, "key1"), unsigned(1));
   EXPECT_EQ(sql.FindMin(table_name, "key2"), unsigned(2));
   EXPECT_EQ(sql.FindMin(table_name, "key3"), unsigned(3));
+
+  EXPECT_EQ(sql.FindMin(table_name, "key3", primary_key + ">1"), unsigned(10));
 
   EXPECT_TRUE(sql.Close());
   remove(gTestPerfFile.c_str());
@@ -442,6 +458,8 @@ TEST(PerfSqlite, FindMax) {
   EXPECT_EQ(sql.FindMax(table_name, "key1"), unsigned(21));
   EXPECT_EQ(sql.FindMax(table_name, "key2"), unsigned(22));
   EXPECT_EQ(sql.FindMax(table_name, "key3"), unsigned(23));
+
+  EXPECT_EQ(sql.FindMax(table_name, "key3", primary_key + "<3"), unsigned(15));
 
   EXPECT_TRUE(sql.Close());
   remove(gTestPerfFile.c_str());
@@ -547,6 +565,7 @@ TEST(PerfSqlite, sqlite) {
   EXPECT_TRUE(sql.Update("", "", "", "", ""));
   EXPECT_TRUE(sql.Delete("", "", ""));
   EXPECT_TRUE(sql.Select("", "", "", Callback, nullptr));
+  EXPECT_TRUE(sql.Select("", Callback, nullptr));
   EXPECT_EQ(sql.FindMin("", ""), (unsigned)0);
   EXPECT_EQ(sql.FindMax("", ""), (unsigned)0);
   EXPECT_EQ(sql.Count("", "", ""), (unsigned)0);

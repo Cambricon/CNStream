@@ -37,23 +37,30 @@ class Sqlite {
   }
   bool Connect();
   bool Close();
+
   bool Execution(std::string sql_statement);
+
   bool CreateTable(std::string table_name, std::string primary_key, std::vector<std::string> key_names);
+
   bool Insert(std::string table_name, std::string key_names, std::string values);
   bool Update(std::string table_name, std::string condition_key, std::string condition_value,
               std::string update_key, std::string update_value);
   bool Delete(std::string table_name, std::string key_names, std::string values);
+
   bool Select(std::string table_name, std::string key_name, std::string condition,
               int (*callback)(void*, int, char**, char**), void* data);
+  bool Select(std::string condition, int (*callback)(void*, int, char**, char**), void* data);
 
-  size_t FindMin(std::string table_name, std::string key_name);
-  size_t FindMax(std::string table_name, std::string key_name);
+  size_t FindMin(std::string table_name, std::string key_name, std::string condition = "");
+  size_t FindMax(std::string table_name, std::string key_name, std::string condition = "");
   size_t Count(std::string table_name, std::string key_name, std::string condition = "");
 
   void Begin();
   void Commit();
+
   bool SetDbName(const std::string& db_name);
   std::string GetDbName();
+
 
  private:
 #ifdef HAVE_SQLITE

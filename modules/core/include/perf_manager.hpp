@@ -28,7 +28,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -37,26 +36,11 @@
 namespace cnstream {
 
 class Sqlite;
-class PerfCalculator;
-class PerfStats;
-
-/**
- * @brief The basic data structure for performance measurements.
- *
- * Records performance information at the start-time point and end-time point.
- */
-struct PerfInfo {
-  std::string perf_type;          /// perf type
-  std::string primary_key;        /// pts of each data frame
-  std::string primary_value;      /// pts of each data frame
-  std::string key;
-  std::string value;
-};  // struct PerfInfo
 
 /**
  * @brief PerfManager class.
  *
- * Records PerfInfo and calculates the performance statistics of modules and pipeline .
+ * Creates sql handler and records data to database.
  */
 class PerfManager {
  public:
@@ -69,7 +53,7 @@ class PerfManager {
   */
   ~PerfManager();
   /**
-  * @brief Stops to record PerfInfo.
+  * @brief Stops to record data to database.
   *
   * @return Void.
   */
@@ -77,104 +61,144 @@ class PerfManager {
   /**
   * @brief Initializes PerfManager.
   *
-  * Creates database, tables, and PerfCalculator, and starts the thread function, which inserts PerfInfo to database.
+  * Creates database and starts the thread function, which inserts data to database.
   *
   * @param db_name The name of the database.
-  * @param module_names All module names in the pipeline.
-  * @param start_node The name of the start module in the pipeline.
-  * @param end_nodes The names of all end modules in the pipeline.
   *
   * @return Returns true if PerfManager is initialized successfully, otherwise returns false.
   */
-  bool Init(std::string db_name, std::vector<std::string> module_names,
-            std::string start_node, std::vector<std::string> end_nodes);
+  bool Init(std::string db_name);
+
   /**
-  * @brief Records PerfInfo.
+  * @brief Records data to database.
   *
-  * Creates timestamp and sets it to PerfInfo. And then inserts the time stamp into database.
+  * Creates timestamp and then records the data into database.
   *
-  * @param info The PerfInfo.
+  * @param is_finished If true, indicates the frame has been processed by the module,
+                       and the end time will be reocorded to database.
+  * @param perf_type The perf type.
+  * @param module_name The module name.
+  * @param pts The pts of the frame.
   *
   * @return Returns true if the information is recorded successfully, otherwise returns false.
   */
-  bool Record(bool is_finished, std::string type, std::string module_name, int64_t pts);
-  bool Record(std::string type, std::string primary_key, std::string primary_value, std::string key);
-  bool Record(std::string type, std::string primary_key, std::string primary_value,
+  bool Record(bool is_finished, std::string perf_type, std::string module_name, int64_t pts);
+  /**
+  * @brief Records data to database.
+  *
+  * Creates timestamp and then records the data into database.
+  *
+  * @param perf_type The perf type.
+  * @param primary_key The primary key.
+  * @param primary_value The value of the primary key.
+  * @param key The key. The value of the key is the timestamp.
+  *
+  * @return Returns true if the information is recorded successfully, otherwise returns false.
+  */
+  bool Record(std::string perf_type, std::string primary_key, std::string primary_value, std::string key);
+  /**
+  * @brief Records data to database.
+  *
+  * @param perf_type The perf type.
+  * @param primary_key The primary key.
+  * @param primary_value The value of the primary key.
+  * @param key The key. The value of the key is the timestamp.
+  * @param value The value of the key.
+  *
+  * @return Returns true if the information is recorded successfully, otherwise returns false.
+  */
+  bool Record(std::string perf_type, std::string primary_key, std::string primary_value,
               std::string key, std::string value);
-  bool RegisterPerfType(std::string type, std::string primary_key, std::vector<std::string> keys);
   /**
   * @brief Registers performance type.
   *
-  * @param type The type of performance.
+  * The performance type will be registered and a table with primary key and keys will be created.
+  *
+  * @param perf_type The performance type.
+  * @param primary_key The primary key.
+  * @param keys The keys.
   *
   * @return Returns true if the performance type is registered successfully, otherwise returns false.
   */
-  bool RegisterPerfType(std::string type);
+  bool RegisterPerfType(std::string perf_type, std::string primary_key, const std::vector<std::string> &keys);
 
   /**
-  * @brief Begins a sqlite3 event.
+  * @brief Begins a database event.
   *
   * @return Void.
   */
   void SqlBeginTrans();
   /**
-  * @brief Commits a sqlite3 event.
+  * @brief Commits a database event.
   *
   * @return Void.
   */
   void SqlCommitTrans();
-  /**
-  * @brief Calculates the performance statistics of modules.
-  *
-  * @param perf_type The type of performance.
-  * @param module_name The module name.
-  *
-  * @return Returns the performance statistics.
-  */
-  PerfStats CalculatePerfStats(std::string perf_type, std::string module_name);
-  /**
-  * @brief Calculates the performance statistics of a pipeline.
-  *
-  * @param perf_type The type of performance.
-  *
-  * @return Returns performance statistics of all end modules of a pipeline.
-  */
-  std::vector<std::pair<std::string, PerfStats>> CalculatePipelinePerfStats(std::string perf_type);
 
-  bool Init(std::string db_name);
-  void CreatePerfCalculator(std::string perf_type);
-  void CreatePerfCalculator(std::string perf_type, std::string start_node, std::string end_node);
-  std::shared_ptr<PerfCalculator> GetCalculator(std::string name);
-  PerfStats CalculatePerfStats(std::string calculator_name, std::string perf_type,
-                               std::string start_key, std::string end_key);
-  PerfStats CalculatePerfStats(std::string perf_type, std::string start_key, std::string end_key);
-  bool SetModuleNames(std::vector<std::string> module_names);
-  bool SetStartNode(std::string start_node);
-  bool SetEndNodes(std::vector<std::string> end_nodes);
-  PerfStats CalculateThroughput(std::string calculator_name, std::string perf_type,
-                                std::string start_key, std::string end_key);
-  PerfStats CalculateThroughput(std::string perf_type, std::string start_key, std::string end_key);
+  /**
+  * @brief Gets sql handler.
+  *
+  * @return Returns sql handler.
+  */
+  std::shared_ptr<Sqlite> GetSql() { return sql_; }
+
+  /**
+  * @brief Gets keys.
+  *
+  * @param module_names The module names.
+  * @param suffix The suffixes.
+  *
+  * @return Returns module names with suffixes.
+  */
+  static std::vector<std::string> GetKeys(const std::vector<std::string>& module_names,
+                                          const std::vector<std::string>& suffix);
+
+  /**
+  * @brief Gets the end time suffix.
+  *
+  * @return Returns the end time suffix.
+  */
+  static inline std::string GetEndTimeSuffix() { return "_etime"; }
+  /**
+  * @brief Gets the start time suffix.
+  *
+  * @return Returns the start time suffix.
+  */
+  static inline std::string GetStartTimeSuffix() { return "_stime"; }
+  /**
+  * @brief Gets the primary key.
+  *
+  * @return Returns the primary key.
+  */
+  static inline std::string GetPrimaryKey() { return "pts"; }
+  /**
+  * @brief Gets the default table name.
+  *
+  * @return Returns the default table name.
+  */
+  static inline std::string GetDefaultType() { return "PROCESS"; }
+
 
  private:
 #ifdef UNIT_TEST
  public:  // NOLINT
 #endif
-  std::vector<std::string> GetKeys(const std::vector<std::string>& module_names);
+  struct PerfInfo {
+    std::string perf_type;
+    std::string primary_key;
+    std::string primary_value;
+    std::string key;
+    std::string value;
+  };  // struct PerfInfo
+
   void PopInfoFromQueue();
   void InsertInfoToDb(const PerfInfo& info);
-  void CreatePerfCalculatorForModules(std::string perf_type);
-  void CreatePerfCalculatorForPipeline(std::string perf_type);
   bool PrepareDbFileDir(std::string file_dir);
   bool CreateDir(std::string dir);
-  std::shared_ptr<PerfCalculator> GetCalculator(std::string perf_type, std::string module_name);
 
   bool is_initialized_ = false;
-  std::string start_node_;
-  std::vector<std::string> end_nodes_;
-  std::vector<std::string> module_names_;
   std::unordered_set<std::string> perf_type_;
   std::shared_ptr<Sqlite> sql_ = nullptr;
-  std::unordered_map<std::string, std::shared_ptr<PerfCalculator>> calculator_map_;
   ThreadSafeQueue<PerfInfo> queue_;
   std::thread thread_;
   std::atomic<bool> running_{false};

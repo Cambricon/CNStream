@@ -117,10 +117,14 @@ TEST(CoreModule, SetAndGetPerfManager) {
   std::vector<std::string> stream_ids = {"1", "2"};
   std::vector<std::string> m_names = {"m1", "m2"};
 
+  std::vector<std::string> keys = PerfManager::GetKeys(m_names, {PerfManager::GetStartTimeSuffix(),
+      PerfManager::GetEndTimeSuffix(), "_th"});
+
   std::unordered_map<std::string, std::shared_ptr<PerfManager>> managers;
   for (auto it : stream_ids) {
     managers[it] = std::make_shared<PerfManager>();
-    EXPECT_TRUE(managers[it]->Init(gTestPerfDir + "test_" + it + ".db", m_names, m_names[0], {m_names[1]}));
+    EXPECT_TRUE(managers[it]->Init(gTestPerfDir + "test_" + it + ".db"));
+    managers[it]->RegisterPerfType(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), keys);
   }
   ptr->SetPerfManagers(managers);
 

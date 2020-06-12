@@ -122,7 +122,7 @@
 使用说明
 ^^^^^^^^^
 
-1. 配置 ``detection_config.json`` 文件。该文件位于 ``cnstream/samples/demo`` 目录下。配置所需要的离线模型和追踪方法等。
+配置追踪模块所需要的离线模型和追踪方法等。
 
    ::
  
@@ -139,63 +139,6 @@
          }
      }
     
-2. 创建追踪模块。在追踪模块的头文件中，做如下设置:
-
-   - 调用 ``Open`` 接口打开该模块。
-   - 调用 ``close`` 接口关闭该模块。
-   - 调用 ``Process`` 接口处理每一帧送到该模块的数据。
-
-   示例代码：
-
-   ::
-     
-     class Tracker ：public Module, public ModuleCreator<Tracker> {
-     public:
-        explicit Tracker (const std::string& name);    //Create a Track plugin.
-        ~ Tracker();
-
-        // Open the Track plugin you have just created. Called by pipeline when pipeline started.
-        bool Open(cnstream::ModuleParamSet paramSet) override;
-
-        // Called by pipeline when pipeline stopped.
-        void Close() override;
-
-        // Process each frame.
-        int Process(std::shared_ptr<CNFrameInfo> data) override;
-     }
-
-     static const char *name = “test-tracker”;
-     int main()
-     {
-     std::shared_ptr<Module> track = std::make_shared<Tracker>(name);
-     ModuleParamSet param;
-
-     param[“model_path”] = “test_track”;
-     param[“func_name”] = “func_name”;
-     param[“track_name”] = “track_name”;
-     param[“device_id”] = 1;
-     track->Open(param);
-
-     int width = 1920, height = 1080;
-     size_t nbytes = width x height x sizeof(uint8_t) * 3; 
-     auto data = cnstream::CNFrameInfo::Create(std::to_string(channel_id));
-     data->channel_idx = channel_id;
-     CNDataFrame &frame = data->frame;
-     frame.frame_id = 1;
-     frame.width = width;
-     frame.height = height;
-     frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
-     frame.strides[0] = width;
-     frame.ctx.dev_type = DevContext::DevType::MLU;
-     frame.data[0].reset(new CNSyncedMemory(nbytes));
-
-     int ret = track->Process(data);
-     if (ret != 0)
-       printf(“track process error\n”);
-
-     track->Close();
-     }
-
 .. _rstp_sink:
 
 RTSP Sink模块

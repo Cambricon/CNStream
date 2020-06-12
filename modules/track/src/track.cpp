@@ -30,38 +30,58 @@ namespace cnstream {
 
 struct TrackerContext {
   std::unique_ptr<edk::EasyTrack> processer_ = nullptr;
-  std::unique_ptr<FeatureExtractor> feature_extractor_ = nullptr;
   TrackerContext() = default;
   ~TrackerContext() = default;
   TrackerContext(const TrackerContext &) = delete;
   TrackerContext &operator=(const TrackerContext &) = delete;
 };
 
-static thread_local TrackerContext g_tl_ctx;
+static thread_local std::unique_ptr<edk::MluContext> g_tl_mlu_env;
+static thread_local std::unique_ptr<FeatureExtractor> g_tl_feature_extractor;
 
 Tracker::Tracker(const std::string &name) : Module(name) {}
 
 Tracker::~Tracker() { Close(); }
 
-inline TrackerContext *Tracker::GetContext() {
-  if (!g_tl_ctx.processer_) {
-    edk::MluContext env;
-    env.SetDeviceId(device_id_);
-    env.ConfigureForThisThread();
-
-    if ("KCF" == track_name_) {
-#ifdef ENABLE_KCF
-      auto pKcfTrack = new (std::nothrow) edk::KcfTrack;
-      LOG_IF(FATAL, nullptr == pKcfTrack) << "Tracker::GetTrackerContext() new edk::KcfTrack failed";
-      g_tl_ctx.processer_.reset(pKcfTrack);
-      dynamic_cast<edk::KcfTrack *>(g_tl_ctx.processer_.get())->SetModel(model_loader_, device_id_);
-#endif
-    } else {  // "FeatureMatch by default"
-      g_tl_ctx.processer_.reset(new edk::FeatureMatchTrack);
-      g_tl_ctx.feature_extractor_.reset(new FeatureExtractor(model_loader_, batch_size_, device_id_));
+TrackerContext *Tracker::GetContext(CNFrameInfoPtr data) {
+  if (!g_tl_mlu_env) {
+    g_tl_mlu_env.reset(new edk::MluContext);
+    g_tl_mlu_env->SetDeviceId(device_id_);
+    g_tl_mlu_env->ConfigureForThisThread();
+  }
+  if (!g_tl_feature_extractor) {
+    if (!model_loader_) {
+      LOG(INFO) << "[FeatureExtractor] model not set, extract feature on CPU";
+      g_tl_feature_extractor.reset(new FeatureExtractor());
+    } else {
+      g_tl_feature_extractor.reset(new FeatureExtractor(model_loader_, batch_size_, device_id_));
     }
   }
-  return &g_tl_ctx;
+
+  TrackerContext *ctx = nullptr;
+  auto search = contexts_.find(data->channel_idx);
+  if (data->channel_idx >= GetMaxStreamNumber()) {
+    return nullptr;
+  }
+  if (search != contexts_.end()) {
+    // context exists
+    ctx = search->second;
+  } else {
+    ctx = new TrackerContext;
+    if ("KCF" == track_name_) {
+#ifdef ENABLE_KCF
+      ctx->processer_.reset(new edk::KcfTrack);
+      dynamic_cast<edk::KcfTrack *>(ctx->processer_.get())->SetModel(model_loader_, device_id_);
+      contexts_[data->channel_idx] = ctx;
+#endif
+    } else {  // "FeatureMatch by default"
+      edk::FeatureMatchTrack* track = new edk::FeatureMatchTrack;
+      track->SetParams(max_cosine_distance_, 100, 0.7, 30, 3);
+      ctx->processer_.reset(track);
+      contexts_[data->channel_idx] = ctx;
+    }
+  }
+  return ctx;
 }
 
 bool Tracker::Open(ModuleParamSet paramSet) {
@@ -75,6 +95,9 @@ bool Tracker::Open(ModuleParamSet paramSet) {
     func_name_ = paramSet["func_name"];
   }
 
+  if (paramSet.find("max_cosine_distance") != paramSet.end()) {
+    max_cosine_distance_ = std::stof(paramSet["max_cosine_distance"]);
+  }
   if (paramSet.find("device_id") != paramSet.end()) {
     device_id_ = std::stoi(paramSet["device_id"]);
   }
@@ -103,16 +126,17 @@ bool Tracker::Open(ModuleParamSet paramSet) {
 void Tracker::Close() {
   if (model_loader_) {
     model_loader_.reset();
-    model_loader_ = nullptr;
   }
-  if (g_tl_ctx.feature_extractor_) {
-    g_tl_ctx.feature_extractor_.reset();
-    g_tl_ctx.feature_extractor_ = nullptr;
+  if (g_tl_feature_extractor) {
+    g_tl_feature_extractor.reset();
   }
-  if (g_tl_ctx.processer_) {
-    g_tl_ctx.processer_.reset();
-    g_tl_ctx.processer_ = nullptr;
+  if (g_tl_mlu_env) {
+    g_tl_mlu_env.reset();
   }
+  for (auto &pair : contexts_) {
+    delete pair.second;
+  }
+  contexts_.clear();
 }
 
 int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
@@ -127,14 +151,14 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
     bbox.w = (bbox.x + bbox.w > 1.0) ? (1.0 - bbox.x) : bbox.w;
     bbox.h = (bbox.y + bbox.h > 1.0) ? (1.0 - bbox.y) : bbox.h;
   }
-  TrackerContext *ctx = GetContext();
+  TrackerContext *ctx = GetContext(data);
   if (nullptr == ctx || nullptr == ctx->processer_) {
     throw TrackerError("Get Tracker Context Failed.");
   }
 
   if (track_name_ == "FeatureMatch") {
     std::vector<std::vector<float>> features;
-    ctx->feature_extractor_->ExtractFeature(data, data->objs, &features);
+    g_tl_feature_extractor->ExtractFeature(data, data->objs, &features);
 
     std::vector<edk::DetectObject> in, out;
     for (size_t i = 0; i < data->objs.size(); i++) {
@@ -152,19 +176,8 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
     edk::TrackFrame tframe;
     ctx->processer_->UpdateFrame(tframe, in, &out);
 
-    data->objs.clear();
     for (size_t i = 0; i < out.size(); i++) {
-      CNInferObjectPtr obj = std::make_shared<CNInferObject>();
-      obj->id = std::to_string(out[i].label);
-      obj->track_id = std::to_string(out[i].track_id);
-      obj->score = out[i].score;
-      obj->bbox.x = CLIP(out[i].bbox.x);
-      obj->bbox.y = CLIP(out[i].bbox.y);
-      obj->bbox.w = CLIP(out[i].bbox.width);
-      obj->bbox.h = CLIP(out[i].bbox.height);
-      obj->bbox.w = (obj->bbox.w + obj->bbox.x) > 1 ? 1 - obj->bbox.x : obj->bbox.w;
-      obj->bbox.h = (obj->bbox.h + obj->bbox.y) > 1 ? 1 - obj->bbox.y : obj->bbox.h;
-      data->objs.push_back(obj);
+      data->objs[out[i].detect_id]->track_id = std::to_string(out[i].track_id);
     }
   } else if (track_name_ == "KCF") {
 #ifdef ENABLE_KCF
@@ -210,4 +223,3 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
 }
 
 }  // namespace cnstream
-

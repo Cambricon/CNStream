@@ -74,13 +74,15 @@ std::vector<std::shared_ptr<InferTask>> ResizeConvertBatchingDoneStage::Batching
     IOResValue mlu_value = this->mlu_input_res_->WaitResourceByTicket(&mir_tickett);
     CHECK_EQ(mlu_value.datas.size(), 1) << "Internal error, maybe model input num not 1";
 
-    std::shared_ptr<CNFrameInfo> last_finfo = nullptr;
+    std::shared_ptr<CNFrameInfo> info = nullptr;
     std::string pts_str;
 
     if (perf_manager_) {
-      last_finfo = finfos.back().first;
-      pts_str = std::to_string(last_finfo->frame.frame_id * 100 + last_finfo->channel_idx);
-      perf_manager_->Record(perf_type_, "pts", pts_str, "resize_start_time");
+      info = finfos.back().first;
+      pts_str = std::to_string(info->frame.frame_id * 100 + info->channel_idx);
+      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_start_time");
+      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_cnt",
+          std::to_string(finfos.size()));
     }
 
     if (!rcop_value->op.SyncOneOutput(mlu_value.datas[0].ptr)) {
@@ -88,7 +90,7 @@ std::vector<std::shared_ptr<InferTask>> ResizeConvertBatchingDoneStage::Batching
     }
 
     if (perf_manager_) {
-      perf_manager_->Record(perf_type_, "pts", pts_str, "resize_end_time");
+      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_end_time");
     }
 
     this->rcop_res_->DeallingDone();
@@ -126,19 +128,21 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
     IOResValue mlu_input_value = this->mlu_input_res_->WaitResourceByTicket(&mir_ticket);
     IOResValue mlu_output_value = this->mlu_output_res_->WaitResourceByTicket(&mor_ticket);
 
-    std::shared_ptr<CNFrameInfo> last_finfo = nullptr;
+    std::shared_ptr<CNFrameInfo> info = nullptr;
     std::string pts_str;
 
     if (perf_manager_) {
-      last_finfo = finfos.back().first;
-      pts_str = std::to_string(last_finfo->frame.frame_id * 100 + last_finfo->channel_idx);
-      perf_manager_->Record(perf_type_, "pts", pts_str, "infer_start_time");
+      info = finfos.back().first;
+      pts_str = std::to_string(info->frame.frame_id * 100 + info->channel_idx);
+      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_start_time");
+      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_cnt",
+          std::to_string(finfos.size()));
     }
 
     this->easyinfer_->Run(mlu_input_value.ptrs, mlu_output_value.ptrs);
 
     if (perf_manager_) {
-      perf_manager_->Record(perf_type_, "pts", pts_str, "infer_end_time");
+      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_end_time");
     }
 
     this->mlu_input_res_->DeallingDone();

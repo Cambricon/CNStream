@@ -33,7 +33,6 @@
 #include "infer_thread_pool.hpp"
 #include "obj_batching_stage.hpp"
 #include "obj_filter.hpp"
-#include "perf_manager.hpp"
 
 namespace cnstream {
 
@@ -254,11 +253,6 @@ void InferEngine::BatchingDone() {
     batching_stage_->Reset();
   }
   if (!batched_finfos_.empty()) {
-    if (infer_perf_manager_) {
-      std::shared_ptr<CNFrameInfo> last_finfo = batched_finfos_.back().first;
-      std::string pts_str = std::to_string(last_finfo->frame.frame_id * 100 + last_finfo->channel_idx);
-      infer_perf_manager_->Record(infer_thread_id_, "pts", pts_str, "batching_done_time");
-    }
     for (auto& it : batching_done_stages_) {
       auto tasks = it->BatchingDone(batched_finfos_);
       tp_->SubmitTask(tasks);

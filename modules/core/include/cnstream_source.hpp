@@ -96,7 +96,6 @@ class SourceModule : public Module {
   std::map<std::string /*stream_id*/, std::shared_ptr<SourceHandler>> source_map_;
 };
 
-class PerfRecorder;
 class SourceHandler {
  public:
   explicit SourceHandler(SourceModule *module, const std::string &stream_id, int frame_rate, bool loop)

@@ -18,8 +18,9 @@
  * THE SOFTWARE.
  *************************************************************************/
 #include "data_handler_ffmpeg.hpp"
-#include <memory>
+
 #include <sstream>
+#include <string>
 #include <thread>
 #include <utility>
 
@@ -236,7 +237,10 @@ bool DataHandlerFFmpeg::Process() {
   bool ret = Extract();
 
   if (perf_manager_ != nullptr) {
-    perf_manager_->Record(false, "PROCESS", module_->GetName(), packet_.pts);
+    std::string thread_name = "cn-" + module_->GetName() + stream_id_;
+    perf_manager_->Record(false, PerfManager::GetDefaultType(), module_->GetName(), packet_.pts);
+    perf_manager_->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(packet_.pts),
+                          module_->GetName() + "_th", "'" + thread_name + "'");
   }
 
   if (!ret) {

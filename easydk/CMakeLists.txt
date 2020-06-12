@@ -8,6 +8,8 @@ option(WITH_BANG "Build Bang operator" ON)
 option(ENABLE_KCF "Build with KCF track" ON)
 option(WITH_CNPLUGIN "Build CNPlugin operator" OFF)
 
+set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
+
 #######################################################################
 
 set(MLU_LIBS_PATH $ENV{NEUWARE_HOME}/lib64)
@@ -58,8 +60,7 @@ endif()
 
 if(WITH_BANG AND WITH_INFER)
   message(STATUS "Build with EasyBang")
-  file(GLOB_RECURSE bang_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/kernel_*.o ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/*.cpp)
-  file(GLOB_RECURSE bang_srcs ${bang_srcs} ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize/ResizeKernel.o ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/*.cpp)
+  file(GLOB_RECURSE bang_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/kernel_*.o ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/*.cpp)
 endif()
 
 if(WITH_CNPLUGIN)

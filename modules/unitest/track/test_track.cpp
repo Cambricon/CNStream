@@ -96,7 +96,7 @@ std::shared_ptr<CNFrameInfo> GenTestData(int iter, int obj_num) {
   cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
 
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
-  data->channel_idx = 0;
+  data->channel_idx = g_channel_id;
   CNDataFrame &frame = data->frame;
   frame.frame_id = 1;
   frame.timestamp = 1000;
@@ -124,6 +124,7 @@ std::shared_ptr<CNFrameInfo> GenTestYUVData(int iter, int obj_num) {
   cv::Mat img(height + height / 2, width, CV_8UC1);
 
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
+  data->channel_idx = g_channel_id;
   CNDataFrame &frame = data->frame;
   frame.frame_id = 1;
   frame.timestamp = 1000;
@@ -152,6 +153,7 @@ std::shared_ptr<CNFrameInfo> GenTestImageData() {
   img = cv::imread(image_path, cv::IMREAD_COLOR);
 
   auto data = cnstream::CNFrameInfo::Create("1", false);
+  data->channel_idx = g_channel_id;
   CNDataFrame &frame = data->frame;
   frame.frame_id = 1;
   frame.timestamp = 1000;
@@ -260,7 +262,6 @@ TEST(Tracker, ProcessFeatureMatchCPU2) {
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   ModuleParamSet param;
   param["track_name"] = "FeatureMatch";
-  param["moduel_path"] = "";
   ASSERT_TRUE(track->Open(param));
   int iter = 0;
   int obj_num = 3;

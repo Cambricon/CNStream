@@ -20,14 +20,14 @@ CNStream提供性能统计机制，帮助用户统计各模块及整条pipeline�
 
        性能统计实现机制
 
-每个数据流都需要创建一个 ``PerfManager`` 进行性能统计。初始化 ``PerfManager`` 后，数据库文件将被创建。每一帧数据将会被记录下来，并保存到创建的数据库中。基于数据库中的数据，计算相应各模块和pipeline的性能数据。
+每个数据流都需要创建一个PerfManager进行性能统计。初始化PerfManager后，数据库文件将被创建。每一帧数据将会被记录下来，并保存到创建的数据库中。基于数据库中的数据，计算相应各模块和pipeline的性能数据。
 
 数据库文件
 <<<<<<<<<<<<
 
 CNStream使用SQLite3数据库保存用户想要计算的性能数据。
 
-用户在初始化 ``PerfManager`` 时，可以通过 ``Init`` 函数传入数据库文件名以及数据库中的字段名称。再通过调用 ``Record`` 函数将相关数据记录到数据库中。最后CNStream调用该数据库的数据对模块和pipeline进行性能计算。
+用户在初始化PerfManager时，可以通过 ``Init`` 函数传入数据库文件名以及数据库中的字段名称。再通过调用 ``Record`` 函数，基于数据库中的字段，将相关数据记录到数据库中。最后CNStream调用该数据库的数据对模块和pipeline进行性能计算。
 
 初始化PerfManager
 <<<<<<<<<<<<<<<<<<<
@@ -51,7 +51,7 @@ CNStream使用SQLite3数据库保存用户想要计算的性能数据。
 
     ModuleA------ModuleB------ModuleC
 
-``PerfManager`` 初始化调用 ``Init`` 函数，示例如下：
+PerfManager初始化调用 ``Init`` 函数，示例如下：
 
 ::
 
@@ -73,7 +73,7 @@ CNStream使用SQLite3数据库保存用户想要计算的性能数据。
 
 如果想要使用自定义的perf类型，需要创建数据库文件，并连接数据库。使用此方法，用户需要调用 ``Init`` 函数传入数据库文件名（包括数据库文件的所在路径），并调用 ``RegisterPerfType`` 函数自定义per类型。
 
-调用 ``Init`` 函数初始化``PerfManager``，示例如下：
+调用 ``Init`` 函数初始化PerfManager，示例如下：
 
 ::
 
@@ -305,9 +305,9 @@ Pipeline的性能计算
 对自定义构建pipeline的性能统计
 ------------------------------
 
-用户需要按照 :ref:`programmingguide` 的步骤构建pipeline。但在动态增加数据源之前，需要调用 ``CreatePerfManager`` 函数创建 ``PerfManager``，并在函数中传入所有数据流的唯一标识 ``stream_id`` 和希望保存数据库文件的路径。
+用户需要按照 :ref:`programmingguide` 的步骤构建pipeline。但在动态增加数据源之前，需要调用 ``CreatePerfManager`` 函数创建PerfManager，并在函数中传入所有数据流的唯一标识 ``stream_id`` 和希望保存数据库文件的路径。
 
-创建 ``PerfManager`` 源代码示例如下，详情可参考 ``samples/demo/demo.cpp`` 文件的CNStream源码。
+创建PerfManager源代码示例如下，详情可参考 ``samples/demo/demo.cpp`` 文件的CNStream源码。
 
 ::
 
@@ -361,7 +361,7 @@ Pipeline的性能计算
 自定义计时
 <<<<<<<<<<<<<<<<<<<
 
-用户需要在模块基类中声明如下变量来实现自定义计时。调用 ``CreatePerfManager`` 函数后，其他模块即可访问到各视频流的 ``PerfManager``。
+用户需要在模块基类中声明如下变量来实现自定义计时。调用 ``CreatePerfManager`` 函数后，其他模块即可访问到各视频流的PerfManager。
 
 ::
 
