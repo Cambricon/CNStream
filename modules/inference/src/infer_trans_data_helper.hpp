@@ -43,11 +43,6 @@ class InferTransDataHelper {
 
   void SubmitData(const std::pair<std::shared_ptr<CNFrameInfo>, InferEngine::ResultWaitingCard>& data);
 
-  void SetPerfManagerContext(std::shared_ptr<PerfManager> manager, std::string th_id) {
-    infer_perf_manager_ = manager;
-    infer_thread_id_ = th_id;
-  }
-
  private:
   void Loop();
   std::mutex mtx_;
@@ -56,9 +51,6 @@ class InferTransDataHelper {
   Inferencer* infer_ = nullptr;
   std::thread th_;
   std::atomic<bool> running_;
-
-  std::shared_ptr<PerfManager> infer_perf_manager_;
-  std::string infer_thread_id_;
 };  // class InferTransDataHelper
 
 }  // namespace cnstream

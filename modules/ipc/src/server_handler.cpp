@@ -197,7 +197,7 @@ void IPCServerHandler::ProcessFrameInfoPackage(size_t thread_idx) {
 
     auto perf_manager_ = ipc_module_->GetPerfManager(recv_pkg.stream_id);
     if (!(data->frame.flags & CN_FRAME_FLAG_EOS) && (nullptr != perf_manager_)) {
-      perf_manager_->Record(false, "PROCESS", ipc_module_->GetName(), recv_pkg.timestamp);
+      perf_manager_->Record(false, PerfManager::GetDefaultType(), ipc_module_->GetName(), recv_pkg.timestamp);
     }
 
     this->PackageToCNData(recv_pkg, data);

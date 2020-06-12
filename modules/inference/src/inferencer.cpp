@@ -25,6 +25,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -63,11 +64,12 @@ class InferencerPrivate {
   std::map<std::thread::id, InferContextSptr> ctxs_;
   std::mutex ctx_mtx_;
   bool use_scaler_ = false;
+
   std::shared_ptr<PerfManager> infer_perf_manager_ = nullptr;
+  std::unordered_map<std::string, std::shared_ptr<PerfCalculator>> perf_calculator_;
   std::thread cal_perf_th_;
-  std::vector<std::string> th_ids_;
   std::atomic<bool> perf_th_running_{false};
-  std::mutex th_ids_mutex;
+
   bool obj_infer_ = false;
   std::shared_ptr<ObjPreproc> obj_preproc_ = nullptr;
   std::shared_ptr<ObjPostproc> obj_postproc_ = nullptr;
@@ -99,66 +101,80 @@ class InferencerPrivate {
       ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_);
       ctxs_[tid] = ctx;
       if (infer_perf_manager_) {
-        infer_perf_manager_->RegisterPerfType(tid_str, "pts", {"batching_done_time", "resize_start_time",
-            "resize_end_time", "infer_start_time", "infer_end_time", "end_time"});
-        infer_perf_manager_->CreatePerfCalculator(tid_str, "batching_done_time", "end_time");
-        infer_perf_manager_->CreatePerfCalculator(tid_str, "resize_start_time", "resize_end_time");
-        infer_perf_manager_->CreatePerfCalculator(tid_str, "infer_start_time", "infer_end_time");
-        ctx->trans_data_helper->SetPerfManagerContext(infer_perf_manager_, tid_str);
-        std::lock_guard<std::mutex> lg(th_ids_mutex);
-        th_ids_.push_back(tid_str);
+        infer_perf_manager_->RegisterPerfType(tid_str, PerfManager::GetPrimaryKey(), {"resize_start_time",
+            "resize_end_time", "resize_cnt", "infer_start_time", "infer_end_time", "infer_cnt"});
       }
     }
     return ctx;
   }
 
   void CalcPerf();
-  void PrintPerf(std::string start, std::string end);
+  void PrintPerf();
+  void PrintPerf(std::string name, std::vector<std::string> keys);
 
  private:
   DECLARE_PUBLIC(q_ptr_, Inferencer);
 };  // class InferencerPrivate
 
-void InferencerPrivate::PrintPerf(std::string start, std::string end) {
-  PerfStats stats;
-  double total_throughput = 0.f;
-  for (auto it : th_ids_) {
-    if (start == "batching_done_time" && end == "end_time") {
-      stats = infer_perf_manager_->CalculateThroughput(it, start, end);
-    } else {
-      stats = infer_perf_manager_->CalculatePerfStats(it, start, end);
+void InferencerPrivate::PrintPerf(std::string name, std::vector<std::string> keys) {
+  if (perf_calculator_.find(name) != perf_calculator_.end()) {
+    std::shared_ptr<PerfCalculator> calculator = perf_calculator_[name];
+    std::shared_ptr<PerfUtils> perf_utils = calculator->GetPerfUtils();
+    std::vector<std::string> thread_ids = perf_utils->GetTableNames("inferencer");
+    PerfStats stats_latency;
+    PerfStats stats_fps;
+    for (auto thread_id : thread_ids) {
+      std::cout << thread_id;
+      stats_fps = calculator->CalcThroughput("inferencer", thread_id, keys);
+      stats_latency = calculator->CalcLatency("inferencer", thread_id, keys);
+      PerfStats avg_fps = calculator->GetAvgThroughput("inferencer", thread_id);
+
+      if (name == "rsz_cvt_batch") {
+        stats_latency.frame_cnt *= bsize_;
+        stats_fps.frame_cnt *= bsize_;
+        stats_fps.fps *= bsize_;
+        avg_fps.fps *= bsize_;
+        avg_fps.frame_cnt *= bsize_;
+      }
+
+      PrintPerfStats(stats_fps, avg_fps, stats_latency);
     }
 
-    stats.frame_cnt *= bsize_;
-    stats.fps *= bsize_;
-    std::cout << it;
-    if (start == "batching_done_time" && end == "end_time") {
-      PrintThroughput(stats);
-    } else {
-      PrintPerfStats(stats);
+    PerfStats total_stats = calculator->CalcThroughput("inferencer", "", keys);
+    PerfStats total_avg_fps = calculator->GetAvgThroughput("inferencer", "");
+
+    if (name == "rsz_cvt_batch") {
+      total_stats.fps *= bsize_;
+      total_stats.frame_cnt *= bsize_;
+      total_avg_fps.fps *= bsize_;
+      total_avg_fps.frame_cnt *= bsize_;
     }
-    total_throughput += stats.fps;
-  }
-  if (start == "batching_done_time" && end == "end_time") {
-    std::cout << "Total Throughput: " << total_throughput << std::endl;
+
+    std::cout << "Total : ";
+    PrintThroughput(total_stats, total_avg_fps);
   }
 }
 
+void InferencerPrivate::PrintPerf() {
+  std::cout << "\n************************************** Inferencer Statistics **********************************\n";
+  std::cout << "---------------------------- [resize and convert (theoretical)] ----------------------\n";
+  PrintPerf("rsz_cvt_batch", {"resize_start_time", "resize_end_time"});
+  std::cout << "---------------------------- [resize and convert] ---------------------------------------\n";
+  PrintPerf("rsz_cvt", {"resize_start_time", "resize_end_time", "resize_cnt"});
+  std::cout << "-------------------------------- [inference] --------------------------------------------\n";
+  PrintPerf("infer", {"infer_start_time", "infer_end_time", "infer_cnt"});
+}
+
 void InferencerPrivate::CalcPerf() {
+  std::this_thread::sleep_for(std::chrono::seconds(1));
   while (perf_th_running_) {
-    std::cout << "************************************** Inferencer Statistics ************************************\n";
-    std::cout << "             (Average and Max Latency is for one batch. batch size is " << bsize_ << ")"<< std::endl;
-    {
-      std::lock_guard<std::mutex> lg(th_ids_mutex);
-      std::cout << "---------- [resize and convert] ---------------------------------------------------------------\n";
-      PrintPerf("resize_start_time", "resize_end_time");
-      std::cout << "---------- [inference] ------------------------------------------------------------------------\n";
-      PrintPerf("infer_start_time", "infer_end_time");
-      std::cout << "---------- [inferencer module] ----------------------------------------------------------------\n";
-      PrintPerf("batching_done_time", "end_time");
-    }
+    PrintPerf();
     std::this_thread::sleep_for(std::chrono::seconds(2));
+    infer_perf_manager_->SqlCommitTrans();
+    infer_perf_manager_->SqlBeginTrans();
   }
+  infer_perf_manager_->SqlCommitTrans();
+  PrintPerf();
 }
 
 Inferencer::Inferencer(const std::string& name) : Module(name) {
@@ -171,7 +187,7 @@ Inferencer::Inferencer(const std::string& name) : Module(name) {
                            "The offline model path. Normally offline model is a file"
                            " with cambricon extension.");
   param_register_.Register("func_name", "The offline model function name, usually is 'subnet0'.");
-  param_register_.Register("peproc_name", "The preprocessing method name.");
+  param_register_.Register("preproc_name", "The preprocessing method name.");
   param_register_.Register("postproc_name", "The postprocessing method name.");
   param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
   param_register_.Register("batching_timeout",
@@ -345,6 +361,21 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
         LOG(ERROR) << "Init infer perf manager failed.";
         return false;
     }
+    d_ptr_->infer_perf_manager_->SqlBeginTrans();
+    std::shared_ptr<PerfUtils> perf_utils = std::make_shared<PerfUtils>();
+    perf_utils->AddSql("inferencer", d_ptr_->infer_perf_manager_->GetSql());
+
+    d_ptr_->perf_calculator_["rsz_cvt"] = std::make_shared<PerfCalculatorForInfer>();
+    d_ptr_->perf_calculator_["infer"] = std::make_shared<PerfCalculatorForInfer>();
+    d_ptr_->perf_calculator_["rsz_cvt_batch"] = std::make_shared<PerfCalculatorForInfer>();
+
+    for (auto it : d_ptr_->perf_calculator_) {
+      if (!it.second->SetPerfUtils(perf_utils)) {
+        LOG(ERROR) << "Set perf utils failed.";
+        return false;
+      }
+    }
+
     d_ptr_->perf_th_running_.store(true);
     d_ptr_->cal_perf_th_ = std::thread(&InferencerPrivate::CalcPerf, d_ptr_);
   }

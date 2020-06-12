@@ -105,7 +105,7 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
  private:
-  inline TrackerContext *GetContext();
+  TrackerContext *GetContext(CNFrameInfoPtr data);
   std::unordered_map<int, TrackerContext *> contexts_;
   std::shared_ptr<edk::ModelLoader> model_loader_ = nullptr;
   int device_id_ = 0;
@@ -113,6 +113,7 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
   std::string model_path_ = "";
   std::string func_name_ = "";
   std::string track_name_ = "";
+  float max_cosine_distance_ = 0.2;
 };  // class Tracker
 
 }  // namespace cnstream

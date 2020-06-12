@@ -231,7 +231,6 @@ MatchResult &FeatureMatchPrivate::MatchIou(std::vector<int> detect_indices, std:
 }
 
 void FeatureMatchPrivate::InitNewTrack(const DetectObject &det) {
-  VLOG(4) << "new track: %lu" << next_id_;
   FeatureMatchTrackObject obj;
   obj.age = 1;
   obj.class_id = det.label;
@@ -332,6 +331,7 @@ void FeatureMatchTrack::UpdateFrame(const TrackFrame &frame, const Objects &dete
       ptrack_obj->kf->Update(to_xyah(pdetect_obj->bbox));
       tracks->push_back(*pdetect_obj);
       tracks->rbegin()->track_id = ptrack_obj->track_id;
+      tracks->rbegin()->detect_id = pair.first;
       if (!ptrack_obj->feature_unmatched) {
         ptrack_obj->features.emplace_back(pdetect_obj->feature);
         if (ptrack_obj->features.size() > nn_budget_) {
@@ -341,6 +341,7 @@ void FeatureMatchTrack::UpdateFrame(const TrackFrame &frame, const Objects &dete
       ptrack_obj->time_since_last_update = 0;
       ptrack_obj->age++;
       if (ptrack_obj->state == TrackState::TENTATIVE && ptrack_obj->age > n_init_) {
+        VLOG(4) << "new track: " << fm_p_->next_id_;
         ptrack_obj->state = TrackState::CONFIRMED;
         ptrack_obj->track_id = fm_p_->next_id_++;
       }
@@ -351,6 +352,7 @@ void FeatureMatchTrack::UpdateFrame(const TrackFrame &frame, const Objects &dete
       fm_p_->InitNewTrack(detects[idx]);
       tracks->push_back(detects[idx]);
       tracks->rbegin()->track_id = fm_p_->tracks_.rbegin()->track_id;
+      tracks->rbegin()->detect_id = idx;
     }
 
     // unmatched tracks: mark missed

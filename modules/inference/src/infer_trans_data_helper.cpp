@@ -28,7 +28,6 @@
 #include <thread>
 #include <utility>
 #include "inferencer.hpp"
-#include "perf_manager.hpp"
 
 namespace cnstream {
 
@@ -64,11 +63,6 @@ void InferTransDataHelper::Loop() {
     auto finfo = data.first;
     auto card = data.second;
     card.WaitForCall();
-
-    if (infer_perf_manager_) {
-      std::string pts_str = std::to_string(finfo->frame.frame_id * 100 + finfo->channel_idx);
-      infer_perf_manager_->Record(infer_thread_id_, "pts", pts_str, "end_time");
-    }
 
     if (infer_) {
       infer_->TransmitData(finfo);

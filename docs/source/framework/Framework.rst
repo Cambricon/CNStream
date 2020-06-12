@@ -86,36 +86,26 @@ ModuleConfigs（JSON）的示例如下。JSON配置文件支持C和C++风格的�
     {
       "source" : {
        "class_name" : "DataSource",     //指定module使用哪个类来创建。
-       "parallelism" : 0, //framework创建的module线程数目。source module不使用这个字段。
+       "parallelism" : 0, //框架创建的module线程数目。source module不使用这个字段。
        "next_modules" : ["inference"], //下一个连接模块的名字，可以有多个。
        "custom_params" : {             //当前module的参数。
          "source_type" : "ffmpeg",    //使用ffmpeg作为demuxer。
          "output_type" : "mlu",      //解码图像输出到MLU内存。
          "decoder_type" : "mlu",    //使用CNDecoder。
-         "reuse_cndec_buf": "true", //复用CNDecoder的输出image buffer。
          "device_id" : 0           //MLU设备id。
        }
      },
 
     "inference" : {
       "class_name" : "M220Inference",
-      "parallelism" : 16,            //framwork创建的模块线程数，也是输入队列的数目。
+      "parallelism" : 16,            //框架创建的模块线程数，也是输入队列的数目。
       "max_input_queue_size" : 32,   //输入队列的最大长度。
-      "next_modules" : ["fps_stats"],
       "custom_params" : {
 	    // 使用寒武纪工具生成的离线模型。
-        "model_path" : "/data/models/resnet34_ssd.cambricon", 
+        "model_path" : "/data/models/resnet34_ssd.cambricon", //支持绝对路径和相对JSON文件路径。 
         "func_name" : "subnet0",
-        "device_id" : 0,
-        "batch_size" : 4, //M220 Inference实现中batch的最大数目。
-        "worker_num" : 8  //M220 Inference内部创建的线程池的线程数目。
+        "device_id" : 0
       }
-    },
-
-    "fps_stats" : {
-      "class_name" : "cnstream::FpsStats",
-      "parallelism" : 4,
-      "max_input_queue_size" : 32
     }
   }
 
@@ -181,11 +171,12 @@ CNDataFrame中集成了SyncedMemory。基于MLU平台的异构性，在应用程
 
 CNDataFrame中的SyncedMem支持deep copy或者复用已有的内存。当管理CNDecoder和Inference之间的image buffer时，可以进行deep copy和复用decoder的buffer内存。decoder和后续的inference处理完全解耦，但是会带来dev2dev copy的代价。
 
-另外，CNInferObject不仅提供对常规推理结果的数据存储机制，还提供用户自定义数据格式的接口 ``extra_attributes_`` ，方便用户使用其他格式传递数据，如JSON格式。
+另外，CNInferObject不仅提供对常规推理结果的数据存储机制，还提供用户自定义数据格式的接口 ``AddExtraAttribute`` ，方便用户使用其他格式传递数据，如JSON格式。
 
 ::
 
-  std::map<std::string, std::string> extra_attributes_;
+  bool AddExtraAttribute(const std::vector<std::pair<std::string, std::string>>& attributes);
+  std::string GetExtraAttribute(const std::string& key);
 
 cnstream::EventBus类
 ---------------------

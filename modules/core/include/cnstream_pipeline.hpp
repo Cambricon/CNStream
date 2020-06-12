@@ -451,7 +451,7 @@ class Pipeline : public Module {
    *
    * @return Void.
    */
-  void CalculateModulePerfStats();
+  void CalculateModulePerfStats(bool final_print = false);
   /**
    * @brief Calculates the perfomance of pipeline and prints the performance statistics.
    *
@@ -459,7 +459,7 @@ class Pipeline : public Module {
    *
    * @return Void.
    */
-  void CalculatePipelinePerfStats();
+  void CalculatePipelinePerfStats(bool final_print = false);
   /* called by pipeline */
   /**
    * Registers a callback to be called after the frame process is done.

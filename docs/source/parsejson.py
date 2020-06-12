@@ -205,7 +205,7 @@ class clsModifyTex:
         #从单个表格里用正则表达式找caption
         #定义正则表达式,查找caption内容
         new_singletablecontent = singletablecontent
-        searchstr = r'\\sphinxcaption{(?P<caption>[\s\S]*?)}'
+        searchstr = r'(\\sphinxcaption|\\caption){(?P<caption>[\s\S]*?)}'
         matchcaption = re.search(searchstr, singletablecontent, re.M | re.I|re.U)
         if matchcaption != None:
             tablecaption = matchcaption.group('caption') #得到caption的值
@@ -226,14 +226,14 @@ class clsModifyTex:
 
     def __StartModifyTableAttr(self, singletablecontent, islongtable):
         #修改表格属性
-        searchstr = r'(\\begin{tabular}|\\begin{tabulary})(\[[a-z]\]|{\\linewidth}\[[a-z]\])({[\s\S].*})'
+        searchstr = r'(\\begin{tabular}|\\begin{tabulary})(\[[a-z]\]|{\\linewidth}\[[a-z]\])([\s\S].*)'
         #为了添加表格的通用属性，先对字符串做分割
         #python会把正则表达式中的分组自动分割，因此上面的正则表达式会自动分割为三个字符串
         #加上头尾字符串总共分为5个字符串数组。要修改第1维字符串为\\being{longtable},第2维字符串直接删除，第3维字符串不变
         splittable = re.split(searchstr, singletablecontent,0, re.M | re.I|re.U )
         if splittable == None or len(splittable) < 5:
            	 #再修改长表格属性
-            searchstr = r'\\begin{longtable}({[\s\S].*})'
+            searchstr = r'\\begin{longtable}([\s\S].*)'
             #为了添加表格的通用属性，先对字符串做分割
             #python会把正则表达式中的分组自动分割，因此上面的正则表达式会自动分割为三个字符串
             #加上头尾字符串总共分为5个字符串数组。要修改第1维字符串为\\being{longtable},第2维字符串直接删除，第3维字符串不变
@@ -241,7 +241,7 @@ class clsModifyTex:
             if len(splittable) < 3:
                 #至少是3维的数组，否则不是预想的内容，不做处理
                 return singletablecontent
-            newtable4 = self.__ModifyTableHead(splittable[2], self.tablesattrobj.headtype)
+            newtable4 = self.__ModifyLongTableHead(splittable[2], self.tablesattrobj.headtype)
             singletablecontent = r'\begin{longtable}'+splittable[1]+newtable4  #begin{longtable}必须再加上，因为Python并不认为它是正则表达式，因此不再分组里面第0个分组为空。
 
             return singletablecontent
@@ -260,7 +260,73 @@ class clsModifyTex:
             singletablecontent = splittable[0]+splittable[1]+splittable[2]+splittable[3]+newtable4
 
         return singletablecontent
+        
+    #修改sphinx自动生成的长表格表头
+    def __ModifyLongTableHead(self,content,headtype):
 
+        #先找出第一行
+        searchstr = r'\\hline(?P<content>[\s\S]*?)\\hline'
+        pattern = re.compile(searchstr,re.M | re.I|re.U)
+        matchiter = pattern.finditer(content)
+        posarr = []
+        i = 0
+        for m in matchiter:
+            
+            if i > 1:
+                break;
+                
+            posarr.append([])
+            posarr[i] = m.span()
+            
+            if i ==0:
+                newcontent = content[0:posarr[i][0]]
+            else:
+                newcontent = newcontent+content[posarr[i-1][1]:posarr[i][0]]
+                
+            newcontent += r'\hline'+headtype
+            #m = re.search(searchstr, content, re.M|re.I|re.U )
+            headcontent = m.group(1) #匹配到的第一个即为表头内容
+            #posarr = m.span(1)  #保存起始位置和结束位置，便于组成新的内容
+            
+            if 'multicolumn' in headcontent:
+                return content        
+            
+            headlist = []
+            
+            if r'\sphinxstyletheadfamily' in headcontent:
+                pattern = re.compile(r'(?<=\\sphinxstyletheadfamily)(?P<value>[\s\S]*?)(?=(\\unskip|&)|\\\\)', re.M | re.I|re.U)
+                aftercontent = headcontent
+                mobjarr = pattern.finditer(aftercontent)
+                
+                preposlist = []
+                for mobj in mobjarr:
+                    amarr = mobj.group('value')
+                    curposlist = mobj.span()
+            
+                    #用表头内容数组替换
+                    fontcolor = self.tablesattrobj.headfontcolor
+                    #先去掉首尾空格，避免首尾有空格无法去掉回车换行符
+                    amarr = amarr.strip()
+                    amarr = amarr.strip('\r')
+                    amarr = amarr.strip('\n')
+                    amarr = amarr.strip()  #再去掉首尾空格，避免多余的空格出现
+                    if amarr == '':
+                        continue
+                    fontcolor = fontcolor.replace('{}','{'+ amarr+'}',1)
+                    if len(preposlist) > 0:
+                        headlist.append(headcontent[preposlist[1]:curposlist[0]])
+                    else:
+                        headlist.append(headcontent[0:curposlist[0]])
+                    headlist.append(fontcolor)
+                    preposlist = curposlist
+                headlist.append(headcontent[preposlist[1]:len(headcontent)])  #把最后一个字符串加上
+                headcontent = ''
+                for prelist in headlist:
+                    headcontent = headcontent + prelist + '\n'
+                newcontent += headcontent+r'\hline'               
+            i +=1
+        newcontent += content[posarr[i-1][1]:len(content)]
+        return newcontent
 
     def __ModifyTableHead(self, content, headtype):
         #先找出第一行
@@ -304,13 +370,12 @@ class clsModifyTex:
            	    headlist.append(headcontent[0:curposlist[0]])
             headlist.append(fontcolor)
             preposlist = curposlist
-           #print(len(preposlist))
-        #if len(preposlist)>1:
+
         headlist.append(headcontent[preposlist[1]:len(headcontent)])  #把最后一个字符串加上
         headcontent = ''
         for prelist in headlist:
             headcontent = headcontent + prelist + '\n'
-        newcontent = content[0:posarr[0]]+headtype+headcontent+content[posarr[1]:len(content)]
+        newcontent = content[0:posarr[0]]+headtype+'\n'+headcontent+content[posarr[1]:len(content)]
         return newcontent
 
 

@@ -34,130 +34,125 @@
 namespace cnstream {
 
 extern std::string gTestPerfDir;
-static const char kTableName[] = "PROCESS";
 static const char kDbName[] = "test.db";
 static std::vector<std::string> module_names = {"module_0", "module_1", "module_2", "module_3"};
-static std::vector<std::string> end_nodes = {"module_1", "module_3"};
+
+static void Register(PerfManager* manager) {
+  std::string start = PerfManager::GetStartTimeSuffix();
+  std::string end = PerfManager::GetEndTimeSuffix();
+  std::string table_name = PerfManager::GetDefaultType();
+  std::string p_key = PerfManager::GetPrimaryKey();
+  std::vector<std::string> keys = PerfManager::GetKeys(module_names, {start, end, "_th"});
+  manager->RegisterPerfType(table_name, p_key, keys);
+  EXPECT_TRUE(manager->perf_type_.find(table_name) != manager->perf_type_.end());
+}
 
 TEST(PerfManager, Stop) {
   PerfManager manager;
   manager.Stop();
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
+  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
   EXPECT_TRUE(manager.running_);
   manager.Stop();
   EXPECT_FALSE(manager.running_);
 }
 
 TEST(PerfManager, Init) {
-  {
-    PerfManager manager;
-    EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
-    EXPECT_TRUE(manager.sql_ != nullptr);
-    EXPECT_TRUE(manager.is_initialized_);
-    EXPECT_TRUE(manager.perf_type_.find(kTableName) != manager.perf_type_.end());
-    std::string table_name = kTableName;
-    for (auto it : module_names) {
-      EXPECT_TRUE(manager.calculator_map_.find(table_name + "_" + it) != manager.calculator_map_.end());
-    }
-    EXPECT_TRUE(manager.running_);
-    EXPECT_TRUE(manager.is_initialized_);
-  }
-  {
-    PerfManager manager;
-    EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
-    EXPECT_TRUE(manager.sql_ != nullptr);
-    EXPECT_TRUE(manager.is_initialized_);
-    EXPECT_TRUE(manager.perf_type_.find(kTableName) == manager.perf_type_.end());
+  PerfManager manager;
+  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
+  EXPECT_TRUE(manager.sql_ != nullptr);
+  EXPECT_TRUE(manager.is_initialized_);
+  EXPECT_TRUE(manager.perf_type_.find(manager.GetDefaultType()) == manager.perf_type_.end());
 
-    EXPECT_TRUE(manager.SetModuleNames(module_names));
-    EXPECT_FALSE(manager.SetStartNode("wrong"));
-    EXPECT_FALSE(manager.SetEndNodes({"wrong"}));
-    EXPECT_TRUE(manager.SetStartNode(module_names[0]));
-    EXPECT_TRUE(manager.SetEndNodes(end_nodes));
-
-    std::string table_name = kTableName;
-    manager.RegisterPerfType(table_name);
-    for (auto it : module_names) {
-      EXPECT_TRUE(manager.calculator_map_.find(table_name + "_" + it) != manager.calculator_map_.end());
-    }
-    EXPECT_TRUE(manager.running_);
-    EXPECT_TRUE(manager.is_initialized_);
-
-    EXPECT_FALSE(manager.SetModuleNames(module_names));
-    EXPECT_FALSE(manager.SetStartNode(module_names[0]));
-    EXPECT_FALSE(manager.SetEndNodes(end_nodes));
-  }
+  Register(&manager);
+  EXPECT_TRUE(manager.running_);
 }
 
 TEST(PerfManager, InitFailedCase) {
   PerfManager manager;
-  EXPECT_FALSE(manager.Init("", module_names, module_names[0], end_nodes));
-  // moudle names should be unique
-  std::vector<std::string> m_names = {"m1", "m", "m"};
-#ifdef HAVE_SQLITE
-  EXPECT_FALSE(manager.Init(gTestPerfDir + kDbName, m_names, m_names[0], {m_names[2]}));
-#endif
-  // start node should be found in module names
-  EXPECT_FALSE(manager.Init(gTestPerfDir + kDbName, module_names, m_names[0], end_nodes));
-  // end nodes should be found in module names
-  EXPECT_FALSE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], {m_names[1]}));
+  EXPECT_FALSE(manager.Init(""));
+
   // can not init twice
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
-  EXPECT_FALSE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
-  EXPECT_FALSE(manager.Init(gTestPerfDir + kDbName));
+  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
+  EXPECT_FALSE(manager.Init(gTestPerfDir));
 
   // db file is holded by manager.
   PerfManager manager2;
-  EXPECT_FALSE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
+  EXPECT_FALSE(manager.Init(gTestPerfDir + kDbName));
+
+  manager.Stop();
 }
 
 TEST(PerfManager, Record) {
   PerfManager manager;
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
+  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
+  Register(&manager);
+
+  std::string table_name = manager.GetDefaultType();
+
   for (uint32_t i = 0; i < module_names.size(); i++) {
-    PerfInfo info {};
-    EXPECT_TRUE(manager.Record(false, kTableName, module_names[i], 0));
-    EXPECT_TRUE(manager.Record(true, kTableName, module_names[i], 0));
+    PerfManager::PerfInfo info {};
+    EXPECT_TRUE(manager.Record(false, table_name, module_names[i], 0));
+    EXPECT_TRUE(manager.Record(true, table_name, module_names[i], 0));
+    EXPECT_TRUE(manager.Record(table_name, PerfManager::GetPrimaryKey(), "0", module_names[i] + "_th", "'th_0'"));
+    EXPECT_TRUE(manager.Record(table_name, PerfManager::GetPrimaryKey(), "1",
+                module_names[i] + PerfManager::GetStartTimeSuffix()));
   }
   manager.Stop();
 #ifdef HAVE_SQLITE
   for (uint32_t i = 0; i < module_names.size(); i++) {
-    EXPECT_EQ(manager.sql_->Count(kTableName, module_names[i] + "_stime"), (unsigned)1);
-    EXPECT_EQ(manager.sql_->Count(kTableName, module_names[i] + "_etime"), (unsigned)1);
+    EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] +
+                                  PerfManager::GetStartTimeSuffix()), (unsigned)2);
+    EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] +
+                                  PerfManager::GetEndTimeSuffix()), (unsigned)1);
+    EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + "_th"), (unsigned)1);
   }
 #endif
 }
 
 TEST(PerfManager, RecordFailedCase) {
   PerfManager manager;
-  EXPECT_FALSE(manager.Record(false, kTableName, module_names[0], 0));
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
+  std::string table_name = manager.GetDefaultType();
+
+  // Record before init
+  EXPECT_FALSE(manager.Record(false, table_name, module_names[0], 0));
+
+  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
+  Register(&manager);
+
   for (uint32_t i = 0; i < module_names.size(); i++) {
-    EXPECT_TRUE(manager.Record(false, kTableName, module_names[i], 0));
-    EXPECT_TRUE(manager.Record(true, kTableName, module_names[i], 0));
+    EXPECT_TRUE(manager.Record(false, table_name, module_names[i], 0));
+    EXPECT_TRUE(manager.Record(true, table_name, module_names[i], 0));
   }
   manager.Stop();
 #ifdef HAVE_SQLITE
   for (uint32_t i = 0; i < module_names.size(); i++) {
-    EXPECT_EQ(manager.sql_->Count(kTableName, module_names[i] + "_stime"), (unsigned)1);
-    EXPECT_EQ(manager.sql_->Count(kTableName, module_names[i] + "_etime"), (unsigned)1);
+    EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] +
+                                  PerfManager::GetStartTimeSuffix()), (unsigned)1);
+    EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] +
+                                  PerfManager::GetEndTimeSuffix()), (unsigned)1);
   }
 #endif
-  EXPECT_FALSE(manager.Record(true, kTableName, module_names[0], 0));
+  // Record after stop
+  EXPECT_FALSE(manager.Record(true, table_name, module_names[0], 0));
 }
 
 void ThreadFunc(int i, std::vector<std::string> m_names, PerfManager* manager, int64_t num) {
+  std::string table_name = PerfManager::GetDefaultType();
   for (int64_t pts = 0; pts < num; pts++) {
-    EXPECT_TRUE(manager->Record(false, kTableName, m_names[i%4], pts));
+    EXPECT_TRUE(manager->Record(false, table_name, m_names[i%4], pts));
   }
   for (int64_t pts = 0; pts < num; pts++) {
-    EXPECT_TRUE(manager->Record(true, kTableName, m_names[i%4], pts));
+    EXPECT_TRUE(manager->Record(true, table_name, m_names[i%4], pts));
   }
 }
 
 TEST(PerfManager, MultiThreadRecordInfo) {
   PerfManager manager;
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
+  std::string table_name = manager.GetDefaultType();
+
+  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
+  Register(&manager);
+
   manager.SqlBeginTrans();
 
   std::vector<std::thread> ths;
@@ -172,111 +167,117 @@ TEST(PerfManager, MultiThreadRecordInfo) {
   manager.SqlCommitTrans();
 #ifdef HAVE_SQLITE
   for (uint32_t i = 0; i < module_names.size(); i++) {
-    EXPECT_EQ(manager.sql_->Count(kTableName, module_names[i] + "_stime"), (unsigned)data_num);
-    EXPECT_EQ(manager.sql_->Count(kTableName, module_names[i] + "_etime"), (unsigned)data_num);
+    EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] +
+                                  PerfManager::GetStartTimeSuffix()), (unsigned)data_num);
+    EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] +
+                                  PerfManager::GetEndTimeSuffix()), (unsigned)data_num);
   }
 #endif
 }
 
 TEST(PerfManager, InsertInfoToDb) {
   PerfManager manager;
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
+  std::string table_name = manager.GetDefaultType();
+
+  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
+  Register(&manager);
   EXPECT_TRUE(manager.sql_ != nullptr);
 
   int64_t pts = 0;
-  PerfInfo info {kTableName, "pts", std::to_string(pts), module_names[0] + "_stime", TimeStamp::CurrentToString()};
+  PerfManager::PerfInfo info {table_name, PerfManager::GetPrimaryKey(), std::to_string(pts), module_names[0] +
+                              PerfManager::GetStartTimeSuffix(), TimeStamp::CurrentToString()};
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
 #ifdef HAVE_SQLITE
-  EXPECT_EQ(manager.sql_->Count(kTableName, "pts", "pts=" + std::to_string(pts)), unsigned(1));
-  EXPECT_EQ(manager.sql_->Count(kTableName, module_names[0] + "_stime", "pts=" + std::to_string(pts)), unsigned(1));
+  EXPECT_EQ(manager.sql_->Count(table_name, PerfManager::GetPrimaryKey(),
+            PerfManager::GetPrimaryKey() + "=" + std::to_string(pts)), unsigned(1));
+  EXPECT_EQ(manager.sql_->Count(table_name, module_names[0] + PerfManager::GetStartTimeSuffix(),
+            PerfManager::GetPrimaryKey() + "=" + std::to_string(pts)), unsigned(1));
 #endif
 
-  info.key =  module_names[0] + "_etime";
+  info.key =  module_names[0] + PerfManager::GetEndTimeSuffix();
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
 #ifdef HAVE_SQLITE
-  EXPECT_EQ(manager.sql_->Count(kTableName, module_names[0] + "_etime", "pts=" + std::to_string(pts)), unsigned(1));
+  EXPECT_EQ(manager.sql_->Count(table_name, module_names[0] + PerfManager::GetEndTimeSuffix(),
+            PerfManager::GetPrimaryKey() + "=" + std::to_string(pts)), unsigned(1));
 #endif
 
-  info.key =  module_names[1] + "_stime";
+  info.key =  module_names[1] + PerfManager::GetStartTimeSuffix();
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
 #ifdef HAVE_SQLITE
-  EXPECT_EQ(manager.sql_->Count(kTableName, module_names[1] + "_stime", "pts=" + std::to_string(pts)), unsigned(1));
+  EXPECT_EQ(manager.sql_->Count(table_name, module_names[1] + PerfManager::GetStartTimeSuffix(),
+            PerfManager::GetPrimaryKey() + "=" + std::to_string(pts)), unsigned(1));
 #endif
 
-  info.key =  module_names[1] + "_etime";
+  info.key =  module_names[1] + PerfManager::GetEndTimeSuffix();
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
 #ifdef HAVE_SQLITE
-  EXPECT_EQ(manager.sql_->Count(kTableName, module_names[1] + "_etime", "pts=" + std::to_string(pts)), unsigned(1));
+  EXPECT_EQ(manager.sql_->Count(table_name, module_names[1] + PerfManager::GetEndTimeSuffix(),
+            PerfManager::GetPrimaryKey() + "=" + std::to_string(pts)), unsigned(1));
 #endif
 }
 
 TEST(PerfManager, InsertInfoToDbFailedCase) {
   PerfManager manager;
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
+  std::string table_name = manager.GetDefaultType();
+
+  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
+  Register(&manager);
+
   EXPECT_TRUE(manager.sql_ != nullptr);
 
-  PerfInfo info {"wrong_type", "pts", "0", module_names[0] + "_stime", TimeStamp::CurrentToString()};
+  PerfManager::PerfInfo info {"wrong_type", PerfManager::GetPrimaryKey(), "0",
+      module_names[0] + PerfManager::GetStartTimeSuffix(), TimeStamp::CurrentToString()};
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
-  EXPECT_EQ(manager.sql_->Count(kTableName, "pts", "pts=0"), unsigned(0));
+  EXPECT_EQ(manager.sql_->Count(table_name, PerfManager::GetPrimaryKey(), PerfManager::GetPrimaryKey() + "=0"),
+      unsigned(0));
 }
 
 TEST(PerfManager, RegisterPerfType) {
   PerfManager manager;
   std::string type1 = "type1";
   std::string type2 = "type2";
-  EXPECT_TRUE(manager.RegisterPerfType(type1));
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
+  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
+  std::vector<std::string> keys =
+      PerfManager::GetKeys(module_names, {PerfManager::GetStartTimeSuffix(), PerfManager::GetEndTimeSuffix()});
   EXPECT_TRUE(manager.sql_ != nullptr);
-  EXPECT_TRUE(manager.RegisterPerfType(type2));
+  EXPECT_TRUE(manager.RegisterPerfType(type1, PerfManager::GetPrimaryKey(), keys));
+  EXPECT_TRUE(manager.RegisterPerfType(type2, PerfManager::GetPrimaryKey(), keys));
 
-  PerfInfo info {type1, "pts", "0", module_names[0] + "_stime", TimeStamp::CurrentToString()};
+  PerfManager::PerfInfo info {type1, PerfManager::GetPrimaryKey(), "0",
+      module_names[0] + PerfManager::GetStartTimeSuffix(), TimeStamp::CurrentToString()};
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
 #ifdef HAVE_SQLITE
-  EXPECT_EQ(manager.sql_->Count(type1, "pts", "pts=0"), unsigned(1));
+  EXPECT_EQ(manager.sql_->Count(type1, PerfManager::GetPrimaryKey(), PerfManager::GetPrimaryKey() + "=0"), unsigned(1));
 #endif
 
   info.perf_type = type2;
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
 #ifdef HAVE_SQLITE
-  EXPECT_EQ(manager.sql_->Count(type2, "pts", "pts=0"), unsigned(1));
+  EXPECT_EQ(manager.sql_->Count(type2, PerfManager::GetPrimaryKey(), PerfManager::GetPrimaryKey() + "=0"), unsigned(1));
 #endif
 }
 
 TEST(PerfManager, RegisterPerfTypeFailedCase) {
   PerfManager manager;
-  EXPECT_FALSE(manager.RegisterPerfType(""));
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
-  EXPECT_TRUE(manager.RegisterPerfType(kTableName));
+  std::string table_name = manager.GetDefaultType();
+  // register before init
+  EXPECT_FALSE(manager.RegisterPerfType(table_name, PerfManager::GetPrimaryKey(), module_names));
+
+  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
+  // perf type should not be empty
+  EXPECT_FALSE(manager.RegisterPerfType("", PerfManager::GetPrimaryKey(), module_names));
+
+  // perf type is registered
+  EXPECT_TRUE(manager.RegisterPerfType(table_name, PerfManager::GetPrimaryKey(), module_names));
+  EXPECT_FALSE(manager.RegisterPerfType(table_name, PerfManager::GetPrimaryKey(), module_names));
 }
 
 TEST(PerfManager, GetKeys) {
-  PerfManager manager;
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
-  std::vector<std::string> keys = manager.GetKeys(module_names);
+  std::vector<std::string> suffix = {"1", "2"};
+  std::vector<std::string> keys = PerfManager::GetKeys(module_names, suffix);
   EXPECT_EQ(keys.size(), module_names.size() * 2);
-  std::vector<std::string> suffix = {"_stime", "_etime"};
   for (uint32_t i = 0; i < module_names.size(); i++) {
     EXPECT_TRUE(keys[i] == module_names[i/2] + suffix[i%2]);
-  }
-}
-
-TEST(PerfManager, GetKeysFailedCase) {
-  PerfManager manager;
-  std::vector<std::string> keys = manager.GetKeys(module_names);
-  EXPECT_EQ(keys.size(), unsigned(0));
-}
-
-TEST(PerfManager, CreatePerfCalculator) {
-  PerfManager manager;
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
-  manager.CreatePerfCalculatorForModules("type1");
-  manager.CreatePerfCalculatorForPipeline("type1");
-  for (uint32_t i = 0; i < module_names.size(); i++) {
-    EXPECT_TRUE(manager.calculator_map_.find("type1_" + module_names[i]) != manager.calculator_map_.end());
-    if (i == 1 || i == 3) {
-      EXPECT_TRUE(manager.calculator_map_.find("type1_" + module_names[i] + "_pipeline") !=
-                  manager.calculator_map_.end());
-    }
   }
 }
 
@@ -285,11 +286,15 @@ TEST(PerfManager, SqlBeginAndCommit) {
   size_t duration1, duration2;
   {
     PerfManager manager;
-    EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
+    std::string table_name = manager.GetDefaultType();
+
+    EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
+    Register(&manager);
+
     start = TimeStamp::Current();
     manager.SqlBeginTrans();
     for (int64_t i = 0; i < 10000; i++) {
-      EXPECT_TRUE(manager.Record(false, kTableName, module_names[0], i));
+      EXPECT_TRUE(manager.Record(false, table_name, module_names[0], i));
     }
     manager.Stop();
     manager.SqlCommitTrans();
@@ -298,10 +303,13 @@ TEST(PerfManager, SqlBeginAndCommit) {
   }
   {
     PerfManager manager;
-    EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
+    std::string table_name = manager.GetDefaultType();
+    EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
+    Register(&manager);
+
     start = TimeStamp::Current();
     for (int64_t i = 0; i < 10000; i++) {
-      EXPECT_TRUE(manager.Record(false, kTableName, module_names[0], i));
+      EXPECT_TRUE(manager.Record(false, table_name, module_names[0], i));
     }
     manager.Stop();
     end = TimeStamp::Current();
@@ -329,7 +337,7 @@ TEST(PerfManager, PrepareDbFileDir) {
     EXPECT_TRUE(manager.PrepareDbFileDir(db_path));
     EXPECT_EQ(access(path.c_str(), 0), 0);
 
-    EXPECT_TRUE(manager.Init(db_path, module_names, module_names[0], end_nodes));
+    EXPECT_TRUE(manager.Init(db_path));
 
 #ifdef HAVE_SQLITE
     EXPECT_EQ(access(db_path.c_str(), 0), 0);
@@ -352,7 +360,7 @@ TEST(PerfManager, PrepareDbFileDir) {
 
 TEST(PerfManager, PrepareDbFileDirFailedCase) {
   PerfManager manager;
-  std::string db_path = gTestPerfDir + "test.db";
+  std::string db_path = gTestPerfDir + kDbName;
   remove(db_path.c_str());
 
   EXPECT_FALSE(manager.PrepareDbFileDir(""));
@@ -369,107 +377,6 @@ TEST(PerfManager, PrepareDbFileDirFailedCase) {
 #endif
   sql->Close();
   EXPECT_TRUE(manager.PrepareDbFileDir(db_path));
-}
-
-TEST(PerfManager, GetCalculator) {
-  PerfManager manager;
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
-  manager.CreatePerfCalculatorForModules("type1");
-  manager.CreatePerfCalculatorForPipeline("type1");
-  for (uint32_t i = 0; i < module_names.size(); i++) {
-    EXPECT_TRUE(manager.calculator_map_.find("type1_" + module_names[i]) != manager.calculator_map_.end());
-    if (i == 1 || i == 3) {
-      EXPECT_TRUE(manager.calculator_map_.find("type1_" + module_names[i] + "_pipeline") !=
-                  manager.calculator_map_.end());
-    }
-  }
-  EXPECT_TRUE(manager.GetCalculator("type1", module_names[0]) != nullptr);
-  EXPECT_TRUE(manager.GetCalculator("type2", module_names[0]) == nullptr);
-}
-
-void CheckForPerfStats(PerfStats stats, bool success_case, uint32_t line) {
-  if (success_case) {
-    EXPECT_NE(stats.latency_avg, (unsigned)0) << "wrong line = " << line;
-    EXPECT_DOUBLE_EQ(stats.fps, 1e9 / stats.latency_avg / 1000.f) << "wrong line = " << line;
-    EXPECT_EQ(stats.latency_avg, stats.latency_max) << "wrong line = " << line;
-    EXPECT_EQ(stats.frame_cnt, (unsigned)1) << "wrong line = " << line;
-  } else {
-    EXPECT_EQ(stats.latency_avg, (unsigned)0) << "wrong line = " << line;
-    EXPECT_EQ(stats.latency_max, (unsigned)0) << "wrong line = " << line;
-    EXPECT_DOUBLE_EQ(stats.fps, 0) << "wrong line = " << line;
-    EXPECT_EQ(stats.frame_cnt, (unsigned)0) << "wrong line = " << line;
-  }
-}
-TEST(PerfManager, CalculatePerfStats) {
-  PerfManager manager;
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
-  manager.Record(false, kTableName, module_names[0], 0);
-  std::this_thread::sleep_for(std::chrono::microseconds(100));
-  manager.Record(true, kTableName, module_names[0], 0);
-  manager.Stop();
-  PerfStats stats = manager.CalculatePerfStats(kTableName, module_names[0]);
-#ifdef HAVE_SQLITE
-  CheckForPerfStats(stats, true, __LINE__);
-#else
-  CheckForPerfStats(stats, false, __LINE__);
-#endif
-}
-
-TEST(PerfManager, CalculatePerfStatsFailedCase) {
-  PerfManager manager;
-  PerfStats stats = manager.CalculatePerfStats(kTableName, module_names[0]);
-  CheckForPerfStats(stats, false, __LINE__);
-
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
-  stats = manager.CalculatePerfStats(kTableName, module_names[0]);
-  CheckForPerfStats(stats, false, __LINE__);
-
-  stats = manager.CalculatePerfStats("wrong_table", module_names[0]);
-  CheckForPerfStats(stats, false, __LINE__);
-}
-
-void CheckForPipelinePerfStats(std::vector<std::pair<std::string, PerfStats>> vec_stats, bool success_case,
-                               uint32_t line) {
-  EXPECT_EQ(vec_stats.size(), (unsigned)2) << "wrong line = " << line;
-  EXPECT_TRUE(vec_stats[0].first == module_names[1]) << "wrong line = " << line;
-  EXPECT_TRUE(vec_stats[1].first == module_names[3]) << "wrong line = " << line;
-  for (uint32_t i = 0; i < 2; i++) {
-    if (success_case) {
-      EXPECT_NE(vec_stats[i].second.latency_avg, (unsigned)0) << "wrong line = " << line;
-      EXPECT_NE(vec_stats[i].second.fps, 0) << "wrong line = " << line;
-      EXPECT_EQ(vec_stats[i].second.latency_avg, vec_stats[i].second.latency_max) << "wrong line = " << line;
-      EXPECT_EQ(vec_stats[i].second.frame_cnt, (unsigned)1) << "wrong line = " << line;
-    } else {
-      CheckForPerfStats(vec_stats[i].second, false, line);
-    }
-  }
-}
-
-TEST(PerfManager, CalculatePipelinePerfStats) {
-  PerfManager manager;
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
-  manager.Record(false, kTableName, module_names[0], 0);
-  std::this_thread::sleep_for(std::chrono::microseconds(100));
-  manager.Record(true, kTableName, module_names[1], 0);
-  std::this_thread::sleep_for(std::chrono::microseconds(100));
-  manager.Record(true, kTableName, module_names[3], 0);
-  manager.Stop();
-  auto vec_stats = manager.CalculatePipelinePerfStats(kTableName);
-#ifdef HAVE_SQLITE
-  CheckForPipelinePerfStats(vec_stats, true, __LINE__);
-#endif
-}
-
-TEST(PerfManager, CalculatePipelinePerfStatsFailedCase) {
-  PerfManager manager;
-  auto vec_stats_1 = manager.CalculatePipelinePerfStats(kTableName);
-  EXPECT_EQ(vec_stats_1.size(), (unsigned)0);
-
-  EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName, module_names, module_names[0], end_nodes));
-  auto vec_stats_2 = manager.CalculatePipelinePerfStats(kTableName);
-  CheckForPipelinePerfStats(vec_stats_2, false, __LINE__);
-  auto vec_stats_3 = manager.CalculatePipelinePerfStats("wrong_table");
-  CheckForPipelinePerfStats(vec_stats_3, false, __LINE__);
 }
 
 }  // namespace cnstream

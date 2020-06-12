@@ -216,7 +216,9 @@ class PipelinePrivate {
 
  private:
   std::unordered_map<std::string, std::shared_ptr<PerfManager>> perf_managers_;
+  std::unordered_map<std::string, std::shared_ptr<PerfCalculator>> perf_calculators_;
   std::vector<std::string> stream_ids_;
+  std::string start_node_;
   std::vector<std::string> end_nodes_;
   std::thread perf_commit_thread_;
   std::thread calculate_perf_thread_;
@@ -532,10 +534,16 @@ bool Pipeline::Stop() {
     d_ptr_->event_thread_.join();
   }
 
+  // close modules
+  for (auto& it : d_ptr_->modules_) {
+    it.second.instance->Close();
+    it.second.instance->ClearPerfManagers();
+  }
   for (auto it : d_ptr_->perf_managers_) {
     it.second->Stop();
     it.second = nullptr;
   }
+
   d_ptr_->perf_running_.store(false);
   if (d_ptr_->perf_commit_thread_.joinable()) {
     d_ptr_->perf_commit_thread_.join();
@@ -545,12 +553,6 @@ bool Pipeline::Stop() {
   }
 
   d_ptr_->perf_managers_.clear();
-
-  // close modules
-  for (auto& it : d_ptr_->modules_) {
-    it.second.instance->Close();
-    it.second.instance->ClearPerfManagers();
-  }
 
   d_ptr_->ClearEOSMask();
   LOG(INFO) << "Pipeline Stop";
@@ -616,7 +618,8 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     }
   } else {
     if (d_ptr_->perf_managers_.find(data->frame.stream_id) != d_ptr_->perf_managers_.end()) {
-      d_ptr_->perf_managers_[data->frame.stream_id]->Record(true, "PROCESS", moduleName, data->frame.timestamp);
+      d_ptr_->perf_managers_[data->frame.stream_id]->Record(true, PerfManager::GetDefaultType(),
+                                                            moduleName, data->frame.timestamp);
     }
   }
 
@@ -688,7 +691,11 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
     {
       if (!(data->frame.flags & CN_FRAME_FLAG_EOS)
           && d_ptr_->perf_managers_.find(data->frame.stream_id) != d_ptr_->perf_managers_.end()) {
-        d_ptr_->perf_managers_[data->frame.stream_id]->Record(false, "PROCESS", node_name, data->frame.timestamp);
+        d_ptr_->perf_managers_[data->frame.stream_id]->Record(false, PerfManager::GetDefaultType(),
+                                                              node_name, data->frame.timestamp);
+        d_ptr_->perf_managers_[data->frame.stream_id]->Record(
+            PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(data->frame.timestamp),
+            node_name + "_th", "'" + thread_name + "'");
       }
 
       int ret = module_info.instance->DoProcess(data);
@@ -877,35 +884,64 @@ void Pipeline::NotifyStreamMsg(const StreamMsg& smsg) {
 }
 
 bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir) {
-  if (d_ptr_->perf_running_) return false;
-  std::vector<std::string> module_names;
-  std::string start_node_name;
+  if (d_ptr_->perf_running_) {
+    return false;
+  }
   if (db_dir == "") {
     db_dir = "perf_database";
   }
   d_ptr_->end_nodes_.clear();
-  for (auto& it : d_ptr_->modules_) {
-    const std::string node_name = it.first;
+
+  // Get start module name, end module name and module names
+  std::vector<std::string> module_names;
+  for (auto& module_it : d_ptr_->modules_) {
+    const std::string node_name = module_it.first;
     LOG(INFO) << "module name " << node_name << std::endl;
     module_names.push_back(node_name);
-    if (it.second.input_connectors.size() == 0) {
-      start_node_name = node_name;
+    if (module_it.second.input_connectors.size() == 0) {
+      d_ptr_->start_node_ = node_name;
     }
-    if (it.second.output_connectors.size() == 0) {
+    if (module_it.second.output_connectors.size() == 0) {
       d_ptr_->end_nodes_.push_back(node_name);
     }
   }
-  for (auto it : stream_ids) {
-    LOG(INFO) << "Create PerfManager for stream " << it;
-    d_ptr_->perf_managers_[it] = std::make_shared<PerfManager>();
-    if (!d_ptr_->perf_managers_[it]->Init(db_dir + "/stream_" + it + ".db", module_names, start_node_name,
-                                          d_ptr_->end_nodes_)) {
+
+  std::shared_ptr<PerfUtils> perf_utils = std::make_shared<PerfUtils>();
+  std::vector<std::string> keys = PerfManager::GetKeys(module_names,
+      {PerfManager::GetStartTimeSuffix(), PerfManager::GetEndTimeSuffix(), "_th"});
+
+  // Create PerfManager for all streams
+  for (auto stream_id : stream_ids) {
+    LOG(INFO) << "Create PerfManager for stream " << stream_id;
+    std::shared_ptr<PerfManager> manager = std::make_shared<PerfManager>();
+    d_ptr_->perf_managers_[stream_id] = manager;
+    if (!manager->Init(db_dir + "/stream_" + stream_id + ".db")) {
       return false;
     }
+    if (!manager->RegisterPerfType(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), keys)) {
+      return false;
+    }
+    perf_utils->AddSql(stream_id, manager->GetSql());
   }
 
-  for (auto& it : d_ptr_->modules_) {
-    it.second.instance->SetPerfManagers(d_ptr_->perf_managers_);
+  // Create PerfCalculators for each module
+  for (auto& module_it : d_ptr_->modules_) {
+    module_it.second.instance->SetPerfManagers(d_ptr_->perf_managers_);
+    std::string node_name = module_it.first;
+    if (d_ptr_->perf_calculators_.find(node_name) != d_ptr_->perf_calculators_.end()) {
+      LOG(WARNING) << "perf calculator is created before. name : " << node_name;
+    }
+    d_ptr_->perf_calculators_[node_name] = std::make_shared<PerfCalculatorForModule>();
+    d_ptr_->perf_calculators_[node_name]->SetPerfUtils(perf_utils);
+  }
+
+  // Create PerfCalculators for pipeline
+  for (auto& end_node : d_ptr_->end_nodes_) {
+    if (d_ptr_->perf_calculators_.find("pipeline_" + end_node) != d_ptr_->perf_calculators_.end()) {
+      LOG(WARNING) << "perf calculator is created before. name : " << "pipeline_" + end_node;
+    }
+    d_ptr_->perf_calculators_["pipeline_" + end_node] = std::make_shared<PerfCalculatorForPipeline>();
+    d_ptr_->perf_calculators_["pipeline_" + end_node]->SetPerfUtils(perf_utils);
   }
 
   d_ptr_->stream_ids_ = stream_ids;
@@ -923,9 +959,9 @@ void Pipeline::CalculatePerfStats() {
   }
   std::cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
             << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%" << std::endl;
-  CalculateModulePerfStats();
+  CalculateModulePerfStats(1);
   std::cout << "\n" <<std::endl;
-  CalculatePipelinePerfStats();
+  CalculatePipelinePerfStats(1);
 }
 
 void Pipeline::PerfSqlCommitLoop() {
@@ -941,47 +977,89 @@ void Pipeline::PerfSqlCommitLoop() {
   }
 }
 
-void Pipeline::CalculateModulePerfStats() {
+void Pipeline::CalculateModulePerfStats(bool final_print) {
   for (auto& module_it : d_ptr_->modules_) {
     std::string node_name = module_it.first;
     const ModuleAssociatedInfo& module_info = module_it.second;
     if (module_info.instance && module_info.instance->ShowPerfInfo()) {
-      std::cout << "---------------------------------"
-        << std::setw(15) << std::setfill('-') << "[ " + node_name << " Performance ]"
-        << "-----------------------------------" << std::endl;
-      for (auto stream_id : d_ptr_->stream_ids_) {
-        if (d_ptr_->perf_managers_.find(stream_id) != d_ptr_->perf_managers_.end()) {
+      if (d_ptr_->perf_calculators_.find(node_name) != d_ptr_->perf_calculators_.end()) {
+        std::cout << "\n---------------------------------[ " + node_name << " Performance ]"
+                  << "-----------------------------------" << std::endl;
+        std::shared_ptr<PerfCalculator> calculator = d_ptr_->perf_calculators_[node_name];
+        for (auto stream_id : d_ptr_->stream_ids_) {
           std::cout << std::setw(2) << std::setfill(' ') << stream_id;
-          PrintLatency(d_ptr_->perf_managers_[stream_id]->CalculatePerfStats("PROCESS", node_name));
+          PrintLatency(calculator->CalcLatency(stream_id, PerfManager::GetDefaultType(),
+             {node_name + PerfManager::GetStartTimeSuffix(), node_name + PerfManager::GetEndTimeSuffix()}));
+        }  // for each stream
+        // calculate throughput for each module
+        std::cout << std::endl;
+        PerfStats stats;
+        if (final_print) {
+          calculator->SetPrintThroughput(false);
+          do {
+            stats = calculator->CalcThroughput("", PerfManager::GetDefaultType(),
+                {node_name + PerfManager::GetStartTimeSuffix(), node_name + PerfManager::GetEndTimeSuffix(),
+                node_name + "_th"});
+          } while (stats.frame_cnt);
+          calculator->SetPrintThroughput(true);
+        } else {
+          stats = calculator->CalcThroughput("", PerfManager::GetDefaultType(),
+              {node_name + PerfManager::GetStartTimeSuffix(), node_name + PerfManager::GetEndTimeSuffix(),
+              node_name + "_th"});
         }
-      }  // for each stream
+        PerfStats avg_fps = calculator->GetAvgThroughput("", PerfManager::GetDefaultType());
+        std::cout << "Total : ";
+        PrintThroughput(stats, avg_fps);
+      }
     }
   }  // for each module
 }
 
-void Pipeline::CalculatePipelinePerfStats() {
-  std::vector<std::pair<std::string, std::vector<std::pair<std::string, PerfStats>>>> pipeline_l;
+void Pipeline::CalculatePipelinePerfStats(bool final_print) {
   std::cout << "\033[32m"
             << "-------------------------------------[ Pipeline Performance ]"
             << "-------------------------------------" << "\033[0m" << std::endl;
 
-  for (auto stream_id : d_ptr_->stream_ids_) {
-    if (d_ptr_->perf_managers_.find(stream_id) != d_ptr_->perf_managers_.end()) {
-      pipeline_l.push_back(std::make_pair(stream_id,
-          d_ptr_->perf_managers_[stream_id]->CalculatePipelinePerfStats("PROCESS")));
-    }
-  }
+  for (auto end_node : d_ptr_->end_nodes_) {
+    if (d_ptr_->perf_calculators_.find("pipeline_" + end_node) != d_ptr_->perf_calculators_.end()) {
+      std::shared_ptr<PerfCalculator> calculator = d_ptr_->perf_calculators_["pipeline_" + end_node];
+      std::cout << "End node " << end_node << std::endl;
 
-  double total_fps;
-  for (uint32_t i = 0; i < d_ptr_->end_nodes_.size(); i++) {
-    total_fps = 0.f;
-    std::cout << "End node * * " << d_ptr_->end_nodes_[i] << " * *" << std::endl;
-    for (auto it : pipeline_l) {
-      std::cout << std::setw(2) << std::setfill(' ') << it.first;
-      PrintPerfStats(it.second[i].second);
-      total_fps += it.second[i].second.fps;
+      double total_fps_tmp = 0.f;
+      size_t total_fn_tmp = 0;
+      for (auto stream_id : d_ptr_->stream_ids_) {
+        std::cout << std::setw(2) << std::setfill(' ') << stream_id;
+        auto latency_stats = calculator->CalcLatency(stream_id, PerfManager::GetDefaultType(),
+            {d_ptr_->start_node_ + PerfManager::GetStartTimeSuffix(), end_node + PerfManager::GetEndTimeSuffix()});
+        auto fps_stats = calculator->CalcThroughput(stream_id, PerfManager::GetDefaultType(),
+            {end_node + PerfManager::GetEndTimeSuffix()});
+        PerfStats avg_fps = calculator->GetAvgThroughput(stream_id, PerfManager::GetDefaultType());
+        PrintPerfStats(fps_stats, avg_fps, latency_stats);
+
+        total_fn_tmp += avg_fps.frame_cnt;
+        total_fps_tmp += avg_fps.fps;
+      }  // for each stream
+      // std::cout << "Stream Sum Total : " << total_fps_tmp << " cnt = " << total_fn_tmp << std::endl;
+
+      std::cout << "\nTotal : ";
+      // calculate throughput for pipeline
+      PerfStats stats;
+      if (final_print) {
+        do {
+          stats = calculator->CalcThroughput("", PerfManager::GetDefaultType(),
+                                             {end_node + PerfManager::GetEndTimeSuffix()});
+        } while (stats.frame_cnt);
+      } else {
+        stats = calculator->CalcThroughput("", PerfManager::GetDefaultType(),
+                                           {end_node + PerfManager::GetEndTimeSuffix()});
+      }
+      PerfStats avg_fps = calculator->GetAvgThroughput("", PerfManager::GetDefaultType());
+      PrintThroughput(stats, avg_fps);
+
+      if (final_print) {
+        std::cout << "\nTotal : " << avg_fps.fps << std::endl;
+      }
     }
-    std::cout << "Total fps:" << total_fps << std::endl;
   }
 }
 

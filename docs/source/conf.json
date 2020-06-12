@@ -37,8 +37,8 @@
 	],
         "isfiguretabletoc": {
 		"comment": "插图目录英文：List of  Figures;表格目录英文：List of Tables.",
-                "isfigurestoc": false,
-                "istablestoc": true,
+                "isfigurestoc": true,
+                "istablestoc": false,
                 "figurestoc": [
                            "\\\\renewcommand\\listfigurename{插\\ 图\\ 目\\ 录}",
                            "\\listoffigures"

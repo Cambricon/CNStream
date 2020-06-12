@@ -91,12 +91,15 @@ void FeatureExtractor::ExtractFeature(CNFrameInfoPtr data, ThreadSafeVector<std:
 void FeatureExtractor::ExtractFeatureOnMlu(CNFrameInfoPtr data,
                                            ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
                                            std::vector<std::vector<float>>* features) {
+  uint64_t data_count = model_loader_->InputShapes()[0].hwc();
   for (uint32_t i = 0; i < inputs.size(); ++i) {
     auto obj = inputs[i];
     cv::Mat obj_image = CropImage(*data->frame.ImageBGR(), obj->bbox);
     // do pre-process
-    cv::Mat preproc_image;
-    preproc_image = Preprocess(obj_image);
+
+    cv::Mat preproc_image = Preprocess(obj_image);
+    float *cpu_input = static_cast<float*>(input_cpu_ptr_[0]);
+    memcpy(cpu_input, preproc_image.data, data_count * sizeof(float));
 
     // do copy and inference
     mem_op_.MemcpyInputH2D(input_mlu_ptr_, input_cpu_ptr_, batch_size_);
@@ -105,7 +108,7 @@ void FeatureExtractor::ExtractFeatureOnMlu(CNFrameInfoPtr data,
 
     // do post-process
     const float* begin = reinterpret_cast<float*>(output_cpu_ptr_[0]);
-    const float* end = begin + model_loader_->OutputShapes()[0].DataCount();
+    const float* end = begin + model_loader_->OutputShapes()[0].hwc();
     features->push_back(std::vector<float>(begin, end));
   }
 }
@@ -114,7 +117,7 @@ void FeatureExtractor::ExtractFeatureOnCpu(const cv::Mat& image,
                                            ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
                                            std::vector<std::vector<float>>* features) {
   for (uint32_t num = 0; num < inputs.size(); ++num) {
-auto obj = inputs[num];
+    auto obj = inputs[num];
     cv::Rect rect = cv::Rect(obj->bbox.x * image.cols, obj->bbox.y * image.rows, obj->bbox.w * image.cols,
                              obj->bbox.h * image.rows);
     cv::Mat obj_img(image, rect);
