@@ -56,6 +56,8 @@ class SourceModule : public Module {
    */
   int AddVideoSource(const std::string &stream_id, const std::string &filename, int framerate, bool loop = false);
 
+  std::shared_ptr<SourceHandler> GetSourceHandler(const std::string& stream_id);
+
   /**
    * @brief Remove one stream from DataSource module,should be called before pipeline stops.
    * @param

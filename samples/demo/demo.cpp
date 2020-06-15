@@ -26,12 +26,13 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "cnstream_core.hpp"
 #include "data_source.hpp"
 #include "displayer.hpp"
 #include "util.hpp"
-
+#include "data_handler_mem.hpp"
 #ifdef BUILD_IPC
 #include "module_ipc.hpp"
 #endif
@@ -161,6 +162,7 @@ int main(int argc, char** argv) {
   /*
     add stream sources...
   */
+  std::vector<std::thread> vec_threads_mem;
   int streams = static_cast<int>(video_urls.size());
   auto url_iter = video_urls.begin();
 
@@ -171,6 +173,23 @@ int main(int argc, char** argv) {
       if (-1 == source->AddVideoSource(std::to_string(i), filename, FLAGS_src_frame_rate, FLAGS_loop)) {
         LOG(ERROR) << "Add video source failed. stream_id : " << i;
         invalid_stream_num++;
+      } else {
+        auto handler = dynamic_cast<cnstream::DataHandlerMem*>(source->GetSourceHandler(std::to_string(i)).get());
+        if (handler) {
+          vec_threads_mem.push_back(
+            std::thread([&](cnstream::DataHandlerMem* handler, const char* file_name) {
+            FILE *fp = fopen(file_name, "rb");
+            if (fp) {
+              unsigned char buf[4096];
+              while (!feof(fp)) {
+                int size = fread(buf, 1, 4096, fp);
+                handler->Write(buf, size);
+              }
+              handler->Write(NULL, 0);
+              fclose(fp);
+            }
+            }, handler, filename.c_str()));
+        }
       }
     }
   }
@@ -179,6 +198,10 @@ int main(int argc, char** argv) {
   }
 
   gdisplayer = dynamic_cast<cnstream::Displayer*>(pipeline.GetModule("displayer"));
+
+  for (auto &thread_id : vec_threads_mem) {
+    thread_id.join();
+  }
 
   auto quit_callback = [&pipeline, streams, &source]() {
     for (int i = 0; i < streams; i++) {

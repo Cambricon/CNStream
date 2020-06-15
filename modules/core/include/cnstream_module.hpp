@@ -382,8 +382,19 @@ class Module {
   std::unordered_map<std::string, std::shared_ptr<PerfManager>> perf_managers_;
 };
 
+/**
+ * @brief ModuleEx class.
+ *
+ * Module has permission to transmit data by itself.
+ */
 class ModuleEx : public Module {
  public:
+  /**
+  * Constructor.
+  *
+  * @param name The name of a module. Modules defined in a pipeline should
+  *             have different names.
+  */
   explicit ModuleEx(const std::string &name) : Module(name) { hasTransmit_.store(true); }
 };
 

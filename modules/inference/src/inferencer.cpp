@@ -226,6 +226,14 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
     return false;
   }
 
+  if (paramSet.find("device_id") != paramSet.end()) {
+    d_ptr_->device_id_ = std::stoi(paramSet["device_id"]);
+  }
+
+  edk::MluContext ctx;
+  ctx.SetDeviceId(d_ptr_->device_id_);
+  ctx.ConfigureForThisThread();
+
   std::string model_path = paramSet["model_path"];
   model_path = GetPathRelativeToTheJSONFile(model_path, paramSet);
 
@@ -323,10 +331,6 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
     d_ptr_->use_scaler_ = true;
   }
 
-  if (paramSet.find("device_id") != paramSet.end()) {
-    d_ptr_->device_id_ = std::stoi(paramSet["device_id"]);
-  }
-
 #ifdef CNS_MLU100
   if (paramSet.find("batch_size") != paramSet.end()) {
     std::stringstream ss;
@@ -385,11 +389,6 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
   } else {
   }
 
-  /* hold this code. when all threads that set the cnrt device id exit, cnrt may release the memory itself */
-  edk::MluContext ctx;
-  ctx.SetDeviceId(d_ptr_->device_id_);
-  ctx.ConfigureForThisThread();
-
   return true;
 }
 
@@ -413,7 +412,8 @@ int Inferencer::Process(CNFrameInfoPtr data) {
   bool eos = data->frame.flags & CNFrameFlag::CN_FRAME_FLAG_EOS;
   bool drop_data = d_ptr_->interval_ > 0 && pctx->drop_count++ % d_ptr_->interval_ != 0;
 
-  if (!eos && data->frame.ctx.dev_id != d_ptr_->device_id_) {
+  if (!eos && data->frame.ctx.dev_id != d_ptr_->device_id_ &&
+      data->frame.ctx.dev_type == DevContext::MLU) {
     data->frame.CopyToSyncMemOnDevice(d_ptr_->device_id_);
   }
 
