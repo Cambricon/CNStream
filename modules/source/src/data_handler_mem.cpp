@@ -44,8 +44,34 @@ extern "C" {
 #include "glog/logging.h"
 #include "threadsafe_queue.hpp"
 #include "data_handler_mem.hpp"
+#include "perf_manager.hpp"
 
 namespace cnstream {
+
+struct IOBuffer {
+  explicit IOBuffer(unsigned char *buf, int size) {
+    if (buf && size) {
+      buf_ = (unsigned char *)av_malloc(sizeof(unsigned char) * size);
+      if (buf_) {
+        memcpy(buf_, buf, size);
+        size_ = size;
+      } else {
+        size_ = 0;
+      }
+    } else {
+      buf_ = nullptr;
+      size_ = 0;
+    }
+  }
+  ~IOBuffer() {
+    if (buf_) {
+      av_freep(&buf_);
+    }
+    size_ = 0;
+  }
+  unsigned char *buf_ = nullptr;
+  int size_;
+};
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -176,7 +202,9 @@ void DataHandlerMem::ClearResources(bool demux_only) {
   }
   if (p_format_ctx_) {
     avformat_close_input(&p_format_ctx_);
-    av_freep(&avio_);
+    if (avio_) {
+      av_freep(&avio_);
+    }
     p_format_ctx_ = nullptr;
   }
   video_index_ = -1;
@@ -212,12 +240,23 @@ bool DataHandlerMem::Extract() {
     } else if (AV_NOPTS_VALUE != packet_.pts) {
       find_pts_ = true;
     }
+    if (find_pts_ == false) {
+      packet_.pts = pts_++;
+    }
     return true;
   }
 }
 
 bool DataHandlerMem::Process() {
   bool ret = Extract();
+
+  if (perf_manager_ != nullptr) {
+    std::string thread_name = "cn-" + module_->GetName() + stream_id_;
+    perf_manager_->Record(false, PerfManager::GetDefaultType(), module_->GetName(), packet_.pts);
+    perf_manager_->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(packet_.pts),
+                          module_->GetName() + "_th", "'" + thread_name + "'");
+  }
+
   if (!ret) {
     LOG(INFO) << "Read EOS from file";
     demux_eos_.store(1);

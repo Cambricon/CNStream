@@ -1,5 +1,6 @@
 include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/settings.cmake)
 include_directories("${Example_INCLUDE_DIRS}")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/source/src")
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR} srcs)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/preprocess preprocess_srcs)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/postprocess postprocess_srcs)

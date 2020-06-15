@@ -89,6 +89,13 @@ int SourceModule::AddVideoSource(const std::string &stream_id, const std::string
   return -1;
 }
 
+std::shared_ptr<SourceHandler> SourceModule::GetSourceHandler(const std::string& stream_id) {
+  if (source_map_.find(stream_id) == source_map_.cend()) {
+    return nullptr;
+  }
+  return source_map_[stream_id];
+}
+
 int SourceModule::RemoveSource(const std::string &stream_id) {
   std::unique_lock<std::mutex> lock(mutex_);
   auto iter = source_map_.find(stream_id);

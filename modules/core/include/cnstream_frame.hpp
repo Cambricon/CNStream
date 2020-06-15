@@ -218,7 +218,7 @@ struct CNDataFrame {
   /**
    * @brief Syncronizes source data to specific device, and reset ctx.dev_id to device_id when synced, for multi-device
    * case.
-   * @param device_id.
+   * @param device_id The device id.
    * @return Void.
    */
   void CopyToSyncMemOnDevice(int device_id);

@@ -28,6 +28,7 @@
 
 #include "data_handler_ffmpeg.hpp"
 #include "data_handler_raw.hpp"
+#include "data_handler_mem.hpp"
 #include "glog/logging.h"
 
 namespace cnstream {
@@ -36,8 +37,9 @@ DataSource::DataSource(const std::string &name) : SourceModule(name) {
   param_register_.SetModuleDesc(
       "DataSource is a module for handling input data (videos or images)."
       " Feed data to codec and send decoded data to the next module if there is one.");
-  param_register_.Register("source_type", "Input source type. It could be ffmpeg or raw.");
-  param_register_.Register("output_type", "Where the outputs will be stored. It could be cpu or mlu.");
+  param_register_.Register("source_type", "Input source type. It could be ffmpeg, raw or mem.");
+  param_register_.Register("output_type", "Where the outputs will be stored. It could be cpu or mlu,"
+                           "It is used when decoder_type is cpu.");
   param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
   param_register_.Register("interval",
                            "How many frames will be discarded between two frames"
@@ -91,6 +93,8 @@ bool DataSource::Open(ModuleParamSet paramSet) {
       param_.source_type_ = SOURCE_FFMPEG;
     } else if (source_type == "raw") {
       param_.source_type_ = SOURCE_RAW;
+    } else if (source_type == "mem") {
+      param_.source_type_ = SOURCE_MEM;
     } else {
       LOG(ERROR) << "source_type " << paramSet["source_type"] << " not supported";
       return false;
@@ -98,10 +102,10 @@ bool DataSource::Open(ModuleParamSet paramSet) {
   }
 
   if (paramSet.find("output_type") != paramSet.end()) {
-    std::string dec_type = paramSet["output_type"];
-    if (dec_type == "cpu") {
+    std::string out_type = paramSet["output_type"];
+    if (out_type == "cpu") {
       param_.output_type_ = OUTPUT_CPU;
-    } else if (dec_type == "mlu") {
+    } else if (out_type == "mlu") {
       param_.output_type_ = OUTPUT_MLU;
     } else {
       LOG(ERROR) << "output_type " << paramSet["output_type"] << " not supported";
@@ -144,6 +148,10 @@ bool DataSource::Open(ModuleParamSet paramSet) {
         LOG(ERROR) << "decoder_type MLU : device_id must be set";
         return false;
       }
+    }
+    if (dec_type == "mlu" && param_.output_type_ == OUTPUT_CPU) {
+      LOG(ERROR) << "decoder_type MLU : output_type must be mlu.";
+      return false;
     }
   }
 
@@ -256,6 +264,10 @@ std::shared_ptr<SourceHandler> DataSource::CreateSource(const std::string &strea
         new (std::nothrow) DataHandlerFFmpeg(this, stream_id, filename, framerate, loop);
     LOG_IF(FATAL, nullptr == DataHandlerFFmpeg_ptr) << "DataSource::CreateSource() new DataHandlerFFmpeg failed";
     ptr = dynamic_cast<SourceHandler *>(DataHandlerFFmpeg_ptr);
+  } else if (param_.source_type_ == SOURCE_MEM) {
+    DataHandlerMem *DataHandlerMem_ptr = new (std::nothrow) DataHandlerMem(this, stream_id, filename, framerate);
+    LOG_IF(FATAL, nullptr == DataHandlerMem_ptr) << "DataSource::CreateSource() new DataHandlerMem failed";
+    ptr = dynamic_cast<SourceHandler *>(DataHandlerMem_ptr);
   } else {
     LOG(ERROR) << "source, not supported yet";
   }
@@ -276,7 +288,7 @@ bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
 
   if (paramSet.find("source_type") != paramSet.end()) {
     std::string source_type = paramSet.at("source_type");
-    if (source_type != "ffmpeg" && source_type != "raw") {
+    if (source_type != "ffmpeg" && source_type != "raw" && source_type != "mem") {
       LOG(ERROR) << "[DataSource] [source_type] " << paramSet.at("source_type") << " not supported";
       return false;
     }

@@ -42,7 +42,8 @@ namespace cnstream {
  */
 enum SourceType {
   SOURCE_RAW,     ///< Represents the raw stream. The source is sent for decoding directly.
-  SOURCE_FFMPEG   ///< Represents the normal stream. The source is demuxed with FFmpeg before sent for decoding.
+  SOURCE_FFMPEG,   ///< Represents the normal stream. The source is demuxed with FFmpeg before sent for decoding.
+  SOURCE_MEM
 };
 /**
  * @brief The storage type of the output frame data that are stored for modules on CPU or MLU.
@@ -102,7 +103,7 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
    * @param paramSet
    * @verbatim
    *   source_type: Optional. The demuxer type. The default value is SOURCE_RAW.
-   *                Supported values are ``raw`` and ``ffmpeg``.
+   *                Supported values are ``raw``, ``ffmpeg`` and "mem".
    *   output_type: Optional. The output type. The default output_type is cpu.
    *                Supported values are ``mlu`` and ``cpu``.
    *   interval: Optional. Process one frame for every ``interval`` frames. Process every frame by default.

@@ -279,7 +279,8 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
     LOG(ERROR) << "OSD module processed illegal frame: width or height may < 0.";
     return -1;
   }
-  if (data->frame.ptr_cpu[0] == nullptr && data->frame.ptr_mlu[0] == nullptr) {
+  if (data->frame.ptr_cpu[0] == nullptr && data->frame.ptr_mlu[0] == nullptr
+      && data->frame.cpu_data == nullptr && data->frame.mlu_data == nullptr) {
     LOG(ERROR) << "OSD module processed illegal frame: data ptr point to nullptr.";
     return -1;
   }

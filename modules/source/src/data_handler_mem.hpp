@@ -36,37 +36,15 @@
 
 namespace cnstream {
 
-struct IOBuffer {
-  explicit IOBuffer(unsigned char *buf, int size) {
-    if (buf && size) {
-      buf_ = (unsigned char *)av_malloc(sizeof(unsigned char) * size);
-      if (buf_) {
-        memcpy(buf_, buf, size);
-        size_ = size;
-      } else {
-        size_ = 0;
-      }
-    } else {
-      buf_ = nullptr;
-      size_ = 0;
-    }
-  }
-  ~IOBuffer() {
-    if (buf_) {
-      av_freep(&buf_);
-    }
-    size_ = 0;
-  }
-  unsigned char *buf_ = nullptr;
-  int size_;
-};
+struct IOBuffer;
 
 class DataHandlerMem : public DataHandler {
  public:
   explicit DataHandlerMem(DataSource *module, std::string stream_id,
-                          int frame_rate = 0, bool loop = false)
-    :DataHandler(module, stream_id, frame_rate, loop),
-     module_(module), stream_id_(stream_id) {}
+                          const std::string& filename, int frame_rate = 0)
+    :DataHandler(module, stream_id, frame_rate, false),
+    // filename_(filename) {}
+     module_(module), stream_id_(stream_id), filename_(filename) {}
   ~DataHandlerMem() {}
   int Write(unsigned char *buf, int size);
 
@@ -85,6 +63,7 @@ class DataHandlerMem : public DataHandler {
 #endif
   DataSource *module_ = nullptr;
   std::string stream_id_;
+  std::string filename_;
 
  private:
 #ifdef UNIT_TEST
@@ -100,6 +79,7 @@ class DataHandlerMem : public DataHandler {
   int video_index_ = -1;
   bool first_frame_ = true;
   bool find_pts_ = true;  // set it to true by default!
+  int64_t pts_ = 0;
   std::shared_ptr<FFmpegDecoder> decoder_ = nullptr;
 };
 

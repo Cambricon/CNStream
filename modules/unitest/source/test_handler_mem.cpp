@@ -56,19 +56,13 @@ static void ResetParam(ModuleParamSet &param) {  // NOLINT
   param["output_buf_number"] = "100";
 }
 
-TEST(DataHandlerMem, IoBuffer) {
-  unsigned char buf[TestSize];
-  IOBuffer iobuffer(buf, TestSize);
-  EXPECT_NE(iobuffer.buf_, nullptr);
-}
-
 TEST(DataHandlerMem, Write) {
   DataSource src(gname);
   ModuleParamSet param;
   ResetParam(param);
   ASSERT_TRUE(src.CheckParamSet(param));
   ASSERT_TRUE(src.Open(param));
-  auto handler = std::make_shared<DataHandlerMem>(&src, std::to_string(0), 30, false);
+  auto handler = std::make_shared<DataHandlerMem>(&src, std::to_string(0), "filename", 30);
   ASSERT_TRUE(handler != nullptr);
   EXPECT_TRUE(handler->module_ == &src);
   EXPECT_TRUE(handler->stream_id_ == std::to_string(0));
