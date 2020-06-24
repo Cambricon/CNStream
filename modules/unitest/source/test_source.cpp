@@ -166,7 +166,7 @@ TEST(Source, OpenClose) {
 
   // raw only support mlu decoder
   param["source_type"] = "raw";
-  param["output_type"] = "cpu";
+  param["output_type"] = "mlu";
   param["decoder_type"] = "mlu";
   param["device_id"] = "0";
   param["chunk_size"] = "16384";

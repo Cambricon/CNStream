@@ -31,21 +31,29 @@
 namespace cnstream {
 
 DataSource::DataSource(const std::string &name) : SourceModule(name) {
-  param_register_.SetModuleDesc("DataSource is a module for handling input data.");
-  param_register_.Register("source_type", "Input source type, must be ffmpeg or raw.");
-  param_register_.Register("output_type", "Output type, must be cpu or mlu.");
-  param_register_.Register("device_id", "Device ID.");
-  param_register_.Register("interval", "Interval.");
-  param_register_.Register("decoder_type", "Decoder type, must be cpu or mlu.");
-  param_register_.Register("output_width", "Decoder output width.");
-  param_register_.Register("output_height", "Decoder output height.");
-  param_register_.Register("reuse_cndec_buf", "Whether decoder reuse buffer.");
-  param_register_.Register("chunk_size", "Chunk size when source_type is raw.");
-  param_register_.Register("width", "Width when source_type is raw.");
-  param_register_.Register("height", "Height when source_type is raw.");
-  param_register_.Register("interlaced", "Interlaced when source_type is raw.");
-  param_register_.Register("input_buf_number", "Input buffer number.");
-  param_register_.Register("output_buf_number", "Output buffer number.");
+  param_register_.SetModuleDesc("DataSource is a module for handling input data (videos or images)."
+                                " Feed data to codec and send decoded data to the next module if there is one.");
+  param_register_.Register("source_type", "Input source type. It could be ffmpeg or raw.");
+  param_register_.Register("output_type", "Where the outputs will be stored. It could be cpu or mlu,"
+                           "It is used when decoder_type is cpu.");
+  param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
+  param_register_.Register("interval", "How many frames will be discarded between two frames"
+                           " which will be sent to codec.");
+  param_register_.Register("decoder_type", "Which the input data will be decoded by. It could be cpu or mlu.");
+  param_register_.Register("output_width", "After decoding, the width of the output frames.");
+  param_register_.Register("output_height", "After decoding, the height of the output frames.");
+  param_register_.Register("reuse_cndec_buf", "This parameter decides whether the codec buffer that stores output data"
+                           "will be held and reused by the framework afterwards. It should be true or false.");
+  param_register_.Register("chunk_size", "How many bytes will be sent to codec once."
+                           " Chunk size is used when source_type is raw.");
+  param_register_.Register("width", "When source_type is raw, we need to set it to  the width of input data.");
+  param_register_.Register("height", "When source_type is raw, we need to set it to the height of input data.");
+  param_register_.Register("interlaced", "When source_type is raw, we need to set interlaced to fasle or true."
+                           " It should be set according to the input data.");
+  param_register_.Register("input_buf_number", "Codec buffer number for storing input data."
+                           " Basically, we do not need to set it, as it will be allocated automatically.");
+  param_register_.Register("output_buf_number", "Codec buffer number for storing output data."
+                           " Basically, we do not need to set it, as it will be allocated automatically.");
 }
 
 DataSource::~DataSource() {}
@@ -76,10 +84,10 @@ bool DataSource::Open(ModuleParamSet paramSet) {
   }
 
   if (paramSet.find("output_type") != paramSet.end()) {
-    std::string dec_type = paramSet["output_type"];
-    if (dec_type == "cpu") {
+    std::string out_type = paramSet["output_type"];
+    if (out_type == "cpu") {
       param_.output_type_ = OUTPUT_CPU;
-    } else if (dec_type == "mlu") {
+    } else if (out_type == "mlu") {
       param_.output_type_ = OUTPUT_MLU;
     } else {
       LOG(ERROR) << "output_type " << paramSet["output_type"] << " not supported";
@@ -121,6 +129,10 @@ bool DataSource::Open(ModuleParamSet paramSet) {
         LOG(ERROR) << "decoder_type MLU : device_id must be set";
         return false;
       }
+    }
+    if (dec_type == "mlu" && param_.output_type_ == OUTPUT_CPU) {
+      LOG(ERROR) << "decoder_type MLU : output_type must be mlu.";
+      return false;
     }
   }
 
