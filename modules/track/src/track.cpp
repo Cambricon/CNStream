@@ -39,7 +39,16 @@ struct TrackerContext {
 static thread_local std::unique_ptr<edk::MluContext> g_tl_mlu_env;
 static thread_local std::unique_ptr<FeatureExtractor> g_tl_feature_extractor;
 
-Tracker::Tracker(const std::string &name) : Module(name) {}
+Tracker::Tracker(const std::string &name) : Module(name) {
+  param_register_.SetModuleDesc("Tracker is a module for realtime tracking.");
+  param_register_.Register("model_path",
+                           "The offline model path. Normally offline model is a file"
+                           " with cambricon extension.");
+  param_register_.Register("func_name", "The offline model function name, usually is 'subnet0'.");
+  param_register_.Register("track_name", "Track algorithm name. Choose from FeatureMatch and KCF.");
+  param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
+  param_register_.Register("max_cosine_distance", "Threshold of cosine distance.");
+}
 
 Tracker::~Tracker() { Close(); }
 
@@ -75,7 +84,7 @@ TrackerContext *Tracker::GetContext(CNFrameInfoPtr data) {
       contexts_[data->channel_idx] = ctx;
 #endif
     } else {  // "FeatureMatch by default"
-      edk::FeatureMatchTrack* track = new edk::FeatureMatchTrack;
+      edk::FeatureMatchTrack *track = new edk::FeatureMatchTrack;
       track->SetParams(max_cosine_distance_, 100, 0.7, 30, 3);
       ctx->processer_.reset(track);
       contexts_[data->channel_idx] = ctx;
@@ -85,11 +94,11 @@ TrackerContext *Tracker::GetContext(CNFrameInfoPtr data) {
 }
 
 bool Tracker::Open(ModuleParamSet paramSet) {
-  batch_size_ = 1;
   if (paramSet.find("model_path") != paramSet.end()) {
     model_path_ = paramSet["model_path"];
     model_path_ = GetPathRelativeToTheJSONFile(model_path_, paramSet);
   }
+
   std::string func_name_ = "subnet0";
   if (paramSet.find("func_name") != paramSet.end()) {
     func_name_ = paramSet["func_name"];
@@ -98,18 +107,14 @@ bool Tracker::Open(ModuleParamSet paramSet) {
   if (paramSet.find("max_cosine_distance") != paramSet.end()) {
     max_cosine_distance_ = std::stof(paramSet["max_cosine_distance"]);
   }
+
   if (paramSet.find("device_id") != paramSet.end()) {
     device_id_ = std::stoi(paramSet["device_id"]);
   }
 
+  track_name_ = "FeatureMatch";
   if (paramSet.find("track_name") != paramSet.end()) {
     track_name_ = paramSet["track_name"];
-    if (track_name_ != "FeatureMatch" && track_name_ != "KCF") {
-      LOG(ERROR) << "Unsupported tracker type " << track_name_;
-      return false;
-    }
-  } else {
-    track_name_ = "FeatureMatch";
   }
 
   if (!model_path_.empty()) {
@@ -220,6 +225,46 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
 #endif
   }
   return 0;
+}
+
+bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
+  ParametersChecker checker;
+  for (auto &it : paramSet) {
+    if (!param_register_.IsRegisted(it.first)) {
+      LOG(WARNING) << "[Tracker] Unknown param: " << it.first;
+    }
+  }
+
+  if (paramSet.find("model_path") != paramSet.end()) {
+    if (!checker.CheckPath(paramSet.at("model_path"), paramSet)) {
+      LOG(ERROR) << "[Tracker] [model_path] : " << paramSet.at("model_path") << " non-existence.";
+      return false;
+    }
+  }
+
+  if (paramSet.find("track_name") != paramSet.end()) {
+    std::string track_name = paramSet.at("track_name");
+    if (track_name != "FeatureMatch" && track_name != "KCF") {
+      LOG(ERROR) << "[Tracker] [track_name] : Unsupported tracker type " << track_name;
+      return false;
+    }
+  }
+
+  std::string err_msg;
+  if (paramSet.find("device_id") != paramSet.end()) {
+    if (!checker.IsNum({"device_id"}, paramSet, err_msg)) {
+      LOG(ERROR) << "[Tracker] " << err_msg;
+      return false;
+    }
+  }
+
+  if (paramSet.find("max_cosine_distance") != paramSet.end()) {
+    if (!checker.IsNum({"max_cosine_distance"}, paramSet, err_msg)) {
+      LOG(ERROR) << "[Tracker] " << err_msg;
+      return false;
+    }
+  }
+  return true;
 }
 
 }  // namespace cnstream

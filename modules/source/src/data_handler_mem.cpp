@@ -222,7 +222,6 @@ bool DataHandlerMem::Extract() {
       continue;
     }
 
-    // AVStream* vstream = p_format_ctx_->streams[video_index_];
     if (first_frame_) {
       if (packet_.flags & AV_PKT_FLAG_KEY) {
         first_frame_ = false;
@@ -232,6 +231,7 @@ bool DataHandlerMem::Extract() {
       }
     }
 
+    AVStream* vstream = p_format_ctx_->streams[video_index_];
     // find pts information
     if (AV_NOPTS_VALUE == packet_.pts && find_pts_) {
       find_pts_ = false;
@@ -239,6 +239,7 @@ bool DataHandlerMem::Extract() {
                    << "use ordered numbers instead. ";
     } else if (AV_NOPTS_VALUE != packet_.pts) {
       find_pts_ = true;
+      packet_.pts = av_rescale_q(packet_.pts, vstream->time_base, {1, 90000});
     }
     if (find_pts_ == false) {
       packet_.pts = pts_++;

@@ -4,6 +4,7 @@ set(contrib_modules_list cnencode)
 
 foreach(contrib_module ${contrib_modules_list})
   include_directories(${PROJECT_SOURCE_DIR}/modules_contrib/${contrib_module}/include)
+  install(DIRECTORY ${PROJECT_SOURCE_DIR}/modules_contrib/${contrib_module}/include/ DESTINATION include)
   file(GLOB_RECURSE contrib_module_src ${PROJECT_SOURCE_DIR}/modules_contrib/${contrib_module}/*.cpp)
   list(APPEND contrib_module_srcs ${contrib_module_src})
 endforeach()
