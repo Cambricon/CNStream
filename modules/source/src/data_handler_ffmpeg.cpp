@@ -225,6 +225,7 @@ bool DataHandlerFFmpeg::Extract() {
                    << "stream url: " << filename_.c_str();
     } else if (AV_NOPTS_VALUE != packet_.pts) {
       find_pts_ = true;
+      packet_.pts = av_rescale_q(packet_.pts, vstream->time_base, {1, 90000});
     }
     if (find_pts_ == false) {
       packet_.pts = pts_++;

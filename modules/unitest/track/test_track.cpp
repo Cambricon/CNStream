@@ -51,18 +51,46 @@ static constexpr const char *kcf_track = "KCF";
 static constexpr const char *img_path = "../../data/images/19.jpg";
 static constexpr int g_dev_id = 0;
 static constexpr int g_channel_id = 0;
+static constexpr int g_max_cosine_distance = 0.2;
 
 TEST(Tracker, Construct) {
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   EXPECT_STREQ(track->GetName().c_str(), gname);
 }
 
+TEST(Tracker, CheckParamSet) {
+  std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
+  ModuleParamSet param;
+  EXPECT_TRUE(track->CheckParamSet(param));
+
+  param["model_path"] = "fake_path";
+  EXPECT_FALSE(track->CheckParamSet(param));
+
+  param["model_path"] = GetExePath() + g_kcfmodel_path;
+  param["func_name"] = gfunc_name;
+  param["track_name"] = "fake_name";
+  EXPECT_FALSE(track->CheckParamSet(param));
+
+  param["track_name"] = kcf_track;
+  EXPECT_TRUE(track->CheckParamSet(param));
+
+  param["device_id"] = "fake_id";
+  EXPECT_FALSE(track->CheckParamSet(param));
+
+  param["device_id"] = std::to_string(g_dev_id);
+  EXPECT_TRUE(track->CheckParamSet(param));
+
+  param["max_cosine_distance"] = "fake_distance";
+  EXPECT_FALSE(track->CheckParamSet(param));
+
+  param["max_cosine_distance"] = std::to_string(g_max_cosine_distance);
+  EXPECT_TRUE(track->CheckParamSet(param));
+}
+
 TEST(Tracker, OpenClose) {
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   ModuleParamSet param;
-  // wrong track name
-  param["track_name"] = "foo";
-  EXPECT_FALSE(track->Open(param));
+
   // Deep Sort On CPU
   param["track_name"] = ds_track;
   EXPECT_TRUE(track->Open(param));

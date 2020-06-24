@@ -104,6 +104,15 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
    */
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
+  /**
+   * @brief Check ParamSet for a module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Returns true if this API run successfully. Otherwise, returns false.
+   */
+  bool CheckParamSet(const ModuleParamSet &paramSet) const override;
+
  private:
   TrackerContext *GetContext(CNFrameInfoPtr data);
   std::unordered_map<int, TrackerContext *> contexts_;
