@@ -1,0 +1,2 @@
+rtsp url names:
+rtsp://192.168.64.21:9554/rtsp_live

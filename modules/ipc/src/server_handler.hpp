@@ -102,10 +102,10 @@ class IPCServerHandler : public IPCHandler {
 
   /**
    *  @brief  Process received frame info package, convert FrameInfoPackage to CNFrameInfo and send to pipeline for each
-   * channel.
+   * stream.
    *  @return Void.
    */
-  void ProcessFrameInfoPackage(size_t channel_idx);
+  void ProcessFrameInfoPackage(size_t thread_idx);
 
  private:
   CNServer server_handle_;                       // server socket handle

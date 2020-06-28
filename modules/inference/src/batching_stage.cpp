@@ -26,6 +26,7 @@
 #include <memory>
 #include <vector>
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 #include "infer_resource.hpp"
 #include "infer_task.hpp"
 #include "preproc.hpp"
@@ -78,17 +79,18 @@ ResizeConvertBatchingStage::ResizeConvertBatchingStage(std::shared_ptr<edk::Mode
 ResizeConvertBatchingStage::~ResizeConvertBatchingStage() {}
 
 std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<CNFrameInfo> finfo) {
-  void* src_y = finfo->frame.data[0]->GetMutableMluData();
-  void* src_uv = finfo->frame.data[1]->GetMutableMluData();
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(finfo->datas[CNDataFramePtrKey]);
+  void* src_y = frame->data[0]->GetMutableMluData();
+  void* src_uv = frame->data[1]->GetMutableMluData();
   QueuingTicket ticket = rcop_res_->PickUpTicket();
   std::shared_ptr<RCOpValue> value = rcop_res_->WaitResourceByTicket(&ticket);
   edk::MluResizeConvertOp::ColorMode cmode = edk::MluResizeConvertOp::ColorMode::YUV2ABGR_NV12;
-  if (finfo->frame.fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12) {
+  if (frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12) {
     cmode = edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV12;
-  } else if (finfo->frame.fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) {
+  } else if (frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) {
     cmode = edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV21;
   } else {
-    throw CnstreamError("Can not handle this frame with format :" + std::to_string(static_cast<int>(finfo->frame.fmt)));
+    throw CnstreamError("Can not handle this frame with format :" + std::to_string(static_cast<int>(frame->fmt)));
   }
   if (!rcop_res_->Initialized()) {
     uint32_t dst_w = model_->InputShapes()[0].w;
@@ -108,9 +110,9 @@ std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<
     }
   }
   edk::MluResizeConvertOp::InputData input_data;
-  input_data.src_w = finfo->frame.width;
-  input_data.src_h = finfo->frame.height;
-  input_data.src_stride = finfo->frame.stride[0];
+  input_data.src_w = frame->width;
+  input_data.src_h = frame->height;
+  input_data.src_stride = frame->stride[0];
   input_data.planes[0] = src_y;
   input_data.planes[1] = src_uv;
   value->op.BatchingUp(input_data);
@@ -126,8 +128,9 @@ ScalerBatchingStage::~ScalerBatchingStage() {}
 
 void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx,
                                           const IOResValue& value) {
-  void* src_y = finfo->frame.data[0]->GetMutableMluData();
-  void* src_uv = finfo->frame.data[1]->GetMutableMluData();
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(finfo->datas[CNDataFramePtrKey]);
+  void* src_y = frame->data[0]->GetMutableMluData();
+  void* src_uv = frame->data[1]->GetMutableMluData();
   void* dst = value.datas[0].Offset(batch_idx);
   cncodecWorkInfo work_info;
   cncodecFrame src_frame;
@@ -137,7 +140,7 @@ void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, ui
   memset(&dst_frame, 0, sizeof(dst_frame));
 
   cncodecPixelFormat fmt = CNCODEC_PIX_FMT_NV12;
-  switch (finfo->frame.fmt) {
+  switch (frame->fmt) {
     case CN_PIXEL_FORMAT_YUV420_NV21:
       fmt = CNCODEC_PIX_FMT_NV21;
       break;
@@ -145,21 +148,21 @@ void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, ui
       fmt = CNCODEC_PIX_FMT_NV12;
       break;
     default:
-      LOG(ERROR) << "Scaler: unsupport fmt: " + std::to_string(finfo->frame.fmt);
+      LOG(ERROR) << "Scaler: unsupport fmt: " + std::to_string(frame->fmt);
       break;
   }
 
   src_frame.pixelFmt = fmt;
   src_frame.colorSpace = CNCODEC_COLOR_SPACE_BT_709;
-  src_frame.width = finfo->frame.width;
-  src_frame.height = finfo->frame.height;
-  src_frame.planeNum = finfo->frame.GetPlanes();
-  src_frame.plane[0].size = finfo->frame.GetPlaneBytes(0);
+  src_frame.width = frame->width;
+  src_frame.height = frame->height;
+  src_frame.planeNum = frame->GetPlanes();
+  src_frame.plane[0].size = frame->GetPlaneBytes(0);
   src_frame.plane[0].addr = reinterpret_cast<u64_t>(src_y);
-  src_frame.plane[1].size = finfo->frame.GetPlaneBytes(1);
+  src_frame.plane[1].size = frame->GetPlaneBytes(1);
   src_frame.plane[1].addr = reinterpret_cast<u64_t>(src_uv);
-  src_frame.stride[0] = finfo->frame.stride[0];
-  src_frame.stride[1] = finfo->frame.stride[1];
+  src_frame.stride[0] = frame->stride[0];
+  src_frame.stride[1] = frame->stride[1];
   src_frame.channel = 1;
   src_frame.deviceId = 0;  // FIXME
 

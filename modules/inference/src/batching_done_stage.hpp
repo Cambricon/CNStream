@@ -75,7 +75,7 @@ class BatchingDoneStage {
   int dev_id_ = -1;  // only for EasyInfer::Init
   std::shared_ptr<PerfManager> perf_manager_ = nullptr;
   std::string perf_type_;
-};                   // class BatchingDoneStage
+};  // class BatchingDoneStage
 
 class H2DBatchingDoneStage : public BatchingDoneStage {
  public:
@@ -152,8 +152,8 @@ class PostprocessingBatchingDoneStage : public BatchingDoneStage {
 class ObjPostprocessingBatchingDoneStage : public BatchingDoneStage {
  public:
   ObjPostprocessingBatchingDoneStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, int dev_id,
-                                  std::shared_ptr<ObjPostproc> postprocessor,
-                                  std::shared_ptr<CpuOutputResource> cpu_output_res)
+                                     std::shared_ptr<ObjPostproc> postprocessor,
+                                     std::shared_ptr<CpuOutputResource> cpu_output_res)
       : BatchingDoneStage(model, batchsize, dev_id), postprocessor_(postprocessor), cpu_output_res_(cpu_output_res) {}
 
   std::vector<std::shared_ptr<InferTask>> BatchingDone(const BatchingDoneInput& finfos) { return {}; }

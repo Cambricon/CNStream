@@ -41,6 +41,11 @@ using std::to_string;
 using std::string;
 #define ALIGN(size, alignment) (((uint32_t)(size) + (alignment)-1) & ~((alignment)-1))
 
+// cncodec add version macro since v1.6.0
+#ifndef CNCODEC_VERSION
+#define CNCODEC_VERSION 0
+#endif
+
 namespace edk {
 
 // static constexpr uint32_t g_buffer_size = 1 << 22;
@@ -689,6 +694,11 @@ static int32_t EventHandler(cncodecCbEventType type, void *user_data, void *pack
       LOG(ERROR) << "Abort error thrown from cncodec";
       handler->AbortEncoder();
       break;
+#if CNCODEC_VERSION >= 10600
+    case CNCODEC_CB_EVENT_STREAM_CORRUPT:
+      LOG(WARNING) << "Stream corrupt, discard frame";
+      break;
+#endif
     default:
       LOG(ERROR) << "Unknown event type";
       handler->AbortEncoder();

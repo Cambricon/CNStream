@@ -35,11 +35,11 @@ using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 using RtspSinkContext = std::shared_ptr<RtspSinkJoinStream>;
 
 enum ColorFormat {
-  YUV420 = 0,   /* Planar Y4-U1-V1 */
-  RGB24,        /* Packed R8G8B8.*/
-  BGR24,        /* Packed B8G8R8.*/
-  NV21,         /* Semi-Planar Y4-V1U1*/
-  NV12,         /* Semi-Planar Y4-U1V1*/
+  YUV420 = 0, /* Planar Y4-U1-V1 */
+  RGB24,      /* Packed R8G8B8.*/
+  BGR24,      /* Packed B8G8R8.*/
+  NV21,       /* Semi-Planar Y4-V1U1*/
+  NV12,       /* Semi-Planar Y4-U1V1*/
 };
 
 enum VideoCodecType {
@@ -53,19 +53,19 @@ enum EncoderType {
   MLU,
 };
 
-struct RtspParam{
-  int frame_rate = 25;     // Target fps
-  int udp_port = 9554;     // UDP port
-  int http_port = 8080;    // RTSP-over-HTTP channel port
-  int src_width = 1920;    // Source width;
-  int src_height = 1080;   // Source height;
-  int dst_width = 1920;    // Target width,prefered size same with input
-  int dst_height = 1080;   // Target height,prefered size same with input
-  int gop = 20;            // Target gop,default is 10
-  int kbps = 2 * 1024;     // Target Kbps,default is 2*1024(2M)
-  ColorFormat color_format = NV21;    // Color format
-  VideoCodecType codec_type = H264;   // Video codec type
-  EncoderType enc_type = FFMPEG;      // Encoder type
+struct RtspParam {
+  int frame_rate = 25;               // Target fps
+  int udp_port = 9554;               // UDP port
+  int http_port = 8080;              // RTSP-over-HTTP channel port
+  int src_width = 1920;              // Source width;
+  int src_height = 1080;             // Source height;
+  int dst_width = 1920;              // Target width,prefered size same with input
+  int dst_height = 1080;             // Target height,prefered size same with input
+  int gop = 20;                      // Target gop,default is 10
+  int kbps = 2 * 1024;               // Target Kbps,default is 2*1024(2M)
+  ColorFormat color_format = NV21;   // Color format
+  VideoCodecType codec_type = H264;  // Video codec type
+  EncoderType enc_type = FFMPEG;     // Encoder type
 
   int device_id;             // Device id
   int view_rows;             // Row of the display grid. Only used in mosaic mode.
@@ -93,12 +93,12 @@ class RtspSink : public Module, public ModuleCreator<RtspSink> {
   ~RtspSink();
 
   /**
-  * @brief Called by pipeline when pipeline start.
-  *
-  * @param paramSet : parameter set
-  *
-  * @return ture if module open succeed, otherwise false.
-  */
+   * @brief Called by pipeline when pipeline start.
+   *
+   * @param paramSet : parameter set
+   *
+   * @return ture if module open succeed, otherwise false.
+   */
   bool Open(ModuleParamSet paramSet) override;
 
   /**

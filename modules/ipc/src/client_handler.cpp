@@ -31,9 +31,7 @@ namespace cnstream {
 
 IPCClientHandler::IPCClientHandler(const IPCType& type, ModuleIPC* ipc_module) : IPCHandler(type, ipc_module) {}
 
-IPCClientHandler::~IPCClientHandler() {
-  CloseSemphore();
-}
+IPCClientHandler::~IPCClientHandler() { CloseSemphore(); }
 
 bool IPCClientHandler::Open() {
   if (socket_address_.empty()) {
@@ -79,7 +77,8 @@ void IPCClientHandler::Close() {
   if (processed_frames_map_.size() > 0) {
     for (auto& it : processed_frames_map_) {
       auto data = it.second;
-      data->frame.ReleaseSharedMem(memmap_type_);
+      CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+      frame->ReleaseSharedMem(memmap_type_, data->stream_id);
     }
   }
 }
@@ -151,7 +150,8 @@ void IPCClientHandler::FreeSharedMemory() {
     std::string key = "stream_id_" + recv_pkg.stream_id + "_frame_id_" + std::to_string(recv_pkg.frame_id);
     auto iter = processed_frames_map_.find(key);
     if (iter != processed_frames_map_.end()) {
-      iter->second->frame.ReleaseSharedMem(memmap_type_);
+      CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(iter->second->datas[CNDataFramePtrKey]);
+      frame->ReleaseSharedMem(memmap_type_, iter->second->stream_id);
       processed_frames_map_.erase(iter);
       framesmap_full_cond_.notify_one();
     } else {
@@ -165,7 +165,8 @@ bool IPCClientHandler::CacheProcessedData(std::shared_ptr<CNFrameInfo> data) {
     std::unique_lock<std::mutex> lock(mutex_);
     if (framesmap_full_cond_.wait_for(lock, std::chrono::milliseconds(10),
                                       [&] { return (processed_frames_map_.size() < max_cachedframe_size_); })) {
-      std::string key = "stream_id_" + data->frame.stream_id + "_frame_id_" + std::to_string(data->frame.frame_id);
+      CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+      std::string key = "stream_id_" + data->stream_id + "_frame_id_" + std::to_string(frame->frame_id);
       processed_frames_map_.insert(make_pair(key, data));
       return true;
     }

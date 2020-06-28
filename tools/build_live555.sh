@@ -7,7 +7,7 @@ LIVE555_CONFIG=linux-with-shared-libraries
 LIVE555_CONFIG_ARM=armlinux
 CROSS_COMPILE=$1
 
-if [ -f "$LIVE555_INST_DIR/lib/libliveMedia.so" ];then
+if [ -f "$LIVE555_INST_DIR/lib/libliveMedia.so" ] && [ -f "$LIVE555_INST_DIR/include/liveMedia/liveMedia.hh" ];then
   echo "live555 has been built and installed already"
   exit 0
 fi

@@ -32,6 +32,7 @@
 #error OpenCV required
 #endif
 
+#include "cnstream_frame_va.hpp"
 #include "easyinfer/model_loader.h"
 #include "easyinfer/shape.h"
 #include "preproc.hpp"
@@ -65,33 +66,36 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
   // check params
   auto input_shapes = model->InputShapes();
   if (net_inputs.size() != 1 || (input_shapes[0].c != 3 && input_shapes[0].c != 4)) {
-    LOG(ERROR) << "[PreprocCpu] model input shape not supported, net_input.size = "
-               << net_inputs.size() << ", input_shapes[0].c = " << input_shapes[0].c;
+    LOG(ERROR) << "[PreprocCpu] model input shape not supported, net_input.size = " << net_inputs.size()
+               << ", input_shapes[0].c = " << input_shapes[0].c;
     return -1;
   }
 
   DLOG(INFO) << "[PreprocCpu] do preproc...";
 
-  int width = package->frame.width;
-  int height = package->frame.height;
+  cnstream::CNDataFramePtr frame =
+      cnstream::any_cast<cnstream::CNDataFramePtr>(package->datas[cnstream::CNDataFramePtrKey]);
+
+  int width = frame->width;
+  int height = frame->height;
   int dst_w = input_shapes[0].w;
   int dst_h = input_shapes[0].h;
 
-  uint8_t* img_data = new(std::nothrow) uint8_t[package->frame.GetBytes()];
+  uint8_t* img_data = new (std::nothrow) uint8_t[frame->GetBytes()];
   if (!img_data) {
-    LOG(ERROR) << "Failed to alloc memory, size: " << package->frame.GetBytes();
+    LOG(ERROR) << "Failed to alloc memory, size: " << frame->GetBytes();
     return -1;
   }
   uint8_t* t = img_data;
 
-  for (int i = 0; i < package->frame.GetPlanes(); ++i) {
-    memcpy(t, package->frame.data[i]->GetCpuData(), package->frame.GetPlaneBytes(i));
-    t += package->frame.GetPlaneBytes(i);
+  for (int i = 0; i < frame->GetPlanes(); ++i) {
+    memcpy(t, frame->data[i]->GetCpuData(), frame->GetPlaneBytes(i));
+    t += frame->GetPlaneBytes(i);
   }
 
   // convert color space
   cv::Mat img;
-  switch (package->frame.fmt) {
+  switch (frame->fmt) {
     case cnstream::CNDataFormat::CN_PIXEL_FORMAT_BGR24:
       img = cv::Mat(height, width, CV_8UC3, img_data);
       break;
@@ -149,12 +153,14 @@ IMPLEMENT_REFLEX_OBJECT_EX(ObjPreprocCpu, cnstream::ObjPreproc)
 int ObjPreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
                            const cnstream::CNFrameInfoPtr& finfo,
                            const std::shared_ptr<cnstream::CNInferObject>& pobj) {
+  cnstream::CNDataFramePtr frame =
+      cnstream::any_cast<cnstream::CNDataFramePtr>(finfo->datas[cnstream::CNDataFramePtrKey]);
   // origin frame
-  cv::Mat frame_bgr = *finfo->frame.ImageBGR();
+  cv::Mat frame_bgr = *frame->ImageBGR();
 
   // crop objct from frame
-  int w = finfo->frame.width;
-  int h = finfo->frame.height;
+  int w = frame->width;
+  int h = frame->height;
   cv::Rect obj_roi(pobj->bbox.x * w, pobj->bbox.y * h, pobj->bbox.w * w, pobj->bbox.h * h);
   cv::Mat obj_bgr = frame_bgr(obj_roi);
 
@@ -176,4 +182,3 @@ int ObjPreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::sha
 
   return 0;
 }
-

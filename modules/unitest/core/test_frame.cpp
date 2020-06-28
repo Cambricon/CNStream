@@ -64,7 +64,7 @@ void RunConvertImageTest(CNDataFrame* frame, int image_type) {
   frame->CopyToSyncMem();
   EXPECT_NE(frame->ImageBGR(), nullptr);
   free(frame->ptr_cpu[0]);
-  if (image_type == 1|| image_type == 2) {  // YUV
+  if (image_type == 1 || image_type == 2) {  // YUV
     free(frame->ptr_cpu[1]);
   }
 }

@@ -36,6 +36,7 @@
 #else
 #error OpenCV required
 #endif
+#include "cnstream_frame_va.hpp"
 
 static std::vector<string> LoadLabels(const std::string& label_path) {
   std::vector<std::string> labels;
@@ -193,17 +194,22 @@ Osd::Osd(const std::string& name) : Module(name) {
   param_register_.SetModuleDesc("Osd is a module for drawing objects on image. Output image is BGR24 format.");
   param_register_.Register("label_path", "The path of the label file.");
   param_register_.Register("chinese_label_flag", "Whether chinese label will be used.");
+  param_register_.Register("text_scale_coef",
+                           "The coefficient of text scale, which can change the size of text put on image.");
+  param_register_.Register("text_thickness_coef",
+                           "The coefficient of text thickness, which can change the thickness of text put on image.");
 }
 
 Osd::~Osd() { Close(); }
 
 OsdContext* Osd::GetOsdContext(CNFrameInfoPtr data) {
-  if (data->channel_idx >= GetMaxStreamNumber()) {
+  if (data->GetStreamIndex() >= GetMaxStreamNumber()) {
     return nullptr;
   }
 
   OsdContext* ctx = nullptr;
-  auto it = osd_ctxs_.find(data->channel_idx);
+  std::unique_lock<std::mutex> guard(mutex_);
+  auto it = osd_ctxs_.find(data->stream_id);
   if (it != osd_ctxs_.end()) {
     ctx = it->second;
   } else {
@@ -213,7 +219,7 @@ OsdContext* Osd::GetOsdContext(CNFrameInfoPtr data) {
       return nullptr;
     }
     ctx->frame_index_ = 0;
-    osd_ctxs_[data->channel_idx] = ctx;
+    osd_ctxs_[data->stream_id] = ctx;
   }
   return ctx;
 }
@@ -229,6 +235,12 @@ bool Osd::Open(cnstream::ModuleParamSet paramSet) {
     if (labels_.empty()) {
       LOG(WARNING) << "Empty label file or wrong file path.";
     } else {
+      if (paramSet.find("text_scale_coef") != paramSet.end()) {
+          text_scale_coef_ = std::stof(paramSet["text_scale_coef"]);
+        }
+      if (paramSet.find("text_thickness_coef") != paramSet.end()) {
+          text_thickness_coef_ = std::stof(paramSet["text_thickness_coef"]);
+        }
 #ifdef HAVE_FREETYPE
       if (paramSet.find("chinese_label_flag") != paramSet.end()) {
         if (paramSet.find("chinese_label_flag")->second == "true") {
@@ -275,12 +287,13 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
     LOG(ERROR) << "Get Osd Context Failed.";
     return -1;
   }
-  if (data->frame.width < 0 || data->frame.height < 0) {
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  if (frame->width < 0 || frame->height < 0) {
     LOG(ERROR) << "OSD module processed illegal frame: width or height may < 0.";
     return -1;
   }
-  if (data->frame.ptr_cpu[0] == nullptr && data->frame.ptr_mlu[0] == nullptr
-      && data->frame.cpu_data == nullptr && data->frame.mlu_data == nullptr) {
+  if (frame->ptr_cpu[0] == nullptr && frame->ptr_mlu[0] == nullptr && frame->cpu_data == nullptr &&
+      frame->mlu_data == nullptr) {
     LOG(ERROR) << "OSD module processed illegal frame: data ptr point to nullptr.";
     return -1;
   }
@@ -293,8 +306,9 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
     }
   }
 
+  CNObjsVec input_objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
   std::vector<DetectObject> objs;
-  for (const auto& it : data->objs) {
+  for (const auto& it : input_objs) {
     DetectObject obj;
     obj.label = it->id.empty() ? -1 : std::stoi(it->id);
     obj.score = it->score;
@@ -307,11 +321,12 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
     obj.track_id = it->track_id.empty() ? -1 : std::stoi(it->track_id);
     objs.push_back(obj);
   }
-
+  ctx->processer_->SetTextScaleCoef(text_scale_coef_);
+  ctx->processer_->SetTextThicknessCoef(text_thickness_coef_);
   if (!chinese_label_flag_) {
-    ctx->processer_->DrawLabel(*data->frame.ImageBGR(), objs);
+    ctx->processer_->DrawLabel(*frame->ImageBGR(), objs);
   } else {
-    ctx->processer_->DrawLabel(*data->frame.ImageBGR(), objs, font_.get());
+    ctx->processer_->DrawLabel(*frame->ImageBGR(), objs, font_.get());
   }
   return 0;
 }
@@ -334,6 +349,11 @@ bool Osd::CheckParamSet(const ModuleParamSet& paramSet) const {
       LOG(ERROR) << "[Osd] [chinese_label_flag] must be true or false.";
       return false;
     }
+  }
+  std::string err_msg;
+  if (!checker.IsNum({"text_scale_coef", "text_thickness_coef"}, paramSet, err_msg)) {
+    LOG(ERROR) << "[Osd] " << err_msg;
+    return false;
   }
   return true;
 }

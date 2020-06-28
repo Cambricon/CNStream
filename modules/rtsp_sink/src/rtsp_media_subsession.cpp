@@ -24,8 +24,7 @@ namespace cnstream {
 
 namespace RtspStreaming {
 
-RtspMediaSubsession*
-RtspMediaSubsession::createNew(UsageEnvironment& env, StreamReplicator* replicator) {  // NOLINT 
+RtspMediaSubsession* RtspMediaSubsession::createNew(UsageEnvironment& env, StreamReplicator* replicator) {  // NOLINT
   return new RtspMediaSubsession(env, replicator);
 }
 

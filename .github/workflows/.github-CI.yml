@@ -11,7 +11,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Run lintgit
-      run: ./tools/lintgit master $PWD
+      run: ./tools/lintgit origin/master $PWD
 
   build:
     runs-on: self-hosted
@@ -20,6 +20,6 @@ jobs:
     - name: install live555
       run: ./tools/download_live.sh 
     - name: configure
-      run: mkdir build && cd build && cmake -DMLU=MLU270 .. && make -j16
+      run: mkdir build && cd build && cmake -DMLU=MLU270 .. && make -j
     - name: test
-      run: export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/neuware/lib64 && ./build/bin/cnstream_test
+      run: export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/neuware/lib64 && ./build/bin/cnstream_core_test && ./build/bin/cnstream_test

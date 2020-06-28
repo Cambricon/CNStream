@@ -135,7 +135,7 @@ class EasyDecode {
    *        An Exception is thrown when send data failed.
    * @return return false when STATUS is not UNINITIALIZED or STOP.
    */
-  bool SendData(const CnPacket& packet, bool eos = false) noexcept(false);
+  bool SendData(const CnPacket& packet, bool eos = false, bool integral_frame = false) noexcept(false);
 
   /**
    * @brief Release decoder's buffer.
@@ -151,6 +151,14 @@ class EasyDecode {
    * @return when error occurs, return false.
    */
   bool CopyFrameD2H(void* dst, const CnFrame& frame);
+
+  /**
+   * @brief Gets the minimum decode output buffer count.
+   * @return Return the minimum decode output buffer count.
+   *
+   * @note It only returns right value after received the first frame.
+   **/
+  int GetMinimumOutputBufferCount() const;
 
   /**
    * @brief Destroy the Easy Decode object

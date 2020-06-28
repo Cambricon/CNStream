@@ -28,6 +28,7 @@
 #include "easyinfer/mlu_context.h"
 #include "easyinfer/mlu_memory_op.h"
 
+#include "cnstream_frame_va.hpp"
 #include "rtsp_sink.hpp"
 #include "test_base.hpp"
 
@@ -96,12 +97,16 @@ TEST(RtspSink, Process) {
   EXPECT_TRUE(ptr->Open(params));
   for (int i = 0; i < col * row; i++) {
     auto data = cnstream::CNFrameInfo::Create(std::to_string(i));
+    std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+    data->datas[CNDataFramePtrKey] = frame;
     EXPECT_EQ(ptr->Process(data), -1);
     data = cnstream::CNFrameInfo::Create(std::to_string(i), true);
   }
   // PullRtspStreamOpencv();
   PullRtspStreamFFmpeg();
   auto data = cnstream::CNFrameInfo::Create(std::to_string(col * row + 1));
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+  data->datas[CNDataFramePtrKey] = frame;
   EXPECT_EQ(ptr->Process(data), -1);
   data = cnstream::CNFrameInfo::Create(std::to_string(col * row + 1), true);
   ptr->Close();
@@ -110,6 +115,7 @@ TEST(RtspSink, Process) {
   EXPECT_TRUE(ptr->Open(params));
 
   data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
+  data->datas[CNDataFramePtrKey] = frame;
 
   // test nv12
   EXPECT_EQ(ptr->Process(data), -1);

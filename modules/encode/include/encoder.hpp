@@ -125,7 +125,7 @@ class Encoder : public Module, public ModuleCreator<Encoder> {
   EncoderContext* GetEncoderContext(CNFrameInfoPtr data);
   std::string output_dir_;
   bool dump_as_image_;
-  std::unordered_map<int, EncoderContext*> encode_ctxs_;
+  std::unordered_map<std::string, EncoderContext*> encode_ctxs_;
 };  // class Encoder
 
 }  // namespace cnstream

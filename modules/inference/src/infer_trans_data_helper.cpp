@@ -31,7 +31,7 @@
 
 namespace cnstream {
 
-InferTransDataHelper::InferTransDataHelper(Inferencer* infer) : infer_(infer) {
+InferTransDataHelper::InferTransDataHelper(Inferencer* infer, int batchsize) : infer_(infer), batchsize_(batchsize) {
   running_.store(true);
   th_ = std::thread(&InferTransDataHelper::Loop, this);
 }
@@ -40,14 +40,15 @@ InferTransDataHelper::~InferTransDataHelper() {
   running_.store(false);
   {
     std::lock_guard<std::mutex> lk(mtx_);
-    cond_.notify_one();
+    cond_.notify_all();
   }
   if (th_.joinable()) th_.join();
 }
 
 void InferTransDataHelper::SubmitData(
     const std::pair<std::shared_ptr<CNFrameInfo>, InferEngine::ResultWaitingCard>& data) {
-  std::lock_guard<std::mutex> lk(mtx_);
+  std::unique_lock<std::mutex> lk(mtx_);
+  cond_.wait(lk, [this] () { return running_ && queue_.size() < size_t(3 * batchsize_); });
   queue_.push(data);
   if (queue_.size() == 1) cond_.notify_one();
 }
@@ -59,6 +60,7 @@ void InferTransDataHelper::Loop() {
     if (!running_.load()) break;
     auto data = queue_.front();
     queue_.pop();
+    cond_.notify_one();
     lk.unlock();
     auto finfo = data.first;
     auto card = data.second;

@@ -34,6 +34,7 @@
 #error OpenCV required
 #endif
 
+#include "cnstream_frame_va.hpp"
 #include "cnstream_module.hpp"
 #include "easyinfer/mlu_memory_op.h"
 #include "test_base.hpp"
@@ -124,27 +125,32 @@ std::shared_ptr<CNFrameInfo> GenTestData(int iter, int obj_num) {
   cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
 
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
-  data->channel_idx = g_channel_id;
-  CNDataFrame &frame = data->frame;
-  frame.frame_id = 1;
-  frame.timestamp = 1000;
-  frame.width = width;
-  frame.height = height;
-  frame.ptr_cpu[0] = img.data;
-  frame.stride[0] = width;
-  frame.ctx.dev_type = DevContext::DevType::CPU;
-  frame.fmt = CN_PIXEL_FORMAT_BGR24;
-  frame.CopyToSyncMem();
+  data->SetStreamIndex(g_channel_id);
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+  frame->frame_id = 1;
+  data->timestamp = 1000;
+  frame->width = width;
+  frame->height = height;
+  frame->ptr_cpu[0] = img.data;
+  frame->stride[0] = width;
+  frame->ctx.dev_type = DevContext::DevType::CPU;
+  frame->fmt = CN_PIXEL_FORMAT_BGR24;
+  frame->CopyToSyncMem();
+  data->datas[CNDataFramePtrKey] = frame;
+
+  CNObjsVec objs;
   for (int i = 0; i < obj_num; ++i) {
     auto obj = std::make_shared<CNInferObject>();
     obj->id = std::to_string(i);
     float val = i * 0.1 + 0.01;
     CNInferBoundingBox bbox = {val, val, val, val};
     obj->bbox = bbox;
-    data->objs.push_back(obj);
+    objs.push_back(obj);
   }
+  data->datas[cnstream::CNObjsVecKey] = objs;
   return data;
 }
+
 std::shared_ptr<CNFrameInfo> GenTestYUVData(int iter, int obj_num) {
   // prepare data
   int width = 1920;
@@ -152,25 +158,30 @@ std::shared_ptr<CNFrameInfo> GenTestYUVData(int iter, int obj_num) {
   cv::Mat img(height + height / 2, width, CV_8UC1);
 
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
-  data->channel_idx = g_channel_id;
-  CNDataFrame &frame = data->frame;
-  frame.frame_id = 1;
-  frame.timestamp = 1000;
-  frame.width = width;
-  frame.height = height;
-  frame.ptr_cpu[0] = img.data;
-  frame.stride[0] = width;
-  frame.ctx.dev_type = DevContext::DevType::CPU;
-  frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
-  frame.CopyToSyncMem();
+  data->SetStreamIndex(g_channel_id);
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+  frame->frame_id = 1;
+  data->timestamp = 1000;
+  frame->width = width;
+  frame->height = height;
+  frame->ptr_cpu[0] = img.data;
+  frame->stride[0] = width;
+  frame->ctx.dev_type = DevContext::DevType::CPU;
+  frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+  frame->CopyToSyncMem();
+  data->datas[CNDataFramePtrKey] = frame;
+
+  CNObjsVec objs;
   for (int i = 0; i < obj_num; ++i) {
     auto obj = std::make_shared<CNInferObject>();
     obj->id = std::to_string(i);
     float val = i * 0.1 + 0.01;
     CNInferBoundingBox bbox = {val, val, val, val};
     obj->bbox = bbox;
-    data->objs.push_back(obj);
+    objs.push_back(obj);
   }
+
+  data->datas[cnstream::CNObjsVecKey] = objs;
   return data;
 }
 
@@ -181,22 +192,26 @@ std::shared_ptr<CNFrameInfo> GenTestImageData() {
   img = cv::imread(image_path, cv::IMREAD_COLOR);
 
   auto data = cnstream::CNFrameInfo::Create("1", false);
-  data->channel_idx = g_channel_id;
-  CNDataFrame &frame = data->frame;
-  frame.frame_id = 1;
-  frame.timestamp = 1000;
-  frame.width = img.cols;
-  frame.height = img.rows;
-  frame.ptr_cpu[0] = img.data;
-  frame.stride[0] = img.cols;
-  frame.ctx.dev_type = DevContext::DevType::CPU;
-  frame.fmt = CN_PIXEL_FORMAT_BGR24;
-  frame.CopyToSyncMem();
+  data->SetStreamIndex(g_channel_id);
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+  frame->frame_id = 1;
+  data->timestamp = 1000;
+  frame->width = img.cols;
+  frame->height = img.rows;
+  frame->ptr_cpu[0] = img.data;
+  frame->stride[0] = img.cols;
+  frame->ctx.dev_type = DevContext::DevType::CPU;
+  frame->fmt = CN_PIXEL_FORMAT_BGR24;
+  frame->CopyToSyncMem();
+  data->datas[CNDataFramePtrKey] = frame;
+
+  CNObjsVec objs;
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(1);
   CNInferBoundingBox bbox = {0.2, 0.2, 0.6, 0.6};
   obj->bbox = bbox;
-  data->objs.push_back(obj);
+  objs.push_back(obj);
+  data->datas[cnstream::CNObjsVecKey] = objs;
   return data;
 }
 
@@ -215,7 +230,9 @@ TEST(Tracker, ProcessMluFeature) {
   for (int n = 0; n < repeat_time; ++n) {
     auto data = GenTestData(n, obj_num);
     EXPECT_EQ(track->Process(data), 0);
-    for (auto &obj : data->objs) {
+
+    CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
+    for (auto &obj : objs) {
       EXPECT_FALSE(obj->track_id.empty());
     }
   }
@@ -232,7 +249,9 @@ TEST(Tracker, ProcessCpuFeature) {
   auto data = GenTestImageData();
   for (int n = 0; n < repeat_time; ++n) {
     EXPECT_EQ(track->Process(data), 0);
-    for (auto &obj : data->objs) {
+
+    CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
+    for (auto &obj : objs) {
       EXPECT_FALSE(obj->track_id.empty());
     }
   }
@@ -260,29 +279,22 @@ TEST(Tracker, ProcessFeatureMatchCPU1) {
   int obj_num = 3;
   auto data = GenTestData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
+
   // Illegal width and height
-  data->frame.width = -1;
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  frame->width = -1;
   EXPECT_EQ(track->Process(data), -1);
-  data->frame.width = 1920;
+  frame->width = 1920;
   EXPECT_EQ(track->Process(data), 0);
 
-  data->frame.height = -1;
+  frame->height = -1;
   EXPECT_EQ(track->Process(data), -1);
-  data->frame.height = 1080;
+  frame->height = 1080;
   EXPECT_EQ(track->Process(data), 0);
 
-  data->frame.width = 5096;
-  data->frame.height = 3160;
-  EXPECT_EQ(track->Process(data), -1);
-
-  data->frame.width = 1920;
-  data->frame.height = 1080;
+  frame->width = 1920;
+  frame->height = 1080;
   EXPECT_EQ(track->Process(data), 0);
-  // Illegal fmt ??
-  // data->frame.fmt = CN_PIXEL_FORMAT_RGB24; //
-  // EXPECT_ANY_THROW(track->Process(data)); //
-  // data->frame.fmt = CN_PIXEL_FORMAT_BGR24;
-  // EXPECT_EQ(track->Process(data), 0);
 }
 
 TEST(Tracker, ProcessFeatureMatchCPU2) {
@@ -295,11 +307,14 @@ TEST(Tracker, ProcessFeatureMatchCPU2) {
   int obj_num = 3;
   auto data = GenTestData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
+
+  CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(5);
   CNInferBoundingBox bbox = {0.6, 0.6, -0.1, -0.1};
   obj->bbox = bbox;
-  data->objs.push_back(obj);
+  objs.push_back(obj);
+  data->datas[cnstream::CNObjsVecKey] = objs;
   EXPECT_EQ(track->Process(data), 0);
 }
 
@@ -313,11 +328,14 @@ TEST(Tracker, ProcessFeatureMatchCPU3) {
   int obj_num = 3;
   auto data = GenTestData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
+
+  CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(6);
   CNInferBoundingBox bbox = {0.6, 0.6, 0.6, 0.6};
   obj->bbox = bbox;
-  data->objs.push_back(obj);
+  objs.push_back(obj);
+  data->datas[cnstream::CNObjsVecKey] = objs;
   EXPECT_EQ(track->Process(data), 0);
 }
 
@@ -333,7 +351,8 @@ TEST(Tracker, ProcessFeatureMatchCPU4) {
   for (int n = 0; n < repeat_time; ++n) {
     auto data = GenTestData(n, obj_num);
     EXPECT_EQ(track->Process(data), 0);
-    for (auto &obj : data->objs) {
+    CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
+    for (auto &obj : objs) {
       EXPECT_FALSE(obj->track_id.empty());
     }
   }
@@ -352,26 +371,24 @@ TEST(Tracker, ProcessFeatureMatchMLU1) {
   auto data = GenTestData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
   // Illegal width and height
-  data->frame.width = -1;
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  frame->width = -1;
   EXPECT_EQ(track->Process(data), -1);
-  data->frame.width = 1920;
+  frame->width = 1920;
   EXPECT_EQ(track->Process(data), 0);
 
-  data->frame.height = -1;
+  frame->height = -1;
   EXPECT_EQ(track->Process(data), -1);
-  data->frame.height = 1080;
+  frame->height = 1080;
   EXPECT_EQ(track->Process(data), 0);
 
-  data->frame.width = 5096;
-  data->frame.height = 3160;
-  EXPECT_EQ(track->Process(data), -1);
-  data->frame.width = 1920;
-  data->frame.height = 1080;
+  frame->width = 1920;
+  frame->height = 1080;
   EXPECT_EQ(track->Process(data), 0);
   // Illegal fmt ???
-  // data->frame.fmt = CN_PIXEL_FORMAT_RGB24; //
-  // EXPECT_ANY_THROW(track->Process(data)); //
-  // data->frame.fmt = CN_PIXEL_FORMAT_BGR24; //
+  // frame->fmt = CN_PIXEL_FORMAT_RGB24; //
+  // EXPECT_EQ(track->Process(data), -1); //
+  // frame->fmt = CN_PIXEL_FORMAT_BGR24; //
   // EXPECT_EQ(track->Process(data), 0); //
 }
 
@@ -388,10 +405,12 @@ TEST(Tracker, ProcessFeatureMatchMLU2) {
   auto data = GenTestData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
   auto obj = std::make_shared<CNInferObject>();
+  CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
   obj->id = std::to_string(5);
   CNInferBoundingBox bbox = {0.6, 0.6, -0.1, -0.1};
   obj->bbox = bbox;
-  data->objs.push_back(obj);
+  objs.push_back(obj);
+  data->datas[cnstream::CNObjsVecKey] = objs;
   EXPECT_ANY_THROW(track->Process(data));
 }
 
@@ -408,8 +427,10 @@ TEST(Tracker, ProcessFeatureMatchMLU3) {
   auto data = GenTestData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
   size_t zero = 0;
-  EXPECT_EQ(data->objs.size(), zero);
+  CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
+  EXPECT_EQ(objs.size(), zero);
 }
+
 TEST(Tracker, ProcessFeatureMatchMLU4) {
   // create track
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
@@ -424,7 +445,8 @@ TEST(Tracker, ProcessFeatureMatchMLU4) {
   for (int n = 0; n < repeat_time; ++n) {
     auto data = GenTestData(n, obj_num);
     EXPECT_EQ(track->Process(data), 0);
-    for (auto &obj : data->objs) {
+    CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
+    for (auto &obj : objs) {
       EXPECT_FALSE(obj->track_id.empty());
     }
   }
@@ -447,28 +469,32 @@ std::shared_ptr<CNFrameInfo> GenTestYUVMLUData(int iter, int obj_num) {
 
   // test nv12
   auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
-  data->channel_idx = g_channel_id;
-  CNDataFrame &frame = data->frame;
-  frame.frame_id = iter;
-  frame.timestamp = 1000;
-  frame.width = width;
-  frame.height = height;
-  frame.ptr_mlu[0] = planes[0];
-  frame.ptr_mlu[1] = planes[1];
-  frame.stride[0] = frame.stride[1] = width;
-  frame.ctx.ddr_channel = g_channel_id;
-  frame.ctx.dev_id = g_dev_id;
-  frame.ctx.dev_type = DevContext::DevType::MLU;
-  frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
-  frame.CopyToSyncMem();
+  data->SetStreamIndex(g_channel_id);
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+  frame->frame_id = iter;
+  data->timestamp = 1000;
+  frame->width = width;
+  frame->height = height;
+  frame->ptr_mlu[0] = planes[0];
+  frame->ptr_mlu[1] = planes[1];
+  frame->stride[0] = frame->stride[1] = width;
+  frame->ctx.ddr_channel = g_channel_id;
+  frame->ctx.dev_id = g_dev_id;
+  frame->ctx.dev_type = DevContext::DevType::MLU;
+  frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+  frame->CopyToSyncMem();
+  data->datas[CNDataFramePtrKey] = frame;
+
+  CNObjsVec objs;
   for (int i = 0; i < obj_num; ++i) {
     auto obj = std::make_shared<CNInferObject>();
     obj->id = std::to_string(i);
     float val = i * 0.1 + 0.01;
     CNInferBoundingBox bbox = {val, val, val, val};
     obj->bbox = bbox;
-    data->objs.push_back(obj);
+    objs.push_back(obj);
   }
+  data->datas[CNObjsVecKey] = objs;
   return data;
 }
 
@@ -486,8 +512,9 @@ TEST(Tracker, ProcessKCFMLU0) {
   auto data = GenTestYUVMLUData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
 
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
   // free MLUmemory
-  mem_op.FreeMlu(data->frame.ptr_mlu[0]);
+  mem_op.FreeMlu(frame->ptr_mlu[0]);
 }
 
 TEST(Tracker, ProcessKCFMLU1) {
@@ -504,30 +531,28 @@ TEST(Tracker, ProcessKCFMLU1) {
   auto data = GenTestYUVMLUData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
   // Illegal width and height
-  data->frame.width = -1;
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  frame->width = -1;
   EXPECT_EQ(track->Process(data), -1);
-  data->frame.width = 1920;
+  frame->width = 1920;
   EXPECT_EQ(track->Process(data), 0);
 
-  data->frame.height = -1;
+  frame->height = -1;
   EXPECT_EQ(track->Process(data), -1);
-  data->frame.height = 1080;
+  frame->height = 1080;
   EXPECT_EQ(track->Process(data), 0);
 
-  data->frame.width = 5096;
-  data->frame.height = 3160;
-  EXPECT_EQ(track->Process(data), -1);
-  data->frame.width = 1920;
-  data->frame.height = 1080;
+  frame->width = 1920;
+  frame->height = 1080;
   EXPECT_EQ(track->Process(data), 0);
   // Illegal fmt
-  data->frame.fmt = CN_PIXEL_FORMAT_RGB24;
-  EXPECT_ANY_THROW(track->Process(data));
-  data->frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+  frame->fmt = CN_PIXEL_FORMAT_RGB24;
+  EXPECT_NO_THROW(track->Process(data));
+  frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
   EXPECT_EQ(track->Process(data), 0);
 
   // free MLUmemory
-  mem_op.FreeMlu(data->frame.ptr_mlu[0]);
+  mem_op.FreeMlu(frame->ptr_mlu[0]);
 }
 
 TEST(Tracker, ProcessKCFMLU2) {
@@ -543,15 +568,19 @@ TEST(Tracker, ProcessKCFMLU2) {
   edk::MluMemoryOp mem_op;
   auto data = GenTestYUVMLUData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
+
+  CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(5);
   CNInferBoundingBox bbox = {0.6, 0.6, -0.1, -0.1};
   obj->bbox = bbox;
-  data->objs.push_back(obj);
+  objs.push_back(obj);
+  data->datas[CNObjsVecKey] = objs;
   EXPECT_EQ(track->Process(data), 0);
 
   // free MLUmemory
-  mem_op.FreeMlu(data->frame.ptr_mlu[0]);
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  mem_op.FreeMlu(frame->ptr_mlu[0]);
 }
 
 TEST(Tracker, ProcessKCFMLU3) {
@@ -567,15 +596,19 @@ TEST(Tracker, ProcessKCFMLU3) {
   edk::MluMemoryOp mem_op;
   auto data = GenTestYUVMLUData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
+
+  CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(6);
   CNInferBoundingBox bbox = {0.6, 0.6, 0.6, 0.6};
   obj->bbox = bbox;
-  data->objs.push_back(obj);
+  objs.push_back(obj);
+  data->datas[CNObjsVecKey] = objs;
   EXPECT_EQ(track->Process(data), 0);
 
   // free MLUmemory
-  mem_op.FreeMlu(data->frame.ptr_mlu[0]);
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  mem_op.FreeMlu(frame->ptr_mlu[0]);
 }
 
 TEST(Tracker, ProcessKCFMLU4) {
@@ -591,11 +624,13 @@ TEST(Tracker, ProcessKCFMLU4) {
   edk::MluMemoryOp mem_op;
   auto data = GenTestYUVMLUData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
+  CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
   size_t zero = 0;
-  EXPECT_EQ(data->objs.size(), zero);
+  EXPECT_EQ(objs.size(), zero);
 
   // free MLUmemory
-  mem_op.FreeMlu(data->frame.ptr_mlu[0]);
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  mem_op.FreeMlu(frame->ptr_mlu[0]);
 }
 
 TEST(Tracker, ProcessKCFMLU5) {
@@ -613,11 +648,13 @@ TEST(Tracker, ProcessKCFMLU5) {
   for (int n = 0; n < repeat_time; ++n) {
     auto data = GenTestYUVMLUData(n, obj_num);
     EXPECT_EQ(track->Process(data), 0);
-    for (auto &obj : data->objs) {
+    CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
+    for (auto &obj : objs) {
       EXPECT_FALSE(obj->track_id.empty());
     }
     // free MLUmemory
-    mem_op.FreeMlu(data->frame.ptr_mlu[0]);
+    CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+    mem_op.FreeMlu(frame->ptr_mlu[0]);
   }
 }
 #endif

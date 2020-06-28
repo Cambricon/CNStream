@@ -12,5 +12,5 @@ set(SRC get_model_io.cpp)
 get_filename_component(name "${SRC}" NAME_WE)
 message("target :  ${name}")
 add_executable(${name} ${SRC})
-target_link_libraries(${name} cnrt cndrv cnstream-toolkit pthread ${GLOG_LIBRARIES} ${GFLAGS_LIBRARIES} dl)
+target_link_libraries(${name} cnrt cndrv easydk pthread ${GLOG_LIBRARIES} ${GFLAGS_LIBRARIES} dl)
 

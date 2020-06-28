@@ -32,12 +32,12 @@
 #include "queuing_server.hpp"
 
 #include "batching_done_stage.hpp"
+#include "cnstream_frame_va.hpp"
 #include "perf_manager.hpp"
 
 namespace cnstream {
 
-std::vector<std::shared_ptr<InferTask>>
-H2DBatchingDoneStage::BatchingDone(const BatchingDoneInput& finfos) {
+std::vector<std::shared_ptr<InferTask>> H2DBatchingDoneStage::BatchingDone(const BatchingDoneInput& finfos) {
   std::vector<InferTaskSptr> tasks;
   InferTaskSptr task;
   QueuingTicket cpu_input_res_ticket = cpu_input_res_->PickUpNewTicket();
@@ -79,10 +79,13 @@ std::vector<std::shared_ptr<InferTask>> ResizeConvertBatchingDoneStage::Batching
 
     if (perf_manager_) {
       info = finfos.back().first;
-      pts_str = std::to_string(info->frame.frame_id * 100 + info->channel_idx);
-      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_start_time");
-      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_cnt",
-          std::to_string(finfos.size()));
+      if (!info->IsEos()) {
+        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(info->datas[CNDataFramePtrKey]);
+        pts_str = std::to_string(frame->frame_id * 100 + info->GetStreamIndex());
+        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_start_time");
+        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_cnt",
+                              std::to_string(finfos.size()));
+      }
     }
 
     if (!rcop_value->op.SyncOneOutput(mlu_value.datas[0].ptr)) {
@@ -133,10 +136,13 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
 
     if (perf_manager_) {
       info = finfos.back().first;
-      pts_str = std::to_string(info->frame.frame_id * 100 + info->channel_idx);
-      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_start_time");
-      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_cnt",
-          std::to_string(finfos.size()));
+      if (!info->IsEos()) {
+        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(info->datas[CNDataFramePtrKey]);
+        pts_str = std::to_string(frame->frame_id * 100 + info->GetStreamIndex());
+        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_start_time");
+        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_cnt",
+                              std::to_string(finfos.size()));
+      }
     }
 
     this->easyinfer_->Run(mlu_input_value.ptrs, mlu_output_value.ptrs);
@@ -205,8 +211,7 @@ std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::Batchin
 }
 
 std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjBatchingDone(
-    const BatchingDoneInput& finfos,
-    const std::vector<std::shared_ptr<CNInferObject>>& objs) {
+    const BatchingDoneInput& finfos, const std::vector<std::shared_ptr<CNInferObject>>& objs) {
   CHECK_EQ(finfos.size(), objs.size()) << "Internal error.";
   std::vector<InferTaskSptr> tasks;
   for (int bidx = 0; bidx < static_cast<int>(finfos.size()); ++bidx) {

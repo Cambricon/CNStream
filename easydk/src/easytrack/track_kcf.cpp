@@ -169,7 +169,7 @@ void KcfTrackPrivate::KcfUpdate(void *mlu_gray, uint32_t frame_index, uint32_t f
         //    obj.label, obj.score, obj.x, obj.y, obj.w, obj.h);
       }
     } else {
-      LOG(INFO) << "@@@@@@ no detect result";
+      VLOG(3) << "@@@@@@ no detect result";
       memset(detect_float_output_, 0, 6 * DETECT_OUT_SIZE * sizeof(float));
     }
 

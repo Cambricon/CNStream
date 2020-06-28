@@ -19,13 +19,13 @@
  *************************************************************************/
 
 #include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <unistd.h>
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <memory>
 #include <string>
 
@@ -89,18 +89,18 @@ bool IPCHandler::ParseStringToPackage(const std::string& str, FrameInfoPackage* 
   }
 
   if (PKG_RELEASE_MEM == pkg->pkg_type || PKG_DATA == pkg->pkg_type) {
-    if (end == doc.FindMember("stream_id") && !doc["stream_id"].IsString()) {
+    if (end == doc.FindMember("stream_id") || !doc["stream_id"].IsString()) {
       LOG(WARNING) << "parse stream_id error.";
       return false;
     } else {
       pkg->stream_id = doc["stream_id"].GetString();
     }
 
-    if (end == doc.FindMember("channel_idx") || !doc["channel_idx"].IsUint()) {
-      LOG(WARNING) << "parse channel_idx error.";
+    if (end == doc.FindMember("stream_idx") || !doc["stream_idx"].IsUint()) {
+      LOG(WARNING) << "parse stream_idx error.";
       return false;
     } else {
-      pkg->channel_idx = doc["channel_idx"].GetUint();
+      pkg->stream_idx = doc["stream_idx"].GetUint();
     }
 
     if (end == doc.FindMember("frame_id") || !doc["frame_id"].IsInt64()) {
@@ -198,7 +198,7 @@ bool IPCHandler::ParseStringToPackage(const std::string& str, FrameInfoPackage* 
       try {
         intptr_t tmp = std::stoll(doc["mlu_mem_handle"].GetString());
         pkg->mlu_mem_handle = reinterpret_cast<void*>(tmp);
-      } catch(const std::invalid_argument) {
+      } catch (const std::invalid_argument) {
         LOG(WARNING) << "mlu_mem_handle is invalid.";
         return false;
       }
@@ -217,8 +217,8 @@ bool IPCHandler::SerializeToString(const FrameInfoPackage& pkg, std::string* str
   writer.Int(static_cast<int>(pkg.pkg_type));
 
   if (PKG_DATA == pkg.pkg_type || PKG_RELEASE_MEM == pkg.pkg_type) {
-    writer.Key("channel_idx");
-    writer.Uint(pkg.channel_idx);
+    writer.Key("stream_idx");
+    writer.Uint(pkg.stream_idx);
 
     writer.Key("stream_id");
     writer.String(pkg.stream_id.c_str());
@@ -282,23 +282,26 @@ void IPCHandler::PreparePackageToSend(const PkgType& type, const std::shared_ptr
       }
 
       send_pkg.pkg_type = PkgType::PKG_DATA;
-      send_pkg.channel_idx = data->channel_idx;
-      send_pkg.stream_id = data->frame.stream_id;
-      send_pkg.flags = data->frame.flags;
-      send_pkg.frame_id = data->frame.frame_id;
-      send_pkg.timestamp = data->frame.timestamp;
-      send_pkg.fmt = data->frame.fmt;
-      send_pkg.width = data->frame.width;
-      send_pkg.height = data->frame.height;
+      send_pkg.stream_idx = data->GetStreamIndex();
+      send_pkg.stream_id = data->stream_id;
+      send_pkg.flags = data->flags;
+      send_pkg.timestamp = data->timestamp;
       send_pkg.mem_map_type = memmap_type_;
+      if (!data->IsEos()) {
+        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+        send_pkg.frame_id = frame->frame_id;
+        send_pkg.fmt = frame->fmt;
+        send_pkg.width = frame->width;
+        send_pkg.height = frame->height;
 
-      for (int i = 0; i < data->frame.GetPlanes(); i++) {
-        send_pkg.stride[i] = data->frame.stride[i];
+        for (int i = 0; i < frame->GetPlanes(); i++) {
+          send_pkg.stride[i] = frame->stride[i];
+        }
+        send_pkg.mlu_mem_handle = frame->mlu_mem_handle;
+        send_pkg.ctx.dev_type = frame->ctx.dev_type;
+        send_pkg.ctx.dev_id = frame->ctx.dev_id;
+        send_pkg.ctx.ddr_channel = frame->ctx.ddr_channel;
       }
-      send_pkg.mlu_mem_handle = data->frame.mlu_mem_handle;
-      send_pkg.ctx.dev_type = data->frame.ctx.dev_type;
-      send_pkg.ctx.dev_id = data->frame.ctx.dev_id;
-      send_pkg.ctx.ddr_channel = data->frame.ctx.ddr_channel;
     } break;
     case PkgType::PKG_RELEASE_MEM: {
       if (!data) {
@@ -307,9 +310,12 @@ void IPCHandler::PreparePackageToSend(const PkgType& type, const std::shared_ptr
       }
 
       send_pkg.pkg_type = PkgType::PKG_RELEASE_MEM;
-      send_pkg.channel_idx = data->channel_idx;
-      send_pkg.stream_id = data->frame.stream_id;
-      send_pkg.frame_id = data->frame.frame_id;
+      send_pkg.stream_idx = data->GetStreamIndex();
+      send_pkg.stream_id = data->stream_id;
+      if (!data->IsEos()) {
+        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+        send_pkg.frame_id = frame->frame_id;
+      }
     } break;
     case PkgType::PKG_ERROR:
       send_pkg.pkg_type = PkgType::PKG_ERROR;
@@ -339,40 +345,48 @@ void IPCHandler::PackageToCNData(const FrameInfoPackage& recv_pkg, std::shared_p
     return;
   }
 
-  data->frame.flags = recv_pkg.flags;
-  data->channel_idx = recv_pkg.channel_idx;
-  data->frame.stream_id = recv_pkg.stream_id;
-  data->frame.frame_id = recv_pkg.frame_id;
+  std::shared_ptr<CNDataFrame> dataframe(new (std::nothrow) CNDataFrame());
+  if (!dataframe) {
+    return;
+  }
+  data->flags = recv_pkg.flags;
+  data->SetStreamIndex(recv_pkg.stream_idx);
+  data->stream_id = recv_pkg.stream_id;
+  data->timestamp = recv_pkg.timestamp;
   // sync shared memory for frame data
-  if (data->frame.flags & CN_FRAME_FLAG_EOS) {
+  if (data->IsEos()) {
     return;
   }
 
-  data->frame.timestamp = recv_pkg.timestamp;
-  data->frame.width = recv_pkg.width;
-  data->frame.height = recv_pkg.height;
-  data->frame.fmt = recv_pkg.fmt;
+  dataframe->frame_id = recv_pkg.frame_id;
+  dataframe->width = recv_pkg.width;
+  dataframe->height = recv_pkg.height;
+  dataframe->fmt = recv_pkg.fmt;
 
   for (int i = 0; i < CN_MAX_PLANES; i++) {
-    data->frame.stride[i] = recv_pkg.stride[i];
+    dataframe->stride[i] = recv_pkg.stride[i];
   }
 
-  data->frame.mlu_mem_handle = recv_pkg.mlu_mem_handle;
+  dataframe->mlu_mem_handle = recv_pkg.mlu_mem_handle;
   // TODO: support different device ctx // NOLINT
   if (dev_ctx_.dev_type == DevContext::INVALID) {
-    data->frame.ctx.dev_type = recv_pkg.ctx.dev_type;
-    data->frame.ctx.dev_id = recv_pkg.ctx.dev_id;
-    data->frame.ctx.ddr_channel = recv_pkg.ctx.ddr_channel;
+    dataframe->ctx.dev_type = recv_pkg.ctx.dev_type;
+    dataframe->ctx.dev_id = recv_pkg.ctx.dev_id;
+    dataframe->ctx.ddr_channel = recv_pkg.ctx.ddr_channel;
   } else {
-    data->frame.ctx.dev_type = dev_ctx_.dev_type;
-    data->frame.ctx.dev_id = dev_ctx_.dev_id;
-    data->frame.ctx.ddr_channel = data->channel_idx % 4;
+    dataframe->ctx.dev_type = dev_ctx_.dev_type;
+    dataframe->ctx.dev_id = dev_ctx_.dev_id;
+    dataframe->ctx.ddr_channel = data->GetStreamIndex() % 4;
   }
 
   // sync shared memory for frame data
-  if (!(data->frame.flags & CN_FRAME_FLAG_EOS)) {
+  if (!data->IsEos()) {
     std::lock_guard<std::mutex> lock(mem_map_mutex_);
-    data->frame.MmapSharedMem(memmap_type_);
+    dataframe->MmapSharedMem(memmap_type_, data->stream_id);
   }
+
+  data->datas[CNDataFramePtrKey] = dataframe;
+  return;
 }
+
 }  //  namespace cnstream

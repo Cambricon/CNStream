@@ -1,0 +1,28 @@
+{
+  "source" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "next_modules" : ["detector"],
+    "custom_params" : {
+      "source_type" : "ffmpeg",
+      "reuse_cndec_buf" : "true",
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "device_id" : 0,
+      "output_buf_number" : 16
+    }
+  },
+
+  "detector" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path" : "../../../../data/models/MLU270/yolov3/yolov3_offline_u4_v1.3.0.cambricon",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocYolov3",
+      "batching_timeout" : 300,
+      "device_id" : 0
+    }
+  }
+}

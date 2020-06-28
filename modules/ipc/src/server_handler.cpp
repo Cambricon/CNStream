@@ -31,9 +31,7 @@ namespace cnstream {
 
 IPCServerHandler::IPCServerHandler(const IPCType& type, ModuleIPC* ipc_module) : IPCHandler(type, ipc_module) {}
 
-IPCServerHandler::~IPCServerHandler() {
-  CloseSemphore();
-}
+IPCServerHandler::~IPCServerHandler() { CloseSemphore(); }
 
 bool IPCServerHandler::Open() {
   if (socket_address_.empty()) {
@@ -55,7 +53,6 @@ bool IPCServerHandler::Open() {
 }
 
 void IPCServerHandler::Close() {
-  // wait until all packages in send_pkgq_ is processed
   while (is_connected_.load() && send_pkgq_.Size() > 0) {
     std::this_thread::yield();
   }
@@ -114,7 +111,7 @@ void IPCServerHandler::RecvPackageLoop() {
           unit_test = false;
         }
 #endif
-        vec_recv_dataq_[recv_pkg.channel_idx % SEND_THREAD_NUM]->Push(recv_pkg);
+        vec_recv_dataq_[recv_pkg.stream_idx % SEND_THREAD_NUM]->Push(recv_pkg);
         if (recv_pkg.flags & CN_FRAME_FLAG_EOS) {
           eos_chn_cnt++;
           if (eos_chn_cnt == ipc_module_->GetChannelCount()) {
@@ -163,7 +160,7 @@ void IPCServerHandler::ListenConnections() {
       is_connected_.store(true);
       send_thread_ = std::thread(&IPCServerHandler::SendPackageLoop, this);
       recv_thread_ = std::thread(&IPCServerHandler::RecvPackageLoop, this);
-      // start send data thread for each channel_idx
+      // start send data thread for each stream_idx
       for (size_t thr_idx = 0; thr_idx < SEND_THREAD_NUM; thr_idx++) {
         vec_recv_dataq_.emplace_back(new ThreadSafeQueue<FrameInfoPackage>);
         vec_process_thread_.push_back(std::thread(&IPCServerHandler::ProcessFrameInfoPackage, this, thr_idx));
@@ -195,12 +192,17 @@ void IPCServerHandler::ProcessFrameInfoPackage(size_t thread_idx) {
       std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 
+    this->PackageToCNData(recv_pkg, data);
+
     auto perf_manager_ = ipc_module_->GetPerfManager(recv_pkg.stream_id);
-    if (!(data->frame.flags & CN_FRAME_FLAG_EOS) && (nullptr != perf_manager_)) {
+    if (!data->IsEos() && (nullptr != perf_manager_)) {
+      std::string thread_name = "cn-" + ipc_module_->GetName() + std::to_string(thread_idx);
       perf_manager_->Record(false, PerfManager::GetDefaultType(), ipc_module_->GetName(), recv_pkg.timestamp);
+      perf_manager_->Record(
+          PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(recv_pkg.timestamp),
+          ipc_module_->GetName() + "_th", "'" + thread_name + "'");
     }
 
-    this->PackageToCNData(recv_pkg, data);
     ipc_module_->SendData(data);
   }
 }
@@ -212,7 +214,6 @@ FrameInfoPackage IPCServerHandler::ReadReceivedData() {
     if (!recv_pkg_.WaitAndTryPop(pkg, std::chrono::milliseconds(10))) {
       continue;
     }
-
     return pkg;
   }
 }

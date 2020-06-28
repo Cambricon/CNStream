@@ -36,7 +36,7 @@ namespace RtspStreaming {
 class RtspFrameSource : public FramedSource {
  public:
   static RtspFrameSource* createNew(UsageEnvironment& env, VideoEncoder* encoder);  // NOLINT
-  RtspFrameSource(UsageEnvironment& env, VideoEncoder* encoder);  // NOLINT
+  RtspFrameSource(UsageEnvironment& env, VideoEncoder* encoder);                    // NOLINT
   virtual ~RtspFrameSource();
 
  private:

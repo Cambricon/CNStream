@@ -1,7 +1,7 @@
 #!/bin/bash
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CURRENT_DIR/../../lib
-pushd $CURRENT_DIR
+cd $CURRENT_DIR
   if [ ! -f $CURRENT_DIR/files.list_video ]; then
     echo "generate files.list_video in $CURRENT_DIR"
     for ((i = 0; i < 2; ++i))
@@ -16,5 +16,4 @@ pushd $CURRENT_DIR
   if [ $? -ne 0 ]; then
       exit 1
   fi
-
-popd
+cd -

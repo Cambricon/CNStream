@@ -36,6 +36,7 @@
 #include "reflex_object.h"
 
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 
 namespace cnstream {
 
@@ -103,7 +104,7 @@ class ObjPreproc : virtual public ReflexObjectEx<ObjPreproc> {
    * @return return 0 if succeed
    */
   virtual int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
-                       const CNFrameInfoPtr& finfo, const std::shared_ptr<CNInferObject>& pobj) = 0;
+                      const CNFrameInfoPtr& finfo, const std::shared_ptr<CNInferObject>& pobj) = 0;
 };  // class ObjPreproc
 
 }  // namespace cnstream

@@ -26,6 +26,7 @@
 #include <memory>
 #include <vector>
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 #include "infer_resource.hpp"
 #include "infer_task.hpp"
 #include "preproc.hpp"
@@ -33,7 +34,7 @@
 namespace cnstream {
 
 std::shared_ptr<InferTask> IOObjBatchingStage::Batching(std::shared_ptr<CNFrameInfo> finfo,
-                                                     std::shared_ptr<CNInferObject> obj) {
+                                                        std::shared_ptr<CNInferObject> obj) {
   bool reserve_ticket = false;
   if (batch_idx_ + 1 == batchsize_) {
     // ready to next batch, do not reserve resource ticket.
@@ -56,19 +57,17 @@ std::shared_ptr<InferTask> IOObjBatchingStage::Batching(std::shared_ptr<CNFrameI
   return task;
 }
 
-CpuPreprocessingObjBatchingStage::CpuPreprocessingObjBatchingStage(
-    std::shared_ptr<edk::ModelLoader> model,
-    uint32_t batchsize, std::shared_ptr<ObjPreproc> preprocessor,
-    std::shared_ptr<CpuInputResource> cpu_input_res)
-  : IOObjBatchingStage(model, batchsize, cpu_input_res), preprocessor_(preprocessor) {}
+CpuPreprocessingObjBatchingStage::CpuPreprocessingObjBatchingStage(std::shared_ptr<edk::ModelLoader> model,
+                                                                   uint32_t batchsize,
+                                                                   std::shared_ptr<ObjPreproc> preprocessor,
+                                                                   std::shared_ptr<CpuInputResource> cpu_input_res)
+    : IOObjBatchingStage(model, batchsize, cpu_input_res), preprocessor_(preprocessor) {}
 
 CpuPreprocessingObjBatchingStage::~CpuPreprocessingObjBatchingStage() {}
 
-void CpuPreprocessingObjBatchingStage::ProcessOneObject(
-    std::shared_ptr<CNFrameInfo> finfo,
-    std::shared_ptr<CNInferObject> obj,
-    uint32_t batch_idx,
-    const IOResValue& value) {
+void CpuPreprocessingObjBatchingStage::ProcessOneObject(std::shared_ptr<CNFrameInfo> finfo,
+                                                        std::shared_ptr<CNInferObject> obj, uint32_t batch_idx,
+                                                        const IOResValue& value) {
   std::vector<float*> net_inputs;
   for (auto it : value.datas) {
     net_inputs.push_back(reinterpret_cast<float*>(it.Offset(batch_idx)));
@@ -77,24 +76,26 @@ void CpuPreprocessingObjBatchingStage::ProcessOneObject(
 }
 
 ResizeConvertObjBatchingStage::ResizeConvertObjBatchingStage(std::shared_ptr<edk::ModelLoader> model,
-    uint32_t batchsize, int dev_id, std::shared_ptr<RCOpResource> rcop_res)
+                                                             uint32_t batchsize, int dev_id,
+                                                             std::shared_ptr<RCOpResource> rcop_res)
     : ObjBatchingStage(model, batchsize), rcop_res_(rcop_res), dev_id_(dev_id) {}
 
 ResizeConvertObjBatchingStage::~ResizeConvertObjBatchingStage() {}
 
 std::shared_ptr<InferTask> ResizeConvertObjBatchingStage::Batching(std::shared_ptr<CNFrameInfo> finfo,
-                                                                std::shared_ptr<CNInferObject> obj) {
-  void* src_y = finfo->frame.data[0]->GetMutableMluData();
-  void* src_uv = finfo->frame.data[1]->GetMutableMluData();
+                                                                   std::shared_ptr<CNInferObject> obj) {
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(finfo->datas[CNDataFramePtrKey]);
+  void* src_y = frame->data[0]->GetMutableMluData();
+  void* src_uv = frame->data[1]->GetMutableMluData();
   QueuingTicket ticket = rcop_res_->PickUpTicket();
   std::shared_ptr<RCOpValue> value = rcop_res_->WaitResourceByTicket(&ticket);
   edk::MluResizeConvertOp::ColorMode cmode = edk::MluResizeConvertOp::ColorMode::YUV2ABGR_NV12;
-  if (finfo->frame.fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12) {
+  if (frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12) {
     cmode = edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV12;
-  } else if (finfo->frame.fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) {
+  } else if (frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) {
     cmode = edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV21;
   } else {
-    throw CnstreamError("Can not handle this frame with format :" + std::to_string(static_cast<int>(finfo->frame.fmt)));
+    throw CnstreamError("Can not handle this frame with format :" + std::to_string(static_cast<int>(frame->fmt)));
   }
   if (!rcop_res_->Initialized()) {
     uint32_t dst_w = model_->InputShapes()[0].w;
@@ -114,30 +115,31 @@ std::shared_ptr<InferTask> ResizeConvertObjBatchingStage::Batching(std::shared_p
     }
   }
   edk::MluResizeConvertOp::InputData input_data;
-  input_data.src_w = finfo->frame.width;
-  input_data.src_h = finfo->frame.height;
-  input_data.src_stride = finfo->frame.stride[0];
+  input_data.src_w = frame->width;
+  input_data.src_h = frame->height;
+  input_data.src_stride = frame->stride[0];
   input_data.planes[0] = src_y;
   input_data.planes[1] = src_uv;
-  input_data.crop_x = obj->bbox.x * finfo->frame.width;
-  input_data.crop_y = obj->bbox.y * finfo->frame.height;
-  input_data.crop_w = obj->bbox.w * finfo->frame.width;
-  input_data.crop_h = obj->bbox.h * finfo->frame.height;
+  input_data.crop_x = obj->bbox.x * frame->width;
+  input_data.crop_y = obj->bbox.y * frame->height;
+  input_data.crop_w = obj->bbox.w * frame->width;
+  input_data.crop_h = obj->bbox.h * frame->height;
   value->op.BatchingUp(input_data);
   rcop_res_->DeallingDone();
   return NULL;
 }
 
 ScalerObjBatchingStage::ScalerObjBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-                                         std::shared_ptr<MluInputResource> mlu_input_res)
+                                               std::shared_ptr<MluInputResource> mlu_input_res)
     : IOObjBatchingStage(model, batchsize, mlu_input_res) {}
 
 ScalerObjBatchingStage::~ScalerObjBatchingStage() {}
 
 void ScalerObjBatchingStage::ProcessOneObject(std::shared_ptr<CNFrameInfo> finfo, std::shared_ptr<CNInferObject> obj,
-                                           uint32_t batch_idx, const IOResValue& value) {
-  void* src_y = finfo->frame.data[0]->GetMutableMluData();
-  void* src_uv = finfo->frame.data[1]->GetMutableMluData();
+                                              uint32_t batch_idx, const IOResValue& value) {
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(finfo->datas[CNDataFramePtrKey]);
+  void* src_y = frame->data[0]->GetMutableMluData();
+  void* src_uv = frame->data[1]->GetMutableMluData();
   void* dst = value.datas[0].Offset(batch_idx);
   cncodecWorkInfo work_info;
   cncodecFrame src_frame;
@@ -148,15 +150,15 @@ void ScalerObjBatchingStage::ProcessOneObject(std::shared_ptr<CNFrameInfo> finfo
 
   src_frame.pixelFmt = CNCODEC_PIX_FMT_NV21;
   src_frame.colorSpace = CNCODEC_COLOR_SPACE_BT_709;
-  src_frame.width = finfo->frame.width;
-  src_frame.height = finfo->frame.height;
-  src_frame.planeNum = finfo->frame.GetPlanes();
-  src_frame.plane[0].size = finfo->frame.GetPlaneBytes(0);
+  src_frame.width = frame->width;
+  src_frame.height = frame->height;
+  src_frame.planeNum = frame->GetPlanes();
+  src_frame.plane[0].size = frame->GetPlaneBytes(0);
   src_frame.plane[0].addr = reinterpret_cast<u64_t>(src_y);
-  src_frame.plane[1].size = finfo->frame.GetPlaneBytes(1);
+  src_frame.plane[1].size = frame->GetPlaneBytes(1);
   src_frame.plane[1].addr = reinterpret_cast<u64_t>(src_uv);
-  src_frame.stride[0] = finfo->frame.stride[0];
-  src_frame.stride[1] = finfo->frame.stride[1];
+  src_frame.stride[0] = frame->stride[0];
+  src_frame.stride[1] = frame->stride[1];
   src_frame.channel = 1;
   src_frame.deviceId = 0;  // FIXME
 

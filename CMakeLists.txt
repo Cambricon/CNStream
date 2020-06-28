@@ -117,6 +117,18 @@ endif()
 list(APPEND 3RDPARTY_INCLUDE_DIRS ${GLOG_INCLUDE_DIRS})
 list(APPEND 3RDPARTY_LIBS ${GLOG_LIBRARIES})
 
+## WITH_RTSP
+set(Live555_LIBS "")
+if(WITH_RTSP)
+  include_directories(${PROJECT_SOURCE_DIR}/3rdparty/live555/include/BasicUsageEnvironment)
+  include_directories(${PROJECT_SOURCE_DIR}/3rdparty/live555/include/groupsock)
+  include_directories(${PROJECT_SOURCE_DIR}/3rdparty/live555/include/liveMedia)
+  include_directories(${PROJECT_SOURCE_DIR}/3rdparty/live555/include/UsageEnvironment)
+  link_directories(${PROJECT_SOURCE_DIR}/3rdparty/live555/lib)
+  set(Live555_LIBS liveMedia UsageEnvironment BasicUsageEnvironment groupsock)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_LIVE555")
+endif()
+
 ##OpenCV
 if(WITH_OPENCV)
   if(CMAKE_TOOLCHAIN_FILE)
@@ -236,7 +248,7 @@ if(NOT DEFINED ENV{NEUWARE_HOME})
 endif()
   
 if(MLU_PLATFORM STREQUAL MLU270)
-  list(APPEND CN_LIBS cnstream-toolkit cnrt cncodec cndrv)
+  list(APPEND CN_LIBS easydk cnrt cncodec cndrv)
 else()
   message(FATAL_ERROR "MLU_PLATFORM not supported!")
 endif()
@@ -251,7 +263,7 @@ include_directories(${PROJECT_SOURCE_DIR}/easydk/include)
 link_directories(${PROJECT_SOURCE_DIR}/lib)
 
 # ---[ Includes
-include_directories(${PROJECT_SOURCE_DIR}/modules/core/include)
+include_directories(${PROJECT_SOURCE_DIR}/framework/core/include)
 
 # ---[ Rapidjson
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/rapidjson/include)
@@ -267,6 +279,7 @@ endif()
 add_subdirectory(3rdparty)
 add_subdirectory(easydk)
 add_subdirectory(modules)
+add_subdirectory(framework)
 if(build_modules_contrib)
   add_subdirectory(modules_contrib)
 endif()

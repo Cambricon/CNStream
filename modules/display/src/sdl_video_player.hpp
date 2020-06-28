@@ -1,8 +1,6 @@
 #ifndef _SDL_VIDEO_PLAYER_HPP_
 #define _SDL_VIDEO_PLAYER_HPP_
 
-#include <cnstream_error.hpp>
-#include <cnstream_time_utility.hpp>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -24,6 +22,8 @@
 #include <SDL2/SDL.h>
 #endif
 
+#include "util/cnstream_time_utility.hpp"
+
 namespace cnstream {
 
 struct UpdateData {
@@ -42,7 +42,7 @@ class SDLVideoPlayer {  // BGR
   void SetFullScreen();
 
   bool FeedData(const UpdateData &data);
-  std::string CalcFps(const UpdateData& data);
+  std::string CalcFps(const UpdateData &data);
 
   void EventLoop(const std::function<void()> &quit_callback);
 
@@ -87,14 +87,15 @@ class SDLVideoPlayer {  // BGR
 class SDLVideoPlayer {  // BGR
  public:
   inline bool Init(int max_chn) { return true; }
-  inline void Destroy() { }
-  inline void SetFullScreen() { }
-  inline void set_window_w(int w) { }
-  inline void set_window_h(int h) { }
-  inline void set_frame_rate(int frame_rate) { }
+  inline void Destroy() {}
+  inline void SetFullScreen() {}
+  inline void set_window_w(int w) {}
+  inline void set_window_h(int h) {}
+  inline void set_frame_rate(int frame_rate) {}
   inline bool FeedData(const UpdateData &data) { return true; }
-  void EventLoop(const std::function<void()> &quit_callback) { }
-  std::string CalcFps(const UpdateData& data) { return "";}
+  void EventLoop(const std::function<void()> &quit_callback) {}
+  std::string CalcFps(const UpdateData &data) { return ""; }
+
  private:
   std::vector<int> flags_;
   std::vector<TickClock> ticker_;

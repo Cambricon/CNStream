@@ -23,10 +23,19 @@
 /**
  *  \file data_source.hpp
  *
- *  This file contains a declaration of struct DataSource and DataSourceParam.
+ *  This file contains a declaration of struct DataSource and DataSourceParam
  */
 
-#include <map>
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
+#ifdef __cplusplus
+}
+#endif
+
 #include <memory>
 #include <string>
 #include <utility>
@@ -38,72 +47,48 @@
 namespace cnstream {
 
 /**
- *  @brief The type of stream or source to be processed.
+ * @brief storage type of output frame data for modules, storage on cpu or mlu.
  */
-enum SourceType {
-  SOURCE_RAW,     ///< Represents the raw stream. The source is sent for decoding directly.
-  SOURCE_FFMPEG,   ///< Represents the normal stream. The source is demuxed with FFmpeg before sent for decoding.
-  SOURCE_MEM
-};
+enum OutputType { OUTPUT_CPU, OUTPUT_MLU };
 /**
- * @brief The storage type of the output frame data that are stored for modules on CPU or MLU.
+ * @brief decoder type used in source module.
  */
-enum OutputType {
-  OUTPUT_CPU,   ///< Outputs to CPU.
-  OUTPUT_MLU    ///< Outputs to MLU.
-};
+enum DecoderType { DECODER_CPU, DECODER_MLU };
 /**
- * @brief The decoder type used in the source module.
- */
-enum DecoderType {
-  DECODER_CPU,   ///< CPU decoder with FFmpeg.
-  DECODER_MLU    ///< MLU decoder with CNCodec.
-};
-/**
- * @brief A structure for private usage.
+ * @brief a structure for private usage
  */
 struct DataSourceParam {
-  SourceType source_type_ = SOURCE_RAW;            ///< The demuxer type. The ``SOURCE_RAW`` value is set for debugging.
-  OutputType output_type_ = OUTPUT_CPU;            ///< Outputs data to CPU or MLU.
-  size_t interval_ = 1;                            ///< Outputs image for every ``interval`` frames.
-  DecoderType decoder_type_ = DECODER_CPU;         ///< The decoder type.
-  bool reuse_cndec_buf = false;                    ///< Valid when ``DECODER_MLU`` is used.
-  int device_id_ = -1;                             ///< The MLU device ID. To disable MLU, set the value to ``-1``.
-  size_t chunk_size_ = 0;                          ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
-  size_t width_ = 0;                               ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
-  size_t height_ = 0;                              ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
-  bool interlaced_ = false;                        ///< Valid when ``SOURCE_RAW`` is used. For H264 and H265 only.
-  size_t output_w = 0;                             ///< Invalid for MLU200 series.
-  size_t output_h = 0;                             ///< Invalid for MLU200 series.
-  uint32_t input_buf_number_ = 2;                  ///< Valid when ``decoder_type`` is set to ``DECODER_MLU``.
-  uint32_t output_buf_number_ = 3;                 ///< Valid when ``decoder_type`` is set to ``DECODER_MLU``.
-  bool apply_stride_align_for_scaler_ = true;      ///< Only Valid on mlu220 platform.
+  OutputType output_type_ = OUTPUT_CPU;     ///< output data to cpu/mlu
+  size_t interval_ = 1;                     ///< output image every "interval" frames
+  DecoderType decoder_type_ = DECODER_CPU;  ///< decoder type
+  bool reuse_cndec_buf = false;             ///< valid when DECODER_MLU used
+  int device_id_ = -1;                      ///< mlu device id, -1 :disable mlu
+  uint32_t input_buf_number_ = 2;           ///< valid when decoder_type = DECODER_MLU
+  uint32_t output_buf_number_ = 3;          ///< valid when decoder_type = DECODER_MLU
 };
 
 /**
- * @brief The class for handling input data.
+ * @brief Class for handling input data
  */
 class DataSource : public SourceModule, public ModuleCreator<DataSource> {
  public:
   /**
-   * @brief Constructs DataSource object with a given module name.
+   * @brief Construct DataSource object with a given moduleName
    * @param
-   * 	moduleName[in]: A defined module name.
+   * 	moduleName[in]:defined module name
    */
   explicit DataSource(const std::string &moduleName);
   /**
-   * @brief Deconstructs DataSource object.
+   * @brief Deconstruct DataSource object
    *
    */
   ~DataSource();
 
   /**
    * @brief Called by pipeline when the pipeline is started.
-   
+
    * @param paramSet
    * @verbatim
-   *   source_type: Optional. The demuxer type. The default value is SOURCE_RAW.
-   *                Supported values are ``raw``, ``ffmpeg`` and "mem".
    *   output_type: Optional. The output type. The default output_type is cpu.
    *                Supported values are ``mlu`` and ``cpu``.
    *   interval: Optional. Process one frame for every ``interval`` frames. Process every frame by default.
@@ -114,58 +99,130 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
                         Supported values are ``true`` and ``false``.
    *   device_id: Required when MLU is used. Device id. Set the value to -1 for CPU.
                   Set the value for MLU in the range 0 - N.
-   *   chunk_size: Required when ``source_type`` is set to ``raw``. The size of the input data chunk.
-   *   width: Required when ``source_type`` is set to ``raw``. The width of the frame.
-   *   height: Required when ``source_type`` is set to ``raw``. The height of the frame.
    *   interlaced: Required when ``source_type`` is set to ``raw``. Interlaced mode.
    *   input_buf_number: Optional. The input buffer number. The default value is 2.
    *   output_buf_number: Optional. The output buffer number. The default value is 3.
    * @endverbatim
    *
    * @return
-   *    Returns true if ``paramSet`` are supported and valid. Otherwise, returns false.
+   *    true if paramSet are supported and valid, othersize false
    */
   bool Open(ModuleParamSet paramSet) override;
   /**
-   * @brief Called by pipeline when the pipeline is stopped.
+   * @brief Called by pipeline when pipeline stop.
    */
   void Close() override;
 
   /**
-   * @brief Checks parameters for a module.
+   * @brief Check ParamSet for a module.
    *
    * @param paramSet Parameters for this module.
    *
-   * @return Returns true if this function has run successfully. Otherwise, returns false.
+   * @return Returns true if this API run successfully. Otherwise, returns false.
    */
   bool CheckParamSet(const ModuleParamSet &paramSet) const override;
 
  public:
   /**
-   * @brief Adds one stream to DataSource module. This function should be called after the pipeline has been started.
-   * @param stream_id[in]: The unique stream identifier.
-   * @param filename[in]: The source path that supports local-file-path, rtsp-url, jpg-sequences, and so on.
-   * @param framerate[in]: The input frequency of the source data.
-   * @param loop[in]: Whether to reload source when EOF is reached.
-   * @return
-   *    Returns the source handler instance.
-   */
-  std::shared_ptr<cnstream::SourceHandler> CreateSource(const std::string &stream_id, const std::string &filename,
-                                                        int framerate, bool loop = false);
-
- public:
-  /**
-   * @brief Gets module parameters. This function should be called after ``Open()`` has been invoked.
+   * @brief Get module parameters, should be called after Open() invoked.
    */
   DataSourceParam GetSourceParam() const { return param_; }
-
-#ifdef UNIT_TEST
-  bool SendData(std::shared_ptr<CNFrameInfo> data) { return SourceModule::SendData(data); }
-#endif
 
  private:
   DataSourceParam param_;
 };  // class DataSource
+
+/*SourceHandler for H264/H265 bitstreams in memory(with prefix-start-code)
+*/
+struct ESPacket {
+  unsigned char *data = nullptr;
+  int size = 0;
+  uint64_t pts = 0;
+  uint32_t flags = 0;
+  enum {
+    FLAG_KEY_FRAME = 0x01,
+    FLAG_EOS = 0x02,
+  };
+};
+
+class FileHandlerImpl;
+class FileHandler : public SourceHandler {
+ public:
+  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
+                                               const std::string &filename, int framerate, bool loop = false);
+  ~FileHandler();
+  /**/
+  bool Open() override;
+  void Close() override;
+
+ private:
+  explicit FileHandler(DataSource *module, const std::string &stream_id, const std::string &filename, int framerate,
+                       bool loop);
+
+ private:
+#ifdef UNIT_TEST
+ public:
+#endif
+  FileHandlerImpl *impl_ = nullptr;
+};  // class FileHandler
+
+class RtspHandlerImpl;
+/*SourceHandler for rtsp as input
+ * use_ffmpeg:
+ *   true: use ffmppeg-rtspclient
+ *   false: use live555-rtspclient, FIXME(provide interface to set strategies:  reconnect, stream_over_tcp, etc...)
+ */
+class RtspHandler : public SourceHandler {
+ public:
+  /*
+   * "reconnect" is valid when "use_ffmpeg" set false
+   */
+  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
+                                               const std::string &url_name, bool use_ffmpeg = false, int reconnect = 1);
+  ~RtspHandler();
+  /**/
+  bool Open() override;
+  void Close() override;
+
+ private:
+  explicit RtspHandler(DataSource *module, const std::string &stream_id, const std::string &url_name, bool use_ffmpeg,
+                       int reconnect);
+
+ private:
+#ifdef UNIT_TEST
+ public:
+#endif
+  RtspHandlerImpl *impl_ = nullptr;
+};  // class RtspHandler
+
+class ESMemHandlerImpl;
+/*SourceHandler for H264/H265 bitstreams in memory(with prefix-start-code)
+ */
+class ESMemHandler : public SourceHandler {
+ public:
+  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id);
+  ~ESMemHandler();
+  /**/
+  bool Open() override;
+  void Close() override;
+
+  /*Write()
+   *   Send H264/H265 bitstream with prefix-startcode.
+   */
+  enum DataType { AUTO, H264, H265 };
+  void SetDataType(DataType type = AUTO);
+  int Write(ESPacket *pkt);
+  int Write(unsigned char *buf, int len);
+
+ private:
+  explicit ESMemHandler(DataSource *module, const std::string &stream_id);
+
+ private:
+#ifdef UNIT_TEST
+ public:
+#endif
+  ESMemHandlerImpl *impl_ = nullptr;
+};  // class ESMemHandler
 
 }  // namespace cnstream
 

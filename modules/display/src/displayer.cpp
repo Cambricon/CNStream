@@ -21,6 +21,7 @@
 #include <string>
 
 #include "cnstream_eventbus.hpp"
+#include "cnstream_frame_va.hpp"
 #include "displayer.hpp"
 #include "sdl_video_player.hpp"
 
@@ -84,8 +85,9 @@ void Displayer::Close() {
 int Displayer::Process(CNFrameInfoPtr data) {
   if (show_) {
     UpdateData ud;
-    ud.img = *data->frame.ImageBGR();
-    ud.chn_idx = data->channel_idx;
+    CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+    ud.img = *frame->ImageBGR();
+    ud.chn_idx = data->GetStreamIndex();
     player_->FeedData(ud);
   }
   return 0;

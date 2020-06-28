@@ -1,0 +1,28 @@
+{
+  "source" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "show_perf_info" : true,
+    "next_modules" : ["ipc"],
+    "custom_params" : {
+      "source_type" : "ffmpeg",
+      "reuse_cndec_buf" : "false",
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "device_id" : 0
+    }
+  },
+
+  "ipc" : {
+    "class_name" : "cnstream::ModuleIPC",
+    "parallelism" :1 ,
+    "show_perf_info" : true,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "ipc_type" : "client",
+      "memmap_type" : "cpu",
+      "max_cachedframe_size" : "80",
+      "socket_address" : "test_ipc"
+    }
+  }
+}

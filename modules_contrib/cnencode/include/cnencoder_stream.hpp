@@ -61,12 +61,7 @@ class CNEncoderStream {
     NV21,
     NV12,
   };
-  enum CodecType {
-    H264 = 0,
-    HEVC,
-    MPEG4,
-    JPEG
-  };
+  enum CodecType { H264 = 0, HEVC, MPEG4, JPEG };
 
   CNEncoderStream(int src_width, int src_height, int width, int height, float frame_rate, PictureFormat format,
                   int bit_rate, int gop_size, CodecType type, uint8_t channelIdx, uint32_t device_id,
@@ -75,7 +70,7 @@ class CNEncoderStream {
 
   bool Update(const cv::Mat &image, int64_t timestamp, bool eos);
   bool Update(uint8_t *image, int64_t timestamp, bool eos);
-  void ResizeYuvNearest(uint8_t* src, uint8_t* dst);
+  void ResizeYuvNearest(uint8_t *src, uint8_t *dst);
   void Bgr2YUV420NV(const cv::Mat &bgr, PictureFormat ToFormat, uint8_t *nv_data);
   void Convert(const uint8_t *src_buffer, const size_t src_buffer_size, uint8_t *dst_buffer,
                const size_t dst_buffer_size);

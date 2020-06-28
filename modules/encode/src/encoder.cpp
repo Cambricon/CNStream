@@ -17,13 +17,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+#include "encoder.hpp"
 
 #include <string>
 #include <thread>
 #include <utility>
 
-#include "cnstream_eventbus.hpp"
-#include "encoder.hpp"
+#include "cnstream_frame_va.hpp"
 
 namespace cnstream {
 
@@ -32,8 +32,7 @@ Encoder::Encoder(const std::string &name) : Module(name) {
   param_register_.Register("dump_dir",
                            "Where to store the encoded video."
                            " For example, '.' means storing to current directory.");
-  param_register_.Register("dump_type",
-                           "dump type, \"video\" or \"image\"");
+  param_register_.Register("dump_type", "dump type, \"video\" or \"image\"");
 }
 
 #ifdef CNS_MLU220_SOC
@@ -77,19 +76,18 @@ static bool CreateDirectory(const std::string &dir_path) {
 
 EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {
   std::unique_lock<std::mutex> lock(encoder_mutex_);
-  if (data->channel_idx >= GetMaxStreamNumber()) {
-    return nullptr;
-  }
   EncoderContext *ctx = nullptr;
-  auto search = encode_ctxs_.find(data->channel_idx);
+  auto search = encode_ctxs_.find(data->stream_id);
   if (search != encode_ctxs_.end()) {
     // context exists
     ctx = search->second;
   } else {
     ctx = new (std::nothrow) EncoderContext;
     LOG_IF(FATAL, nullptr == ctx) << "Encoder::GetEncoderContext() new EncoderContext failed";
-    ctx->size = cv::Size(data->frame.width, data->frame.height);
-    std::string filename = std::to_string(data->channel_idx) + ".avi";
+
+    CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+    ctx->size = cv::Size(frame->width, frame->height);
+    std::string filename = data->stream_id + ".avi";
     std::string video_file;
     if (output_dir_.empty())
       video_file = filename;
@@ -107,7 +105,7 @@ EncoderContext *Encoder::GetEncoderContext(CNFrameInfoPtr data) {
     if (!ctx->writer.isOpened()) {
       PostEvent(cnstream::EventType::EVENT_ERROR, "Create video file failed");
     }
-    encode_ctxs_[data->channel_idx] = ctx;
+    encode_ctxs_[data->stream_id] = ctx;
   }
   return ctx;
 }
@@ -153,18 +151,18 @@ void Encoder::Close() {
 }
 
 int Encoder::Process(CNFrameInfoPtr data) {
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
   if (dump_as_image_) {
-    cv::imwrite(output_dir_ + "/ch" + std::to_string(data->channel_idx)
-        + "_stream" + data->frame.stream_id + "_frame"
-        + std::to_string(data->frame.frame_id)
-        + ".jpg", *data->frame.ImageBGR());
+    cv::imwrite(output_dir_ + "/ch" + data->stream_id + "_stream" + data->stream_id + "_frame" +
+                    std::to_string(frame->frame_id) + ".jpg",
+                *frame->ImageBGR());
   } else {
     EncoderContext *ctx = GetEncoderContext(data);
     if (ctx == nullptr) {
       LOG(ERROR) << "Get Encoder Context Failed.";
       return -1;
     }
-    ctx->writer.write(*data->frame.ImageBGR());
+    ctx->writer.write(*frame->ImageBGR());
   }
   return 0;
 }

@@ -53,8 +53,8 @@ class VideoEncoder {
  protected:
   class VideoFrame {
    public:
-    VideoFrame() { }
-    virtual ~VideoFrame() { }
+    VideoFrame() {}
+    virtual ~VideoFrame() {}
     virtual void Fill(uint8_t *data, int64_t timestamp) = 0;
   };
 

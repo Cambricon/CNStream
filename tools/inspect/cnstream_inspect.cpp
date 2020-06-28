@@ -28,8 +28,10 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <getopt.h>
-#include <stdio.h>
 #include <string.h>
+
+#include <algorithm>
+#include <iostream>
 #include <fstream>
 #include <iomanip>
 #include <string>

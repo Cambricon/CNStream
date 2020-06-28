@@ -25,8 +25,12 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "cnstream_module.hpp"
+#include "data_handler_file.hpp"
+#include "data_handler_mem.hpp"
+#include "data_handler_rtsp.hpp"
 #include "data_source.hpp"
 #include "easyinfer/mlu_context.h"
 #include "test_base.hpp"
@@ -38,18 +42,11 @@ static constexpr const char *gvideo_path = "../../data/videos/cars.mp4";
 static constexpr const char *gimage_path = "../../data/images/%d.jpg";
 
 void ResetParam(ModuleParamSet &param) {  // NOLINT
-  param["source_type"] = "raw";
   param["output_type"] = "mlu";
   param["device_id"] = "0";
   param["interval"] = "1";
   param["decoder_type"] = "mlu";
-  param["output_width"] = "1920";
-  param["output_height"] = "1080";
-  param["reuse_cndex_buf"] = "true";
-  param["chunk_size"] = "16384";
-  param["width"] = "1920";
-  param["height"] = "1080";
-  param["interlaced"] = "1";
+  param["reuse_cndec_buf"] = "true";
   param["input_buf_number"] = "100";
   param["output_buf_number"] = "100";
 }
@@ -67,8 +64,8 @@ TEST(Source, OpenClose) {
   EXPECT_TRUE(src->CheckParamSet(param));
   EXPECT_TRUE(src->Open(param));
 
-  // invalid source type
-  param["source_type"] = "foo";
+  // invalid output_type type
+  param["output_type"] = "foo";
   EXPECT_FALSE(src->Open(param));
   ResetParam(param);
 
@@ -99,24 +96,8 @@ TEST(Source, OpenClose) {
   param["reuse_cndex_buf"] = "false";
   ResetParam(param);
 
-  // raw decode without chunk params
-  param.erase("chunk_size");
-  EXPECT_FALSE(src->Open(param));
-  ResetParam(param);
-  param.erase("width");
-  EXPECT_FALSE(src->Open(param));
-  ResetParam(param);
-  param.erase("height");
-  EXPECT_FALSE(src->CheckParamSet(param));
-  EXPECT_FALSE(src->Open(param));
-  ResetParam(param);
-  param.erase("interlaced");
-  EXPECT_FALSE(src->Open(param));
-  param.clear();
-
   // proper params
   // ffmpeg
-  param["source_type"] = "ffmpeg";
   param["output_type"] = "mlu";
   param["decoder_type"] = "mlu";
   param["device_id"] = "0";
@@ -125,7 +106,6 @@ TEST(Source, OpenClose) {
   param.clear();
   src->Close();
 
-  param["source_type"] = "ffmpeg";
   param["output_type"] = "mlu";
   param["decoder_type"] = "mlu";
   param["reuse_cndec_buf"] = "true";
@@ -141,41 +121,10 @@ TEST(Source, OpenClose) {
   param.clear();
   src->Close();
 
-  // raw
-  param["source_type"] = "raw";
-  param["output_type"] = "mlu";
-  param["decoder_type"] = "mlu";
-  param["device_id"] = "0";
-  param["chunk_size"] = "16384";
-  param["width"] = "1920";
-  param["height"] = "1080";
-  param["interlaced"] = "0";
-  EXPECT_TRUE(src->Open(param));
-  param.clear();
-  src->Close();
-
-  param["source_type"] = "raw";
   param["output_type"] = "mlu";
   param["decoder_type"] = "mlu";
   param["reuse_cndec_buf"] = "true";
   param["device_id"] = "0";
-  param["chunk_size"] = "16384";
-  param["width"] = "1920";
-  param["height"] = "1080";
-  param["interlaced"] = "1";
-  EXPECT_TRUE(src->Open(param));
-  param.clear();
-  src->Close();
-
-  // raw only support mlu decoder
-  param["source_type"] = "raw";
-  param["output_type"] = "mlu";
-  param["decoder_type"] = "mlu";
-  param["device_id"] = "0";
-  param["chunk_size"] = "16384";
-  param["width"] = "1920";
-  param["height"] = "1080";
-  param["interlaced"] = "0";
   EXPECT_TRUE(src->Open(param));
   param.clear();
   src->Close();
@@ -189,13 +138,13 @@ TEST(Source, SendData) {
   auto src = std::make_shared<DataSource>(gname);
   std::shared_ptr<Pipeline> pipeline = std::make_shared<Pipeline>("pipeline");
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
-  data->channel_idx = 0;
+  data->SetStreamIndex(0);
   EXPECT_FALSE(src->SendData(data));
   pipeline->AddModule(src);
   EXPECT_TRUE(src->SendData(data));
 }
 
-TEST(Source, AddVideoSource) {
+TEST(Source, AddSource) {
   auto src = std::make_shared<DataSource>(gname);
   std::string stream_id1 = "1";
   std::string stream_id2 = "2";
@@ -205,41 +154,45 @@ TEST(Source, AddVideoSource) {
   std::string rtsp_path = "rtsp://test";
 
   ModuleParamSet param;
-  param["source_type"] = "ffmpeg";
   param["output_type"] = "mlu";
   param["decoder_type"] = "mlu";
   param["device_id"] = "0";
   ASSERT_TRUE(src->Open(param));
 
+  auto handler1 = FileHandler::Create(src.get(), stream_id1, video_path, 24, true);
+  auto handler2 = FileHandler::Create(src.get(), stream_id2, video_path, 24, false);
+  auto handler3 = FileHandler::Create(src.get(), stream_id3, video_path, 24, false);
+  // auto handler4 = RtspHandler::Create(src.get(), stream_id4, rtsp_path);
+
   // successfully add video source
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24, true), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 24, false), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id3, rtsp_path, 24, true), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id4, rtsp_path, 0, true), 0);
+  EXPECT_EQ(src->AddSource(handler1), 0);
+  EXPECT_EQ(src->AddSource(handler2), 0);
+  EXPECT_EQ(src->AddSource(handler3), 0);
+  // EXPECT_EQ(src->AddSource(handler4), 0);
 
   // repeadly add video source, wrong!
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), -1);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, false), -1);
+  EXPECT_EQ(src->AddSource(handler1), -1);
+  EXPECT_EQ(src->AddSource(handler2), -1);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   src->Close();
-  // filename.empty(), return -1
-  EXPECT_EQ(src->AddVideoSource(std::to_string(3), "", 24, true), -1);
-  // open source failed, return -1
-  EXPECT_EQ(src->AddVideoSource(std::to_string(GetMaxStreamNumber()), "", 24), -1);
-  src->Close();
 
-  /*
+  // filename.empty(), return -1
+  auto handler_error = FileHandler::Create(src.get(), std::to_string(5), "", 24, false);
+  EXPECT_EQ(handler_error, nullptr);
+
   // filename valid, return 0
   for (uint32_t i = 0; i < GetMaxStreamNumber(); i++) {
-    EXPECT_EQ(src->AddVideoSource(std::to_string(i), video_path, 24, true), 0);
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    auto handler = FileHandler::Create(src.get(), std::to_string(i), video_path, 24, false);
+    EXPECT_EQ(src->AddSource(handler), 0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
   // open source failed, return -1
-  EXPECT_EQ(src->AddVideoSource(std::to_string(GetMaxStreamNumber()), video_path, 24), -1);
+  auto handler = FileHandler::Create(src.get(), std::to_string(GetMaxStreamNumber()), video_path, 24, false);
+  EXPECT_EQ(src->AddSource(handler), -1);
 
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
   src->Close();
-  */
 }
 
 TEST(Source, RemoveSource) {
@@ -250,7 +203,6 @@ TEST(Source, RemoveSource) {
   std::string stream_id3 = "3";
   std::string stream_id4 = "4";
   ModuleParamSet param;
-  param["source_type"] = "ffmpeg";
   param["output_type"] = "mlu";
   param["decoder_type"] = "mlu";
   param["device_id"] = "0";
@@ -258,8 +210,9 @@ TEST(Source, RemoveSource) {
 
   // successfully add video source
   for (int i = 0; i < 10; i++) {
-    EXPECT_EQ(src->AddVideoSource(std::to_string(i), video_path, false), 0);
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    auto handler = FileHandler::Create(src.get(), std::to_string(i), video_path, 24, false);
+    EXPECT_EQ(src->AddSource(handler), 0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
   // remove source
   for (int i = 0; i < 10; i++) {
@@ -287,28 +240,34 @@ TEST(Source, FFMpegMLU) {
   std::string stream_id4 = "4";
 
   ModuleParamSet param;
-  param["source_type"] = "ffmpeg";
   param["output_type"] = "mlu";
   param["decoder_type"] = "mlu";
   param["device_id"] = "0";
   ASSERT_TRUE(src->Open(param));
 
   // add source
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 24, true), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id3, video_path, 24, false), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id4, image_path, 24), 0);
+  auto handler1 = FileHandler::Create(src.get(), stream_id1, video_path, 24, false);
+  EXPECT_EQ(src->AddSource(handler1), 0);
 
-  EXPECT_NE(src->AddVideoSource(stream_id3, video_path, 24), 0);
-  EXPECT_NE(src->AddVideoSource(stream_id4, image_path, 24), 0);
+  auto handler2 = FileHandler::Create(src.get(), stream_id2, video_path, 24, true);
+  EXPECT_EQ(src->AddSource(handler2), 0);
+
+  auto handler3 = FileHandler::Create(src.get(), stream_id3, video_path, 24, false);
+  EXPECT_EQ(src->AddSource(handler3), 0);
+
+  auto handler4 = FileHandler::Create(src.get(), stream_id4, image_path, 24, false);
+  EXPECT_EQ(src->AddSource(handler4), 0);
+
+  EXPECT_NE(src->AddSource(handler3), 0);
+  EXPECT_NE(src->AddSource(handler4), 0);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-  EXPECT_EQ(src->RemoveSource(stream_id1), 0);
-  EXPECT_EQ(src->RemoveSource(stream_id2), 0);
+  EXPECT_EQ(src->RemoveSource(handler1), 0);
+  EXPECT_EQ(src->RemoveSource(handler2), 0);
 
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, image_path, 24), 0);
+  EXPECT_EQ(src->AddSource(handler1), 0);
+  EXPECT_EQ(src->AddSource(handler2), 0);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   src->Close();
@@ -316,7 +275,8 @@ TEST(Source, FFMpegMLU) {
   // reuse codec buffer
   param["reuse_cndec_buf"] = "true";
   ASSERT_TRUE(src->Open(param));
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 24), 0);
+  auto handler = FileHandler::Create(src.get(), stream_id1, video_path, 24, false);
+  EXPECT_EQ(src->AddSource(handler), 0);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   src->Close();
@@ -330,18 +290,22 @@ TEST(Source, FFMpegCPU) {
   std::string stream_id3 = "3";
 
   ModuleParamSet param;
-  param["source_type"] = "ffmpeg";
   param["output_type"] = "cpu";
   param["decoder_type"] = "cpu";
   ASSERT_TRUE(src->Open(param));
 
   // add source
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 23), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 24, true), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id3, video_path, 25, false), 0);
 
-  EXPECT_NE(src->AddVideoSource(stream_id3, video_path, 26), 0);
-  EXPECT_NE(src->AddVideoSource(stream_id1, video_path, 27), 0);
+  auto handler1 = FileHandler::Create(src.get(), stream_id1, video_path, 23, false);
+  EXPECT_EQ(src->AddSource(handler1), 0);
+
+  auto handler2 = FileHandler::Create(src.get(), stream_id2, video_path, 24, true);
+  EXPECT_EQ(src->AddSource(handler2), 0);
+
+  auto handler3 = FileHandler::Create(src.get(), stream_id3, video_path, 25, false);
+  EXPECT_EQ(src->AddSource(handler3), 0);
+
+  EXPECT_NE(src->AddSource(handler3), 0);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
@@ -349,20 +313,22 @@ TEST(Source, FFMpegCPU) {
   EXPECT_EQ(src->RemoveSource(stream_id1), 0);
   EXPECT_EQ(src->RemoveSource(stream_id2), 0);
 
-
   param["output_type"] = "mlu";
   param["device_id"] = "0";
   ASSERT_TRUE(src->Open(param));
-  EXPECT_EQ(src->AddVideoSource(stream_id1, video_path, 22), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, video_path, 21), 0);
+
+  auto handler4 = FileHandler::Create(src.get(), stream_id1, video_path, 22, false);
+  EXPECT_EQ(src->AddSource(handler4), 0);
+
+  auto handler5 = FileHandler::Create(src.get(), stream_id2, video_path, 21, false);
+  EXPECT_EQ(src->AddSource(handler5), 0);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   src->Close();
 }
 
-TEST(Source, RawMLU) {
+TEST(Source, MemMLU) {
   std::string h264_path = GetExePath() + "../../modules/unitest/source/data/raw.h264";
-  std::string h265_path = GetExePath() + "../../modules/unitest/source/data/raw.h265";
   auto src = std::make_shared<DataSource>(gname);
   std::string stream_id0 = "0";
   std::string stream_id1 = "1";
@@ -370,35 +336,98 @@ TEST(Source, RawMLU) {
   std::string stream_id3 = "3";
 
   ModuleParamSet param;
-  param["source_type"] = "raw";
   param["output_type"] = "mlu";
   param["decoder_type"] = "mlu";
   param["device_id"] = "0";
-  // chunk size 50K
-  param["chunk_size"] = "50000";
-  param["width"] = "256";
-  param["height"] = "256";
-  param["interlaced"] = "false";
   ASSERT_TRUE(src->Open(param));
 
-  // add source
-  EXPECT_EQ(src->AddVideoSource(stream_id0, h264_path, 23, false), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id1, h264_path, 30, true), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id2, h265_path, 21, false), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id3, h265_path, 27, true), 0);
+  std::vector<std::shared_ptr<SourceHandler>> vec_handlers;
+  std::vector<std::thread> vec_threads_mem;
 
-  EXPECT_NE(src->AddVideoSource(stream_id3, h264_path, 20, true), 0);
+  // add source
+  auto handler0 = ESMemHandler::Create(src.get(), stream_id0);
+  EXPECT_EQ(src->AddSource(handler0), 0);
+  vec_handlers.push_back(handler0);
+
+  auto handler1 = ESMemHandler::Create(src.get(), stream_id1);
+  EXPECT_EQ(src->AddSource(handler1), 0);
+  vec_handlers.push_back(handler1);
+
+  auto handler2 = ESMemHandler::Create(src.get(), stream_id2);
+  EXPECT_EQ(src->AddSource(handler2), 0);
+  vec_handlers.push_back(handler2);
+
+  auto handler3 = ESMemHandler::Create(src.get(), stream_id3);
+  EXPECT_EQ(src->AddSource(handler3), 0);
+  vec_handlers.push_back(handler3);
+
+  EXPECT_NE(src->AddSource(handler3), 0);
+
+  for (auto &handler : vec_handlers) {
+    vec_threads_mem.push_back(std::thread([&]() {
+      FILE *fp = fopen(h264_path.c_str(), "rb");
+      if (fp) {
+        auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+        unsigned char buf[4096];
+        int read_cnt = 0;
+        while (!feof(fp) && read_cnt < 10) {
+          int size = fread(buf, 1, 4096, fp);
+          memHandler->Write(buf, size);
+          read_cnt++;
+        }
+        memHandler->Write(NULL, 0);
+        fclose(fp);
+      }
+    }));
+  }
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   src->Close();
+
+  for (auto &thread_id : vec_threads_mem) {
+    if (thread_id.joinable()) thread_id.join();
+  }
+  vec_threads_mem.clear();
+  vec_handlers.clear();
 
   // reuse codec buffer
   param["reuse_cndec_buf"] = "true";
   ASSERT_TRUE(src->Open(param));
-  EXPECT_EQ(src->AddVideoSource(stream_id0, h264_path, 24, false), 0);
-  EXPECT_EQ(src->AddVideoSource(stream_id1, h264_path, 24, true), 0);
+
+  handler0 = ESMemHandler::Create(src.get(), stream_id1);
+  EXPECT_EQ(src->AddSource(handler0), 0);
+  vec_handlers.push_back(handler0);
+
+  handler1 = ESMemHandler::Create(src.get(), stream_id2);
+  EXPECT_EQ(src->AddSource(handler1), 0);
+  vec_handlers.push_back(handler1);
+
+  for (auto &handler : vec_handlers) {
+    vec_threads_mem.push_back(std::thread([&]() {
+      FILE *fp = fopen(h264_path.c_str(), "rb");
+      if (fp) {
+        auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+        unsigned char buf[4096];
+        int read_cnt = 0;
+        while (!feof(fp) && read_cnt < 10) {
+          int size = fread(buf, 1, 4096, fp);
+          memHandler->Write(buf, size);
+          read_cnt++;
+        }
+        memHandler->Write(NULL, 0);
+        fclose(fp);
+      }
+    }));
+  }
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   src->Close();
+
+  for (auto &thread_id : vec_threads_mem) {
+    if (thread_id.joinable()) thread_id.join();
+  }
+  vec_threads_mem.clear();
+  vec_handlers.clear();
 }
+
 }  // namespace cnstream

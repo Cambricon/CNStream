@@ -22,14 +22,17 @@
 #include <string>
 #include <utility>
 #include <vector>
+
 #include "obj_filter.hpp"
 
 class CarFilter : public cnstream::ObjFilter {
  public:
   bool Filter(const cnstream::CNFrameInfoPtr& finfo, const cnstream::CNInferObjectPtr& obj) override {
     int id = atoi(obj->id.c_str());
-    if (6 == id) return true;  // cars will be inferenced.
-    else if (5 == id) return true;  // buss will be inferenced.
+    if (6 == id)
+      return true;  // cars will be inferenced.
+    else if (5 == id)
+      return true;  // buss will be inferenced.
     return false;
   }
 
@@ -37,4 +40,3 @@ class CarFilter : public cnstream::ObjFilter {
 };  // classd CarFilter
 
 IMPLEMENT_REFLEX_OBJECT_EX(CarFilter, cnstream::ObjFilter)
-

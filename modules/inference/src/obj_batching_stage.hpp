@@ -42,7 +42,7 @@ class ObjPreproc;
 class ObjBatchingStage {
  public:
   ObjBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize)
-                 : model_(model), batchsize_(batchsize) {}
+      : model_(model), batchsize_(batchsize) {}
   virtual ~ObjBatchingStage() {}
   virtual std::shared_ptr<InferTask> Batching(std::shared_ptr<CNFrameInfo> finfo,
                                               std::shared_ptr<CNInferObject> obj) = 0;
@@ -57,10 +57,9 @@ class IOObjBatchingStage : public ObjBatchingStage {
  public:
   IOObjBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
                      std::shared_ptr<IOResource> output_res)
-                   : ObjBatchingStage(model, batchsize), output_res_(output_res) {}
+      : ObjBatchingStage(model, batchsize), output_res_(output_res) {}
   virtual ~IOObjBatchingStage() {}
-  std::shared_ptr<InferTask> Batching(std::shared_ptr<CNFrameInfo> finfo,
-                                      std::shared_ptr<CNInferObject> obj) override;
+  std::shared_ptr<InferTask> Batching(std::shared_ptr<CNFrameInfo> finfo, std::shared_ptr<CNInferObject> obj) override;
   void Reset() override { batch_idx_ = 0; }
 
  protected:
@@ -81,19 +80,18 @@ class CpuPreprocessingObjBatchingStage : public IOObjBatchingStage {
   ~CpuPreprocessingObjBatchingStage();
 
  private:
-  void ProcessOneObject(std::shared_ptr<CNFrameInfo> finfo, std::shared_ptr<CNInferObject> obj,
-                        uint32_t batch_idx, const IOResValue& value) override;
+  void ProcessOneObject(std::shared_ptr<CNFrameInfo> finfo, std::shared_ptr<CNInferObject> obj, uint32_t batch_idx,
+                        const IOResValue& value) override;
   std::shared_ptr<ObjPreproc> preprocessor_;
 };  // class CpuPreprocessingObjBatchingStage
 
 class ResizeConvertObjBatchingStage : public ObjBatchingStage {
  public:
   ResizeConvertObjBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, int dev_id,
-                             std::shared_ptr<RCOpResource> rcop_res);
+                                std::shared_ptr<RCOpResource> rcop_res);
   ~ResizeConvertObjBatchingStage();
 
-  std::shared_ptr<InferTask> Batching(std::shared_ptr<CNFrameInfo> finfo,
-                                      std::shared_ptr<CNInferObject> obj);
+  std::shared_ptr<InferTask> Batching(std::shared_ptr<CNFrameInfo> finfo, std::shared_ptr<CNInferObject> obj);
 
  private:
   std::shared_ptr<RCOpResource> rcop_res_;
@@ -107,8 +105,8 @@ class ScalerObjBatchingStage : public IOObjBatchingStage {
   ~ScalerObjBatchingStage();
 
  private:
-  void ProcessOneObject(std::shared_ptr<CNFrameInfo> finfo, std::shared_ptr<CNInferObject> obj,
-                        uint32_t batch_idx, const IOResValue& value) override;
+  void ProcessOneObject(std::shared_ptr<CNFrameInfo> finfo, std::shared_ptr<CNInferObject> obj, uint32_t batch_idx,
+                        const IOResValue& value) override;
 };  // class ScalerObjBatchingStage
 
 }  // namespace cnstream

@@ -25,6 +25,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "cnstream_frame_va.hpp"
 #include "postproc.hpp"
 
 using std::cerr;
@@ -87,6 +88,8 @@ int PostprocSsd::Execute(const std::vector<float*>& net_outputs, const std::shar
 
   int label;
   float score, x, y, w, h;
+  cnstream::CNObjsVec objs;
+
   for (decltype(box_num) bi = 0; bi < box_num; ++bi) {
     label = *(plabel + bi);
     if (0 == label) continue;
@@ -108,14 +111,16 @@ int PostprocSsd::Execute(const std::vector<float*>& net_outputs, const std::shar
     obj->bbox.y = y;
     obj->bbox.w = w;
     obj->bbox.h = h;
-    package->objs.push_back(obj);
+    objs.push_back(obj);
   }
+  package->datas[cnstream::CNObjsVecKey] = objs;
 
 #elif CNS_MLU270
   auto data = net_outputs[0];
   // auto len = net_outputs[0].second;
   auto box_num = data[0];
   data += 64;
+  cnstream::CNObjsVec objs;
 
   for (decltype(box_num) bi = 0; bi < box_num; ++bi) {
     // if (data[0] != batch_index) continue;
@@ -129,10 +134,10 @@ int PostprocSsd::Execute(const std::vector<float*>& net_outputs, const std::shar
     object->bbox.w = data[5] - object->bbox.x;
     object->bbox.h = data[6] - object->bbox.y;
 
-    package->objs.push_back(object);
+    objs.push_back(object);
     data += 7;
   }
+  package->datas[cnstream::CNObjsVecKey] = objs;
 #endif
   return 0;
 }
-

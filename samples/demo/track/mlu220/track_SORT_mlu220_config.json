@@ -1,0 +1,40 @@
+{
+  "source" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "next_modules" : ["detector"],
+    "custom_params" : {
+      "source_type" : "ffmpeg",
+      "reuse_cndec_buf" : "true",
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "input_buf_number" : 8, 
+      "output_buf_number" : 8,
+      "device_id" : 0
+    }
+  },
+
+  "detector" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 2,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["tracker"],
+    "custom_params" : {
+      "model_path" : "../../../../data/models/MLU220/Primary_Detector/YOLOv3/yolov3_argb_bs4core4.cambricon",
+      "func_name" : "subnet0",
+      "using_scaler" : "true",
+      "postproc_name" : "PostprocFakeYolov3",
+      "device_id" : 0,
+      "batching_timeout" : 30
+    }
+  },
+
+  "tracker" : { 
+    "class_name" : "cnstream::Tracker", 
+    "parallelism" : 2, 
+    "max_input_queue_size" : 20, 
+    "custom_params" : { 
+      "track_name" : "IoUMatch" 
+    }
+  }
+}
