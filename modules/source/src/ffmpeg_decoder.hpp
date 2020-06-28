@@ -18,8 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef MODULES_SOURCE_FFMPEG_DECODER_HPP_
-#define MODULES_SOURCE_FFMPEG_DECODER_HPP_
+#ifndef MODULES_SOURCE_DECODER_HPP_
+#define MODULES_SOURCE_DECODER_HPP_
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,111 +37,156 @@ extern "C" {
 #include <memory>
 #include <string>
 #include <thread>
-#include "cnstream_frame.hpp"
-#include "data_handler.hpp"
-#include "easycodec/easy_decode.h"
-#include "easycodec/vformat.h"
+#include "data_source.hpp"
 #include "easyinfer/mlu_context.h"
+#include "cnstream_frame_va.hpp"
+#include "cn_video_dec.h"
+#include "cn_jpeg_dec.h"
+#include "ffmpeg_parser.hpp"
 
 namespace cnstream {
 
-class FFmpegDecoder {
+class IHandler {
  public:
-  explicit FFmpegDecoder(DataHandler *handler) : handler_(*handler) {
-    stream_id_ = handler_.GetStreamId();
-    stream_idx_ = handler_.GetStreamIndex();
-    dev_ctx_ = handler_.GetDevContext();
+  virtual ~IHandler() {}
+  virtual std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) = 0;
+  virtual bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) = 0;
+  virtual void SendFlowEos() = 0;
+  virtual const DataSourceParam& GetDecodeParam() const = 0;
+};
+
+class Decoder {
+ public:
+  explicit Decoder(IHandler *handler) : handler_(handler) {
+    if (handler_) {
+      param_ = handler_->GetDecodeParam();
+    }
   }
-  virtual ~FFmpegDecoder() {}
-  virtual bool Create(AVStream *st) = 0;
+  virtual ~Decoder() {}
+  virtual bool Create(AVStream *st, int interval = 1) { return false ;}
+  virtual bool Create(VideoStreamInfo *info, int interval) {return false;}
+  virtual bool Process(AVPacket *pkt, bool eos) {return false;}
+  virtual bool Process(ESPacket *pkt) {return false;}
   virtual void Destroy() = 0;
-  virtual bool Process(AVPacket *pkt, bool eos) = 0;
-  virtual void ResetCount(size_t interval) {
-    frame_count_ = 0;
-    frame_id_ = 0;
-    interval_ = interval;
-  }
 
  protected:
-  std::string stream_id_;
-  DataHandler &handler_;
-
-  uint32_t stream_idx_;
-  DevContext dev_ctx_;
+  IHandler *handler_;
+  DataSourceParam param_;
   size_t interval_ = 1;
   size_t frame_count_ = 0;
   uint64_t frame_id_ = 0;
 };
 
-class FFmpegMluDecoder : public FFmpegDecoder {
+class MluDecoder : public Decoder {
  public:
-  explicit FFmpegMluDecoder(DataHandler *handler, bool apply_stride_align_for_scaler = false)
-      : FFmpegDecoder(handler), apply_stride_align_for_scaler_(apply_stride_align_for_scaler) {}
-  ~FFmpegMluDecoder() {
+  explicit MluDecoder(IHandler *handler) : Decoder(handler) {}
+  ~MluDecoder() {
     edk::MluContext env;
-    env.SetDeviceId(dev_ctx_.dev_id);
+    env.SetDeviceId(param_.device_id_);
     env.ConfigureForThisThread();
+    // PrintPerformanceInfomation();
   }
-  bool Create(AVStream *st) override;
+  bool Create(AVStream *st, int interval = 1) override;
+  bool Create(VideoStreamInfo *info, int interval) override;
   void Destroy() override;
+  bool Process(ESPacket *pkt) override;
   bool Process(AVPacket *pkt, bool eos) override;
 
+ public:
+  bool CreateVideoDecoder(VideoStreamInfo *info);
+  void DestroyVideoDecoder();
+  void SequenceCallback(cnvideoDecSequenceInfo *pFormat);
+  void VideoFrameCallback(cnvideoDecOutput *dec_output);
+  void VideoEosCallback();
+  void VideoResetCallback();
+
+  bool CreateJpegDecoder(VideoStreamInfo *info);
+  void DestroyJpegDecoder();
+  void JpegFrameCallback(cnjpegDecOutput *dec_output);
+  void JpegEosCallback();
+  void JpegResetCallback();
+
  private:
-  std::shared_ptr<edk::EasyDecode> instance_ = nullptr;
-  edk::CnPacket cn_packet_;
-  std::atomic<int> eos_got_{0};
-  std::atomic<int> cndec_buf_ref_count_{0};
-  bool apply_stride_align_for_scaler_ = false;
-  void FrameCallback(const edk::CnFrame &frame);
-  void EOSCallback();
 #ifdef UNIT_TEST
  public:  // NOLINT
 #endif
-  int ProcessFrame(const edk::CnFrame &frame, bool *reused);
-#ifdef UNIT_TEST
- private:  // NOLINT
-#endif
+  int ProcessFrame(cnvideoDecOutput *output, bool *reused);
+  int ProcessJpegFrame(cnjpegDecOutput *output, bool *reused);
 
  private:
+  std::atomic<int> cndec_start_flag_{0};
+  std::atomic<int> cndec_error_flag_{0};
+  std::atomic<int> cndec_abort_flag_{0};
+  std::atomic<int> eos_got_{0};
+  std::atomic<int> cndec_buf_ref_count_{0};
+  std::atomic<int> eos_sent_{0};  // flag for cndec-eos has been sent to decoder
+  // cnvideo
+  cnvideoDecCreateInfo create_info_;
+  cnvideoDecoder instance_ = nullptr;
   class CNDeallocator : public cnstream::IDataDeallocator {
    public:
-    explicit CNDeallocator(FFmpegMluDecoder *decoder, uint64_t buf_id) : decoder_(decoder), buf_id_(buf_id) {
+    explicit CNDeallocator(MluDecoder *decoder, cncodecFrame *frame) : decoder_(decoder), frame_(frame) {
       ++decoder_->cndec_buf_ref_count_;
     }
     ~CNDeallocator() {
       if (decoder_->instance_) {
-        decoder_->instance_->ReleaseBuffer(buf_id_);
+        cnvideoDecReleaseReference(decoder_->instance_, frame_);
         --decoder_->cndec_buf_ref_count_;
       }
     }
 
    private:
-    FFmpegMluDecoder *decoder_;
-    uint64_t buf_id_;
+    MluDecoder *decoder_;
+    cncodecFrame *frame_;
+  };
+
+  // cnjpeg
+  cnjpegDecCreateInfo create_jpg_info_;
+  cnjpegDecoder jpg_instance_ = nullptr;
+  class CNDeallocatorJpg : public cnstream::IDataDeallocator {
+   public:
+    explicit CNDeallocatorJpg(MluDecoder *decoder, cncodecFrame *frame) : decoder_(decoder), frame_(frame) {
+      ++decoder_->cndec_buf_ref_count_;
+    }
+    ~CNDeallocatorJpg() {
+      if (decoder_->jpg_instance_) {
+        cnjpegDecReleaseReference(decoder_->jpg_instance_, frame_);
+        --decoder_->cndec_buf_ref_count_;
+      }
+    }
+
+   private:
+    MluDecoder *decoder_;
+    cncodecFrame *frame_;
   };
 };
 
-class FFmpegCpuDecoder : public FFmpegDecoder {
+class FFmpegCpuDecoder : public Decoder {
  public:
-  explicit FFmpegCpuDecoder(DataHandler *handler) : FFmpegDecoder(handler) {}
+  explicit FFmpegCpuDecoder(IHandler *handler) : Decoder(handler) {}
   ~FFmpegCpuDecoder() {}
-  bool Create(AVStream *st) override;
+  bool Create(VideoStreamInfo *info, int interval) override;
+  bool Create(AVStream *st, int interval = 1) override;
   void Destroy() override;
+  bool Process(ESPacket *pkt) override;
   bool Process(AVPacket *pkt, bool eos) override;
 
  private:
 #ifdef UNIT_TEST
- public:  // NOLINT
+ public:
 #endif
   bool ProcessFrame(AVFrame *frame);
 
  private:
+  AVStream *stream_ = nullptr;
   AVCodecContext *instance_ = nullptr;
   AVFrame *av_frame_ = nullptr;
   std::atomic<int> eos_got_{0};
+  std::atomic<int> eos_sent_{0};
   uint8_t *nv21_data_ = nullptr;
   int y_size_ = 0;
-};
+};  // class FFmpegCpuDecoder
+
 }  // namespace cnstream
 
-#endif  // MODULES_SOURCE_FFMPEG_DECODER_HPP_
+#endif  // MODULES_SOURCE_DECODER_HPP_

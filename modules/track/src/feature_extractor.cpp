@@ -35,6 +35,7 @@
 #error OpenCV required
 #endif
 
+#include "cnstream_frame_va.hpp"
 #include "feature_extractor.hpp"
 
 namespace cnstream {
@@ -81,8 +82,9 @@ FeatureExtractor::~FeatureExtractor() {
 
 void FeatureExtractor::ExtractFeature(CNFrameInfoPtr data, ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
                                       std::vector<std::vector<float>>* features) {
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
   if (!model_loader_) {
-    ExtractFeatureOnCpu(*data->frame.ImageBGR(), inputs, features);
+    ExtractFeatureOnCpu(*frame->ImageBGR(), inputs, features);
   } else {
     ExtractFeatureOnMlu(data, inputs, features);
   }
@@ -92,13 +94,14 @@ void FeatureExtractor::ExtractFeatureOnMlu(CNFrameInfoPtr data,
                                            ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
                                            std::vector<std::vector<float>>* features) {
   uint64_t data_count = model_loader_->InputShapes()[0].hwc();
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
   for (uint32_t i = 0; i < inputs.size(); ++i) {
     auto obj = inputs[i];
-    cv::Mat obj_image = CropImage(*data->frame.ImageBGR(), obj->bbox);
+    cv::Mat obj_image = CropImage(*(frame->ImageBGR()), obj->bbox);
     // do pre-process
 
     cv::Mat preproc_image = Preprocess(obj_image);
-    float *cpu_input = static_cast<float*>(input_cpu_ptr_[0]);
+    float* cpu_input = static_cast<float*>(input_cpu_ptr_[0]);
     memcpy(cpu_input, preproc_image.data, data_count * sizeof(float));
 
     // do copy and inference

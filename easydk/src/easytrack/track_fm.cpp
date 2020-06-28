@@ -189,7 +189,7 @@ MatchResult &FeatureMatchPrivate::MatchIou(std::vector<int> detect_indices, std:
   res.unmatched_detections.clear();
   res.unmatched_tracks.clear();
   if (detect_indices.empty()) {
-    LOG(INFO) << "No remained detections to process IoU match";
+    VLOG(4) << "No remained detections to process IoU match";
     res.unmatched_tracks.insert(res.unmatched_tracks.end(), track_indices.begin(), track_indices.end());
     return res;
   }

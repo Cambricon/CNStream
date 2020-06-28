@@ -53,7 +53,7 @@ class LiveRtspServer {
   char is_quit_;
   bool enable_password_;
   unsigned int kbit_rate_;  // in kbs
-};                         // LiveRtspServer
+};                          // LiveRtspServer
 
 }  // namespace RtspStreaming
 

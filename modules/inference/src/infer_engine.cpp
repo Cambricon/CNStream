@@ -29,6 +29,7 @@
 #include <vector>
 #include "batching_done_stage.hpp"
 #include "batching_stage.hpp"
+#include "cnstream_frame_va.hpp"
 #include "infer_resource.hpp"
 #include "infer_thread_pool.hpp"
 #include "obj_batching_stage.hpp"
@@ -41,8 +42,7 @@ void InferEngine::ResultWaitingCard::WaitForCall() { promise_->get_future().shar
 InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, std::shared_ptr<Preproc> preprocessor,
                          std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, float batching_timeout,
                          bool use_scaler, std::shared_ptr<PerfManager> perf_manager, std::string infer_thread_id,
-                         const std::function<void(const std::string& err_msg)>& error_func,
-                         bool keep_aspect_ratio,
+                         const std::function<void(const std::string& err_msg)>& error_func, bool keep_aspect_ratio,
                          bool batching_by_obj, const std::shared_ptr<ObjPreproc>& obj_preprocessor,
                          const std::shared_ptr<ObjPostproc>& obj_postprocessor,
                          const std::shared_ptr<ObjFilter>& obj_filter)
@@ -132,9 +132,9 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
   ResultWaitingCard card(ret_promise);
 
   auto auto_set_done = std::make_shared<AutoSetDone>(ret_promise);
-
   if (batching_by_obj_) {
-    for (const auto& obj : finfo->objs) {
+    CNObjsVec objs = cnstream::any_cast<CNObjsVec>(finfo->datas[CNObjsVecKey]);
+    for (const auto& obj : objs) {
       if (obj_filter_) {
         if (!obj_filter_->Filter(finfo, obj)) continue;
       }
@@ -148,9 +148,7 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
         BatchingDone();
         timeout_helper_.Reset(NULL);
       } else {
-        timeout_helper_.Reset([this]() -> void {
-          BatchingDone();
-        });
+        timeout_helper_.Reset([this]() -> void { BatchingDone(); });
       }
       timeout_helper_.UnlockOperator();
     }
@@ -164,9 +162,7 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       BatchingDone();
       timeout_helper_.Reset(NULL);
     } else {
-      timeout_helper_.Reset([this]() -> void {
-        BatchingDone();
-      });
+      timeout_helper_.Reset([this]() -> void { BatchingDone(); });
     }
     timeout_helper_.UnlockOperator();
   }
@@ -188,8 +184,7 @@ static bool CheckModel(const std::shared_ptr<edk::ModelLoader>& model) {
 }
 
 void InferEngine::StageAssemble() {
-  bool cpu_preprocessing = (!batching_by_obj_ && preprocessor_.get()) ||
-                           (batching_by_obj_ && obj_preprocessor_.get());
+  bool cpu_preprocessing = (!batching_by_obj_ && preprocessor_.get()) || (batching_by_obj_ && obj_preprocessor_.get());
   if (cpu_preprocessing) {
     // 1. cpu preprocessing
     if (batching_by_obj_) {
@@ -238,10 +233,10 @@ void InferEngine::StageAssemble() {
 
   if (batching_by_obj_) {
     obj_postproc_stage_ = std::make_shared<ObjPostprocessingBatchingDoneStage>(model_, batchsize_, dev_id_,
-                                                                          obj_postprocessor_, cpu_output_res_);
+                                                                               obj_postprocessor_, cpu_output_res_);
   } else {
-    std::shared_ptr<BatchingDoneStage> postproc_stage = std::make_shared<PostprocessingBatchingDoneStage>(
-        model_, batchsize_, dev_id_, postprocessor_, cpu_output_res_);
+    std::shared_ptr<BatchingDoneStage> postproc_stage =
+        std::make_shared<PostprocessingBatchingDoneStage>(model_, batchsize_, dev_id_, postprocessor_, cpu_output_res_);
     batching_done_stages_.push_back(postproc_stage);
   }
 }

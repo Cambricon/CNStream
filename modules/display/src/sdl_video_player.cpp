@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -166,7 +167,7 @@ void SDLVideoPlayer::Refresh() {
   SDL_LockTexture(texture_, NULL, reinterpret_cast<void**>(&texture_data), &pitch);
   for (auto& it : datas) {
     std::string fps_info = CalcFps(it);
-    cv::Point font_point(0.6*chn_w_, 0.1*chn_h_);
+    cv::Point font_point(0.6 * chn_w_, 0.1 * chn_h_);
     cv::putText(it.img, fps_info, font_point, CV_FONT_HERSHEY_SIMPLEX, 0.5, cvScalar(255, 0, 0));
 
     auto len = it.img.cols * 3;

@@ -27,6 +27,7 @@
 #include <thread>
 #include <vector>
 
+#include "cnstream_frame_va.hpp"
 #include "ipc_handler.hpp"
 #include "module_ipc.hpp"
 
@@ -62,23 +63,23 @@ TEST(IPCHandler, ParseStringToPackage) {
   json_str = "{\"pkg_type\":3}";
   EXPECT_TRUE(handler->ParseStringToPackage(json_str, &msg_pack));
 
-  json_str = "{\"pkg_type\":1,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0}";
+  json_str = "{\"pkg_type\":1,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0}";
   EXPECT_TRUE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_TRUE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
@@ -90,80 +91,80 @@ TEST(IPCHandler, ParseStringToPackage) {
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[\"str\",1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":\"string\",\"dev_"
       "id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"mem_map_type\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mlu_mem_handle\":\"0\"}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
 
   json_str =
-      "{\"pkg_type\":0,\"stream_id\":\"0\",\"channel_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
+      "{\"pkg_type\":0,\"stream_id\":\"0\",\"stream_idx\":0,\"frame_id\":0,\"flags\":0,\"timestamp\":0,\"data_fmt\":0,"
       "\"width\":1920,\"height\":1080,\"strides\":[1920,1920],\"dev_type\":0,\"dev_id\":0,"
       "\"ddr_channel\":0,\"mem_map_type\":0}";
   EXPECT_FALSE(handler->ParseStringToPackage(json_str, &msg_pack));
@@ -183,7 +184,7 @@ TEST(IPCHandler, SerializeToString) {
   EXPECT_TRUE(handler->SerializeToString(pkg, &str));
 
   pkg.pkg_type = PKG_RELEASE_MEM;
-  pkg.channel_idx = 0;
+  pkg.stream_idx = 0;
   pkg.frame_id = 0;
   pkg.stream_id = "0";
   EXPECT_TRUE(handler->SerializeToString(pkg, &str));
@@ -211,6 +212,9 @@ TEST(IPCHandler, PreparePackageToSend) {
   auto handler = std::make_shared<IPCHandlerTest>(IPC_CLIENT, ipc.get());
 
   std::shared_ptr<CNFrameInfo> data = CNFrameInfo::Create("0");
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+  data->datas[CNDataFramePtrKey] = frame;
+
   EXPECT_NO_THROW(handler->PreparePackageToSend(PkgType::PKG_DATA, nullptr));
   EXPECT_NO_THROW(handler->PreparePackageToSend(PkgType::PKG_RELEASE_MEM, nullptr));
   EXPECT_NO_THROW(handler->PreparePackageToSend(PkgType::PKG_ERROR, nullptr));

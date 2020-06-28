@@ -55,6 +55,11 @@ using std::unique_lock;
     }                                                                         \
   } while (0)
 
+// cncodec add version macro since v1.6.0
+#ifndef CNCODEC_VERSION
+#define CNCODEC_VERSION 0
+#endif
+
 namespace edk {
 
 static std::mutex g_vpu_instance_mutex;
@@ -100,7 +105,7 @@ class DecodeHandler {
   std::pair<bool, std::string> Init(const EasyDecode::Attr& attr);
 
   bool SendJpegData(const CnPacket &packet, bool eos);
-  bool SendVideoData(const CnPacket &packet, bool eos);
+  bool SendVideoData(const CnPacket &packet, bool eos, bool integral_frame);
 
   void AbortDecoder();
 
@@ -137,6 +142,7 @@ class DecodeHandler {
 
   uint32_t packets_count_ = 0;
   uint32_t frames_count_ = 0;
+  int minimum_buf_cnt_ = 0;
 
   EasyDecode::Status status_ = EasyDecode::Status::RUNNING;
   std::mutex status_mtx_;
@@ -284,6 +290,11 @@ void DecodeHandler::EventTaskRunner() {
         LOG(ERROR) << "Abort error thrown from cncodec";
         AbortDecoder();
         break;
+#if CNCODEC_VERSION >= 10600
+      case CNCODEC_CB_EVENT_STREAM_CORRUPT:
+        LOG(WARNING) << "Stream corrupt, discard frame";
+        break;
+#endif
       default:
         LOG(ERROR) << "Unknown event type";
         AbortDecoder();
@@ -485,6 +496,7 @@ int DecodeHandler::ReceiveSequence(cnvideoDecSequenceInfo* info) {
   vparams_.pixelFmt = pixel_fmt_info_->cncodec_fmt;
   vparams_.width = info->width;
   vparams_.height = info->height;
+  minimum_buf_cnt_ = info->minOutputBufNum;
 
   if (info->minInputBufNum > vparams_.inputBufNum) {
 #ifdef ALLOC_BUFFER
@@ -577,7 +589,7 @@ bool DecodeHandler::SendJpegData(const CnPacket &packet, bool eos) {
   return true;
 }
 
-bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos) {
+bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos, bool integral_frame) {
   cnvideoDecInput input;
   if (packet.data != NULL && packet.length > 0) {
     memset(&input, 0, sizeof(cnvideoDecInput));
@@ -585,6 +597,11 @@ bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos) {
     input.streamLength = packet.length;
     input.pts = packet.pts;
     input.flags = CNVIDEODEC_FLAG_TIMESTAMP;
+#if CNCODEC_VERSION >= 10600
+    if (integral_frame) {
+      input.flags |= CNVIDEODEC_FLAG_END_OF_FRAME;
+    }
+#endif
     VLOG(5) << "Feed stream info, data: " << input.streamBuf << " ,length: "
                << input.streamLength << " ,pts: " << input.pts;
 
@@ -737,7 +754,7 @@ EasyDecode::Status EasyDecode::GetStatus() const {
   return handler_->status_;
 }
 
-bool EasyDecode::SendData(const CnPacket& packet, bool eos) {
+bool EasyDecode::SendData(const CnPacket& packet, bool eos, bool integral_frame) {
   if (!handler_->handle_) {
     LOG(ERROR) << "Decoder has not been init";
     return false;
@@ -763,7 +780,7 @@ bool EasyDecode::SendData(const CnPacket& packet, bool eos) {
   if (handler_->jpeg_decode_) {
     ret = handler_->SendJpegData(packet, eos);
   } else {
-    ret = handler_->SendVideoData(packet, eos);
+    ret = handler_->SendVideoData(packet, eos, integral_frame);
   }
 
   // timeout
@@ -837,6 +854,8 @@ bool EasyDecode::CopyFrameD2H(void* dst, const CnFrame& frame) {
 }
 
 EasyDecode::Attr EasyDecode::GetAttr() const { return handler_->attr_; }
+
+int EasyDecode::GetMinimumOutputBufferCount() const { return handler_->minimum_buf_cnt_; }
 
 }  // namespace edk
 

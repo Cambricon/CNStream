@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 #include "easyinfer/easy_infer.h"
 #include "easyinfer/mlu_memory_op.h"
 #include "easyinfer/model_loader.h"

@@ -42,7 +42,6 @@ Postproc* Postproc::Create(const std::string& proc_name) { return ReflexObjectEx
 
 void Postproc::SetThreshold(const float threshold) { threshold_ = threshold; }
 
-
 ObjPostproc* ObjPostproc::Create(const std::string& proc_name) {
   return ReflexObjectEx<ObjPostproc>::CreateObject(proc_name);
 }

@@ -27,31 +27,22 @@
 #include <thread>
 #include <vector>
 
+#include "data_handler_mem.hpp"
 #include "data_source.hpp"
 #include "test_base.hpp"
-#include "data_handler_mem.hpp"
-#include "data_handler.hpp"
 
 #define TestSize 10
 
 namespace cnstream {
 
 static constexpr const char *gname = "source";
-static constexpr const char *gvideo_path = "../../data/videos/cars.mp4";
+static constexpr const char *gh264_path = "../../modules/unitest/source/data/raw.h264";
 
 static void ResetParam(ModuleParamSet &param) {  // NOLINT
-  param["source_type"] = "raw";
   param["output_type"] = "mlu";
   param["device_id"] = "0";
   param["interval"] = "1";
   param["decoder_type"] = "mlu";
-  param["output_width"] = "1920";
-  param["output_height"] = "1080";
-  param["reuse_cndex_buf"] = "true";
-  param["chunk_size"] = "16384";
-  param["width"] = "1920";
-  param["height"] = "1080";
-  param["interlaced"] = "1";
   param["input_buf_number"] = "100";
   param["output_buf_number"] = "100";
 }
@@ -62,19 +53,21 @@ TEST(DataHandlerMem, Write) {
   ResetParam(param);
   ASSERT_TRUE(src.CheckParamSet(param));
   ASSERT_TRUE(src.Open(param));
-  auto handler = std::make_shared<DataHandlerMem>(&src, std::to_string(0), "filename", 30);
+  auto handler = ESMemHandler::Create(&src, std::to_string(0));
   ASSERT_TRUE(handler != nullptr);
-  EXPECT_TRUE(handler->module_ == &src);
-  EXPECT_TRUE(handler->stream_id_ == std::to_string(0));
-  handler->running_.store(1);
-  std::string video_path = GetExePath() + gvideo_path;
+  EXPECT_TRUE(handler->GetStreamId() == std::to_string(0));
+  auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+  EXPECT_EQ(memHandler->Open(), true);
+  std::string video_path = GetExePath() + gh264_path;
   FILE *fp = fopen(video_path.c_str(), "rb");
   ASSERT_TRUE(fp != nullptr);
   unsigned char buf[4096];
-  int size = fread(buf, 1, 4096, fp);
-  EXPECT_EQ(handler->Write(buf, size), size);
+  while (!feof(fp)) {
+    int size = fread(buf, 1, 4096, fp);
+    EXPECT_EQ(memHandler->Write(buf, size), 0);
+  }
+  memHandler->Close();
   fclose(fp);
 }
 
 }  // namespace cnstream
-

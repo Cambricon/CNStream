@@ -22,12 +22,12 @@
 #include <glog/logging.h>
 #include <thread>
 
-#include "cnstream_time_utility.hpp"
 #include "cn_video_encoder.hpp"
 #include "ffmpeg_video_encoder.hpp"
 #include "live_rtsp_server.hpp"
-#include "video_encoder.hpp"
 #include "rtsp_sink.hpp"
+#include "util/cnstream_time_utility.hpp"
+#include "video_encoder.hpp"
 
 namespace cnstream {
 
@@ -40,7 +40,7 @@ struct StreamPipeCtx {
 
 static void RunServer(void *server) { ((RtspStreaming::LiveRtspServer *)server)->Run(); }
 
-StreamPipeCtx *StreamPipeCreate(const RtspParam& rtsp_param) {
+StreamPipeCtx *StreamPipeCreate(const RtspParam &rtsp_param) {
   StreamPipeCtx *pipe_ctx = new StreamPipeCtx;
   if (rtsp_param.enc_type == FFMPEG) {
     pipe_ctx->video_encoder = new FFmpegVideoEncoder(rtsp_param);

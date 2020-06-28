@@ -36,6 +36,7 @@
 #include "reflex_object.h"
 
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 
 namespace cnstream {
 /**

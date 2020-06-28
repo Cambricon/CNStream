@@ -48,21 +48,21 @@ class CNSocket {
   void Close();
 
   /**
-  *  @brief  Shutdown communicate connection.
-  *  @return Void.
-  */
+   *  @brief  Shutdown communicate connection.
+   *  @return Void.
+   */
   void Shutdown();
 
   /**
-  *  @brief  Receive data from socket fd.
-  *  @return received data bytes.
-  */
+   *  @brief  Receive data from socket fd.
+   *  @return received data bytes.
+   */
   int RecvData(char* buf, int buf_size);
 
   /**
-  *  @brief  Send data to socket fd.
-  *  @return send data bytes.
-  */
+   *  @brief  Send data to socket fd.
+   *  @return send data bytes.
+   */
   int SendData(char* buf, int buf_size);
 
   std::string socket_addr_;  // communicate socket address
@@ -81,15 +81,15 @@ class CNServer : public CNSocket {
   bool Open(const std::string& socket_address) override;
 
   /**
-  *  @brief  Accept client to connect.
-  *  @return return client fd if any client connect successfully, otherwise, return -1.
-  */
+   *  @brief  Accept client to connect.
+   *  @return return client fd if any client connect successfully, otherwise, return -1.
+   */
   int Accept();
 
   /**
-  *  @brief Close server listening.
-  *  @return Void.
-  */
+   *  @brief Close server listening.
+   *  @return Void.
+   */
   void CloseListen();
 
  private:

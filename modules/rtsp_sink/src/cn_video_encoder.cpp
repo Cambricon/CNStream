@@ -76,26 +76,32 @@ void CNVideoEncoder::CNVideoFrame::Fill(uint8_t *data, int64_t timestamp) {
   }
 }
 
-CNVideoEncoder::CNVideoEncoder(const RtspParam& rtsp_param)
-    : VideoEncoder(OUTPUT_BUFFER_SIZE) {
+CNVideoEncoder::CNVideoEncoder(const RtspParam &rtsp_param) : VideoEncoder(OUTPUT_BUFFER_SIZE) {
   rtsp_param_ = rtsp_param;
   switch (rtsp_param.color_format) {
     case NV21:
-      picture_format_ = edk::PixelFmt::NV21; break;
+      picture_format_ = edk::PixelFmt::NV21;
+      break;
     case NV12:
-      picture_format_ = edk::PixelFmt::NV12; break;
+      picture_format_ = edk::PixelFmt::NV12;
+      break;
     default:
-      picture_format_ = edk::PixelFmt::NV21; break;
+      picture_format_ = edk::PixelFmt::NV21;
+      break;
   }
   switch (rtsp_param.codec_type) {
     case H264:
-      codec_type_ = edk::CodecType::H264; break;
+      codec_type_ = edk::CodecType::H264;
+      break;
     case HEVC:
-      codec_type_ = edk::CodecType::H265; break;
+      codec_type_ = edk::CodecType::H265;
+      break;
     case MPEG4:
-      codec_type_ = edk::CodecType::MPEG4; break;
+      codec_type_ = edk::CodecType::MPEG4;
+      break;
     default:
-      codec_type_ = edk::CodecType::H264; break;
+      codec_type_ = edk::CodecType::H264;
+      break;
   }
 
   frame_rate_den_ = 1;
@@ -236,7 +242,7 @@ void CNVideoEncoder::EncodeFrame(void *y, void *uv, int64_t timestamp) {
 }
 */
 
-uint32_t CNVideoEncoder::GetOffset(const uint8_t* data) {
+uint32_t CNVideoEncoder::GetOffset(const uint8_t *data) {
   uint32_t offset = 0;
   const uint8_t *p = data;
   if (p[0] == 0x00 && p[1] == 0x00) {

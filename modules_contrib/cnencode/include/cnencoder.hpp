@@ -30,6 +30,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <mutex>
 #include "cnstream_eventbus.hpp"
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
@@ -127,7 +128,8 @@ class CNEncoder : public Module, public ModuleCreator<CNEncoder> {
   uint32_t dst_height_ = 0;
   CNEncoderStream::CodecType cn_type_;
   CNEncoderStream::PictureFormat cn_format_;
-  std::unordered_map<int, CNEncoderContext*> ctxs_;
+  std::unordered_map<std::string, CNEncoderContext*> ctxs_;
+  std::mutex mutex_;
 };  // class CNEncoder
 
 }  // namespace cnstream

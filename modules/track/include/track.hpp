@@ -117,6 +117,7 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
   TrackerContext *GetContext(CNFrameInfoPtr data);
   std::unordered_map<int, TrackerContext *> contexts_;
   std::shared_ptr<edk::ModelLoader> model_loader_ = nullptr;
+  std::mutex mutex_;
   int device_id_ = 0;
   size_t batch_size_ = 1;
   std::string model_path_ = "";

@@ -33,8 +33,9 @@
 #include <vector>
 
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 #include "data_type.hpp"
-#include "threadsafe_queue.hpp"
+#include "util/cnstream_queue.hpp"
 
 namespace cnstream {
 
@@ -55,20 +56,20 @@ enum PkgType {
  * The structure holding process info and frame info transmitting between processores.
  */
 typedef struct {
-  PkgType pkg_type;                           ///< package type
-  uint32_t channel_idx = INVALID_STREAM_IDX;  ///< The index of the channel, stream_index
-  std::string stream_id;                      ///< The data stream aliases where this frame is located to.
-  size_t flags = 0;                           ///< The mask for this frame, ``CNFrameFlag``.
-  int64_t frame_id;                           ///< The frame index that incremented from 0.
-  int64_t timestamp;                          ///< The time stamp of this frame.
-  CNDataFormat fmt;                           ///< The format of the frame.
-  int width;                                  ///< The width of the frame.
-  int height;                                 ///< The height of the frame.
-  int stride[CN_MAX_PLANES];                  ///< The strides of the frame.
-  void* ptr_mlu[CN_MAX_PLANES];               ///< The MLU data addresses for planes.
-  DevContext ctx;                             ///< The device context of this frame.
-  MemMapType mem_map_type;                    ///< memory map/shared type.
-  void* mlu_mem_handle;                       ///< The MLU memory handle for mlu data.
+  PkgType pkg_type;                          ///< package type
+  uint32_t stream_idx = INVALID_STREAM_IDX;  ///< The index of the channel, stream_index
+  std::string stream_id;                     ///< The data stream aliases where this frame is located to.
+  size_t flags = 0;                          ///< The mask for this frame, ``CNFrameFlag``.
+  uint64_t frame_id;                          ///< The frame index that incremented from 0.
+  int64_t timestamp;                         ///< The time stamp of this frame.
+  CNDataFormat fmt;                          ///< The format of the frame.
+  int width;                                 ///< The width of the frame.
+  int height;                                ///< The height of the frame.
+  int stride[CN_MAX_PLANES];                 ///< The strides of the frame.
+  void* ptr_mlu[CN_MAX_PLANES];              ///< The MLU data addresses for planes.
+  DevContext ctx;                            ///< The device context of this frame.
+  MemMapType mem_map_type;                   ///< memory map/shared type.
+  void* mlu_mem_handle;                      ///< The MLU memory handle for mlu data.
 } FrameInfoPackage;
 
 class ModuleIPC;
@@ -128,15 +129,15 @@ class IPCHandler {
   virtual void SendPackageLoop() = 0;
 
   /**
-  *  @brief  Prepare FrameInfoPackage to send_buf or send_package queue.
-  *  @return Void.
-  */
+   *  @brief  Prepare FrameInfoPackage to send_buf or send_package queue.
+   *  @return Void.
+   */
   void PreparePackageToSend(const PkgType& type, const std::shared_ptr<CNFrameInfo> data);
 
   /**
-  *  @brief  Trans data from FrameInfoPackage to CNFrameInfo data.
-  *  @return Void.
-  */
+   *  @brief  Trans data from FrameInfoPackage to CNFrameInfo data.
+   *  @return Void.
+   */
   void PackageToCNData(const FrameInfoPackage& pkg, std::shared_ptr<CNFrameInfo> data);
 
   /**
@@ -152,9 +153,9 @@ class IPCHandler {
   inline MemMapType GetMemMapType() { return memmap_type_; }
 
   /**
-  *  @brief  Set max cached processed frame map size.
-  *  @return Void.
-  */
+   *  @brief  Set max cached processed frame map size.
+   *  @return Void.
+   */
   inline void SetMaxCachedFrameSize(const uint32_t size) { max_cachedframe_size_ = size; }
 
   /**
@@ -175,14 +176,14 @@ class IPCHandler {
    */
   inline void SetDeviceId(const int device_id) {
     dev_ctx_.dev_id = device_id;
-    dev_ctx_.dev_type = DevContext::MLU;    // by default: if set device id, use MLU  device type
+    dev_ctx_.dev_type = DevContext::MLU;  // by default: if set device id, use MLU  device type
   }
 
  protected:
   /**
-  *  @brief Open semphore to sync processors.
-  *  @return Return true if open semphore successfully, otherwise, return false.
-  */
+   *  @brief Open semphore to sync processors.
+   *  @return Return true if open semphore successfully, otherwise, return false.
+   */
   bool OpenSemphore();
 
   /**
@@ -192,15 +193,15 @@ class IPCHandler {
   void CloseSemphore();
 
   /**
-  *  @brief  Post semphore to sync processors.
-  *  @return Void.
-  */
+   *  @brief  Post semphore to sync processors.
+   *  @return Void.
+   */
   void PostSemphore();
 
   /**
-  *  @brief Wait semphore to sync processors.
-  *  @return Void.
-  */
+   *  @brief Wait semphore to sync processors.
+   *  @return Void.
+   */
   void WaitSemphore();
 
  protected:
@@ -208,15 +209,15 @@ class IPCHandler {
  public:  // NOLINT
 #endif
   /**
-  *  @brief  Parse string to FrameInfoPackage.
-  *  @return Return true if parse successfully, otherwise, return false.
-  */
+   *  @brief  Parse string to FrameInfoPackage.
+   *  @return Return true if parse successfully, otherwise, return false.
+   */
   bool ParseStringToPackage(const std::string& str, FrameInfoPackage* pkg);
 
   /**
-  *  @brief  Serialize package to string.
-  *  @return Return true if serialize package successfully, otherwise, return false.
-  */
+   *  @brief  Serialize package to string.
+   *  @return Return true if serialize package successfully, otherwise, return false.
+   */
   bool SerializeToString(const FrameInfoPackage& pkg, std::string* str);
 
  protected:

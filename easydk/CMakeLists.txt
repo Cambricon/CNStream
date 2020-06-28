@@ -67,9 +67,10 @@ if(WITH_CNPLUGIN)
   file(GLOB_RECURSE plugin_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/easyplugin/*.cpp)
 endif()
 
-message(STATUS "Target : cnstream-toolkit")
-add_library(cnstream-toolkit SHARED ${cxxutil_srcs} ${infer_srcs} ${codec_srcs} ${bang_srcs}
+message(STATUS "Target : easydk")
+add_library(easydk SHARED ${cxxutil_srcs} ${infer_srcs} ${codec_srcs} ${bang_srcs}
                                     ${track_srcs} ${plugin_srcs})
 
-target_link_libraries(cnstream-toolkit ${CNRT_LIBS} ${CNCODEC_LIBS} ${CNML_LIBS} ${CNPLUGIN_LIBS} ${KCF_LIBS} ${GlogLib})
+target_link_libraries(easydk ${CNRT_LIBS} ${CNCODEC_LIBS} ${CNML_LIBS} ${CNPLUGIN_LIBS} ${KCF_LIBS} ${GlogLib})
+install(TARGETS easydk LIBRARY DESTINATION lib)
 

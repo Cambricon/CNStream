@@ -160,8 +160,8 @@ RCOpResource::~RCOpResource() {
   }
 }
 
-void RCOpResource::Init(uint32_t dst_w, uint32_t dst_h,
-                        edk::MluResizeConvertOp::ColorMode cmode, edk::CoreVersion core_ver) {
+void RCOpResource::Init(uint32_t dst_w, uint32_t dst_h, edk::MluResizeConvertOp::ColorMode cmode,
+                        edk::CoreVersion core_ver) {
   if (Initialized()) {
     Destroy();
   }

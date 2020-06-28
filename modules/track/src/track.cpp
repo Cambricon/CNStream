@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "cnstream_frame_va.hpp"
 #include "easyinfer/mlu_context.h"
 #include "feature_extractor.hpp"
 #include "track.hpp"
@@ -68,8 +69,9 @@ TrackerContext *Tracker::GetContext(CNFrameInfoPtr data) {
   }
 
   TrackerContext *ctx = nullptr;
-  auto search = contexts_.find(data->channel_idx);
-  if (data->channel_idx >= GetMaxStreamNumber()) {
+  std::unique_lock<std::mutex> guard(mutex_);
+  auto search = contexts_.find(data->GetStreamIndex());
+  if (data->GetStreamIndex() >= GetMaxStreamNumber()) {
     return nullptr;
   }
   if (search != contexts_.end()) {
@@ -81,13 +83,13 @@ TrackerContext *Tracker::GetContext(CNFrameInfoPtr data) {
 #ifdef ENABLE_KCF
       ctx->processer_.reset(new edk::KcfTrack);
       dynamic_cast<edk::KcfTrack *>(ctx->processer_.get())->SetModel(model_loader_, device_id_);
-      contexts_[data->channel_idx] = ctx;
+      contexts_[data->GetStreamIndex()] = ctx;
 #endif
     } else {  // "FeatureMatch by default"
       edk::FeatureMatchTrack *track = new edk::FeatureMatchTrack;
       track->SetParams(max_cosine_distance_, 100, 0.7, 30, 3);
       ctx->processer_.reset(track);
-      contexts_[data->channel_idx] = ctx;
+      contexts_[data->GetStreamIndex()] = ctx;
     }
   }
   return ctx;
@@ -145,9 +147,14 @@ void Tracker::Close() {
 }
 
 int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
-  if (data->frame.width <= 0 || data->frame.height <= 0) return -1;
-  if (data->frame.width >= 4096 || data->frame.height >= 2160) return -1;
-  for (auto idx = data->objs.begin(); idx != data->objs.end(); idx++) {
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  if (frame->width <= 0 || frame->height <= 0) {
+    LOG(ERROR) << "Frame width and height can not be lower than 0.";
+    return -1;
+  }
+
+  CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
+  for (auto idx = objs.begin(); idx != objs.end(); idx++) {
     cnstream::CNInferBoundingBox &bbox = (*idx)->bbox;
     bbox.x = CLIP(bbox.x);
     bbox.w = CLIP(bbox.w);
@@ -158,22 +165,23 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
   }
   TrackerContext *ctx = GetContext(data);
   if (nullptr == ctx || nullptr == ctx->processer_) {
-    throw TrackerError("Get Tracker Context Failed.");
+    LOG(ERROR) << "Get Tracker Context Failed.";
+    return -1;
   }
 
   if (track_name_ == "FeatureMatch") {
     std::vector<std::vector<float>> features;
-    g_tl_feature_extractor->ExtractFeature(data, data->objs, &features);
+    g_tl_feature_extractor->ExtractFeature(data, objs, &features);
 
     std::vector<edk::DetectObject> in, out;
-    for (size_t i = 0; i < data->objs.size(); i++) {
+    for (size_t i = 0; i < objs.size(); i++) {
       edk::DetectObject obj;
-      obj.label = std::stoi(data->objs[i]->id);
-      obj.score = data->objs[i]->score;
-      obj.bbox.x = CLIP(data->objs[i]->bbox.x);
-      obj.bbox.y = CLIP(data->objs[i]->bbox.y);
-      obj.bbox.width = CLIP(data->objs[i]->bbox.w);
-      obj.bbox.height = CLIP(data->objs[i]->bbox.h);
+      obj.label = std::stoi(objs[i]->id);
+      obj.score = objs[i]->score;
+      obj.bbox.x = CLIP(objs[i]->bbox.x);
+      obj.bbox.y = CLIP(objs[i]->bbox.y);
+      obj.bbox.width = CLIP(objs[i]->bbox.w);
+      obj.bbox.height = CLIP(objs[i]->bbox.h);
       obj.feature = features[i];
       in.push_back(obj);
     }
@@ -182,35 +190,37 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
     ctx->processer_->UpdateFrame(tframe, in, &out);
 
     for (size_t i = 0; i < out.size(); i++) {
-      data->objs[out[i].detect_id]->track_id = std::to_string(out[i].track_id);
+      objs[out[i].detect_id]->track_id = std::to_string(out[i].track_id);
     }
   } else if (track_name_ == "KCF") {
 #ifdef ENABLE_KCF
-    if (data->frame.fmt != CN_PIXEL_FORMAT_YUV420_NV21)
-      throw "KCF Only support frame in CN_PIXEL_FORMAT_YUV420_NV21 format";
+    if (frame->fmt != CN_PIXEL_FORMAT_YUV420_NV21) {
+      LOG(ERROR) << "KCF Only support frame in CN_PIXEL_FORMAT_YUV420_NV21 format.";
+      return -1;
+    }
     std::vector<edk::DetectObject> in, out;
-    for (size_t i = 0; i < data->objs.size(); i++) {
+    for (size_t i = 0; i < objs.size(); i++) {
       edk::DetectObject obj;
-      obj.label = std::stoi(data->objs[i]->id);
-      obj.score = data->objs[i]->score;
-      obj.bbox.x = data->objs[i]->bbox.x;
-      obj.bbox.y = data->objs[i]->bbox.y;
-      obj.bbox.width = data->objs[i]->bbox.w;
-      obj.bbox.height = data->objs[i]->bbox.h;
+      obj.label = std::stoi(objs[i]->id);
+      obj.score = objs[i]->score;
+      obj.bbox.x = objs[i]->bbox.x;
+      obj.bbox.y = objs[i]->bbox.y;
+      obj.bbox.width = objs[i]->bbox.w;
+      obj.bbox.height = objs[i]->bbox.h;
       in.push_back(obj);
     }
 
     edk::TrackFrame tframe;
-    tframe.data = data->frame.data[0]->GetMutableMluData();
-    tframe.width = data->frame.width;
-    tframe.height = data->frame.height;
+    tframe.data = frame->data[0]->GetMutableMluData();
+    tframe.width = frame->width;
+    tframe.height = frame->height;
     tframe.format = edk::TrackFrame::ColorSpace::NV21;
-    tframe.frame_id = data->frame.frame_id;
+    tframe.frame_id = frame->frame_id;
     tframe.dev_type = edk::TrackFrame::DevType::MLU;
-    tframe.device_id = data->frame.ctx.dev_id;
+    tframe.device_id = frame->ctx.dev_id;
     ctx->processer_->UpdateFrame(tframe, in, &out);
 
-    data->objs.clear();
+    objs.clear();
     for (size_t i = 0; i < out.size(); i++) {
       std::shared_ptr<CNInferObject> obj = std::make_shared<CNInferObject>();
       obj->id = std::to_string(out[i].label);
@@ -220,8 +230,9 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
       obj->bbox.y = out[i].bbox.y;
       obj->bbox.w = out[i].bbox.width;
       obj->bbox.h = out[i].bbox.height;
-      data->objs.push_back(obj);
+      objs.push_back(obj);
     }
+    data->datas[CNObjsVecKey] = objs;
 #endif
   }
   return 0;

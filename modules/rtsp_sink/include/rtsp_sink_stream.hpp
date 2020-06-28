@@ -47,17 +47,17 @@ class StreamPipeCtx;
 
 class RtspSinkJoinStream {
  public:
-  bool Open(const RtspParam& rtsp_param);
+  bool Open(const RtspParam &rtsp_param);
   void Close();
   bool UpdateYUV(uint8_t *image, int64_t timestamp);
   // bool UpdateYUVs(void *y, void *yu, int64_t timestamp);
   bool UpdateBGR(cv::Mat image, int64_t timestamp, int channel_id = -1);
   void Bgr2Yuv420nv(const cv::Mat &bgr, uint8_t *nv_data);
-  void ResizeYuvNearest(uint8_t* src, uint8_t* dst);
+  void ResizeYuvNearest(uint8_t *src, uint8_t *dst);
 
  private:
   void RefreshLoop();
-  void EncodeFrameYUV(uint8_t* in_data, int64_t timestamp);
+  void EncodeFrameYUV(uint8_t *in_data, int64_t timestamp);
   void EncodeFrameBGR(const cv::Mat &bgr24, int64_t timestamp);
   // void EncodeFramYUVs(void *y, void *uv, int64_t timestamp);
 
@@ -65,9 +65,10 @@ class RtspSinkJoinStream {
 
   std::mutex canvas_lock_;
   cv::Mat canvas_;
-  uint8_t* canvas_data_;
+  uint8_t *canvas_data_;
 
-  void *y_ptr_; void *uv_ptr_;
+  void *y_ptr_;
+  void *uv_ptr_;
   std::thread *refresh_thread_ = nullptr;
   bool running_ = false;
   bool start_refresh_ = false;
@@ -80,4 +81,3 @@ class RtspSinkJoinStream {
 }  // namespace cnstream
 
 #endif  // MODULES_RTSP_SINK_INCLUDE_RTSP_SINK_STREAM_HPP_
-

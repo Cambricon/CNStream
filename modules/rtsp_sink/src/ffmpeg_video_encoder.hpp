@@ -38,7 +38,7 @@ namespace cnstream {
 
 class FFmpegVideoEncoder : public VideoEncoder {
  public:
-  explicit FFmpegVideoEncoder(const RtspParam& rtsp_param);
+  explicit FFmpegVideoEncoder(const RtspParam &rtsp_param);
   ~FFmpegVideoEncoder();
 
   uint32_t GetBitRate() {
@@ -66,7 +66,7 @@ class FFmpegVideoEncoder : public VideoEncoder {
   };
 
   virtual VideoFrame *NewFrame();
-  uint32_t GetOffset(const uint8_t* data);
+  uint32_t GetOffset(const uint8_t *data);
   virtual void EncodeFrame(VideoFrame *frame);
   // virtual void EncodeFrame(void *y, void *uv, int64_t timestamp) {return;};
   void Destroy();

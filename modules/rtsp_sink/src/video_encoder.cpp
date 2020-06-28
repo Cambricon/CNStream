@@ -109,9 +109,7 @@ VideoEncoder::~VideoEncoder() {
   if (sync_output_frame_buffer_) delete[] sync_output_frame_buffer_;
 }
 
-void VideoEncoder::Start() {
-  running_ = true;
-}
+void VideoEncoder::Start() { running_ = true; }
 
 void VideoEncoder::Stop() {
   if (!running_) return;

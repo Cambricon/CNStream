@@ -39,6 +39,7 @@
 #include "easyinfer/mlu_memory_op.h"
 #include "easyinfer/model_loader.h"
 
+#include "cnstream_frame_va.hpp"
 #include "inferencer.hpp"
 #include "postproc.hpp"
 #include "preproc.hpp"
@@ -53,16 +54,16 @@ static const char *g_postproc_name = "PostprocClassification";
 static constexpr int g_dev_id = 0;
 static constexpr int g_channel_id = 0;
 
-
 void GetResult(std::shared_ptr<Module> infer) {
   uint32_t i = 0;
   while (1) {
     auto data = infer->GetOutputFrame();
     if (data != nullptr) {
-      if (!(data->frame.flags & CNFrameFlag::CN_FRAME_FLAG_EOS)) {
-        EXPECT_EQ(data->frame.frame_id, i);
+      if (!data->IsEos()) {
+        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+        EXPECT_EQ(frame->frame_id, i);
         i++;
-        std::cout << "Got data, frame id = " << data->frame.frame_id << std::endl;
+        std::cout << "Got data, frame id = " << frame->frame_id << std::endl;
       } else {
         std::cout << "**********Got EOS *********" << std::endl;
         break;
@@ -91,7 +92,7 @@ TEST(Inferencer, Demo) {
   nbytes = (nbytes + boundary - 1) & ~(boundary - 1);  // align to 64kb
 
   // fake data vector
-  std::vector<void*> frame_data_vec;
+  std::vector<void *> frame_data_vec;
   edk::MluMemoryOp mem_op;
 
   // test nv12
@@ -105,19 +106,20 @@ TEST(Inferencer, Demo) {
     planes[1] = reinterpret_cast<void *>(reinterpret_cast<int64_t>(frame_data) + width * height);  // uv plane
 
     auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
-    CNDataFrame &frame = data->frame;
-    frame.frame_id = i;
-    frame.timestamp = i;
-    frame.width = width;
-    frame.height = height;
-    frame.ptr_mlu[0] = planes[0];
-    frame.ptr_mlu[1] = planes[1];
-    frame.stride[0] = frame.stride[1] = width;
-    frame.ctx.ddr_channel = g_channel_id;
-    frame.ctx.dev_id = g_dev_id;
-    frame.ctx.dev_type = DevContext::DevType::MLU;
-    frame.fmt = CN_PIXEL_FORMAT_YUV420_NV12;
-    frame.CopyToSyncMem();
+    std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+    frame->frame_id = i;
+    data->timestamp = i;
+    frame->width = width;
+    frame->height = height;
+    frame->ptr_mlu[0] = planes[0];
+    frame->ptr_mlu[1] = planes[1];
+    frame->stride[0] = frame->stride[1] = width;
+    frame->ctx.ddr_channel = g_channel_id;
+    frame->ctx.dev_id = g_dev_id;
+    frame->ctx.dev_type = DevContext::DevType::MLU;
+    frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+    frame->CopyToSyncMem();
+    data->datas[CNDataFramePtrKey] = frame;
     int ret = infer->Process(data);
     EXPECT_EQ(ret, 1);
   }

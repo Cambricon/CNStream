@@ -22,6 +22,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "cnstream_frame_va.hpp"
 #include "postproc.hpp"
 
 class PostprocClassification : public cnstream::Postproc {
@@ -39,7 +40,8 @@ int PostprocClassification::Execute(const std::vector<float*>& net_outputs,
                                     const cnstream::CNFrameInfoPtr& package) {
   if (net_outputs.size() != 1) {
     LOG(ERROR) << "[Warning] classification neuron network only has one output,"
-                  " but get " + std::to_string(net_outputs.size());
+                  " but get " +
+                      std::to_string(net_outputs.size());
     return -1;
   }
 
@@ -62,7 +64,10 @@ int PostprocClassification::Execute(const std::vector<float*>& net_outputs,
   auto obj = std::make_shared<cnstream::CNInferObject>();
   obj->id = std::to_string(label);
   obj->score = mscore;
-  package->objs.push_back(obj);
+
+  cnstream::CNObjsVec objs;
+  objs.push_back(obj);
+  package->datas[cnstream::CNObjsVecKey] = objs;
   return 0;
 }
 
@@ -82,7 +87,8 @@ int ObjPostprocClassification::Execute(const std::vector<float*>& net_outputs,
                                        const std::shared_ptr<cnstream::CNInferObject>& obj) {
   if (net_outputs.size() != 1) {
     LOG(ERROR) << "[Warning] classification neuron network only has one output,"
-                  " but get " + std::to_string(net_outputs.size());
+                  " but get " +
+                      std::to_string(net_outputs.size());
     return -1;
   }
 
@@ -109,4 +115,3 @@ int ObjPostprocClassification::Execute(const std::vector<float*>& net_outputs,
   obj->AddAttribute("classification", attr);
   return 0;
 }
-

@@ -305,7 +305,7 @@ bool CNEncoderStream::Update(uint8_t *image, int64_t timestamp, bool eos) {
   return true;
 }
 
-void CNEncoderStream::ResizeYuvNearest(uint8_t* src, uint8_t* dst) {
+void CNEncoderStream::ResizeYuvNearest(uint8_t *src, uint8_t *dst) {
   if (src_width_ == dst_width_ && src_height_ == dst_height_) {
     memcpy(dst, src, output_frame_size_ * sizeof(uint8_t));
     return;
@@ -314,14 +314,14 @@ void CNEncoderStream::ResizeYuvNearest(uint8_t* src, uint8_t* dst) {
   uint32_t xrIntFloat_16 = (src_width_ << 16) / dst_width_ + 1;
   uint32_t yrIntFloat_16 = (src_height_ << 16) / dst_height_ + 1;
 
-  uint8_t* dst_uv = dst + dst_height_ * dst_width_;
-  uint8_t* src_uv = src + src_height_ * src_width_;
-  uint8_t* dst_uv_yScanline = nullptr;
-  uint8_t* src_uv_yScanline = nullptr;
-  uint8_t* dst_y_slice = dst;
-  uint8_t* src_y_slice = nullptr;
-  uint8_t* sp = nullptr;
-  uint8_t* dp = nullptr;
+  uint8_t *dst_uv = dst + dst_height_ * dst_width_;
+  uint8_t *src_uv = src + src_height_ * src_width_;
+  uint8_t *dst_uv_yScanline = nullptr;
+  uint8_t *src_uv_yScanline = nullptr;
+  uint8_t *dst_y_slice = dst;
+  uint8_t *src_y_slice = nullptr;
+  uint8_t *sp = nullptr;
+  uint8_t *dp = nullptr;
 
   for (uint32_t y = 0; y < (dst_height_ & ~7); ++y) {
     srcy = (y * yrIntFloat_16) >> 16;
@@ -333,7 +333,7 @@ void CNEncoderStream::ResizeYuvNearest(uint8_t* src, uint8_t* dst) {
     for (uint32_t x = 0; x < (dst_width_ & ~7); ++x) {
       srcx = (x * xrIntFloat_16) >> 16;
       dst_y_slice[x] = src_y_slice[srcx];
-      if ((y & 1) == 0) {  // y is even
+      if ((y & 1) == 0) {    // y is even
         if ((x & 1) == 0) {  // x is even
           src_index = (srcx / 2) * 2;
           sp = dst_uv_yScanline + x;

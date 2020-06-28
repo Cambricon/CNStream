@@ -119,29 +119,31 @@ void CnOsd::DrawLabel(Mat image, const vector<DetectObject>& objects, cnstream::
       text = labels()[object.label];
       color = colors_[object.label];
     }
-
     // Detection window
     Point tl(xmin, ymin);
     Point br(xmax, ymax);
-    int box_thickness = get_box_thickness();
-    cv::rectangle(image, tl, br, color, box_thickness);
-
+    float scale_coef = GetTextScaleCoef();
+    double scale = scale_coef * image.cols;
+    float thickness_coef = GetTextThicknessCoef();
+    int thickness = static_cast<int>(thickness_coef * image.cols);
+    if (thickness < 1) {
+        thickness = static_cast<int>(0.008 * image.cols);
+        if (thickness < 1) {
+          thickness = 1;
+        }
+    }
+    if (scale < 0.00001) {
+       scale = 0.002 * image.cols;
+    }
+    cv::rectangle(image, tl, br, color, thickness);
     // Label and Score
     text += " " + FloatToString(object.score);
 
     // Track Id
     if (object.track_id >= 0) text += " track_id:" + to_string(object.track_id);
+    auto text_size = cv::getTextSize(text, font_, scale, thickness, nullptr);
 
-    auto scale = CalScale(image.cols * image.rows);
-
-    if (tiled && (cols() * rows() != 0)) {
-      scale = scale / (cols() * rows());
-    }
-
-    int text_thickness = 1;
-    auto text_size = cv::getTextSize(text, font_, scale, text_thickness, nullptr);
-
-    int offset = (box_thickness == 1 ? 0 : -(box_thickness + 1) / 2);
+    int offset = (thickness == 1 ? 0 : -(thickness + 1) / 2);
     Point bl(xmin + offset, ymax + offset);
     Point label_left, label_right;
     label_left = bl;
@@ -157,7 +159,7 @@ void CnOsd::DrawLabel(Mat image, const vector<DetectObject>& objects, cnstream::
     cv::rectangle(image, label_left, label_right, color, CV_FILLED);
     if (cn_font == nullptr) {
       cv::putText(image, text, label_left + Point(0, text_size.height), font_, scale, Scalar(255, 255, 255) - color,
-                  text_thickness, 8, false);
+                  thickness, 8, false);
     } else {
       char* str = const_cast<char*>(text.data());
       cn_font->putText(image, str, label_left + Point(0, text_size.height), Scalar(255, 255, 255) - color);

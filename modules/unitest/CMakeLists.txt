@@ -1,9 +1,7 @@
 if(build_tests)
   include_directories(${PROJECT_SOURCE_DIR}/modules/unitest/include/)
-  include_directories(${PROJECT_SOURCE_DIR}/modules/core/src)
 
-  file(GLOB_RECURSE test_core_srcs ${PROJECT_SOURCE_DIR}/modules/unitest/core/*.cpp)
-  set(test_srcs ${test_core_srcs})
+  set(test_srcs "")
   list(APPEND test_srcs ${PROJECT_SOURCE_DIR}/modules/unitest/test_base.cpp)
   list(APPEND test_srcs ${PROJECT_SOURCE_DIR}/modules/unitest/test_main.cpp)
   if(build_encode)
@@ -50,7 +48,7 @@ if(build_tests)
 
   add_executable(cnstream_test ${test_srcs})
 
-  target_link_libraries(cnstream_test gtest dl cnstream ${CN_LIBS} ${3RDPARTY_LIBS} ${OpenCV_LIBS} ${FFMPEG_LIBRARIES} pthread rt)
+  target_link_libraries(cnstream_test gtest dl cnstream_core cnstream_va ${CN_LIBS} ${3RDPARTY_LIBS} ${OpenCV_LIBS} ${FFMPEG_LIBRARIES} pthread rt)
 
   add_test(cnstream_test ${EXECUTABLE_OUTPUT_PATH}/cnstream_test)
 endif()

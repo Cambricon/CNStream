@@ -54,20 +54,11 @@ class CnOsd {
  private:
   size_t rows_ = 1;
   size_t cols_ = 1;
-  int box_thickness_ = 2;
+  float text_scale_coef_ = 0.002;
+  float text_thickness_coef_ = 0.008;
   vector<string> labels_;
   vector<Scalar> colors_;
   int font_ = cv::FONT_HERSHEY_SIMPLEX;
-  cv::Size bm_size_ = {1920, 1080};  // benchmark size,used to calculate scale.
-  float bm_rate_ = 1.0f;             // benchmark rate, used to calculate scale.
-  inline float CalScale(uint64_t area) const {
-    auto c = 0.3f;
-    auto a = (c - bm_rate_) / std::pow(bm_size_.width * bm_size_.height, 2);
-    auto b = 2 * (bm_rate_ - c) / (bm_size_.width * bm_size_.height);
-    auto scale = a * area * area + b * area + c;
-    if (scale < 0) return 0;
-    return scale;
-  }
 
  public:
   CnOsd() = delete;
@@ -75,7 +66,10 @@ class CnOsd {
 
   inline size_t rows() const { return rows_; }
   inline size_t cols() const { return cols_; }
-  inline int get_box_thickness() const { return box_thickness_; }
+  void SetTextScaleCoef(float coef)  { text_scale_coef_ = coef; }
+  inline float GetTextScaleCoef() const { return text_scale_coef_; }
+  void SetTextThicknessCoef(float coef)  { text_thickness_coef_ = coef; }
+  inline float GetTextThicknessCoef() const { return text_thickness_coef_; }
   inline size_t chn_num() const { return rows() * cols(); }
   inline const std::vector<std::string> labels() const { return labels_; }
   void DrawLabel(Mat image, const vector<DetectObject>& objects, cnstream::CnFont* cn_font = nullptr,

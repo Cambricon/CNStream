@@ -39,14 +39,14 @@ extern "C" {
 }
 #endif
 
-#include <ifaddrs.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <netdb.h>
 #include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -54,6 +54,7 @@ extern "C" {
 #include "easyinfer/mlu_context.h"
 #include "easyinfer/mlu_memory_op.h"
 
+#include "cnstream_frame_va.hpp"
 #include "rtsp_sink.hpp"
 #include "test_base.hpp"
 
@@ -66,8 +67,8 @@ static constexpr int g_height = 720;
 static int g_channel_id = 0;
 
 std::string GetIp() {
-  void * tmpAddrPtr = NULL;
-  struct ifaddrs * ifAddrStruct = NULL;
+  void *tmpAddrPtr = NULL;
+  struct ifaddrs *ifAddrStruct = NULL;
   getifaddrs(&ifAddrStruct);
 
   std::string valid_ip;
@@ -111,7 +112,7 @@ bool PullRtspStreamOpencv() {
 }
 
 bool PullRtspStreamFFmpeg() {
-  AVFormatContext* format_ctx = avformat_alloc_context();
+  AVFormatContext *format_ctx = avformat_alloc_context();
   std::string url = "rtsp://" + GetIp() + ":9554/rtsp_live";
   int ret = -1;
   ret = avformat_open_input(&format_ctx, url.c_str(), nullptr, nullptr);
@@ -129,20 +130,20 @@ bool PullRtspStreamFFmpeg() {
   int video_stream_index = -1;
   fprintf(stdout, "Number of elements in AVFormatContext.streams: %d\n", format_ctx->nb_streams);
   for (uint32_t i = 0; i < format_ctx->nb_streams; ++i) {
-    const AVStream* vstream = format_ctx->streams[i];
+    const AVStream *vstream = format_ctx->streams[i];
 // #if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
 #if LIBAVFORMAT_VERSION_INT < FFMPEG_VERSION_3_1
-  fprintf(stdout, "type of the encoded data: %d\n", vstream->codecpar->codec_id);
+    fprintf(stdout, "type of the encoded data: %d\n", vstream->codecpar->codec_id);
     if (vstream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
       video_stream_index = i;
       fprintf(stdout, "dimensions of the video frame in pixels: width: %d, height: %d, pixel format: %d\n",
-        vstream->codecpar->width, vstream->codecpar->height, vstream->codecpar->format);
+              vstream->codecpar->width, vstream->codecpar->height, vstream->codecpar->format);
 #else
     fprintf(stdout, "type of the encoded data: %d\n", vstream->codec->codec_id);
     if (vstream->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
       video_stream_index = i;
-      fprintf(stdout, "dimensions of the video frame in pixels: width: %d, height: %d\n",
-        vstream->codec->width, vstream->codec->height);
+      fprintf(stdout, "dimensions of the video frame in pixels: width: %d, height: %d\n", vstream->codec->width,
+              vstream->codec->height);
 #endif
     }
   }
@@ -190,40 +191,44 @@ std::shared_ptr<CNFrameInfo> GenTestData(ColorFormat cmode, int width, int heigh
 
   if (g_channel_id > 3) g_channel_id = 0;
   auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
-  CNDataFrame &frame = data->frame;
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
 
   switch (cmode) {
     case BGR24:
-      frame.fmt = CN_PIXEL_FORMAT_BGR24; break;
+      frame->fmt = CN_PIXEL_FORMAT_BGR24;
+      break;
     case NV12:
-      frame.fmt = CN_PIXEL_FORMAT_YUV420_NV12; break;
+      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+      break;
     case NV21:
-      frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21; break;
+      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+      break;
     default:
-      frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21; break;
+      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+      break;
   }
 
-  data->channel_idx = g_channel_id;
-  frame.frame_id = 1;
-  frame.timestamp = 1000;
-  frame.width = width;
-  frame.height = height;
-  frame.ptr_mlu[0] = planes[0];
-  frame.ptr_mlu[1] = planes[1];
-  frame.ptr_mlu[2] = planes[2];
-  frame.stride[0] = frame.stride[1] = frame.stride[2] = width;
+  data->SetStreamIndex(g_channel_id);
+  frame->frame_id = 1;
+  data->timestamp = 1000;
+  frame->width = width;
+  frame->height = height;
+  frame->ptr_mlu[0] = planes[0];
+  frame->ptr_mlu[1] = planes[1];
+  frame->ptr_mlu[2] = planes[2];
+  frame->stride[0] = frame->stride[1] = frame->stride[2] = width;
 
-  frame.ctx.dev_id = g_dev_id;
-  frame.ctx.ddr_channel = g_channel_id;
-  frame.ctx.dev_type = DevContext::DevType::MLU;
+  frame->ctx.dev_id = g_dev_id;
+  frame->ctx.ddr_channel = g_channel_id;
+  frame->ctx.dev_type = DevContext::DevType::MLU;
 
-  frame.CopyToSyncMem();
+  frame->CopyToSyncMem();
+  data->datas[CNDataFramePtrKey] = frame;
   g_channel_id++;
   return data;
 }
 
-void Process(std::shared_ptr<Module> ptr, ColorFormat cmode,
-              int width, int height, int line) {
+void Process(std::shared_ptr<Module> ptr, ColorFormat cmode, int width, int height, int line) {
   auto data = GenTestData(cmode, width, height);
 
   int ret = ptr->Process(data);
@@ -236,7 +241,7 @@ void Process(std::shared_ptr<Module> ptr, ColorFormat cmode,
 }
 
 void TestAllCase(std::shared_ptr<Module> ptr, ModuleParamSet params, int line) {
-  for (int i = 2; i< 5; i++) {
+  for (int i = 2; i < 5; i++) {
     EXPECT_TRUE(ptr->Open(params));
     Process(ptr, static_cast<ColorFormat>(i), g_width, g_height, line);
     // PullRtspStreamOpencv();

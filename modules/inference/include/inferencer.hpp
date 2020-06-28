@@ -51,9 +51,9 @@ using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
  *
  * @detail
  * The input could come from Decoder or other plugins, in MLU memory
- * or CPU memory. Also, If the ``preproc_name`` parameter is set to ``PreprocCpu`` 
+ * or CPU memory. Also, If the ``preproc_name`` parameter is set to ``PreprocCpu``
  * in the Open function or configuration file,
- * CPU is used for image preprocessing. Otherwise, if the ``preproc_name`` parameter is not 
+ * CPU is used for image preprocessing. Otherwise, if the ``preproc_name`` parameter is not
  * set, MLU is used for image preprocessing. The image preprocessing includes
  * data shape resizing and color space convertion.
  * Afterwards, you can infer with offline model loading from the model path.
@@ -100,10 +100,10 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
    *   object_infer: Optional. if object_infer is set to true, the detection target is used as the input to
                      inferencing. if it is set to false, the video frame is used as the input to inferencing.
                      False by default.
-   *   obj_filter_name: Optional. The class name for object filter. See cnstream::ObjFilter. This parameter is valid when
-                     object_infer is true. When this parameter not set, no object will be filtered.
+   *   obj_filter_name: Optional. The class name for object filter. See cnstream::ObjFilter. This parameter is valid
+   when object_infer is true. When this parameter not set, no object will be filtered.
    *   keep_aspect_ratio: Optional. As the mlu is used for image processing, the scale remains constant.
-   *  
+   *
    * @endverbatim
    *
    * @return Returns ture if the inferencer has been opened successfully.

@@ -35,6 +35,7 @@
 #include "postproc.hpp"
 #include "preproc.hpp"
 
+#include "cnstream_frame_va.hpp"
 #include "inferencer.hpp"
 #include "perf_calculator.hpp"
 #include "perf_manager.hpp"
@@ -93,16 +94,15 @@ class InferencerPrivate {
       ss << tid;
       std::string tid_str = "th_" + ss.str();
       ctx->engine = std::make_shared<InferEngine>(
-          device_id_, model_loader_, preproc_, postproc_, bsize_, batching_timeout_, use_scaler_,
-          infer_perf_manager_, tid_str,
-          std::bind(&InferencerPrivate::InferEngineErrorHnadleFunc, this, std::placeholders::_1),
-          keep_aspect_ratio_,
-          obj_infer_, obj_preproc_, obj_postproc_, obj_filter_);
-      ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_);
+          device_id_, model_loader_, preproc_, postproc_, bsize_, batching_timeout_, use_scaler_, infer_perf_manager_,
+          tid_str, std::bind(&InferencerPrivate::InferEngineErrorHnadleFunc, this, std::placeholders::_1),
+          keep_aspect_ratio_, obj_infer_, obj_preproc_, obj_postproc_, obj_filter_);
+      ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_, bsize_);
       ctxs_[tid] = ctx;
       if (infer_perf_manager_) {
-        infer_perf_manager_->RegisterPerfType(tid_str, PerfManager::GetPrimaryKey(), {"resize_start_time",
-            "resize_end_time", "resize_cnt", "infer_start_time", "infer_end_time", "infer_cnt"});
+        infer_perf_manager_->RegisterPerfType(
+            tid_str, PerfManager::GetPrimaryKey(),
+            {"resize_start_time", "resize_end_time", "resize_cnt", "infer_start_time", "infer_end_time", "infer_cnt"});
       }
     }
     return ctx;
@@ -120,28 +120,32 @@ void InferencerPrivate::PrintPerf(std::string name, std::vector<std::string> key
   if (perf_calculator_.find(name) != perf_calculator_.end()) {
     std::shared_ptr<PerfCalculator> calculator = perf_calculator_[name];
     std::shared_ptr<PerfUtils> perf_utils = calculator->GetPerfUtils();
-    std::vector<std::string> thread_ids = perf_utils->GetTableNames("inferencer");
-    PerfStats stats_latency;
-    PerfStats stats_fps;
+    std::vector<std::string> thread_ids = perf_utils->GetTableNames(q_ptr_->GetName());
+    PerfStats latency_stats;
+    PerfStats fps_stats;
+    std::vector<std::pair<std::string, PerfStats>> latest_fps;
+    std::vector<std::pair<std::string, PerfStats>> entire_fps;
     for (auto thread_id : thread_ids) {
       std::cout << thread_id;
-      stats_fps = calculator->CalcThroughput("inferencer", thread_id, keys);
-      stats_latency = calculator->CalcLatency("inferencer", thread_id, keys);
-      PerfStats avg_fps = calculator->GetAvgThroughput("inferencer", thread_id);
+      fps_stats = calculator->CalcThroughput(q_ptr_->GetName(), thread_id, keys);
+      latency_stats = calculator->CalcLatency(q_ptr_->GetName(), thread_id, keys);
+      PerfStats avg_fps = calculator->GetAvgThroughput(q_ptr_->GetName(), thread_id);
 
       if (name == "rsz_cvt_batch") {
-        stats_latency.frame_cnt *= bsize_;
-        stats_fps.frame_cnt *= bsize_;
-        stats_fps.fps *= bsize_;
+        latency_stats.frame_cnt *= bsize_;
+        fps_stats.frame_cnt *= bsize_;
+        fps_stats.fps *= bsize_;
         avg_fps.fps *= bsize_;
         avg_fps.frame_cnt *= bsize_;
       }
+      PrintLatency(latency_stats);
 
-      PrintPerfStats(stats_fps, avg_fps, stats_latency);
+      latest_fps.push_back(std::make_pair(thread_id, fps_stats));
+      entire_fps.push_back(std::make_pair(thread_id, avg_fps));
     }
 
-    PerfStats total_stats = calculator->CalcThroughput("inferencer", "", keys);
-    PerfStats total_avg_fps = calculator->GetAvgThroughput("inferencer", "");
+    PerfStats total_stats = calculator->CalcThroughput(q_ptr_->GetName(), "", keys);
+    PerfStats total_avg_fps = calculator->GetAvgThroughput(q_ptr_->GetName(), "");
 
     if (name == "rsz_cvt_batch") {
       total_stats.fps *= bsize_;
@@ -150,8 +154,25 @@ void InferencerPrivate::PrintPerf(std::string name, std::vector<std::string> key
       total_avg_fps.frame_cnt *= bsize_;
     }
 
-    std::cout << "Total : ";
-    PrintThroughput(total_stats, total_avg_fps);
+    std::cout << "\n=========================================================" << std::endl;
+    std::cout << "Performance for the last 2s" << std::endl;
+    for (auto &it : latest_fps) {
+      std::cout << it.first;
+      PrintThroughput(it.second);
+    }
+
+
+    std::cout << "\nTotal : ";
+    PrintThroughput(total_stats);
+
+    std::cout << "\n=========================================================" << std::endl;
+    std::cout << "Performance for the entire process" << std::endl;
+    for (auto &it : entire_fps) {
+      std::cout << it.first;
+      PrintThroughput(it.second);
+    }
+    std::cout << "\nTotal : ";
+    PrintThroughput(total_avg_fps);
   }
 }
 
@@ -159,9 +180,9 @@ void InferencerPrivate::PrintPerf() {
   std::cout << "\n************************************** Inferencer Statistics **********************************\n";
   std::cout << "---------------------------- [resize and convert (theoretical)] ----------------------\n";
   PrintPerf("rsz_cvt_batch", {"resize_start_time", "resize_end_time"});
-  std::cout << "---------------------------- [resize and convert] ---------------------------------------\n";
+  std::cout << "\n---------------------------- [resize and convert] ---------------------------------------\n";
   PrintPerf("rsz_cvt", {"resize_start_time", "resize_end_time", "resize_cnt"});
-  std::cout << "-------------------------------- [inference] --------------------------------------------\n";
+  std::cout << "\n-------------------------------- [inference] --------------------------------------------\n";
   PrintPerf("infer", {"infer_start_time", "infer_end_time", "infer_cnt"});
 }
 
@@ -204,8 +225,9 @@ Inferencer::Inferencer(const std::string& name) : Module(name) {
   param_register_.Register("threshold", "The threshold of the results.");
   param_register_.Register("object_infer", "Whether to infer with frame or detection object.");
   param_register_.Register("obj_filter_name", "The object filter method name.");
-  param_register_.Register("keep_aspect_ratio", "As the mlu is used for image processing, "
-                            "the scale remains constant.");
+  param_register_.Register("keep_aspect_ratio",
+                           "As the mlu is used for image processing, "
+                           "the scale remains constant.");
 }
 
 Inferencer::~Inferencer() {}
@@ -355,19 +377,23 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
 
   if (paramSet.find("show_stats") != paramSet.end() && paramSet["show_stats"] == "true") {
     d_ptr_->infer_perf_manager_ = std::make_shared<PerfManager>();
+
+    std::string stats_db_path;
     if (paramSet.find("stats_db_name") == paramSet.end()) {
-        LOG(ERROR) << "Must set Inferencer custom parameter [stats_db_name] in config file.";
-        return false;
+      stats_db_path = "perf_database/" + GetName() + ".db";
+      LOG(INFO) << "[Inferencer] Custom parameter [stats_db_name] is not set. Save database file to " << stats_db_path;
+    } else {
+      stats_db_path = paramSet["stats_db_name"];
+      LOG(INFO) << "[Inferencer] Save database file to " << stats_db_path;
     }
-    std::string stats_db_path = paramSet["stats_db_name"];
     stats_db_path = GetPathRelativeToTheJSONFile(stats_db_path, paramSet);
     if (!d_ptr_->infer_perf_manager_->Init(stats_db_path)) {
-        LOG(ERROR) << "Init infer perf manager failed.";
-        return false;
+      LOG(ERROR) << "Init infer perf manager failed.";
+      return false;
     }
     d_ptr_->infer_perf_manager_->SqlBeginTrans();
     std::shared_ptr<PerfUtils> perf_utils = std::make_shared<PerfUtils>();
-    perf_utils->AddSql("inferencer", d_ptr_->infer_perf_manager_->GetSql());
+    perf_utils->AddSql(GetName(), d_ptr_->infer_perf_manager_->GetSql());
 
     d_ptr_->perf_calculator_["rsz_cvt"] = std::make_shared<PerfCalculatorForInfer>();
     d_ptr_->perf_calculator_["infer"] = std::make_shared<PerfCalculatorForInfer>();
@@ -409,12 +435,14 @@ void Inferencer::Close() {
 
 int Inferencer::Process(CNFrameInfoPtr data) {
   std::shared_ptr<InferContext> pctx = d_ptr_->GetInferContext();
-  bool eos = data->frame.flags & CNFrameFlag::CN_FRAME_FLAG_EOS;
+  bool eos = data->IsEos();
   bool drop_data = d_ptr_->interval_ > 0 && pctx->drop_count++ % d_ptr_->interval_ != 0;
 
-  if (!eos && data->frame.ctx.dev_id != d_ptr_->device_id_ &&
-      data->frame.ctx.dev_type == DevContext::MLU) {
-    data->frame.CopyToSyncMemOnDevice(d_ptr_->device_id_);
+  if (!eos) {
+    CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+    if (frame->ctx.dev_id != d_ptr_->device_id_ && frame->ctx.dev_type == DevContext::MLU) {
+      frame->CopyToSyncMemOnDevice(d_ptr_->device_id_);
+    }
   }
 
   if (eos || drop_data) {

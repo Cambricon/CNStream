@@ -34,6 +34,7 @@
 #else
 #error OpenCV required
 #endif
+#include "cnstream_frame_va.hpp"
 #include "cnstream_module.hpp"
 #include "osd.hpp"
 #include "test_base.hpp"
@@ -73,37 +74,42 @@ TEST(Osd, Process) {
   int height = 1080;
   cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
-  data->channel_idx = 0;
-  CNDataFrame &frame = data->frame;
-  frame.frame_id = 1;
-  frame.timestamp = 1000;
-  frame.width = width;
-  frame.height = height;
-  frame.ptr_cpu[0] = img.data;
-  frame.stride[0] = width;
-  frame.ctx.dev_type = DevContext::DevType::CPU;
-  frame.fmt = CN_PIXEL_FORMAT_BGR24;
-  frame.CopyToSyncMem();
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+  data->SetStreamIndex(0);
+  frame->frame_id = 1;
+  data->timestamp = 1000;
+  frame->width = width;
+  frame->height = height;
+  frame->ptr_cpu[0] = img.data;
+  frame->stride[0] = width;
+  frame->ctx.dev_type = DevContext::DevType::CPU;
+  frame->fmt = CN_PIXEL_FORMAT_BGR24;
+  frame->CopyToSyncMem();
+  data->datas[CNDataFramePtrKey] = frame;
 
+  CNObjsVec objs;
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(11);
   CNInferBoundingBox bbox = {0.6, 0.4, 0.6, 0.3};
   obj->bbox = bbox;
-  data->objs.push_back(obj);
+  objs.push_back(obj);
 
-  obj->id = std::to_string(12);
+  auto obj2 = std::make_shared<CNInferObject>();
+  obj2->id = std::to_string(12);
   bbox = {0.1, -0.2, 0.3, 0.4};
-  obj->bbox = bbox;
-  data->objs.push_back(obj);
+  obj2->bbox = bbox;
+  objs.push_back(obj2);
 
   for (int i = 0; i < 5; ++i) {
+    auto obj = std::make_shared<CNInferObject>();
     obj->id = std::to_string(i);
     float val = i * 0.1;
     CNInferBoundingBox bbox = {val, val, val, val};
     obj->bbox = bbox;
-    data->objs.push_back(obj);
+    objs.push_back(obj);
   }
 
+  data->datas[cnstream::CNObjsVecKey] = objs;
   EXPECT_EQ(osd->Process(data), 0);
 }
 

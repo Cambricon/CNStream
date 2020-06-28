@@ -36,6 +36,7 @@
 #include "reflex_object.h"
 
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 
 namespace cnstream {
 
@@ -55,7 +56,7 @@ class ObjFilter : virtual public ReflexObjectEx<ObjFilter> {
    */
   virtual ~ObjFilter() {}
   /**
-   * @brief create relative object filter 
+   * @brief create relative object filter
    *
    * @param filter_name obj filter class name
    *
@@ -70,7 +71,7 @@ class ObjFilter : virtual public ReflexObjectEx<ObjFilter> {
    * @param obj: object infomations
    *
    * @return return true then this object will be processed by inferencer module,
-   *   and return false will be skipped by inferencer module, 
+   *   and return false will be skipped by inferencer module,
    */
   virtual bool Filter(const CNFrameInfoPtr& finfo, const CNInferObjectPtr& pobj) = 0;
 };  // class ObjFilter

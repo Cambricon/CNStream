@@ -32,6 +32,7 @@
 #error OpenCV required
 #endif
 
+#include "cnstream_frame_va.hpp"
 #include "preproc.hpp"
 
 class PreprocYolov3 : public cnstream::Preproc {
@@ -44,27 +45,29 @@ class PreprocYolov3 : public cnstream::Preproc {
       LOG(ERROR) << "[PreprocCpu] model input shape not supported";
       return -1;
     }
+    cnstream::CNDataFramePtr frame =
+        cnstream::any_cast<cnstream::CNDataFramePtr>(package->datas[cnstream::CNDataFramePtrKey]);
 
-    int width = package->frame.width;
-    int height = package->frame.height;
+    int width = frame->width;
+    int height = frame->height;
     int dst_w = input_shapes[0].w;
     int dst_h = input_shapes[0].h;
 
-    uint8_t* img_data = new(std::nothrow) uint8_t[package->frame.GetBytes()];
+    uint8_t* img_data = new (std::nothrow) uint8_t[frame->GetBytes()];
     if (!img_data) {
-      LOG(ERROR) << "Failed to alloc memory, size:" << package->frame.GetBytes();
+      LOG(ERROR) << "Failed to alloc memory, size:" << frame->GetBytes();
       return -1;
     }
     uint8_t* t = img_data;
 
-    for (int i = 0; i < package->frame.GetPlanes(); ++i) {
-      memcpy(t, package->frame.data[i]->GetCpuData(), package->frame.GetPlaneBytes(i));
-      t += package->frame.GetPlaneBytes(i);
+    for (int i = 0; i < frame->GetPlanes(); ++i) {
+      memcpy(t, frame->data[i]->GetCpuData(), frame->GetPlaneBytes(i));
+      t += frame->GetPlaneBytes(i);
     }
 
     // convert color space
     cv::Mat img;
-    switch (package->frame.fmt) {
+    switch (frame->fmt) {
       case cnstream::CNDataFormat::CN_PIXEL_FORMAT_BGR24:
         img = cv::Mat(height, width, CV_8UC3, img_data);
         break;
@@ -121,4 +124,3 @@ class PreprocYolov3 : public cnstream::Preproc {
 };  // class PreprocYolov3
 
 IMPLEMENT_REFLEX_OBJECT_EX(PreprocYolov3, cnstream::Preproc);
-

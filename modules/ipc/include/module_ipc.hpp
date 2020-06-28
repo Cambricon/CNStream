@@ -122,15 +122,15 @@ class ModuleIPC : public Module, public ModuleCreator<ModuleIPC> {
       nullptr;  // ipc handler, may act as client or server, which depends on the parameter configuration
 
   /**
-  * @brief When ModuleIPC act as server, post frame info to communicate process to release shared memory,.
-  *
-  * @param Pointer to the frame info.
-  *
-  * @return void.
-  */
+   * @brief When ModuleIPC act as server, post frame info to communicate process to release shared memory,.
+   *
+   * @param Pointer to the frame info.
+   *
+   * @return void.
+   */
   void PostFrameToReleaseMem(std::shared_ptr<CNFrameInfo> data);
-  size_t chn_cnt_ = 0;      // channel counts
-};  // class ModuleIPC
+  size_t chn_cnt_ = 0;  // channel counts
+};                      // class ModuleIPC
 
 }  // namespace cnstream
 #endif

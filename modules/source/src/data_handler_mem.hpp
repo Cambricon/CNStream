@@ -21,67 +21,116 @@
 #ifndef MODULES_SOURCE_HANDLER_MEM_HPP_
 #define MODULES_SOURCE_HANDLER_MEM_HPP_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
+#ifdef __cplusplus
+}
+#endif
+
+#include <memory>
+#include <sstream>
 #include <string>
 #include <thread>
-#include <memory>
-#include <utility>
 
 #include "data_source.hpp"
-#include "cnstream_frame.hpp"
-#include "cnstream_pipeline.hpp"
-#include "cnstream_source.hpp"
-#include "data_handler.hpp"
+#include "easyinfer/mlu_context.h"
 #include "ffmpeg_decoder.hpp"
-#include "threadsafe_queue.hpp"
+#include "glog/logging.h"
+#include "perf_manager.hpp"
+#include "ffmpeg_parser.hpp"
+#include "data_handler_util.hpp"
 
 namespace cnstream {
 
-struct IOBuffer;
-
-class DataHandlerMem : public DataHandler {
+class ESMemHandlerImpl : public IHandler {
  public:
-  explicit DataHandlerMem(DataSource *module, std::string stream_id,
-                          const std::string& filename, int frame_rate = 0)
-    :DataHandler(module, stream_id, frame_rate, false),
-    // filename_(filename) {}
-     module_(module), stream_id_(stream_id), filename_(filename) {}
-  ~DataHandlerMem() {}
-  int Write(unsigned char *buf, int size);
+  explicit ESMemHandlerImpl(DataSource *module, ESMemHandler &handler)  // NOLINT
+    : module_(module), handler_(handler) {
+      stream_id_ = handler_.GetStreamId();
+  }
+
+  ~ESMemHandlerImpl() {
+    if (es_buffer_) delete []es_buffer_;
+  }
+
+  bool Open();
+  void Close();
+  void SetDataType(ESMemHandler::DataType data_type) {
+    data_type_ = data_type;
+  }
+
+  int Write(ESPacket *pkt);
+  int Write(unsigned char *data, int len);
+
+ private:
+  DataSource *module_ = nullptr;
+  std::shared_ptr<PerfManager> perf_manager_;
+  ESMemHandler &handler_;
+  std::string stream_id_;
+  DataSourceParam param_;
+  size_t interval_ = 1;
+  ESMemHandler::DataType data_type_ = ESMemHandler::AUTO;
+
+  unsigned char *es_buffer_ = nullptr;
+  int es_len_ = 0;
+  static const int max_es_buffer_size = 1024 * 1024;
 
  private:
 #ifdef UNIT_TEST
  public:  // NOLINT
 #endif
-  bool PrepareResources(bool demux_only = false);
-  void ClearResources(bool demux_only = false);
+  bool PrepareResources();
+  void ClearResources();
   bool Process();
   bool Extract();
+  void DecodeLoop();
+
+  /**/
+  std::atomic<int> running_{0};
+  std::thread thread_;
+  bool eos_sent_ = false;
+
+  StreamParser parser_;
+  std::atomic<int> parse_done_{0};
+  BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
 
  private:
+  std::shared_ptr<Decoder> decoder_ = nullptr;
+  uint64_t pts_ = 0;
+
+ public:
+  void SendFlowEos() override {
+    if (eos_sent_) return;
+    auto data = CreateFrameInfo(true);
+    if (!data) {
+      LOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
+      return;
+    }
+    SendFrameInfo(data);
+    eos_sent_ = true;
+  }
+
+  std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) override {
+    return handler_.CreateFrameInfo(eos);
+  }
+
+  bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) override {
+    return handler_.SendData(data);
+  }
+
+  const DataSourceParam& GetDecodeParam() const override {
+    return param_;
+  }
+
 #ifdef UNIT_TEST
  public:  // NOLINT
+  void SetDecodeParam(const DataSourceParam &param) { param_ = param; }
 #endif
-  DataSource *module_ = nullptr;
-  std::string stream_id_;
-  std::string filename_;
-
- private:
-#ifdef UNIT_TEST
- public:  // NOLINT
-#endif
-  AVFormatContext* p_format_ctx_ = nullptr;
-  AVIOContext *avio_ = nullptr;
-  static constexpr int io_buffer_size_ = 32768;
-  unsigned char *io_buffer_;
-  ThreadSafeQueue<std::shared_ptr<IOBuffer>> queue_;
-
-  AVPacket packet_;
-  int video_index_ = -1;
-  bool first_frame_ = true;
-  bool find_pts_ = true;  // set it to true by default!
-  int64_t pts_ = 0;
-  std::shared_ptr<FFmpegDecoder> decoder_ = nullptr;
-};
+};  // class ESMemHandlerImpl
 
 }  // namespace cnstream
 
