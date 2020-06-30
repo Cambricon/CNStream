@@ -30,25 +30,8 @@
 #include <vector>
 
 #include "osd.hpp"
+#include "cnstream_frame_va.hpp"
 
-using cv::Mat;
-using cv::Point;
-using cv::Scalar;
-using std::string;
-using std::vector;
-
-struct DetectObject {
-  /// Object detection label
-  int label;
-  /// Object detection confidence rate
-  float score;
-  /// Struct BoundingBox
-  float x;
-  float y;
-  float width;
-  float height;
-  int track_id;
-};
 
 class CnOsd {
  private:
@@ -56,13 +39,14 @@ class CnOsd {
   size_t cols_ = 1;
   float text_scale_coef_ = 0.002;
   float text_thickness_coef_ = 0.008;
-  vector<string> labels_;
-  vector<Scalar> colors_;
+  std::vector<std::string> labels_;
+  std::vector<std::string> secondary_labels_;
+  std::vector<cv::Scalar> colors_;
   int font_ = cv::FONT_HERSHEY_SIMPLEX;
 
  public:
   CnOsd() = delete;
-  CnOsd(size_t rows, size_t cols, const vector<std::string>& labels);
+  CnOsd(size_t rows, size_t cols, const std::vector<std::string>& labels);
 
   inline size_t rows() const { return rows_; }
   inline size_t cols() const { return cols_; }
@@ -72,8 +56,9 @@ class CnOsd {
   inline float GetTextThicknessCoef() const { return text_thickness_coef_; }
   inline size_t chn_num() const { return rows() * cols(); }
   inline const std::vector<std::string> labels() const { return labels_; }
-  void DrawLabel(Mat image, const vector<DetectObject>& objects, cnstream::CnFont* cn_font = nullptr,
-                 bool tiled = false) const;
+  inline void SetSecondaryLabels(std::vector<std::string>labels) { secondary_labels_ = labels; }
+  void DrawLabel(cv::Mat image, cnstream::CNObjsVec& objects, cnstream::CnFont* cn_font = nullptr, // NOLINT
+                 bool tiled = false, std::vector<std::string> attr_keys = {}) const;
 };
 
 #endif  // _CNOSD_H_

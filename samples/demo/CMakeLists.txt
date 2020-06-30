@@ -3,7 +3,6 @@ set(Example_DIR "${PROJECT_SOURCE_DIR}/samples")
 link_directories("${Example_DIR}/../lib")
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/decode/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/inference/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/osd/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/source/include")

@@ -68,11 +68,15 @@ class BatchingDoneStage {
     perf_manager_ = manager;
     perf_type_ = type;
   }
+  void SetDumpResizedImageDir(const std::string &dir) {
+     dump_resized_image_dir_ = dir;
+  }
 
  protected:
   std::shared_ptr<edk::ModelLoader> model_;
   uint32_t batchsize_ = 0;
   int dev_id_ = -1;  // only for EasyInfer::Init
+  std::string dump_resized_image_dir_ = "";
   std::shared_ptr<PerfManager> perf_manager_ = nullptr;
   std::string perf_type_;
 };  // class BatchingDoneStage

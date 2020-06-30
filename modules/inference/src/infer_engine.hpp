@@ -75,7 +75,8 @@ class InferEngine {
               const std::function<void(const std::string& err_msg)>& error_func = NULL, bool keep_aspect_ratio = false,
               bool batching_by_obj = false, const std::shared_ptr<ObjPreproc>& obj_preprocessor = nullptr,
               const std::shared_ptr<ObjPostproc>& obj_postprocessor = nullptr,
-              const std::shared_ptr<ObjFilter>& obj_filter = nullptr);
+              const std::shared_ptr<ObjFilter>& obj_filter = nullptr,
+              std::string dump_resized_image_dir = "");
   ~InferEngine();
   ResultWaitingCard FeedData(std::shared_ptr<CNFrameInfo> finfo);
 
@@ -103,7 +104,6 @@ class InferEngine {
   std::function<void(const std::string& err_msg)> error_func_ = NULL;
   int dev_id_ = 0;
   bool use_scaler_ = false;
-
   bool batching_by_obj_ = false;
   /* batch up object, preprocessing */
   std::shared_ptr<ObjBatchingStage> obj_batching_stage_ = nullptr;
@@ -112,9 +112,9 @@ class InferEngine {
   std::shared_ptr<ObjFilter> obj_filter_ = nullptr;
   std::vector<std::shared_ptr<CNInferObject>> batched_objs_;
   std::shared_ptr<ObjPostprocessingBatchingDoneStage> obj_postproc_stage_ = nullptr;
-
   std::shared_ptr<PerfManager> infer_perf_manager_;
   std::string infer_thread_id_;
+  std::string dump_resized_image_dir_ = "";
 };  // class InferEngine
 
 }  // namespace cnstream

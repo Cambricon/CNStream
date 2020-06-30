@@ -40,8 +40,6 @@
 
 #include "cnstream_module.hpp"
 
-#define ROUND_UP(addr, boundary) (((u32_t)(addr) + (boundary)-1) & ~((boundary)-1))
-
 namespace cnstream {
 
 CNDataFrame::~CNDataFrame() {
@@ -244,7 +242,7 @@ void CNDataFrame::CopyToSyncMemOnDevice(int device_id) {
       void* dst = mlu_data;
       for (int i = 0; i < GetPlanes(); i++) {
         size_t plane_size = GetPlaneBytes(i);
-        CNS_CNRT_CHECK(cnrtMemcpy(peerdev_data, ptr_mlu[i], plane_size, CNRT_MEM_TRANS_DIR_PEER2PEER));
+        CNS_CNRT_CHECK(cnrtMemcpy(dst, ptr_mlu[i], plane_size, CNRT_MEM_TRANS_DIR_PEER2PEER));
         this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, device_id, ctx.ddr_channel));
         this->data[i]->SetMluData(dst);
         dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);

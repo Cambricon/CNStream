@@ -50,6 +50,10 @@
 #define CN_MAX_PLANES 6
 #endif
 
+#ifndef ROUND_UP
+#define ROUND_UP(addr, boundary) (((u32_t)(addr) + (boundary)-1) & ~((boundary)-1))
+#endif
+
 namespace cnstream {
 /**
  * An enumerated type that is used to

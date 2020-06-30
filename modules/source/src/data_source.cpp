@@ -114,10 +114,6 @@ bool DataSource::Open(ModuleParamSet paramSet) {
         return false;
       }
     }
-    if (dec_type == "mlu" && param_.output_type_ == OUTPUT_CPU) {
-      LOG(ERROR) << "decoder_type MLU : output_type must be mlu.";
-      return false;
-    }
   }
 
   if (param_.decoder_type_ == DECODER_MLU) {
@@ -193,12 +189,6 @@ bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
         LOG(ERROR) << "[DataSource] [decoder_type] MLU : device_id must be set";
         return false;
       }
-
-      if (output_type == "cpu") {
-        LOG(ERROR) << "decoder_type MLU : output_type must be mlu.";
-        return false;
-      }
-
       if (paramSet.find("reuse_cndec_buf") != paramSet.end()) {
         std::string reuse = paramSet.at("reuse_cndec_buf");
         if (reuse != "true" && reuse != "false") {

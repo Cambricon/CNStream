@@ -116,8 +116,10 @@ bool Encoder::Open(ModuleParamSet paramSet) {
   if (paramSet.find("dump_dir") == paramSet.end()) {
     char *path;
     path = getcwd(NULL, 0);
-    output_dir_ = path;
-    // return false;
+    if (path) {
+      output_dir_ = path;
+      free(path);
+    }
   } else {
     output_dir_ = paramSet["dump_dir"];
   }

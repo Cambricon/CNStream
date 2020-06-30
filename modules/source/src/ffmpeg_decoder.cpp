@@ -327,23 +327,50 @@ int MluDecoder::ProcessFrame(cnvideoDecOutput *output, bool *reused) {
   dataframe->frame_id = frame_id_++;
   data->timestamp = output->pts;
   /*fill source data info*/
-  dataframe->ctx.dev_type = DevContext::MLU;
-  dataframe->ctx.dev_id = param_.device_id_;
-  dataframe->ctx.ddr_channel = output->frame.channel;
   dataframe->width = output->frame.width;
   dataframe->height = output->frame.height;
   dataframe->fmt = PixelFmt2CnDataFormat(output->frame.pixelFmt);
-  for (int i = 0; i < dataframe->GetPlanes(); i++) {
-    dataframe->stride[i] = output->frame.stride[i];
-    dataframe->ptr_mlu[i] = reinterpret_cast<void *>(output->frame.plane[i].addr);
-  }
-  if (param_.reuse_cndec_buf) {
-    dataframe->deAllocator_ = std::make_shared<CNDeallocator>(this, &output->frame);
-    if (dataframe->deAllocator_) {
-      *reused = true;
+  if (OUTPUT_MLU == param_.output_type_) {
+    dataframe->ctx.dev_type = DevContext::MLU;
+    dataframe->ctx.dev_id = param_.device_id_;
+    dataframe->ctx.ddr_channel = output->frame.channel;
+    for (int i = 0; i < dataframe->GetPlanes(); i++) {
+      dataframe->stride[i] = output->frame.stride[i];
+      dataframe->ptr_mlu[i] = reinterpret_cast<void *>(output->frame.plane[i].addr);
     }
+    if (param_.reuse_cndec_buf) {
+      dataframe->deAllocator_ = std::make_shared<CNDeallocator>(this, &output->frame);
+      if (dataframe->deAllocator_) {
+        *reused = true;
+      }
+    }
+    dataframe->CopyToSyncMem();
+  } else if (OUTPUT_CPU == param_.output_type_) {
+    dataframe->ctx.dev_type = DevContext::CPU;
+    dataframe->ctx.dev_id = -1;
+    dataframe->ctx.ddr_channel = 0;
+    for (int i = 0; i < dataframe->GetPlanes(); i++) {
+      dataframe->stride[i] = output->frame.stride[i];
+    }
+    size_t bytes = dataframe->GetBytes();
+    bytes = ROUND_UP(bytes, 64 * 1024);
+    CNStreamMallocHost(&dataframe->cpu_data, bytes);
+    if (nullptr == dataframe->cpu_data) {
+      LOG(FATAL) << "MluDecoder: failed to alloc cpu memory";
+    }
+    void* dst = dataframe->cpu_data;
+    for (int i = 0; i < dataframe->GetPlanes(); i++) {
+      size_t plane_size = dataframe->GetPlaneBytes(i);
+      void *src = reinterpret_cast<void *>(output->frame.plane[i].addr);
+      CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dst, src, plane_size, CNRT_MEM_TRANS_DIR_DEV2HOST), param_.device_id_,
+                           output->frame.channel);
+      dataframe->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size));
+      dataframe->data[i]->SetCpuData(dst);
+      dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+    }
+  } else {
+    LOG(FATAL) << "MluDecoder:output type not supported";
   }
-  dataframe->CopyToSyncMem();
   data->datas[CNDataFramePtrKey] = dataframe;
   handler_->SendFrameInfo(data);
   return 0;
@@ -519,23 +546,50 @@ int MluDecoder::ProcessJpegFrame(cnjpegDecOutput *output, bool *reused) {
   dataframe->frame_id = frame_id_++;
   data->timestamp = output->pts;
   /*fill source data info*/
-  dataframe->ctx.dev_type = DevContext::MLU;
-  dataframe->ctx.dev_id = param_.device_id_;
-  dataframe->ctx.ddr_channel = output->frame.channel;
   dataframe->width = output->frame.width;
   dataframe->height = output->frame.height;
   dataframe->fmt = PixelFmt2CnDataFormat(output->frame.pixelFmt);
-  for (int i = 0; i < dataframe->GetPlanes(); i++) {
-    dataframe->stride[i] = output->frame.stride[i];
-    dataframe->ptr_mlu[i] = reinterpret_cast<void *>(output->frame.plane[i].addr);
-  }
-  if (param_.reuse_cndec_buf) {
-    dataframe->deAllocator_ = std::make_shared<CNDeallocatorJpg>(this, &output->frame);
-    if (dataframe->deAllocator_) {
-      *reused = true;
+  if (OUTPUT_MLU == param_.output_type_) {
+    dataframe->ctx.dev_type = DevContext::MLU;
+    dataframe->ctx.dev_id = param_.device_id_;
+    dataframe->ctx.ddr_channel = output->frame.channel;
+    for (int i = 0; i < dataframe->GetPlanes(); i++) {
+      dataframe->stride[i] = output->frame.stride[i];
+      dataframe->ptr_mlu[i] = reinterpret_cast<void *>(output->frame.plane[i].addr);
     }
+    if (param_.reuse_cndec_buf) {
+      dataframe->deAllocator_ = std::make_shared<CNDeallocatorJpg>(this, &output->frame);
+      if (dataframe->deAllocator_) {
+        *reused = true;
+      }
+    }
+    dataframe->CopyToSyncMem();
+  } else if (OUTPUT_CPU == param_.output_type_) {
+    dataframe->ctx.dev_type = DevContext::CPU;
+    dataframe->ctx.dev_id = -1;
+    dataframe->ctx.ddr_channel = 0;
+    for (int i = 0; i < dataframe->GetPlanes(); i++) {
+      dataframe->stride[i] = output->frame.stride[i];
+    }
+    size_t bytes = dataframe->GetBytes();
+    bytes = ROUND_UP(bytes, 64 * 1024);
+    CNStreamMallocHost(&dataframe->cpu_data, bytes);
+    if (nullptr == dataframe->cpu_data) {
+      LOG(FATAL) << "MluDecoder: failed to alloc cpu memory";
+    }
+    void* dst = dataframe->cpu_data;
+    for (int i = 0; i < dataframe->GetPlanes(); i++) {
+      size_t plane_size = dataframe->GetPlaneBytes(i);
+      void *src = reinterpret_cast<void *>(output->frame.plane[i].addr);
+      CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dst, src, plane_size, CNRT_MEM_TRANS_DIR_DEV2HOST), param_.device_id_,
+                           output->frame.channel);
+      dataframe->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size));
+      dataframe->data[i]->SetCpuData(dst);
+      dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+    }
+  } else {
+    LOG(FATAL) << "MluDecoder:output type not supported";
   }
-  dataframe->CopyToSyncMem();
   data->datas[CNDataFramePtrKey] = dataframe;
   handler_->SendFrameInfo(data);
   return 0;
@@ -817,7 +871,7 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
   if (param_.output_type_ == OUTPUT_MLU) {
     dataframe->ctx.dev_type = DevContext::MLU;
     dataframe->ctx.dev_id = param_.device_id_;
-    dataframe->ctx.ddr_channel = 0;  // FIXME
+    dataframe->ctx.ddr_channel = data->GetStreamIndex() % 4;  // FIXME
   } else {
     dataframe->ctx.dev_type = DevContext::CPU;
     dataframe->ctx.dev_id = -1;

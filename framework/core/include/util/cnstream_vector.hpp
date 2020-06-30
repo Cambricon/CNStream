@@ -44,6 +44,7 @@ class ThreadSafeVector {
     SpinLockGuard lk(data_m_);
     SpinLockGuard lk_other(other.data_m_);
     v_ = other.v_;
+    return *this;
   }
   /**
    * @brief Appends the given element value to the end of the container.

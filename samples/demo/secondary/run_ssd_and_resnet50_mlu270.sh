@@ -16,7 +16,8 @@ mkdir -p $MODEL_PATH
 
 cd $MODEL_PATH
     if [ ! -f "resnet50_offline_v1.3.0.cambricon" ]; then
-      wget -O resnet50_offline_v1.3.0.cambricon  http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon
+      wget -c http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon
+      wget -c http://video.cambricon.com/models/MLU270/Classification/resnet50/synset_words.txt
     else
       echo "resnet50 offline model exists."
     fi

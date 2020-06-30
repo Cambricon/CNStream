@@ -34,6 +34,7 @@
 
 #include "cnrt.h"
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 
 namespace cnstream {
 
@@ -68,6 +69,7 @@ void RunConvertImageTest(CNDataFrame* frame, int image_type) {
     free(frame->ptr_cpu[1]);
   }
 }
+
 #ifdef HAVE_OPENCV
 TEST(CoreFrame, ConvertBGRImageToBGR) {
   CNDataFrame frame;
@@ -157,33 +159,29 @@ TEST(CoreFrameDeathTest, CopyToSyncMemOnDevice) {
   void* frame_data = nullptr;
   CALL_CNRT_BY_CONTEXT(cnrtMalloc(&frame_data, nbytes), g_dev_id, 0);
   // fake frame data
-  std::string stream_id = std::to_string(0);
-  std::shared_ptr<CNFrameInfo> data = CNFrameInfo::Create(stream_id);
-  if (data == nullptr) {
+  std::shared_ptr<CNDataFrame> frame = std::make_shared<CNDataFrame>();
+  if (frame == nullptr) {
     std::cout << "frame create error\n";
     return;
   }
-  data->frame.flags = 0;
-  data->channel_idx = 0;
-  data->frame.frame_id = 0;
-  data->frame.timestamp = 0;
-  data->frame.width = width;
-  data->frame.height = height;
-  data->frame.mlu_data = frame_data;
-  data->frame.stride[0] = width;
-  data->frame.stride[1] = width;
-  data->frame.ctx.ddr_channel = 0;
-  data->frame.ctx.dev_id = g_dev_id;
-  data->frame.ctx.dev_type = DevContext::MLU;
-  data->frame.fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+  frame->frame_id = 0;
+  frame->width = width;
+  frame->height = height;
+  frame->mlu_data = frame_data;
+  frame->stride[0] = width;
+  frame->stride[1] = width;
+  frame->ctx.ddr_channel = 0;
+  frame->ctx.dev_id = g_dev_id;
+  frame->ctx.dev_type = DevContext::MLU;
+  frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
 
-  EXPECT_DEATH(data->frame.CopyToSyncMemOnDevice(g_dev_id), "");
+  EXPECT_DEATH(frame->CopyToSyncMemOnDevice(g_dev_id), "");
   // check device num, if num > 1, do sync
-  if (dev_num > 1) data->frame.CopyToSyncMemOnDevice(1);
+  if (dev_num > 1) frame->CopyToSyncMemOnDevice(1);
 
-  EXPECT_DEATH(data->frame.CopyToSyncMemOnDevice(dev_num + 1), "");
-  data->frame.ctx.dev_type = DevContext::INVALID;
-  EXPECT_DEATH(data->frame.CopyToSyncMemOnDevice(1), "");
+  EXPECT_DEATH(frame->CopyToSyncMemOnDevice(dev_num + 1), "");
+  frame->ctx.dev_type = DevContext::INVALID;
+  EXPECT_DEATH(frame->CopyToSyncMemOnDevice(1), "");
 }
 
 TEST(CoreFrame, InferObjAddAttribute) {
@@ -251,40 +249,34 @@ TEST(CoreFrame, InferObjGetExtraAttribute) {
 
 TEST(CoreFrame, InferObjAddAndGetfeature) {
   CNInferObject infer_obj;
-  CNInferFeature infer_feature;
-  infer_feature.push_back(0.1);
-  infer_feature.push_back(0.2);
+  CNInferFeature infer_feature1;
+  infer_feature1.data = std::make_shared<float>(0.1);
+  infer_feature1.size = sizeof(float);
+
+  CNInferFeature infer_feature2;
+  infer_feature2.data = std::make_shared<float>(0.2);
+  infer_feature2.size = sizeof(float);
 
   // add feature successfully
-  EXPECT_NO_THROW(infer_obj.AddFeature(infer_feature));
-  // get features
-  std::vector<CNInferFeature> features = infer_obj.GetFeatures();
-  EXPECT_EQ(features.size(), (uint32_t)1);
-  EXPECT_EQ(features[0].size(), (uint32_t)2);
-  EXPECT_EQ(features[0], infer_feature);
+  EXPECT_NO_THROW(infer_obj.AddFeature(infer_feature1));
+  EXPECT_NO_THROW(infer_obj.AddFeature(infer_feature2));
 
-  infer_feature.clear();
-  infer_feature.push_back(0.3);
-  infer_feature.push_back(0.4);
-  infer_feature.push_back(0.5);
-
-  // add feature successfully
-  EXPECT_NO_THROW(infer_obj.AddFeature(infer_feature));
   // get features
-  features.clear();
-  features = infer_obj.GetFeatures();
+  ThreadSafeVector<CNInferFeature> features = infer_obj.GetFeatures();
   EXPECT_EQ(features.size(), (uint32_t)2);
-  EXPECT_EQ(features[0].size(), (uint32_t)2);
-  EXPECT_EQ(features[1].size(), (uint32_t)3);
-  EXPECT_EQ(features[1], infer_feature);
+  EXPECT_EQ(features[0].size, (uint32_t)sizeof(float));
+  EXPECT_EQ(*(features[0].data.get()), *(infer_feature1.data.get()));
+
+  EXPECT_EQ(features[1].size, (uint32_t)sizeof(float));
+  EXPECT_EQ(*(features[1].data.get()), *(infer_feature2.data.get()));
 }
 
-TEST(CoreFrame, SetAndGetParallelism) {
-  int paral = 32;
-  SetParallelism(paral);
-  EXPECT_EQ(GetParallelism(), paral);
-  SetParallelism(0);
-  EXPECT_EQ(GetParallelism(), 0);
+TEST(CoreFrame, SetAndGetFlowDepth) {
+  int flow_depth = 32;
+  SetFlowDepth(flow_depth);
+  EXPECT_EQ(GetFlowDepth(), flow_depth);
+  SetFlowDepth(0);
+  EXPECT_EQ(GetFlowDepth(), 0);
 }
 
 TEST(CoreFrame, CreateFrameInfo) {
@@ -294,18 +286,17 @@ TEST(CoreFrame, CreateFrameInfo) {
   EXPECT_NE(CNFrameInfo::Create("0", true), nullptr);
 }
 
-TEST(CoreFrame, CreateFrameInfoMultiParal) {
+TEST(CoreFrame, CreateFrameInfoMultiFlow_Depth) {
   uint32_t seed = (uint32_t)time(0);
-  int paral = rand_r(&seed) % 64 + 1;
+  int flow_depth = rand_r(&seed) % 64 + 1;
   {
-    SetParallelism(paral);
-    EXPECT_EQ(GetParallelism(), paral);
+    SetFlowDepth(flow_depth);
+    EXPECT_EQ(GetFlowDepth(), flow_depth);
     std::vector<std::shared_ptr<CNFrameInfo>> frame_info_ptrs;
-    for (int i = 0; i < paral; i++) {
+    for (int i = 0; i < flow_depth; i++) {
       // create frame
       frame_info_ptrs.push_back(CNFrameInfo::Create("0"));
       EXPECT_NE(frame_info_ptrs[i], nullptr);
-      frame_info_ptrs[i]->frame.ctx.dev_type = DevContext::CPU;
     }
 
     // exceed parallelism
@@ -314,7 +305,7 @@ TEST(CoreFrame, CreateFrameInfoMultiParal) {
     // create eos frame
     EXPECT_NE(CNFrameInfo::Create("0", true), nullptr);
   }
-  SetParallelism(0);
+  SetFlowDepth(0);
 }
 
 }  // namespace cnstream

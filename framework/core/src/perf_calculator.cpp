@@ -41,7 +41,7 @@ std::mutex latency_mutex;
 std::mutex fps_mutex;
 
 void PrintLatency(const PerfStats &stats, uint32_t width) {
-  std::cout << std::right << " -- [latency] avg: " << std::setw(4) << std::setfill(' ')
+  std::cout << std::right << "  -- [latency] avg: " << std::setw(4) << std::setfill(' ')
             << stats.latency_avg / 1000 << "." << stats.latency_avg % 1000 / 100
             << "ms, min: " << std::setw(4) << std::setfill(' ')
             << stats.latency_min / 1000 << "." << stats.latency_min % 1000 / 100
@@ -51,9 +51,40 @@ void PrintLatency(const PerfStats &stats, uint32_t width) {
 }
 
 void PrintThroughput(const PerfStats &stats, uint32_t width) {
-  std::cout << std::right << " -- [fps]: " << std::setw(6) << std::setfill(' ')
+  std::cout << std::right << "  -- [fps]: " << std::setw(6) << std::setfill(' ')
             << std::fixed << std::setprecision(1) << stats.fps << ", [frame count]: "
             << std::setw(width) << std::setfill(' ') << stats.frame_cnt << std::endl;
+}
+
+void PrintStreamId(std::string stream_id) {
+  std::cout << "[stream id] " << std::right << std::setw(3) << std::setfill(' ') << stream_id;
+}
+
+void PrintStr(const std::string str, uint32_t width, const char fill_charater) {
+  std::cout << std::left << std::setw(width) << std::setfill(fill_charater) << str;
+}
+
+void PrintTitle(std::string title) {
+  std::cout << std::endl;
+  PrintStr("===================================[ " + title + " ]", 96, '=');
+  std::cout << std::endl;
+}
+
+void PrintTitleForLatestThroughput(const std::string timeframe) {
+  std::cout << std::endl;
+  PrintStr("-", 56, '-');
+  std::cout << "\nThroughput over the last " << timeframe << std::endl;
+}
+
+void PrintTitleForAverageThroughput() {
+  std::cout << std::endl;
+  PrintStr("-", 56, '-');
+  std::cout << "\nAverage throughput over the process" << std::endl;
+}
+
+void PrintTitleForTotal() {
+  std::cout << std::endl;
+  PrintStr("Total : ");
 }
 
 // --- PerfCalculator  --- //

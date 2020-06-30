@@ -45,8 +45,9 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
                          const std::function<void(const std::string& err_msg)>& error_func, bool keep_aspect_ratio,
                          bool batching_by_obj, const std::shared_ptr<ObjPreproc>& obj_preprocessor,
                          const std::shared_ptr<ObjPostproc>& obj_postprocessor,
-                         const std::shared_ptr<ObjFilter>& obj_filter)
-    : model_(model),
+                         const std::shared_ptr<ObjFilter>& obj_filter,
+                         std::string dump_resized_image_dir)
+     :model_(model),
       preprocessor_(preprocessor),
       postprocessor_(postprocessor),
       batchsize_(batchsize),
@@ -59,7 +60,8 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
       obj_postprocessor_(obj_postprocessor),
       obj_filter_(obj_filter),
       infer_perf_manager_(perf_manager),
-      infer_thread_id_(infer_thread_id) {
+      infer_thread_id_(infer_thread_id),
+      dump_resized_image_dir_(dump_resized_image_dir) {
   try {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id);
@@ -228,6 +230,7 @@ void InferEngine::StageAssemble() {
   std::shared_ptr<BatchingDoneStage> d2h_stage =
       std::make_shared<D2HBatchingDoneStage>(model_, batchsize_, dev_id_, mlu_output_res_, cpu_output_res_);
   infer_stage->SetPerfContext(infer_perf_manager_, infer_thread_id_);
+  infer_stage->SetDumpResizedImageDir(dump_resized_image_dir_);
   batching_done_stages_.push_back(infer_stage);
   batching_done_stages_.push_back(d2h_stage);
 
