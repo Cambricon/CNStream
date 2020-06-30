@@ -113,6 +113,74 @@ TEST(Osd, Process) {
   EXPECT_EQ(osd->Process(data), 0);
 }
 
+TEST(Osd, ProcessSecondary) {
+  // create osd
+  std::shared_ptr<Module> osd = std::make_shared<Osd>(gname);
+  ModuleParamSet param;
+  std::string label_path = GetExePath() + glabel_path;
+  param["label_path"] = label_path;
+  param["secodary_labtel_path"] = label_path;
+  param["attr_key"] = "classifaction";
+  ASSERT_TRUE(osd->Open(param));
+
+  // prepare data
+  int width = 1920;
+  int height = 1080;
+  cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
+  auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+  data->SetStreamIndex(0);
+  frame->frame_id = 1;
+  data->timestamp = 1000;
+  frame->width = width;
+  frame->height = height;
+  frame->ptr_cpu[0] = img.data;
+  frame->stride[0] = width;
+  frame->ctx.dev_type = DevContext::DevType::CPU;
+  frame->fmt = CN_PIXEL_FORMAT_BGR24;
+  frame->CopyToSyncMem();
+  data->datas[CNDataFramePtrKey] = frame;
+
+
+
+  CNObjsVec objs;
+  auto obj = std::make_shared<CNInferObject>();
+  obj->id = std::to_string(11);
+  CNInferBoundingBox bbox = {0.6, 0.4, 0.6, 0.3};
+  obj->bbox = bbox;
+  cnstream::CNInferAttr attr;
+  attr.id = 0;
+  attr.value = -1;
+  attr.score = -1;
+  obj->AddAttribute("classifaction", attr);
+  objs.push_back(obj);
+
+
+
+  auto obj2 = std::make_shared<CNInferObject>();
+  obj2->id = std::to_string(12);
+  bbox = {0.1, -0.2, 0.3, 0.4};
+  obj2->bbox = bbox;
+  cnstream::CNInferAttr attr2;
+  attr2.id = 0;
+  attr2.value = 2;
+  attr2.score = 0.6;
+  obj2->AddAttribute("classifaction", attr2);
+  objs.push_back(obj2);
+
+  for (int i = 0; i < 5; ++i) {
+    auto obj = std::make_shared<CNInferObject>();
+    obj->id = std::to_string(i);
+    float val = i * 0.1;
+    CNInferBoundingBox bbox = {val, val, val, val};
+    obj->bbox = bbox;
+    objs.push_back(obj);
+  }
+
+  data->datas[cnstream::CNObjsVecKey] = objs;
+  EXPECT_EQ(osd->Process(data), 0);
+}
+
 TEST(Osd, CheckParamSet) {
   std::shared_ptr<Module> osd = std::make_shared<Osd>(gname);
   ModuleParamSet param;

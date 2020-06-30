@@ -73,6 +73,48 @@ void PrintLatency(const PerfStats &stats, uint32_t width = 0);
  * @return Void.
  */
 void PrintThroughput(const PerfStats &stats, uint32_t width = 0);
+/**
+ * @brief Prints stream id.
+ * @param stream_id The stream id.
+ *
+ * @return Void.
+ */
+void PrintStreamId(std::string stream_id);
+/**
+ * @brief Prints string.
+ * @param str The string.
+ * @param width The width of the printed string. The default value is 15.
+ * @param fill_charater Fills output with fill_charater. The default value is empty char
+ *
+ * @return Void.
+ */
+void PrintStr(const std::string str, uint32_t width = 15, const char fill_charater = ' ');
+/**
+ * @brief Prints title.
+ * @param title The title.
+ *
+ * @return Void.
+ */
+void PrintTitle(std::string title);
+/**
+ * @brief Prints title for latest throughput.
+ * @param timeframe The latest throughput is over timeframe. The default value is 2s.
+ *
+ * @return Void.
+ */
+void PrintTitleForLatestThroughput(const std::string timeframe = "2s");
+/**
+ * @brief Prints title for average throughput.
+ *
+ * @return Void.
+ */
+void PrintTitleForAverageThroughput();
+/**
+ * @brief Prints 'total'.
+ *
+ * @return Void.
+ */
+void PrintTitleForTotal();
 
 class PerfUtils;
 class PerfCalculationMethod;

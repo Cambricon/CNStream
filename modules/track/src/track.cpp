@@ -153,6 +153,10 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
     return -1;
   }
 
+  if (data->datas.find(CNObjsVecKey) == data->datas.end()) {
+    return 0;
+  }
+
   CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
   for (auto idx = objs.begin(); idx != objs.end(); idx++) {
     cnstream::CNInferBoundingBox &bbox = (*idx)->bbox;

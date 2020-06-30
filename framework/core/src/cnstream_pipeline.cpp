@@ -740,10 +740,12 @@ bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::strin
 
 void Pipeline::CalculatePerfStats() {
   while (d_ptr_->perf_running_) {
+    std::cout << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+              << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << std::endl;
     CalculateModulePerfStats();
     std::cout << "\n" << std::endl;
     CalculatePipelinePerfStats();
-    sleep(2);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
     std::cout << "\n\n" << std::endl;
   }
   std::cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
@@ -759,7 +761,7 @@ void Pipeline::PerfSqlCommitLoop() {
       it.second->SqlCommitTrans();
       it.second->SqlBeginTrans();
     }
-    sleep(1);
+    std::this_thread::sleep_for(std::chrono::seconds(1));
   }
   for (auto& it : d_ptr_->perf_managers_) {
     it.second->SqlCommitTrans();
@@ -769,11 +771,8 @@ void Pipeline::PerfSqlCommitLoop() {
 static void CalcAndPrintLatestThroughput(std::string sql_name, std::string perf_type, std::vector<std::string> keys,
                                          std::shared_ptr<PerfCalculator> calculator, bool final_print,
                                          bool is_pipeline) {
-  std::cout << "\n=======================================================" << std::endl;
-  std::cout << "Performance for the last 2s" << std::endl;
-  if (is_pipeline) {
-    std::cout << "(* * Note: There is a slight delay * *)" << std::endl;
-    std::cout << "Pipeline : ";
+  if (!is_pipeline) {
+    PrintTitleForLatestThroughput();
   }
   // calculate throughput for each module
   PerfStats stats;
@@ -785,7 +784,10 @@ static void CalcAndPrintLatestThroughput(std::string sql_name, std::string perf_
     stats = calculator->CalcThroughput(sql_name, perf_type, keys);
   }
   if (!is_pipeline) {
-    std::cout << "\nTotal : ";
+    PrintTitleForTotal();
+  } else {
+    std::cout << "\n(* Note: There is a slight delay.)\n";
+    PrintStr("Pipeline : ");
   }
   PrintThroughput(stats);
 }
@@ -796,8 +798,7 @@ void Pipeline::CalculateModulePerfStats(bool final_print) {
     std::shared_ptr<Module> instance = module_it.second;
     if (instance && instance->ShowPerfInfo()) {
       if (d_ptr_->perf_calculators_.find(node_name) != d_ptr_->perf_calculators_.end()) {
-        std::cout << "\n---------------------------------[ " + node_name << " Performance ]"
-                  << "-----------------------------------" << std::endl;
+        PrintTitle(node_name + " Performance");
         std::shared_ptr<PerfCalculator> calculator = d_ptr_->perf_calculators_[node_name];
         std::vector<std::pair<std::string, PerfStats>> latency_vec;
         std::vector<uint32_t> digit_of_frame_cnt;
@@ -811,7 +812,7 @@ void Pipeline::CalculateModulePerfStats(bool final_print) {
         }  // for each stream
 
         for (auto& it : latency_vec) {
-          std::cout << "[stream id] " << std::setw(2) << std::setfill(' ') << it.first;
+          PrintStreamId(it.first);
           PrintLatency(it.second, PerfUtils::Max(digit_of_frame_cnt));
         }
         // calculate and print throughput for module
@@ -820,8 +821,8 @@ void Pipeline::CalculateModulePerfStats(bool final_print) {
                                       node_name + PerfManager::GetEndTimeSuffix(), node_name + "_th"},
                                       calculator, final_print, false);
         PerfStats avg_fps = calculator->GetAvgThroughput("", PerfManager::GetDefaultType());
-        std::cout << "\n=================================================" << std::endl;
-        std::cout << "Performance for the entire process\n\nTotal : ";
+        PrintTitleForAverageThroughput();
+        PrintTitleForTotal();
         PrintThroughput(avg_fps);
       }
     }
@@ -829,15 +830,14 @@ void Pipeline::CalculateModulePerfStats(bool final_print) {
 }
 
 void Pipeline::CalculatePipelinePerfStats(bool final_print) {
-  std::cout << "\033[32m"
-            << "-------------------------------------[ Pipeline Performance ]"
-            << "-------------------------------------"
-            << "\033[0m" << std::endl;
+  std::cout << "\033[32m";
+  PrintTitle("Pipeline Performance");
+  std::cout<< "\033[0m";
 
   for (auto& end_node : d_ptr_->end_nodes_) {
     if (d_ptr_->perf_calculators_.find("pipeline_" + end_node) != d_ptr_->perf_calculators_.end()) {
       std::shared_ptr<PerfCalculator> calculator = d_ptr_->perf_calculators_["pipeline_" + end_node];
-      std::cout << "End node " << end_node << std::endl;
+      std::cout << "End node : " << end_node << std::endl;
 
       double total_fps_tmp = 0.f;
       size_t total_fn_tmp = 0;
@@ -853,12 +853,12 @@ void Pipeline::CalculatePipelinePerfStats(bool final_print) {
                                                          {end_node + PerfManager::GetEndTimeSuffix()});
         PerfStats avg_fps = calculator->GetAvgThroughput(stream_id, PerfManager::GetDefaultType());
 
-        latest_fps.push_back(std::make_pair(stream_id, fps_stats));
-        latest_frame_cnt_digit.push_back(std::to_string(fps_stats.frame_cnt).length());
-        entire_fps.push_back(std::make_pair(stream_id, avg_fps));
-        entire_frame_cnt_digit.push_back(std::to_string(avg_fps.frame_cnt).length());
         latency_vec.push_back(std::make_pair(stream_id, latency_stats));
+        latest_fps.push_back(std::make_pair(stream_id, fps_stats));
+        entire_fps.push_back(std::make_pair(stream_id, avg_fps));
         latency_frame_cnt_digit.push_back(std::to_string(avg_fps.frame_cnt).length());
+        latest_frame_cnt_digit.push_back(std::to_string(fps_stats.frame_cnt).length());
+        entire_frame_cnt_digit.push_back(std::to_string(avg_fps.frame_cnt).length());
 
         total_fn_tmp += avg_fps.frame_cnt;
         total_fps_tmp += avg_fps.fps;
@@ -866,17 +866,16 @@ void Pipeline::CalculatePipelinePerfStats(bool final_print) {
 
       uint32_t max_digit = PerfUtils::Max(latency_frame_cnt_digit);
       for (auto& it : latency_vec) {
-        std::cout << "[stream id] " << std::setw(2) << std::setfill(' ') << it.first;
+        PrintStreamId(it.first);
         PrintLatency(it.second, max_digit);
       }
       // std::cout << "Stream Sum Total : " << total_fps_tmp << " cnt = " << total_fn_tmp << std::endl;
 
       // print throughput for each stream
-      std::cout << "\n=======================================================" << std::endl;
-      std::cout << "Performance for the last 2s" << std::endl;
+      PrintTitleForLatestThroughput();
       max_digit = PerfUtils::Max(latest_frame_cnt_digit);
       for (auto& it : latest_fps) {
-        std::cout << "[stream id] " << std::setw(2) << std::setfill(' ') << it.first;
+        PrintStreamId(it.first);
         PrintThroughput(it.second, max_digit);
       }
       // calculate and print throughput for pipeline
@@ -885,14 +884,13 @@ void Pipeline::CalculatePipelinePerfStats(bool final_print) {
                                    calculator, final_print, true);
 
       PerfStats avg_fps = calculator->GetAvgThroughput("", PerfManager::GetDefaultType());
-      std::cout << "\n=======================================================" << std::endl;
-      std::cout << "Performance for the entire process" << std::endl;
+      PrintTitleForAverageThroughput();
       max_digit = PerfUtils::Max(entire_frame_cnt_digit);
       for (auto& it : entire_fps) {
-        std::cout << "[stream id] " << std::setw(2) << std::setfill(' ') << it.first;
+        PrintStreamId(it.first);
         PrintThroughput(it.second, max_digit);
       }
-      std::cout << "\nTotal : ";
+      PrintTitleForTotal();
       PrintThroughput(avg_fps);
 
       if (final_print) {

@@ -76,7 +76,7 @@ class InferencerPrivate {
   std::shared_ptr<ObjPostproc> obj_postproc_ = nullptr;
   std::shared_ptr<ObjFilter> obj_filter_ = nullptr;
   bool keep_aspect_ratio_ = false;  // mlu preprocessing, keep aspect ratio
-
+  std::string dump_resized_image_dir_ = "";
   void InferEngineErrorHnadleFunc(const std::string& err_msg) {
     LOG(FATAL) << err_msg;
     q_ptr_->PostEvent(EVENT_ERROR, err_msg);
@@ -92,11 +92,14 @@ class InferencerPrivate {
       ctx = std::make_shared<InferContext>();
       std::stringstream ss;
       ss << tid;
-      std::string tid_str = "th_" + ss.str();
+      std::string thread_id_str = ss.str();
+      thread_id_str.erase(0, thread_id_str.length() - 9);
+      std::string tid_str = "th_" + thread_id_str;
       ctx->engine = std::make_shared<InferEngine>(
           device_id_, model_loader_, preproc_, postproc_, bsize_, batching_timeout_, use_scaler_, infer_perf_manager_,
           tid_str, std::bind(&InferencerPrivate::InferEngineErrorHnadleFunc, this, std::placeholders::_1),
-          keep_aspect_ratio_, obj_infer_, obj_preproc_, obj_postproc_, obj_filter_);
+          keep_aspect_ratio_, obj_infer_, obj_preproc_, obj_postproc_, obj_filter_,
+          dump_resized_image_dir_);
       ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_, bsize_);
       ctxs_[tid] = ctx;
       if (infer_perf_manager_) {
@@ -117,77 +120,86 @@ class InferencerPrivate {
 };  // class InferencerPrivate
 
 void InferencerPrivate::PrintPerf(std::string name, std::vector<std::string> keys) {
-  if (perf_calculator_.find(name) != perf_calculator_.end()) {
-    std::shared_ptr<PerfCalculator> calculator = perf_calculator_[name];
-    std::shared_ptr<PerfUtils> perf_utils = calculator->GetPerfUtils();
-    std::vector<std::string> thread_ids = perf_utils->GetTableNames(q_ptr_->GetName());
-    PerfStats latency_stats;
-    PerfStats fps_stats;
-    std::vector<std::pair<std::string, PerfStats>> latest_fps;
-    std::vector<std::pair<std::string, PerfStats>> entire_fps;
-    for (auto thread_id : thread_ids) {
-      std::cout << thread_id;
-      fps_stats = calculator->CalcThroughput(q_ptr_->GetName(), thread_id, keys);
-      latency_stats = calculator->CalcLatency(q_ptr_->GetName(), thread_id, keys);
-      PerfStats avg_fps = calculator->GetAvgThroughput(q_ptr_->GetName(), thread_id);
+  if (perf_calculator_.find(name) == perf_calculator_.end()) {
+    LOG(ERROR) << "[Inferencer] [" << q_ptr_->GetName() << "] Can not find perf calculator " << name << std::endl;
+    return;
+  }
+  std::shared_ptr<PerfCalculator> calculator = perf_calculator_[name];
+  std::shared_ptr<PerfUtils> perf_utils = calculator->GetPerfUtils();
+  std::vector<std::string> thread_ids = perf_utils->GetTableNames(q_ptr_->GetName());
 
-      if (name == "rsz_cvt_batch") {
-        latency_stats.frame_cnt *= bsize_;
-        fps_stats.frame_cnt *= bsize_;
-        fps_stats.fps *= bsize_;
-        avg_fps.fps *= bsize_;
-        avg_fps.frame_cnt *= bsize_;
-      }
-      PrintLatency(latency_stats);
-
-      latest_fps.push_back(std::make_pair(thread_id, fps_stats));
-      entire_fps.push_back(std::make_pair(thread_id, avg_fps));
-    }
-
-    PerfStats total_stats = calculator->CalcThroughput(q_ptr_->GetName(), "", keys);
-    PerfStats total_avg_fps = calculator->GetAvgThroughput(q_ptr_->GetName(), "");
+  std::vector<std::pair<std::string, PerfStats>> latest_fps, entire_fps, latency_vec;
+  std::vector<uint32_t> latest_frame_cnt_digit, entire_frame_cnt_digit, latency_frame_cnt_digit;
+  for (auto thread_id : thread_ids) {
+    PerfStats fps_stats = calculator->CalcThroughput(q_ptr_->GetName(), thread_id, keys);
+    PerfStats latency_stats = calculator->CalcLatency(q_ptr_->GetName(), thread_id, keys);
+    PerfStats avg_fps = calculator->GetAvgThroughput(q_ptr_->GetName(), thread_id);
 
     if (name == "rsz_cvt_batch") {
-      total_stats.fps *= bsize_;
-      total_stats.frame_cnt *= bsize_;
-      total_avg_fps.fps *= bsize_;
-      total_avg_fps.frame_cnt *= bsize_;
+      latency_stats.frame_cnt *= bsize_;
+      fps_stats.frame_cnt *= bsize_;
+      fps_stats.fps *= bsize_;
+      avg_fps.fps *= bsize_;
+      avg_fps.frame_cnt *= bsize_;
     }
 
-    std::cout << "\n=========================================================" << std::endl;
-    std::cout << "Performance for the last 2s" << std::endl;
-    for (auto &it : latest_fps) {
-      std::cout << it.first;
-      PrintThroughput(it.second);
-    }
+    latency_vec.push_back(std::make_pair(thread_id, latency_stats));
+    latest_fps.push_back(std::make_pair(thread_id, fps_stats));
+    entire_fps.push_back(std::make_pair(thread_id, avg_fps));
 
-
-    std::cout << "\nTotal : ";
-    PrintThroughput(total_stats);
-
-    std::cout << "\n=========================================================" << std::endl;
-    std::cout << "Performance for the entire process" << std::endl;
-    for (auto &it : entire_fps) {
-      std::cout << it.first;
-      PrintThroughput(it.second);
-    }
-    std::cout << "\nTotal : ";
-    PrintThroughput(total_avg_fps);
+    latency_frame_cnt_digit.push_back(std::to_string(latency_stats.frame_cnt).length());
+    latest_frame_cnt_digit.push_back(std::to_string(fps_stats.frame_cnt).length());
+    entire_frame_cnt_digit.push_back(std::to_string(avg_fps.frame_cnt).length());
   }
+
+  PerfStats total_stats = calculator->CalcThroughput(q_ptr_->GetName(), "", keys);
+  PerfStats total_avg_fps = calculator->GetAvgThroughput(q_ptr_->GetName(), "");
+
+  if (name == "rsz_cvt_batch") {
+    total_stats.fps *= bsize_;
+    total_stats.frame_cnt *= bsize_;
+    total_avg_fps.fps *= bsize_;
+    total_avg_fps.frame_cnt *= bsize_;
+  }
+
+  uint32_t max_digit = PerfUtils::Max(latency_frame_cnt_digit);
+  for (auto &it : latency_vec) {
+    PrintStr(it.first);
+    PrintLatency(it.second, max_digit);
+  }
+  PrintTitleForLatestThroughput();
+  max_digit = PerfUtils::Max(latest_frame_cnt_digit);
+  for (auto &it : latest_fps) {
+    PrintStr(it.first);
+    PrintThroughput(it.second, max_digit);
+  }
+  PrintTitleForTotal();
+  PrintThroughput(total_stats);
+
+  PrintTitleForAverageThroughput();
+  max_digit = PerfUtils::Max(entire_frame_cnt_digit);
+  for (auto &it : entire_fps) {
+    PrintStr(it.first);
+    PrintThroughput(it.second, max_digit);
+  }
+  PrintTitleForTotal();
+  PrintThroughput(total_avg_fps);
 }
 
 void InferencerPrivate::PrintPerf() {
-  std::cout << "\n************************************** Inferencer Statistics **********************************\n";
-  std::cout << "---------------------------- [resize and convert (theoretical)] ----------------------\n";
+  std::cout << "\n\n#################################################"
+            << "#################################################" << std::endl;
+  PrintStr("Inferencer performance.    Module name : " + q_ptr_->GetName());
+  PrintTitle("resize and convert (theoretical)");
   PrintPerf("rsz_cvt_batch", {"resize_start_time", "resize_end_time"});
-  std::cout << "\n---------------------------- [resize and convert] ---------------------------------------\n";
+  PrintTitle("resize and convert (realistic)");
   PrintPerf("rsz_cvt", {"resize_start_time", "resize_end_time", "resize_cnt"});
-  std::cout << "\n-------------------------------- [inference] --------------------------------------------\n";
+  PrintTitle("run inference");
   PrintPerf("infer", {"infer_start_time", "infer_end_time", "infer_cnt"});
 }
 
 void InferencerPrivate::CalcPerf() {
-  std::this_thread::sleep_for(std::chrono::seconds(1));
+  std::this_thread::sleep_for(std::chrono::milliseconds(1500));
   while (perf_th_running_) {
     PrintPerf();
     std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -228,6 +240,7 @@ Inferencer::Inferencer(const std::string& name) : Module(name) {
   param_register_.Register("keep_aspect_ratio",
                            "As the mlu is used for image processing, "
                            "the scale remains constant.");
+  param_register_.Register("dump_resized_image_dir", "where to dump the resized image.");
 }
 
 Inferencer::~Inferencer() {}
@@ -352,7 +365,16 @@ bool Inferencer::Open(ModuleParamSet paramSet) {
   if (scaler_str != paramSet.end() && scaler_str->second == "true") {
     d_ptr_->use_scaler_ = true;
   }
-
+  if (paramSet.find("dump_resized_image_dir") != paramSet.end()) {
+    d_ptr_->dump_resized_image_dir_ = paramSet["dump_resized_image_dir"];
+    if (d_ptr_->dump_resized_image_dir_.empty()) {
+      char* path = getcwd(nullptr, 0);
+      if (path) {
+        d_ptr_->dump_resized_image_dir_ = path;
+        free(path);
+      }
+    }
+  }
 #ifdef CNS_MLU100
   if (paramSet.find("batch_size") != paramSet.end()) {
     std::stringstream ss;

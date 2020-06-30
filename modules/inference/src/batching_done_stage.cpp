@@ -22,9 +22,14 @@
 #include <easyinfer/easy_infer.h>
 #include <easyinfer/mlu_memory_op.h>
 #include <glog/logging.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "cnrt.h"
 #include "infer_engine.hpp"
 #include "infer_resource.hpp"
 #include "infer_task.hpp"
@@ -133,7 +138,6 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
 
     std::shared_ptr<CNFrameInfo> info = nullptr;
     std::string pts_str;
-
     if (perf_manager_) {
       info = finfos.back().first;
       if (!info->IsEos()) {
@@ -144,7 +148,30 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
                               std::to_string(finfos.size()));
       }
     }
-
+    if (!dump_resized_image_dir_.empty()) {
+      int batch_offset = mlu_input_value.datas[0].batch_offset;
+      int frame_num = finfos.size();
+      int len = batch_offset * frame_num;
+      std::vector<char> cpu_input_value(len);
+      for (const auto& data : mlu_input_value.datas) {
+        cnrtMemcpy(reinterpret_cast<void*>(cpu_input_value.data()), data.ptr, len, CNRT_MEM_TRANS_DIR_DEV2HOST);
+        for (int  i = 0; i < frame_num; i++) {
+          info = finfos[i].first;
+          CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(info->datas[CNDataFramePtrKey]);
+          char *img = reinterpret_cast<char*>(cpu_input_value.data()) + batch_offset * i;
+          cv::Mat bgr(data.shape.h, data.shape.w, CV_8UC3);
+          cv::Mat bgra(data.shape.h, data.shape.w, CV_8UC4, img);
+          cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
+          std::string stream_index = std::to_string(info->GetStreamIndex());
+          if (0 != access(dump_resized_image_dir_.c_str(), 0)) {
+            mkdir(dump_resized_image_dir_.c_str(), 0777);
+          }
+          cv::imwrite(dump_resized_image_dir_ + "/ch" + stream_index + "_stream" + stream_index + "_frame" +
+                                      std::to_string(frame->frame_id) + ".jpg",
+                                                      bgr);
+        }
+      }
+    }
     this->easyinfer_->Run(mlu_input_value.ptrs, mlu_output_value.ptrs);
 
     if (perf_manager_) {
