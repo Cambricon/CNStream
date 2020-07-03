@@ -26,38 +26,33 @@
 
 namespace cnstream {
 
-class ConnectorPrivate {
- private:
-  explicit ConnectorPrivate(Connector* q);
-  ~ConnectorPrivate();
-  Conveyor* GetConveyorByIdx(int idx) const;
-
-  DECLARE_PUBLIC(q_ptr_, Connector);
-  std::vector<Conveyor*> vec_conveyor_;
-  size_t conveyor_capacity_ = 20;
-  std::atomic<bool> stop_{false};
-  DISABLE_COPY_AND_ASSIGN(ConnectorPrivate);
-};  // class ConnectorPrivate
-
-Connector::Connector(const size_t conveyor_count, size_t conveyor_capacity)
-    : d_ptr_(new (std::nothrow) ConnectorPrivate(this)) {
-  LOG_IF(FATAL, nullptr == d_ptr_) << "Connector::Connector()  new ConnectorPrivate failed.";
-  d_ptr_->conveyor_capacity_ = conveyor_capacity;
-  d_ptr_->vec_conveyor_.reserve(conveyor_count);
+Connector::Connector(const size_t conveyor_count, size_t conveyor_capacity) {
+  conveyor_capacity_ = conveyor_capacity;
+  conveyors_.reserve(conveyor_count);
   for (size_t i = 0; i < conveyor_count; ++i) {
-    Conveyor* Conveyor_ptr = new (std::nothrow) Conveyor(this, conveyor_capacity);
-    LOG_IF(FATAL, nullptr == Conveyor_ptr) << "Connector::Connector()  new Conveyor failed.";
-    d_ptr_->vec_conveyor_.push_back(Conveyor_ptr);
+    Conveyor* conveyor = new (std::nothrow) Conveyor(this, conveyor_capacity);
+    LOG_IF(FATAL, nullptr == conveyor) << "Connector::Connector()  new Conveyor failed.";
+    conveyors_.push_back(conveyor);
   }
 }
 
-Connector::~Connector() { delete d_ptr_; }
+Connector::~Connector() {
+  for (Conveyor* conveyor : conveyors_) {
+    delete conveyor;
+  }
+}
 
-const size_t Connector::GetConveyorCount() const { return d_ptr_->vec_conveyor_.size(); }
+const size_t Connector::GetConveyorCount() const {
+  return conveyors_.size();
+}
 
-Conveyor* Connector::GetConveyor(int conveyor_idx) const { return d_ptr_->GetConveyorByIdx(conveyor_idx); }
+Conveyor* Connector::GetConveyor(int conveyor_idx) const {
+  return GetConveyorByIdx(conveyor_idx);
+}
 
-size_t Connector::GetConveyorCapacity() const { return d_ptr_->conveyor_capacity_; }
+size_t Connector::GetConveyorCapacity() const {
+  return conveyor_capacity_;
+}
 
 CNFrameInfoPtr Connector::PopDataBufferFromConveyor(int conveyor_idx) {
   return GetConveyor(conveyor_idx)->PopDataBuffer();
@@ -67,30 +62,28 @@ void Connector::PushDataBufferToConveyor(int conveyor_idx, CNFrameInfoPtr data) 
   GetConveyor(conveyor_idx)->PushDataBuffer(data);
 }
 
-bool Connector::IsStopped() { return d_ptr_->stop_.load(); }
-
-void Connector::Start() { d_ptr_->stop_.store(false); }
-
-void Connector::Stop() { d_ptr_->stop_.store(true); }
-
-ConnectorPrivate::ConnectorPrivate(Connector* q) : q_ptr_(q) {}
-
-ConnectorPrivate::~ConnectorPrivate() {
-  for (Conveyor* it : vec_conveyor_) {
-    delete it;
-  }
+bool Connector::IsStopped() {
+  return stop_.load();
 }
 
-Conveyor* ConnectorPrivate::GetConveyorByIdx(int idx) const {
+void Connector::Start() {
+  stop_.store(false);
+}
+
+void Connector::Stop() {
+  stop_.store(true);
+}
+
+Conveyor* Connector::GetConveyorByIdx(int idx) const {
   CHECK_GE(idx, 0);
-  CHECK_LT(idx, static_cast<int>(vec_conveyor_.size()));
-  return vec_conveyor_[idx];
+  CHECK_LT(idx, static_cast<int>(conveyors_.size()));
+  return conveyors_[idx];
 }
 
 void Connector::EmptyDataQueue() {
   size_t conveyor_cnt = GetConveyorCount();
   for (size_t conveyor_idx = 0; conveyor_idx < conveyor_cnt; ++conveyor_idx) {
-    d_ptr_->GetConveyorByIdx(conveyor_idx)->PopAllDataBuffer();
+    GetConveyorByIdx(conveyor_idx)->PopAllDataBuffer();
   }
 }
 

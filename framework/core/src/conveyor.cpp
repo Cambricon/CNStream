@@ -34,7 +34,9 @@ Conveyor::Conveyor(Connector* container, size_t max_size, bool enable_drop)
   LOG_IF(FATAL, nullptr == container) << "container should not be nullptr.";
 }
 
-uint32_t Conveyor::GetBufferSize() { return dataq_.Size(); }
+uint32_t Conveyor::GetBufferSize() {
+  return dataq_.Size();
+}
 
 void Conveyor::PushDataBuffer(CNFrameInfoPtr data) {
   while (!container_->IsStopped() && dataq_.Size() >= max_size_) {

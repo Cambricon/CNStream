@@ -33,6 +33,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -46,6 +47,9 @@
 #include "cnstream_source.hpp"
 
 namespace cnstream {
+
+class Connector;
+class PerfCalculator;
 
 /**
  * Data stream message type.
@@ -95,7 +99,7 @@ class StreamMsgObserver {
    * @param msg The stream message from a pipeline.
    */
   virtual void Update(const StreamMsg& msg) = 0;
-  virtual ~StreamMsgObserver() {}
+  virtual ~StreamMsgObserver() = default;
 };  // class StreamMsgObserver
 
 /**
@@ -106,16 +110,17 @@ struct LinkStatus {
   std::vector<uint32_t> cache_size;  ///< The size of each queue that is used to cache data between modules.
 };
 
+static constexpr size_t MAX_STREAM_NUM = 64;
+
 /**
  * @brief ModuleId&StreamIdx manager for pipeline.
  *
  * Allocates and deallocates id for Pipeline modules & Streams.
  *
  */
-static constexpr size_t MAX_STREAM_NUM = 64;
 class IdxManager {
  public:
-  IdxManager() {}
+  IdxManager() = default;
   IdxManager(const IdxManager&) = delete;
   IdxManager& operator=(const IdxManager&) = delete;
   uint32_t GetStreamIndex(const std::string& stream_id);
@@ -129,8 +134,6 @@ class IdxManager {
   std::bitset<MAX_STREAM_NUM> stream_bitset;
   uint64_t module_id_mask_ = 0;
 };  // class IdxManager
-
-class PipelinePrivate;
 
 /**
  * The manager of the modules.
@@ -419,10 +422,15 @@ class Pipeline {
 
  private:
   /* ------Internal methods------ */
+  void SetEOSMask();
+  void ClearEOSMask();
+  void UpdateByStreamMsg(const StreamMsg& msg);
+  void StreamMsgHandleFunc();
 
  private:
 #ifdef UNIT_TEST
- public:  // NOLINT
+
+ public:
 #endif
   void TransmitData(const std::string node_name, std::shared_ptr<CNFrameInfo> data);
 
@@ -438,17 +446,20 @@ class Pipeline {
    */
   friend class Module;
   friend class SourceModule;
+
   uint32_t GetStreamIndex(const std::string& stream_id) {
     if (idxManager_) {
       return idxManager_->GetStreamIndex(stream_id);
     }
     return INVALID_STREAM_IDX;
   }
+
   void ReturnStreamIndex(const std::string& stream_id) {
     if (idxManager_) {
       idxManager_->ReturnStreamIndex(stream_id);
     }
   }
+
   size_t GetModuleIdx() {
     if (idxManager_) {
       return idxManager_->GetModuleIdx();
@@ -463,12 +474,46 @@ class Pipeline {
   }
 
   const std::string& GetName() const { return name_; }
+
+  /**
+   * The module associated informations
+   */
+  struct ModuleAssociatedInfo {
+    uint32_t parallelism = 0;
+    std::shared_ptr<Connector> connector;
+    std::set<std::string> down_nodes;
+    std::vector<std::string> input_connectors;
+    std::vector<std::string> output_connectors;
+  };
+
   std::string name_;
   std::atomic<bool> running_{false};
   EventBus* event_bus_ = nullptr;
   IdxManager* idxManager_ = nullptr;
-  DECLARE_PRIVATE(d_ptr_, Pipeline);
   std::function<void(std::shared_ptr<CNFrameInfo>)> frame_done_callback_ = nullptr;
+
+  ThreadSafeQueue<StreamMsg> msgq_;
+  std::thread smsg_thread_;
+  std::vector<std::string> stream_ids_;
+  StreamMsgObserver* smsg_observer_ = nullptr;
+  std::atomic<bool> exit_msg_loop_{false};
+
+  std::vector<std::thread> threads_;
+  std::unordered_map<std::string, std::shared_ptr<Module>> modules_map_;
+  std::unordered_map<std::string, std::shared_ptr<Connector>> links_;
+  std::unordered_map<std::string, ModuleAssociatedInfo> modules_;
+  std::unordered_map<std::string, CNModuleConfig> modules_config_;
+  std::unordered_map<std::string, std::vector<std::string>> connections_config_;
+  std::string start_node_;
+  std::vector<std::string> end_nodes_;
+  std::mutex stop_mtx_;
+  uint64_t eos_mask_ = 0;
+
+  std::unordered_map<std::string, std::shared_ptr<PerfManager>> perf_managers_;
+  std::unordered_map<std::string, std::shared_ptr<PerfCalculator>> perf_calculators_;
+  std::thread perf_commit_thread_;
+  std::thread calculate_perf_thread_;
+  std::atomic<bool> perf_running_{false};
 };  // class Pipeline
 
 }  // namespace cnstream

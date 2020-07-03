@@ -248,7 +248,7 @@ struct CNDataFrame {
  public:
   void* cpu_data = nullptr;  ///< CPU data pointer. You need to allocate it by calling CNStreamMallocHost().
   void* mlu_data = nullptr;  ///< A pointer to the MLU data.
-  std::shared_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Synce data helper.
+  std::shared_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Sync data helper.
 
 #ifdef HAVE_OPENCV
   /**

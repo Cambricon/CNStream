@@ -19,19 +19,12 @@ CNStream支持用户创建自定义模块。使用CNStream框架创建自定义�
    public:
     explicit ExampleModule(const std::string &name) : super(name) {}
     bool Open(cnstream::ModuleParamSet paramSet) override {
-      std::cout << this->GetName() << " Open called" << std::endl;
-      for (auto &v : paramSet) {
-        std::cout << "\t" << v.first << " : " << v.second << std::endl;
-      }
+      // do something ...
       return true;
     }
     void Close() override { std::cout << this->GetName() << " Close called" << std::endl; }
     int Process(std::shared_ptr<cnstream::CNFrameInfo> data) override {
       // do something ...
-      std::unique_lock<std::mutex> lock(print_mutex);
-      std::cout << this->GetName() << " process: " << data->frame.stream_id << "--" << data->frame.frame_id;
-      std::cout << " : " << std::this_thread::get_id() << std::endl;
-      /*continue by the framework*/
       return 0;
     }
   
@@ -53,10 +46,7 @@ CNStream支持用户创建自定义模块。使用CNStream框架创建自定义�
    public:
     explicit ExampleModuleSource(const std::string &name) : super(name) {}
     bool Open(cnstream::ModuleParamSet paramSet) override {
-      std::cout << this->GetName() << " Open called" << std::endl;
-      for (auto &v : paramSet) {
-        std::cout << "\t" << v.first << " : " << v.second << std::endl;
-      }
+      // do something ...
       return true;
     }
     void Close() override { std::cout << this->GetName() << " Close called" << std::endl; }
@@ -86,84 +76,17 @@ CNStream支持用户创建自定义模块。使用CNStream框架创建自定义�
    public:
     explicit ExampleModuleEx(const std::string &name) : super(name) {}
     bool Open(cnstream::ModuleParamSet paramSet) override {
-      std::cout << this->GetName() << " Open called" << std::endl;
-      for (auto &v : paramSet) {
-        std::cout << "\t" << v.first << " : " << v.second << std::endl;
-      }
-      running_.store(1);
-      threads_.push_back(std::thread(&ExampleModuleEx::BackgroundProcess, this));
+      // do something ...
       return true;
     }
     void Close() override {
-      running_.store(0);
-      for (auto &thread : threads_) {
-        thread.join();
-      }
-      std::cout << this->GetName() << " Close called" << std::endl;
+      // do something ...
     }
     int Process(FrameInfoPtr data) override {
-      {
-        std::unique_lock<std::mutex> lock(print_mutex);
-        if (data->frame.flags & cnstream::CN_FRAME_FLAG_EOS) {
-          std::cout << this->GetName() << " process: " << data->frame.stream_id << "--EOS";
-        } else {
-          std::cout << this->GetName() << " process: " << data->frame.stream_id << "--" << data->frame.frame_id;
-        }
-        std::cout << " : " << std::this_thread::get_id() << std::endl;
-      }
-      // handle data in background threads...
-      q_.enqueue(data);
-  
+      // do something ...
       /*notify that data handle by the module*/
       return 1;
     }
-  
-   private:
-    void BackgroundProcess() {
-      /*NOTE: EOS data has no invalid context,
-       *    All data recevied including EOS must be forwarded.
-       */
-      std::vector<FrameInfoPtr> eos_datas;
-      std::vector<FrameInfoPtr> datas;
-      FrameInfoPtr data;
-      while (running_.load()) {
-        bool value = q_.wait_dequeue_timed(data, 1000 * 100);
-        if (!value) continue;
-  
-        /*gather data*/
-        if (!(data->frame.flags & cnstream::CN_FRAME_FLAG_EOS)) {
-          datas.push_back(data);
-        } else {
-          eos_datas.push_back(data);
-        }
-  
-        if (datas.size() == 4 || (data->frame.flags & cnstream::CN_FRAME_FLAG_EOS)) {
-          /*process data...and then forward
-           */
-          for (auto &v : datas) {
-            this->container_->ProvideData(this, v);
-            std::unique_lock<std::mutex> lock(print_mutex);
-            std::cout << this->GetName() << " forward: " << v->frame.stream_id << "--" << v->frame.frame_id;
-            std::cout << " : " << std::this_thread::get_id() << std::endl;
-          }
-          datas.clear();
-        }
-  
-        /*forward EOS*/
-        for (auto &v : eos_datas) {
-          this->container_->ProvideData(this, v);
-          std::unique_lock<std::mutex> lock(print_mutex);
-          std::cout << this->GetName() << " forward: " << v->frame.stream_id << "--EOS ";
-          std::cout << " : " << std::this_thread::get_id() << std::endl;
-        }
-        eos_datas.clear();
-      }  // while
-    }
-  
-   private:
-    moodycamel::BlockingConcurrentQueue<FrameInfoPtr> q_;
-    std::vector<std::thread> threads_;
-    std::atomic<int> running_{0};
   
    private:
     ExampleModuleEx(const ExampleModuleEx &) = delete;

@@ -18,8 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef MODULES_CORE_INCLUDE_PERF_MANAGER_HPP_
-#define MODULES_CORE_INCLUDE_PERF_MANAGER_HPP_
+#ifndef FRAMEWORK_CORE_INCLUDE_PERF_MANAGER_HPP_
+#define FRAMEWORK_CORE_INCLUDE_PERF_MANAGER_HPP_
 
 #include <stdlib.h>
 
@@ -205,4 +205,4 @@ class PerfManager {
 
 }  // namespace cnstream
 
-#endif  // MODULES_CORE_INCLUDE_PERF_MANAGER_HPP_
+#endif  // FRAMEWORK_CORE_INCLUDE_PERF_MANAGER_HPP_

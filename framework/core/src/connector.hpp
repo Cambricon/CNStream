@@ -21,7 +21,9 @@
 #ifndef MODULES_CORE_INCLUDE_CONNECTOR_HPP_
 #define MODULES_CORE_INCLUDE_CONNECTOR_HPP_
 
+#include <atomic>
 #include <memory>
+#include <vector>
 
 #include "cnstream_frame.hpp"
 
@@ -29,7 +31,6 @@ namespace cnstream {
 
 using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 
-class ConnectorPrivate;
 class Conveyor;
 
 /**
@@ -76,8 +77,12 @@ class Connector {
   void EmptyDataQueue();
 
  private:
-  DECLARE_PRIVATE(d_ptr_, Connector);
   DISABLE_COPY_AND_ASSIGN(Connector);
+  Conveyor* GetConveyorByIdx(int idx) const;
+
+  std::vector<Conveyor*> conveyors_;
+  size_t conveyor_capacity_ = 20;
+  std::atomic<bool> stop_{false};
 };  // class Connector
 
 }  // namespace cnstream

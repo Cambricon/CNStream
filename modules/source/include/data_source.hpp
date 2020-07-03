@@ -65,6 +65,7 @@ struct DataSourceParam {
   int device_id_ = -1;                      ///< mlu device id, -1 :disable mlu
   uint32_t input_buf_number_ = 2;           ///< valid when decoder_type = DECODER_MLU
   uint32_t output_buf_number_ = 3;          ///< valid when decoder_type = DECODER_MLU
+  bool apply_stride_align_for_scaler_ = false;  //< recommended for use on m200 platforms
 };
 
 /**
@@ -102,6 +103,7 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
    *   interlaced: Required when ``source_type`` is set to ``raw``. Interlaced mode.
    *   input_buf_number: Optional. The input buffer number. The default value is 2.
    *   output_buf_number: Optional. The output buffer number. The default value is 3.
+   *   apply_stride_align_for_scaler: Optional. Apply stride align for scaler on m220(m.2/edge).
    * @endverbatim
    *
    * @return

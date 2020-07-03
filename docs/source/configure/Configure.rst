@@ -18,17 +18,15 @@ CNStream有以下环境依赖。
 - OpenCV2.4.9+
 - GFlags2.1.2
 - GLog0.3.4
-- Cmake2.8.7+
-- Live555
+- CMake2.8.7+
 - SDL22.0.4+
-- SQLite3
 
 .. _寒武纪依赖库:
 
 寒武纪安装包
 ^^^^^^^^^^^^^
 
-CNStream的使用依赖于寒武纪Neuware安装包中CNRT库和CNCodec库。Neuware安装包是寒武纪公司发布的基于寒武纪硬件产品的神经网络开发工具包。用户需要在使用CNStream之前安装寒武纪Neuware安装包。发送邮件到 service@cambricon.com 联系寒武纪工程师获得Neuware安装包和安装指南。
+CNStream的使用依赖于寒武纪Neuware安装包中CNRT库和CNCodec库。Neuware安装包是寒武纪公司发布的基于寒武纪硬件产品的神经网络开发工具包。用户需要在使用CNStream之前需要安装寒武纪Neuware安装包。发送邮件到 service@cambricon.com 或者 solution-sdk@cambricon.com 联系寒武纪工程师获得Neuware安装包和安装指南。
 
 Debian或Ubuntu环境配置
 ------------------------
@@ -54,28 +52,17 @@ Debian或Ubuntu环境配置
 
     ::
 
-        sudo apt-get install libopencv-dev  libgflags-dev libgoogle-glog-dev cmake
-        sudo apt-get install libfreetype6 ttf-wqy-zenhei libsdl2-dev lcov libsqlite3-dev sqlite3
-        cd ${CNSTREAM_DIR}/tools
-        ./download_live.sh
+        sudo apt-get install libopencv-dev libgflags-dev libgoogle-glog-dev cmake
+        sudo apt-get install libfreetype6 ttf-wqy-zenhei libsdl2-dev
 
 #.  编译CNStream。CNStream使用CMake编译系统进行编译。
 
-    - 针对MLU270平台：
+    ::
 
-      ::
+        mkdir -p build; cd build
+        cmake ${CNSTREAM_DIR}
+        make
 
-            mkdir -p build; cd build
-            cmake ${CNSTREAM_DIR} -DMLU=MLU270
-            make
-
-    - 针对MLU220 SOC平台：
-
-      ::
-
-            mkdir -p build; cd build
-            cmake ${CNSTREAM_DIR} -DMLU=MLU220_SOC
-            make
 
 #.  运行示例程序。
 
@@ -112,29 +99,17 @@ CentOS环境配置
     ::
 
       sudo yum install opencv-devel.x86_64 gflags.x86_64 glog.x86_64 cmake3.x86_64
-      sudo yum install freetype-devel SDL2_gfx-devel.x86_64 wqy-zenhei-fonts lcov sqlite-devel
+      sudo yum install freetype-devel SDL2_gfx-devel.x86_64 wqy-zenhei-fonts
       sudo yum install ffmpeg ffmpeg-devel
-      cd ${CNSTREAM_DIR}/tools
-      ./download_live.sh
 
 #.  编译CNStream。CNStream使用CMake编译系统进行编译。 ``${CNSTREAM_DIR}`` 代表CNStream源码目录。
 
-    - 针对MLU270平台：
+    ::
 
-      ::
+        mkdir -p build; cd build
+        cmake ${CNSTREAM_DIR}
+        make
 
-            mkdir -p build; cd build
-            cmake ${CNSTREAM_DIR} -DMLU=MLU270
-            make
-
-
-    - 针对MLU220 SOC平台：
-
-      ::
-
-            mkdir -p build; cd build
-            cmake ${CNSTREAM_DIR} -DMLU=MLU220_SOC
-            make
 
 #.  运行示例程序。
 
@@ -158,7 +133,7 @@ Docker环境配置
 
         git clone https://github.com/Cambricon/CNStream.git
         cp ${neuware_package} CNStream   #copy your neuware package into CNStream
-        docker build -f Dockerfile --build-arg mlu_platform=${board_series} --build-arg neuware_package=${neuware_package_name} -t ubuntu_cnstream:v1 .
+        docker build -f docker/Dockerfile --build-arg neuware_package=${neuware_package_name} -t ubuntu_cnstream:v1 .
 
 
     CNStream提供以下Dockerfile：

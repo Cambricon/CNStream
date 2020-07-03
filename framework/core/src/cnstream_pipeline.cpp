@@ -26,7 +26,6 @@
 #include <iostream>
 #include <list>
 #include <memory>
-#include <set>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -100,109 +99,55 @@ void IdxManager::ReturnModuleIdx(size_t id_) {
   module_id_mask_ &= ~(1 << id_);
 }
 
-struct ModuleAssociatedInfo {
-  uint32_t parallelism = 0;
-  std::shared_ptr<Connector> connector;
-  std::set<std::string> down_nodes;
-  std::vector<std::string> input_connectors;
-  std::vector<std::string> output_connectors;
-};
-
-class PipelinePrivate {
- private:
-  explicit PipelinePrivate(Pipeline* q_ptr) : q_ptr_(q_ptr) {
-    // stream message handle thread
-    exit_msg_loop_ = false;
-    smsg_thread_ = std::thread(&PipelinePrivate::StreamMsgHandleFunc, this);
+void Pipeline::SetEOSMask() {
+  for (const std::pair<std::string, std::shared_ptr<Module>> module_info : modules_map_) {
+    auto instance = module_info.second;
+    eos_mask_ |= (uint64_t)1 << instance->GetId();
   }
-  ~PipelinePrivate() {
-    exit_msg_loop_ = true;
-    if (smsg_thread_.joinable()) smsg_thread_.join();
-  }
-  std::unordered_map<std::string, std::shared_ptr<Connector>> links_;
-  std::vector<std::thread> threads_;
-  std::unordered_map<std::string, ModuleAssociatedInfo> modules_;
-  std::mutex stop_mtx_;
-  uint64_t eos_mask_ = 0;
+}
+void Pipeline::ClearEOSMask() { eos_mask_ = 0; }
 
- private:
-  std::unordered_map<std::string, std::shared_ptr<PerfManager>> perf_managers_;
-  std::unordered_map<std::string, std::shared_ptr<PerfCalculator>> perf_calculators_;
-  std::vector<std::string> stream_ids_;
-  std::string start_node_;
-  std::vector<std::string> end_nodes_;
-  std::thread perf_commit_thread_;
-  std::thread calculate_perf_thread_;
-  std::atomic<bool> perf_running_{false};
+void Pipeline::UpdateByStreamMsg(const StreamMsg& msg) {
+  LOG(INFO) << "[" << GetName() << "] got stream message: " << msg.type << " " << msg.stream_id;
+  msgq_.Push(msg);
+}
 
- private:
-  std::unordered_map<std::string, CNModuleConfig> modules_config_;
-  std::unordered_map<std::string, std::vector<std::string>> connections_config_;
-  std::unordered_map<std::string, std::shared_ptr<Module>> modules_map_;
-  DECLARE_PUBLIC(q_ptr_, Pipeline);
-  void SetEOSMask() {
-    for (const std::pair<std::string, std::shared_ptr<Module>> module_info : modules_map_) {
-      auto instance = module_info.second;
-      eos_mask_ |= (uint64_t)1 << instance->GetId();
+void Pipeline::StreamMsgHandleFunc() {
+  while (!exit_msg_loop_) {
+    StreamMsg msg;
+    while (!exit_msg_loop_ && !msgq_.WaitAndTryPop(msg, std::chrono::microseconds(200))) {
+    }
+
+    if (exit_msg_loop_) return;
+
+    switch (msg.type) {
+      case StreamMsgType::EOS_MSG:
+      case StreamMsgType::ERROR_MSG:
+      case StreamMsgType::USER_MSG0:
+      case StreamMsgType::USER_MSG1:
+      case StreamMsgType::USER_MSG2:
+      case StreamMsgType::USER_MSG3:
+      case StreamMsgType::USER_MSG4:
+      case StreamMsgType::USER_MSG5:
+      case StreamMsgType::USER_MSG6:
+      case StreamMsgType::USER_MSG7:
+      case StreamMsgType::USER_MSG8:
+      case StreamMsgType::USER_MSG9:
+        LOG(INFO) << "[" << GetName() << "] notify stream message: " << msg.type << " " << msg.stream_id;
+        if (smsg_observer_) {
+          smsg_observer_->Update(msg);
+        }
+        break;
+      default:
+        break;
     }
   }
-  void ClearEOSMask() { eos_mask_ = 0; }
-
-  /*
-    stream message
-   */
- private:
-  void SetStreamMsgObserver(StreamMsgObserver* smsg_observer) { smsg_observer_ = smsg_observer; }
-
-  StreamMsgObserver* GetStreamMsgObserver() const { return smsg_observer_; }
-
-  mutable StreamMsgObserver* smsg_observer_ = nullptr;
-
-  void UpdateByStreamMsg(const StreamMsg& msg) {
-    LOG(INFO) << "[" << q_ptr_->GetName() << "] got stream message: " << msg.type << " " << msg.stream_id;
-    msgq_.Push(msg);
-  }
-
-  void StreamMsgHandleFunc() {
-    while (!exit_msg_loop_) {
-      StreamMsg msg;
-      while (!exit_msg_loop_ && !msgq_.WaitAndTryPop(msg, std::chrono::microseconds(200))) {
-      }
-
-      if (exit_msg_loop_) return;
-
-      switch (msg.type) {
-        case StreamMsgType::EOS_MSG:
-        case StreamMsgType::ERROR_MSG:
-        case StreamMsgType::USER_MSG0:
-        case StreamMsgType::USER_MSG1:
-        case StreamMsgType::USER_MSG2:
-        case StreamMsgType::USER_MSG3:
-        case StreamMsgType::USER_MSG4:
-        case StreamMsgType::USER_MSG5:
-        case StreamMsgType::USER_MSG6:
-        case StreamMsgType::USER_MSG7:
-        case StreamMsgType::USER_MSG8:
-        case StreamMsgType::USER_MSG9:
-          LOG(INFO) << "[" << q_ptr_->GetName() << "] notify stream message: " << msg.type << " " << msg.stream_id;
-          if (smsg_observer_) {
-            smsg_observer_->Update(msg);
-          }
-          break;
-        default:
-          break;
-      }
-    }
-  }
-
-  ThreadSafeQueue<StreamMsg> msgq_;
-  std::thread smsg_thread_;
-  volatile bool exit_msg_loop_ = false;
-};  // class PipelinePrivate
+}
 
 Pipeline::Pipeline(const std::string& name) : name_(name) {
-  d_ptr_ = new (std::nothrow) PipelinePrivate(this);
-  LOG_IF(FATAL, nullptr == d_ptr_) << "Pipeline::Pipeline() failed to alloc PipelinePrivate";
+  // stream message handle thread
+  exit_msg_loop_ = false;
+  smsg_thread_ = std::thread(&Pipeline::StreamMsgHandleFunc, this);
 
   event_bus_ = new (std::nothrow) EventBus();
   LOG_IF(FATAL, nullptr == event_bus_) << "Pipeline::Pipeline() failed to alloc EventBus";
@@ -214,17 +159,24 @@ Pipeline::Pipeline(const std::string& name) : name_(name) {
 
 Pipeline::~Pipeline() {
   running_ = false;
-  for (auto& it : d_ptr_->modules_map_) {
+  for (auto& it : modules_map_) {
     it.second->SetContainer(nullptr);
   }
+  exit_msg_loop_ = true;
+  if (smsg_thread_.joinable()) {
+    smsg_thread_.join();
+  }
   delete event_bus_;
-  delete d_ptr_;
   delete idxManager_;
 }
 
-void Pipeline::SetStreamMsgObserver(StreamMsgObserver* observer) { d_ptr_->SetStreamMsgObserver(observer); }
+void Pipeline::SetStreamMsgObserver(StreamMsgObserver* observer) {
+  smsg_observer_ = observer;
+}
 
-StreamMsgObserver* Pipeline::GetStreamMsgObserver() const { return d_ptr_->GetStreamMsgObserver(); }
+StreamMsgObserver* Pipeline::GetStreamMsgObserver() const {
+  return smsg_observer_;
+}
 
 EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
   StreamMsg smsg;
@@ -233,7 +185,7 @@ EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
     case EventType::EVENT_ERROR:
       smsg.type = ERROR_MSG;
       smsg.module_name = event.module_name;
-      d_ptr_->UpdateByStreamMsg(smsg);
+      UpdateByStreamMsg(smsg);
       LOG(ERROR) << "[" << event.module_name << "]: "
                  << "Error: " << event.message;
       ret = EVENT_HANDLE_STOP;
@@ -267,7 +219,7 @@ EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
 bool Pipeline::ProvideData(const Module* module, std::shared_ptr<CNFrameInfo> data) {
   std::string moduleName = module->GetName();
 
-  if (d_ptr_->modules_map_.find(moduleName) == d_ptr_->modules_map_.end()) return false;
+  if (modules_map_.find(moduleName) == modules_map_.end()) return false;
 
   TransmitData(moduleName, data);
 
@@ -277,7 +229,7 @@ bool Pipeline::ProvideData(const Module* module, std::shared_ptr<CNFrameInfo> da
 bool Pipeline::AddModule(std::shared_ptr<Module> module) {
   std::string moduleName = module->GetName();
 
-  if (d_ptr_->modules_map_.find(moduleName) != d_ptr_->modules_map_.end()) {
+  if (modules_map_.find(moduleName) != modules_map_.end()) {
     LOG(WARNING) << "Module [" << moduleName << "] has already been added to this pipeline";
     return false;
   }
@@ -292,21 +244,21 @@ bool Pipeline::AddModule(std::shared_ptr<Module> module) {
   ModuleAssociatedInfo associated_info;
   associated_info.parallelism = 1;
   associated_info.connector = std::make_shared<Connector>(associated_info.parallelism);
-  d_ptr_->modules_.insert(std::make_pair(moduleName, associated_info));
-  d_ptr_->modules_map_[moduleName] = module;
+  modules_.insert(std::make_pair(moduleName, associated_info));
+  modules_map_[moduleName] = module;
   return true;
 }
 
 bool Pipeline::SetModuleAttribute(std::shared_ptr<Module> module, uint32_t parallelism, size_t queue_capacity) {
   std::string moduleName = module->GetName();
-  if (d_ptr_->modules_.find(moduleName) == d_ptr_->modules_.end()) return false;
-  d_ptr_->modules_[moduleName].parallelism = parallelism;
+  if (modules_.find(moduleName) == modules_.end()) return false;
+  modules_[moduleName].parallelism = parallelism;
   if (parallelism && queue_capacity) {
-    d_ptr_->modules_[moduleName].connector = std::make_shared<Connector>(parallelism, queue_capacity);
-    return static_cast<bool>(d_ptr_->modules_[moduleName].connector);
+    modules_[moduleName].connector = std::make_shared<Connector>(parallelism, queue_capacity);
+    return static_cast<bool>(modules_[moduleName].connector);
   }
-  if (!parallelism && d_ptr_->modules_[moduleName].connector) {
-    d_ptr_->modules_[moduleName].connector.reset();
+  if (!parallelism && modules_[moduleName].connector) {
+    modules_[moduleName].connector.reset();
   }
   return true;
 }
@@ -319,14 +271,14 @@ std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_p
   std::string up_node_name = up_node->GetName();
   std::string down_node_name = down_node->GetName();
 
-  if (d_ptr_->modules_.find(up_node_name) == d_ptr_->modules_.end() ||
-      d_ptr_->modules_.find(down_node_name) == d_ptr_->modules_.end()) {
+  if (modules_.find(up_node_name) == modules_.end() ||
+      modules_.find(down_node_name) == modules_.end()) {
     LOG(ERROR) << "module has not been added to this pipeline";
     return "";
   }
 
-  ModuleAssociatedInfo& up_node_info = d_ptr_->modules_.find(up_node_name)->second;
-  ModuleAssociatedInfo& down_node_info = d_ptr_->modules_.find(down_node_name)->second;
+  ModuleAssociatedInfo& up_node_info = modules_.find(up_node_name)->second;
+  ModuleAssociatedInfo& down_node_info = modules_.find(down_node_name)->second;
 
   std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
   if (!down_node_info.connector) {
@@ -344,14 +296,14 @@ std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_p
   // create connector
   up_node_info.output_connectors.push_back(link_id);
   down_node_info.input_connectors.push_back(link_id);
-  d_ptr_->links_[link_id] = down_node_info.connector;
+  links_[link_id] = down_node_info.connector;
 
   down_node->SetParentId(up_node->GetId());
   return link_id;
 }
 
 bool Pipeline::QueryLinkStatus(LinkStatus* status, const std::string& link_id) {
-  std::shared_ptr<Connector> con = d_ptr_->links_[link_id];
+  std::shared_ptr<Connector> con = links_[link_id];
   if (!con) {
     LOG(ERROR) << "can not find link according to link id";
     return false;
@@ -369,11 +321,11 @@ bool Pipeline::QueryLinkStatus(LinkStatus* status, const std::string& link_id) {
 
 bool Pipeline::Start() {
   // set eos mask
-  d_ptr_->SetEOSMask();
+  SetEOSMask();
   // open modules
   std::vector<std::shared_ptr<Module>> opened_modules;
   bool open_module_failed = false;
-  for (auto& it : d_ptr_->modules_map_) {
+  for (auto& it : modules_map_) {
     if (!it.second->Open(GetModuleParamSet(it.second->GetName()))) {
       open_module_failed = true;
       LOG(ERROR) << it.second->GetName() << " start failed!";
@@ -385,30 +337,30 @@ bool Pipeline::Start() {
 
   if (open_module_failed) {
     for (auto it : opened_modules) it->Close();
-    d_ptr_->ClearEOSMask();
+    ClearEOSMask();
     return false;
   }
 
-  if (d_ptr_->perf_running_) {
-    for (auto it : d_ptr_->perf_managers_) {
+  if (perf_running_) {
+    for (auto it : perf_managers_) {
       it.second->SqlBeginTrans();
     }
-    d_ptr_->perf_commit_thread_ = std::thread(&Pipeline::PerfSqlCommitLoop, this);
-    d_ptr_->calculate_perf_thread_ = std::thread(&Pipeline::CalculatePerfStats, this);
+    perf_commit_thread_ = std::thread(&Pipeline::PerfSqlCommitLoop, this);
+    calculate_perf_thread_ = std::thread(&Pipeline::CalculatePerfStats, this);
   }
 
   // start data transmit
   running_.store(true);
   event_bus_->Start();
 
-  for (const std::pair<std::string, ModuleAssociatedInfo>& it : d_ptr_->modules_) {
+  for (const std::pair<std::string, ModuleAssociatedInfo>& it : modules_) {
     if (it.second.connector) {
       it.second.connector->Start();
     }
   }
 
   // create process threads
-  for (auto& it : d_ptr_->modules_) {
+  for (auto& it : modules_) {
     const std::string node_name = it.first;
     ModuleAssociatedInfo& module_info = it.second;
     uint32_t parallelism = module_info.parallelism;
@@ -418,61 +370,61 @@ bool Pipeline::Start() {
       return false;
     }
     for (uint32_t conveyor_idx = 0; conveyor_idx < parallelism; ++conveyor_idx) {
-      d_ptr_->threads_.push_back(std::thread(&Pipeline::TaskLoop, this, node_name, conveyor_idx));
+      threads_.push_back(std::thread(&Pipeline::TaskLoop, this, node_name, conveyor_idx));
     }
   }
   LOG(INFO) << "Pipeline Start";
-  LOG(INFO) << "Total Module's threads :" << d_ptr_->threads_.size();
+  LOG(INFO) << "Total Module's threads :" << threads_.size();
   return true;
 }
 
 bool Pipeline::Stop() {
-  std::lock_guard<std::mutex> lk(d_ptr_->stop_mtx_);
+  std::lock_guard<std::mutex> lk(stop_mtx_);
   if (!IsRunning()) return true;
 
   // stop data transmit
-  for (const std::pair<std::string, ModuleAssociatedInfo>& it : d_ptr_->modules_) {
+  for (const std::pair<std::string, ModuleAssociatedInfo>& it : modules_) {
     if (it.second.connector) {
       it.second.connector->EmptyDataQueue();
       it.second.connector->Stop();
     }
   }
   running_.store(false);
-  for (std::thread& it : d_ptr_->threads_) {
+  for (std::thread& it : threads_) {
     if (it.joinable()) it.join();
   }
-  d_ptr_->threads_.clear();
+  threads_.clear();
   event_bus_->Stop();
 
   // close modules
-  for (auto& it : d_ptr_->modules_map_) {
+  for (auto& it : modules_map_) {
     it.second->Close();
   }
 
-  for (auto it : d_ptr_->perf_managers_) {
+  for (auto it : perf_managers_) {
     it.second->Stop();
     it.second = nullptr;
   }
 
-  d_ptr_->perf_running_.store(false);
-  if (d_ptr_->perf_commit_thread_.joinable()) {
-    d_ptr_->perf_commit_thread_.join();
+  perf_running_.store(false);
+  if (perf_commit_thread_.joinable()) {
+    perf_commit_thread_.join();
   }
-  if (d_ptr_->calculate_perf_thread_.joinable()) {
-    d_ptr_->calculate_perf_thread_.join();
+  if (calculate_perf_thread_.joinable()) {
+    calculate_perf_thread_.join();
   }
 
-  d_ptr_->perf_managers_.clear();
+  perf_managers_.clear();
 
-  d_ptr_->ClearEOSMask();
+  ClearEOSMask();
   LOG(INFO) << "Pipeline Stop";
   return true;
 }
 
 void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo> data) {
-  LOG_IF(FATAL, d_ptr_->modules_.find(moduleName) == d_ptr_->modules_.end());
+  LOG_IF(FATAL, modules_.find(moduleName) == modules_.end());
 
-  const ModuleAssociatedInfo& module_info = d_ptr_->modules_[moduleName];
+  const ModuleAssociatedInfo& module_info = modules_[moduleName];
 
   if (data->IsEos()) {
     LOG(INFO) << "[" << moduleName << "]"
@@ -483,26 +435,26 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     e.message = moduleName + " received eos from  " + data->stream_id;
     e.thread_id = std::this_thread::get_id();
     event_bus_->PostEvent(e);
-    const uint64_t eos_mask = data->AddEOSMask(d_ptr_->modules_map_[moduleName].get());
-    if (eos_mask == d_ptr_->eos_mask_) {
+    const uint64_t eos_mask = data->AddEOSMask(modules_map_[moduleName].get());
+    if (eos_mask == eos_mask_) {
       StreamMsg msg;
       msg.type = StreamMsgType::EOS_MSG;
       msg.stream_id = data->stream_id;
       msg.module_name = moduleName;
-      d_ptr_->UpdateByStreamMsg(msg);
+      UpdateByStreamMsg(msg);
     }
   } else {
-    if (d_ptr_->perf_managers_.find(data->stream_id) != d_ptr_->perf_managers_.end()) {
-      d_ptr_->perf_managers_[data->stream_id]->Record(true, PerfManager::GetDefaultType(), moduleName, data->timestamp);
+    if (perf_managers_.find(data->stream_id) != perf_managers_.end()) {
+      perf_managers_[data->stream_id]->Record(true, PerfManager::GetDefaultType(), moduleName, data->timestamp);
     }
   }
 
-  Module* module = d_ptr_->modules_map_[moduleName].get();
+  Module* module = modules_map_[moduleName].get();
   for (auto& down_node_name : module_info.down_nodes) {
-    ModuleAssociatedInfo& down_node_info = d_ptr_->modules_.find(down_node_name)->second;
+    ModuleAssociatedInfo& down_node_info = modules_.find(down_node_name)->second;
     assert(down_node_info.connector);
     assert(0 < down_node_info.input_connectors.size());
-    Module* down_node = d_ptr_->modules_map_[down_node_name].get();
+    Module* down_node = modules_map_[down_node_name].get();
     uint64_t frame_mask = data->SetModuleMask(down_node, module);
 
     // case 1: down_node has only 1 input node: current node
@@ -527,9 +479,9 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
 }
 
 void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
-  LOG_IF(FATAL, d_ptr_->modules_.find(node_name) == d_ptr_->modules_.end());
+  LOG_IF(FATAL, modules_.find(node_name) == modules_.end());
 
-  ModuleAssociatedInfo& module_info = d_ptr_->modules_[node_name];
+  ModuleAssociatedInfo& module_info = modules_[node_name];
   std::shared_ptr<Connector> connector = module_info.connector;
 
   if (!connector.get() || module_info.input_connectors.size() <= 0) {
@@ -540,7 +492,7 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
   std::string thread_name = "cn-" + node_name.substr(0, len) + std::to_string(conveyor_idx);
   SetThreadName(thread_name, pthread_self());
 
-  std::shared_ptr<Module> instance = d_ptr_->modules_map_[node_name];
+  std::shared_ptr<Module> instance = modules_map_[node_name];
   bool has_data = true;
   while (has_data) {
     has_data = false;
@@ -559,9 +511,9 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
     assert(data->GetModulesMask(instance.get()) == instance->GetModulesMask());
     data->ClearModuleMask(instance.get());
 
-    if (!data->IsEos() && d_ptr_->perf_managers_.find(data->stream_id) != d_ptr_->perf_managers_.end()) {
-      d_ptr_->perf_managers_[data->stream_id]->Record(false, PerfManager::GetDefaultType(), node_name, data->timestamp);
-      d_ptr_->perf_managers_[data->stream_id]->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(),
+    if (!data->IsEos() && perf_managers_.find(data->stream_id) != perf_managers_.end()) {
+      perf_managers_[data->stream_id]->Record(false, PerfManager::GetDefaultType(), node_name, data->timestamp);
+      perf_managers_[data->stream_id]->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(),
                                                       std::to_string(data->timestamp), node_name + "_th",
                                                       "'" + thread_name + "'");
     }
@@ -580,7 +532,7 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
       msg.type = StreamMsgType::ERROR_MSG;
       msg.stream_id = data->stream_id;
       msg.module_name = node_name;
-      d_ptr_->UpdateByStreamMsg(msg);
+      UpdateByStreamMsg(msg);
       return;
     }
   }  // while
@@ -588,18 +540,15 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
 
 /* ------config/auto-graph methods------ */
 int Pipeline::AddModuleConfig(const CNModuleConfig& config) {
-  if (d_ptr_ == nullptr) {
-    return -1;
-  }
-  d_ptr_->modules_config_[config.name] = config;
-  d_ptr_->connections_config_[config.name] = config.next;
+  modules_config_[config.name] = config;
+  connections_config_[config.name] = config.next;
   return 0;
 }
 
 ModuleParamSet Pipeline::GetModuleParamSet(const std::string& moduleName) {
   ModuleParamSet paramSet;
-  auto iter = d_ptr_->modules_config_.find(moduleName);
-  if (iter != d_ptr_->modules_config_.end()) {
+  auto iter = modules_config_.find(moduleName);
+  if (iter != modules_config_.end()) {
     for (auto& v : iter->second.parameters) {
       // filter some keys ...
       paramSet[v.first] = v.second;
@@ -610,8 +559,8 @@ ModuleParamSet Pipeline::GetModuleParamSet(const std::string& moduleName) {
 
 CNModuleConfig Pipeline::GetModuleConfig(const std::string& module_name) {
   CNModuleConfig config = {};
-  auto iter = d_ptr_->modules_config_.find(module_name);
-  if (iter != d_ptr_->modules_config_.end()) {
+  auto iter = modules_config_.find(module_name);
+  if (iter != modules_config_.end()) {
     config = iter->second;
   }
   return config;
@@ -632,19 +581,19 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
     this->AddModule(instance);
     this->SetModuleAttribute(instance, v.parallelism, v.maxInputQueueSize);
   }
-  for (auto& v : d_ptr_->connections_config_) {
+  for (auto& v : connections_config_) {
     for (auto& name : v.second) {
-      if (this->LinkModules(d_ptr_->modules_map_[v.first], d_ptr_->modules_map_[name]).empty()) {
+      if (this->LinkModules(modules_map_[v.first], modules_map_[name]).empty()) {
         LOG(ERROR) << "Link [" << v.first << "] with [" << name << "] failed.";
         return -1;
       }
-      linked_id_mask |= (uint64_t)1 << d_ptr_->modules_map_[name]->GetId();
+      linked_id_mask |= (uint64_t)1 << modules_map_[name]->GetId();
     }
   }
   for (auto& v : configs) {
     if (v.className != "cnstream::DataSource" && v.className != "cnstream::TestDataSource" &&
         v.className != "cnstream::ModuleIPC" &&
-        !(((uint64_t)1 << d_ptr_->modules_map_[v.name]->GetId()) & linked_id_mask)) {
+        !(((uint64_t)1 << modules_map_[v.name]->GetId()) & linked_id_mask)) {
       LOG(ERROR) << v.name << " not linked to any module.";
       return -1;
     }
@@ -662,33 +611,33 @@ int Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
 }
 
 Module* Pipeline::GetModule(const std::string& moduleName) {
-  auto iter = d_ptr_->modules_map_.find(moduleName);
-  if (iter != d_ptr_->modules_map_.end()) {
-    return d_ptr_->modules_map_[moduleName].get();
+  auto iter = modules_map_.find(moduleName);
+  if (iter != modules_map_.end()) {
+    return modules_map_[moduleName].get();
   }
   return nullptr;
 }
 
 bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir) {
-  if (d_ptr_->perf_running_) {
+  if (perf_running_) {
     return false;
   }
   if (db_dir == "") {
     db_dir = "perf_database";
   }
-  d_ptr_->end_nodes_.clear();
+  end_nodes_.clear();
 
   // Get start module name, end module name and module names
   std::vector<std::string> module_names;
-  for (auto& module_it : d_ptr_->modules_) {
+  for (auto& module_it : modules_) {
     const std::string node_name = module_it.first;
     LOG(INFO) << "module name " << node_name << std::endl;
     module_names.push_back(node_name);
     if (module_it.second.input_connectors.size() == 0) {
-      d_ptr_->start_node_ = node_name;
+      start_node_ = node_name;
     }
     if (module_it.second.output_connectors.size() == 0) {
-      d_ptr_->end_nodes_.push_back(node_name);
+      end_nodes_.push_back(node_name);
     }
   }
 
@@ -700,7 +649,7 @@ bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::strin
   for (auto& stream_id : stream_ids) {
     LOG(INFO) << "Create PerfManager for stream " << stream_id;
     std::shared_ptr<PerfManager> manager = std::make_shared<PerfManager>();
-    d_ptr_->perf_managers_[stream_id] = manager;
+    perf_managers_[stream_id] = manager;
     if (!manager->Init(db_dir + "/stream_" + stream_id + ".db")) {
       LOG(ERROR) << "Init PerfManager of stream " << stream_id << " failed.";
       return false;
@@ -714,32 +663,32 @@ bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::strin
   }
 
   // Create PerfCalculators for each module
-  for (auto& module_it : d_ptr_->modules_) {
+  for (auto& module_it : modules_) {
     std::string node_name = module_it.first;
-    if (d_ptr_->perf_calculators_.find(node_name) != d_ptr_->perf_calculators_.end()) {
+    if (perf_calculators_.find(node_name) != perf_calculators_.end()) {
       LOG(WARNING) << "perf calculator is created before. name : " << node_name;
     }
-    d_ptr_->perf_calculators_[node_name] = std::make_shared<PerfCalculatorForModule>();
-    d_ptr_->perf_calculators_[node_name]->SetPerfUtils(perf_utils);
+    perf_calculators_[node_name] = std::make_shared<PerfCalculatorForModule>();
+    perf_calculators_[node_name]->SetPerfUtils(perf_utils);
   }
 
   // Create PerfCalculators for pipeline
-  for (auto& end_node : d_ptr_->end_nodes_) {
-    if (d_ptr_->perf_calculators_.find("pipeline_" + end_node) != d_ptr_->perf_calculators_.end()) {
+  for (auto& end_node : end_nodes_) {
+    if (perf_calculators_.find("pipeline_" + end_node) != perf_calculators_.end()) {
       LOG(WARNING) << "perf calculator is created before. name : "
                    << "pipeline_" + end_node;
     }
-    d_ptr_->perf_calculators_["pipeline_" + end_node] = std::make_shared<PerfCalculatorForPipeline>();
-    d_ptr_->perf_calculators_["pipeline_" + end_node]->SetPerfUtils(perf_utils);
+    perf_calculators_["pipeline_" + end_node] = std::make_shared<PerfCalculatorForPipeline>();
+    perf_calculators_["pipeline_" + end_node]->SetPerfUtils(perf_utils);
   }
 
-  d_ptr_->stream_ids_ = stream_ids;
-  d_ptr_->perf_running_.store(true);
+  stream_ids_ = stream_ids;
+  perf_running_.store(true);
   return true;
 }
 
 void Pipeline::CalculatePerfStats() {
-  while (d_ptr_->perf_running_) {
+  while (perf_running_) {
     std::cout << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
               << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << std::endl;
     CalculateModulePerfStats();
@@ -756,14 +705,14 @@ void Pipeline::CalculatePerfStats() {
 }
 
 void Pipeline::PerfSqlCommitLoop() {
-  while (d_ptr_->perf_running_) {
-    for (auto& it : d_ptr_->perf_managers_) {
+  while (perf_running_) {
+    for (auto& it : perf_managers_) {
       it.second->SqlCommitTrans();
       it.second->SqlBeginTrans();
     }
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
-  for (auto& it : d_ptr_->perf_managers_) {
+  for (auto& it : perf_managers_) {
     it.second->SqlCommitTrans();
   }
 }
@@ -793,16 +742,16 @@ static void CalcAndPrintLatestThroughput(std::string sql_name, std::string perf_
 }
 
 void Pipeline::CalculateModulePerfStats(bool final_print) {
-  for (auto& module_it : d_ptr_->modules_map_) {
+  for (auto& module_it : modules_map_) {
     std::string node_name = module_it.first;
     std::shared_ptr<Module> instance = module_it.second;
     if (instance && instance->ShowPerfInfo()) {
-      if (d_ptr_->perf_calculators_.find(node_name) != d_ptr_->perf_calculators_.end()) {
+      if (perf_calculators_.find(node_name) != perf_calculators_.end()) {
         PrintTitle(node_name + " Performance");
-        std::shared_ptr<PerfCalculator> calculator = d_ptr_->perf_calculators_[node_name];
+        std::shared_ptr<PerfCalculator> calculator = perf_calculators_[node_name];
         std::vector<std::pair<std::string, PerfStats>> latency_vec;
         std::vector<uint32_t> digit_of_frame_cnt;
-        for (auto& stream_id : d_ptr_->stream_ids_) {
+        for (auto& stream_id : stream_ids_) {
           // calculate and print latency for each stream
           PerfStats stats = calculator->CalcLatency(stream_id, PerfManager::GetDefaultType(),
               {node_name + PerfManager::GetStartTimeSuffix(), node_name + PerfManager::GetEndTimeSuffix()});
@@ -834,20 +783,20 @@ void Pipeline::CalculatePipelinePerfStats(bool final_print) {
   PrintTitle("Pipeline Performance");
   std::cout<< "\033[0m";
 
-  for (auto& end_node : d_ptr_->end_nodes_) {
-    if (d_ptr_->perf_calculators_.find("pipeline_" + end_node) != d_ptr_->perf_calculators_.end()) {
-      std::shared_ptr<PerfCalculator> calculator = d_ptr_->perf_calculators_["pipeline_" + end_node];
+  for (auto& end_node : end_nodes_) {
+    if (perf_calculators_.find("pipeline_" + end_node) != perf_calculators_.end()) {
+      std::shared_ptr<PerfCalculator> calculator = perf_calculators_["pipeline_" + end_node];
       std::cout << "End node : " << end_node << std::endl;
 
       double total_fps_tmp = 0.f;
       size_t total_fn_tmp = 0;
       std::vector<std::pair<std::string, PerfStats>> latest_fps, entire_fps, latency_vec;
       std::vector<uint32_t> latest_frame_cnt_digit, entire_frame_cnt_digit, latency_frame_cnt_digit;
-      for (auto& stream_id : d_ptr_->stream_ids_) {
+      for (auto& stream_id : stream_ids_) {
         // calculate and print latency for each stream
         PerfStats latency_stats =
             calculator->CalcLatency(stream_id, PerfManager::GetDefaultType(),
-            {d_ptr_->start_node_ + PerfManager::GetStartTimeSuffix(), end_node + PerfManager::GetEndTimeSuffix()});
+            {start_node_ + PerfManager::GetStartTimeSuffix(), end_node + PerfManager::GetEndTimeSuffix()});
         // calculate throughput for each stream
         PerfStats fps_stats = calculator->CalcThroughput(stream_id, PerfManager::GetDefaultType(),
                                                          {end_node + PerfManager::GetEndTimeSuffix()});
@@ -901,7 +850,7 @@ void Pipeline::CalculatePipelinePerfStats(bool final_print) {
 }
 
 std::unordered_map<std::string, std::shared_ptr<PerfManager>> Pipeline::GetPerfManagers() {
-  return d_ptr_->perf_managers_;
+  return perf_managers_;
 }
 
 }  // namespace cnstream

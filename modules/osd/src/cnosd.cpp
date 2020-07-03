@@ -123,7 +123,7 @@ void CnOsd::DrawLabel(cv::Mat image, cnstream::CNObjsVec& objects, cnstream::CnF
     float ymax = (y + h) * image.rows;
 
     int label = object->id.empty() ? -1 : std::stoi(object->id);
-    int score = object->score;
+    float score = object->score;
     int track_id = object->track_id.empty() ? -1 : std::stoi(object->track_id);
     std::string text;
     cv::Scalar color;
@@ -179,9 +179,17 @@ void CnOsd::DrawLabel(cv::Mat image, cnstream::CNObjsVec& objects, cnstream::CnF
       char* str = const_cast<char*>(text.data());
       cn_font->putText(image, str, label_left + cv::Point(0, text_size.height), cv::Scalar(255, 255, 255) - color);
     }
-
+    float second_scale = scale / 4;
+    if (second_scale < 0.00001) {
+      second_scale = 1;
+    }
+    int second_thickness = thickness / 4;
+    if (second_thickness < 1) {
+      second_thickness = 1;
+    }
+    auto second_text_size = cv::getTextSize(text, font_, second_scale, second_thickness, nullptr);
     // draw secondary infer infomation
-    int line_interval = 20;
+    int line_interval = second_text_size.height;
     for (auto& key : attr_keys) {
       cnstream::CNInferAttr infer_attr = object->GetAttribute(key);
       if (infer_attr.value < 0) continue;
@@ -189,8 +197,8 @@ void CnOsd::DrawLabel(cv::Mat image, cnstream::CNObjsVec& objects, cnstream::CnF
       std::string secondary_lable = secondary_labels_[infer_attr.value];
       std::string secondary_text = secondary_lable + " : " + secondary_score;
       cv::putText(image, secondary_text, cv::Point(xmin, ymin + line_interval),
-                  cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255) - color, 1);
-      line_interval += 10;
+                  font_, second_scale, cv::Scalar(255, 255, 255) - color, second_thickness, 8, false);
+      line_interval += second_text_size.height;
     }
   }
 }
