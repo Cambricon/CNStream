@@ -173,8 +173,13 @@ class FFmpegCpuDecoder : public Decoder {
 
  private:
 #ifdef UNIT_TEST
+
  public:
 #endif
+  /**
+   * yuv420p convert to yuv420p nv12/nv21
+   */
+  bool FrameCvt2Yuv420sp(AVFrame *frame, uint8_t *sp, int dst_stride, bool nv21 = false);
   bool ProcessFrame(AVFrame *frame);
 
  private:
@@ -183,8 +188,6 @@ class FFmpegCpuDecoder : public Decoder {
   AVFrame *av_frame_ = nullptr;
   std::atomic<int> eos_got_{0};
   std::atomic<int> eos_sent_{0};
-  uint8_t *nv21_data_ = nullptr;
-  int y_size_ = 0;
 };  // class FFmpegCpuDecoder
 
 }  // namespace cnstream

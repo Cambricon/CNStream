@@ -26,87 +26,67 @@
 #include <utility>
 
 #include "cnstream_pipeline.hpp"
-#include "util/cnstream_queue.hpp"
 
 namespace cnstream {
 
-class EventBusPrivate {
- private:
-  explicit EventBusPrivate(EventBus *d) : q_ptr_(d) {}
-
-  ThreadSafeQueue<Event> queue_;
-  std::list<std::pair<BusWatcher, Pipeline *>> bus_watchers_;
-  std::thread event_thread_;
-  std::atomic<bool> running_{false};
-  DECLARE_PUBLIC(q_ptr_, EventBus);
-  DISABLE_COPY_AND_ASSIGN(EventBusPrivate);
-};  // class EventBusPrivate
-
-EventBus::EventBus() {
-  d_ptr_ = new (std::nothrow) EventBusPrivate(this);
-  LOG_IF(FATAL, nullptr == d_ptr_) << "EventBus::EventBus() new EventBusPrivate failed.";
-}
-
 EventBus::~EventBus() {
   Stop();
-  delete d_ptr_;
 }
 
 bool EventBus::IsRunning() {
-  if (d_ptr_) {
-    return d_ptr_->running_.load();
-  }
-  return false;
+  return running_.load();
 }
 
 bool EventBus::Start() {
-  d_ptr_->running_.store(true);
-  d_ptr_->event_thread_ = std::thread(&EventBus::EventLoop, this);
+  running_.store(true);
+  event_thread_ = std::thread(&EventBus::EventLoop, this);
   return true;
 }
 
 void EventBus::Stop() {
   if (IsRunning()) {
-    d_ptr_->running_.store(false);
-    if (d_ptr_->event_thread_.joinable()) {
-      d_ptr_->event_thread_.join();
+    running_.store(false);
+    if (event_thread_.joinable()) {
+      event_thread_.join();
     }
   }
 }
 
-// return number of bus watchers
+// @return The number of bus watchers that has been added to this event bus.
 uint32_t EventBus::AddBusWatch(BusWatcher func, Pipeline *watcher) {
-  std::unique_lock<std::mutex> lk(watcher_mut_);
-  d_ptr_->bus_watchers_.push_front(std::make_pair(func, watcher));
-  return d_ptr_->bus_watchers_.size();
+  std::lock_guard<std::mutex> lk(watcher_mtx_);
+  bus_watchers_.push_front(std::make_pair(func, watcher));
+  return bus_watchers_.size();
 }
 
 void EventBus::ClearAllWatchers() {
-  std::lock_guard<std::mutex> lk(watcher_mut_);
-  d_ptr_->bus_watchers_.clear();
+  std::lock_guard<std::mutex> lk(watcher_mtx_);
+  bus_watchers_.clear();
 }
 
-const std::list<std::pair<BusWatcher, Pipeline *>> &EventBus::GetBusWatchers() const { return d_ptr_->bus_watchers_; }
+const std::list<std::pair<BusWatcher, Pipeline *>> &EventBus::GetBusWatchers() const {
+  return bus_watchers_;
+}
 
 bool EventBus::PostEvent(Event event) {
-  if (!d_ptr_->running_.load()) {
+  if (!running_.load()) {
     LOG(WARNING) << "Post event failed, pipeline not running";
     return false;
   }
   // LOG(INFO) << "Recieve Event from [" << event.module->GetName() << "] :" << event.message;
-  d_ptr_->queue_.Push(event);
+  queue_.Push(event);
   return true;
 }
 
 Event EventBus::PollEvent() {
   Event event;
   event.type = EVENT_INVALID;
-  while (d_ptr_->running_.load()) {
-    if (d_ptr_->queue_.WaitAndTryPop(event, std::chrono::milliseconds(100))) {
+  while (running_.load()) {
+    if (queue_.WaitAndTryPop(event, std::chrono::milliseconds(100))) {
       break;
     }
   }
-  if (!d_ptr_->running_.load()) event.type = EVENT_STOP;
+  if (!running_.load()) event.type = EVENT_STOP;
   return event;
 }
 
@@ -125,7 +105,7 @@ void EventBus::EventLoop() {
       LOG(INFO) << "[EventLoop] Get stop event";
       break;
     }
-    std::unique_lock<std::mutex> lk(watcher_mut_);
+    std::unique_lock<std::mutex> lk(watcher_mtx_);
     for (auto &watcher : kWatchers) {
       flag = watcher.first(event, watcher.second);
       if (flag == EVENT_HANDLE_INTERCEPTION || flag == EVENT_HANDLE_STOP) {

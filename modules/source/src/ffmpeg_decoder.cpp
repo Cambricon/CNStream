@@ -28,6 +28,8 @@
 
 #include "cnstream_frame_va.hpp"
 
+#define YUV420SP_STRIDE_ALIGN_FOR_SCALER 128
+
 namespace cnstream {
 
 #ifdef __GNUC__
@@ -429,7 +431,8 @@ bool MluDecoder::CreateVideoDecoder(VideoStreamInfo *info) {
   create_info_.inputBufNum = param_.input_buf_number_;
   create_info_.outputBufNum = param_.output_buf_number_;  // must be non-zero, although it is not used.
   create_info_.allocType = CNCODEC_BUF_ALLOC_LIB;
-  create_info_.suggestedLibAllocBitStrmBufSize = info->codec_width * info->codec_height * 3/2/2 + 128;
+  create_info_.suggestedLibAllocBitStrmBufSize = info->codec_width * info->codec_height * 3 / 2 / 2
+                                               + YUV420SP_STRIDE_ALIGN_FOR_SCALER;
   create_info_.userContext = reinterpret_cast<void*>(this);
   eos_got_.store(0);
   eos_sent_.store(0);
@@ -442,6 +445,9 @@ bool MluDecoder::CreateVideoDecoder(VideoStreamInfo *info) {
     return false;
   }
   int stride_align = 1;
+  if (param_.apply_stride_align_for_scaler_)
+    stride_align = YUV420SP_STRIDE_ALIGN_FOR_SCALER;
+
   ret = cnvideoDecSetAttributes(this->instance_, CNVIDEO_DEC_ATTR_OUT_BUF_ALIGNMENT, &stride_align);
   if (0 != ret) {
     LOG(ERROR) << "Failed to set output buffer stride alignment,error code: " << ret;
@@ -640,7 +646,8 @@ bool MluDecoder::CreateJpegDecoder(VideoStreamInfo *info) {
   create_jpg_info_.allocType = CNCODEC_BUF_ALLOC_LIB;
   create_jpg_info_.inputBufNum = param_.input_buf_number_;
   create_jpg_info_.outputBufNum = param_.output_buf_number_;
-  create_jpg_info_.suggestedLibAllocBitStrmBufSize = info->codec_width * info->codec_height * 3/2/2 + 128;
+  create_jpg_info_.suggestedLibAllocBitStrmBufSize = info->codec_width * info->codec_height * 3 / 2 / 2
+                                                   + YUV420SP_STRIDE_ALIGN_FOR_SCALER;
   eos_got_.store(0);
   eos_sent_.store(0);
   cndec_abort_flag_.store(0);
@@ -792,9 +799,6 @@ void FFmpegCpuDecoder::Destroy() {
     av_frame_free(&av_frame_);
     av_frame_ = nullptr;
   }
-  if (nullptr != nv21_data_) {
-    delete[] nv21_data_, nv21_data_ = nullptr;
-  }
 }
 
 bool FFmpegCpuDecoder::Process(ESPacket *pkt) {
@@ -844,6 +848,46 @@ bool FFmpegCpuDecoder::Process(AVPacket *pkt, bool eos) {
   return true;
 }
 
+bool FFmpegCpuDecoder::FrameCvt2Yuv420sp(AVFrame *frame, uint8_t *sp, int dst_stride, bool nv21) {
+  if (frame->format != AV_PIX_FMT_YUV420P && frame->format != AV_PIX_FMT_YUVJ420P) {
+    LOG(ERROR) << "FFmpegCpuDecoder only supports AV_PIX_FMT_YUV420P at this moment";
+    return false;
+  }
+
+  int height = frame->height;
+  int src_stride = frame->linesize[0];
+
+  uint8_t *py = frame->data[0];
+  uint8_t *pu = frame->data[1];
+  uint8_t *pv = frame->data[2];
+
+  uint8_t *pdst_y = sp;
+  uint8_t *pdst_uv = sp + dst_stride * height;
+
+  if (dst_stride == src_stride) {
+    memcpy(pdst_y, py, src_stride * height);
+  } else {
+    for (int row = 0; row < height; ++row) {
+      uint8_t *psrc_yt = py + row * src_stride;
+      uint8_t *pdst_yt = pdst_y + row * dst_stride;
+      memcpy(pdst_yt, psrc_yt, src_stride);
+    }
+  }
+
+  for (int row = 0; row < height / 2; ++row) {
+    uint8_t *psrc_u = pu + frame->linesize[1] * row;
+    uint8_t *psrc_v = pv + frame->linesize[2] * row;
+    if (nv21) std::swap(psrc_u, psrc_v);
+    uint8_t *pdst_uvt = pdst_uv + dst_stride * row;
+    for (int col = 0; col < frame->linesize[1]; ++col) {
+      pdst_uvt[col * 2] = psrc_u[col];
+      pdst_uvt[col * 2 + 1] = psrc_v[col];
+    }
+  }
+
+  return true;
+}
+
 bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
   if (frame_count_++ % interval_ != 0) {
     return true;  // discard frames
@@ -877,39 +921,36 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     dataframe->ctx.dev_id = -1;
     dataframe->ctx.ddr_channel = 0;
   }
-  dataframe->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+  int dst_stride = frame->linesize[0];
+
+  if (param_.apply_stride_align_for_scaler_)
+    dst_stride = std::ceil(1.0 * dst_stride / YUV420SP_STRIDE_ALIGN_FOR_SCALER) * YUV420SP_STRIDE_ALIGN_FOR_SCALER;
+
+  size_t frame_size = dst_stride * frame->height * 3 / 2;
+  uint8_t *sp_data = new (std::nothrow) uint8_t[frame_size];
+  if (!sp_data) {
+    LOG(ERROR) << "Malloc failed, size:" << frame_size;
+    return false;
+  }
+  if (!FrameCvt2Yuv420sp(frame, sp_data, dst_stride, false)) {
+    LOG(ERROR) << "Yuv420p cvt yuv420sp failed.";
+    return false;
+  }
+
+  dataframe->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
   dataframe->width = frame->width;
   dataframe->height = frame->height;
-  dataframe->stride[0] = frame->linesize[0];
-  dataframe->stride[1] = frame->linesize[0];
+  dataframe->stride[0] = dst_stride;
+  dataframe->stride[1] = dst_stride;
 
   if (param_.output_type_ == OUTPUT_MLU) {
-    if (y_size_ != frame->linesize[0] * frame->height) {
-      if (nullptr != nv21_data_) delete[] nv21_data_;
-      y_size_ = frame->linesize[0] * frame->height;
-      nv21_data_ = new (std::nothrow) uint8_t[y_size_ * 3 / 2];
-      if (nullptr == nv21_data_) {
-        LOG(ERROR) << "FFmpegCpuDecoder::ProcessFrame() Failed to alloc memory, size:" << y_size_ * 3 / 2;
-        return false;
-      }
-    }
-
-    /*yuv420 to NV21*/
-    memcpy(nv21_data_, frame->data[0], frame->linesize[0] * frame->height);
-    uint8_t *u = frame->data[1];
-    uint8_t *v = frame->data[2];
-    uint8_t *vu = reinterpret_cast<uint8_t *>(nv21_data_) + frame->linesize[0] * frame->height;
-    for (int i = 0; i < frame->linesize[1] * frame->height / 2; i++) {
-      *vu++ = *v++;
-      *vu++ = *u++;
-    }
-    CALL_CNRT_BY_CONTEXT(cnrtMalloc(&dataframe->mlu_data, y_size_ * 3 / 2), dataframe->ctx.dev_id,
+    CALL_CNRT_BY_CONTEXT(cnrtMalloc(&dataframe->mlu_data, frame_size), dataframe->ctx.dev_id,
                          dataframe->ctx.ddr_channel);
     if (nullptr == dataframe->mlu_data) {
       LOG(ERROR) << "FFmpegCpuDecoder: Failed to alloc mlu memory";
       return false;
     }
-    CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dataframe->mlu_data, nv21_data_, y_size_ * 3 / 2, CNRT_MEM_TRANS_DIR_HOST2DEV),
+    CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dataframe->mlu_data, sp_data, frame_size, CNRT_MEM_TRANS_DIR_HOST2DEV),
                          dataframe->ctx.dev_id, dataframe->ctx.ddr_channel);
 
     auto t = reinterpret_cast<uint8_t *>(dataframe->mlu_data);
@@ -923,19 +964,8 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
       t += plane_size;
     }
   } else if (param_.output_type_ == OUTPUT_CPU) {
-    CNStreamMallocHost(&dataframe->cpu_data, frame->linesize[0] * frame->height * 3 / 2);
-    if (!dataframe->cpu_data) {
-      LOG(WARNING) << "CNStreamMallocHost failed";
-      return false;
-    }
-    memcpy(dataframe->cpu_data, frame->data[0], frame->linesize[0] * frame->height);
-    uint8_t *u = frame->data[1];
-    uint8_t *v = frame->data[2];
-    uint8_t *vu = reinterpret_cast<uint8_t *>(dataframe->cpu_data) + frame->linesize[0] * frame->height;
-    for (int i = 0; i < frame->linesize[1] * frame->height / 2; i++) {
-      *vu++ = *v++;
-      *vu++ = *u++;
-    }
+    dataframe->cpu_data = sp_data;
+    sp_data = nullptr;
     auto t = reinterpret_cast<uint8_t *>(dataframe->cpu_data);
     for (int i = 0; i < dataframe->GetPlanes(); ++i) {
       size_t plane_size = dataframe->GetPlaneBytes(i);
@@ -953,6 +983,7 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
   dataframe->frame_id = frame_id_++;
   data->timestamp = frame->pts;
   data->datas[CNDataFramePtrKey] = dataframe;
+  if (sp_data) delete[] sp_data;
   handler_->SendFrameInfo(data);
   return true;
 }

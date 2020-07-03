@@ -54,8 +54,7 @@ std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, b
     SpinLockGuard guard(spinlock_);
     auto iter = stream_count_map_.find(stream_id);
     if (iter == stream_count_map_.end()) {
-      int count = 1;
-      stream_count_map_[stream_id] = count;
+      stream_count_map_[stream_id] = 1;
       // LOG(INFO) << "CNFrameInfo::Create() insert stream_id: " << stream_id;
     } else {
       int count = stream_count_map_[stream_id];

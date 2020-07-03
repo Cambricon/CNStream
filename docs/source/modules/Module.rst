@@ -6,21 +6,22 @@
 
 针对常规的视频结构化领域，CNStream提供了以下核心功能模块：
 
-* 数据源处理模块：依赖于CNCodec SDK（MLU视频解码SDK），用于视频demux和视频解码。支持多种协议的解封装及对多种格式的视频压缩格式进行解码。视频压缩格式和图片硬解码支持详情，请参考“Cambricon-CNCodec-Developer-Guide”文档手册。
+* 数据源处理模块：依赖于CNCodec SDK（MLU视频解码SDK），用于视频解码和JPEG解码。支持多种协议的解封装及对多种格式的视频压缩格式进行解码。视频压缩格式和图片硬解码支持详情，请参考“Cambricon-CNCodec-Developer-Guide”文档手册。
 
 * 神经网络推理模块：依赖于寒武纪实时运行库（CNRT），支持多种神经网络离线模型对图像数据进行神经网络推理。CNStream的模块式设计，为用户提供了在视频流解码和推理之后的进一步数据加工和处理。
 
 * 追踪模块：使用针对寒武纪平台优化的FeatureMatch和KCF算法，在保证精度的前提下减少CPU使用率，提高了模块性能。
 
-除以上核心模块外，CNStream还提供了自定义示例模块：OSD模块、编码模块、多媒体显示模块和帧率统计模块等。
+除以上核心模块外，CNStream还提供了自定义示例模块：OSD模块、编码模块、多媒体显示模块和RTSP推流模块等。
 
 - OSD（On-Screen Display）模块：支持内容叠加和高亮物件处理。
 - 编码模块：支持在CPU上编码。
 - 多媒体显示模块：支持屏幕上显示视频。
+- RTSP推流模块：将图像数据编码后推流至互联网。
 
 数据源模块
 --------------
-数据源（DataSource）模块是pipeline的起始模块，实现了视频图像获取功能。通过FFmpeg来解封装，或解复用本地文件或者网络流，来得到码流。之后喂给CNDecoder或者CPU Decoder进行解码，得到图像，并把图像存到CNDataFrame的syncedMem中。另外，为了调试方便，该模块还支持读取H264和H265格式的裸码流文件。
+数据源（DataSource）模块是pipeline的起始模块，实现了视频图像获取功能。不仅支持获取内存数据裸流，还可以通过FFmpeg解封装、解复用本地文件或网络流来得到码流。之后喂给解码器解码得到图像，并把图像存到CNDataFrame的CNSyncedMemory中。目前支持H264、H265、MP4、JPEG、RTSP等协议。
 
 .. attention::
    |  一个pipeline只支持定义一个数据源模块。
@@ -32,17 +33,16 @@
 - 支持动态增加和减少数据流。
 - 支持通过配置文件修改和选择source module的具体功能，而不是在编译时选择。
 
-**cnstream::DataSource** 类在 ``cnstream_source.hpp`` 文件中定义。 ``cnstream_source.hpp`` 文件存放在 ``modules/core/include`` 文件夹下。 主要接口如下。源代码中有详细的注释，这里仅给出必要的说明。
+**cnstream::DataSource** 类在 ``data_source.hpp`` 文件中定义。 ``data_source.hpp`` 文件存放在 ``modules/source/include`` 文件夹下。 ``DataSource`` 主要功能继承至 ``SourceModule`` 类，存放在 ``framework/core/include`` 目录下。主要接口如下。源代码中有详细的注释，这里仅给出必要的说明。
 
 ::
 
-  class DataHandler;
-
-  class DataSource : public Module, public ModuleCreator<DataSource> {
+  class SourceModule : public Module {
    public:
     // 动态增加一路stream接口。
-    int AddVideoSource(const std::string &stream_id, const std::string &filename, int framerate, bool loop = false);
+    int AddSource(std::shared_ptr<SourceHandler> handler);
     // 动态减少一路stream接口。
+    int RemoveSource(std::shared_ptr<SourceHandler> handler);
     int RemoveSource(const std::string &stream_id);
 
     // 对source module来说，Process（）不会被调用。
@@ -52,10 +52,10 @@
 
    private:
     ...
-    // 每一路stream，使用一个DataHandler实例实现。
+    // 每一路stream，使用一个SourceHandler实例实现。
     // source module维护stream_id和source handler的映射关系。
     // 用来实现动态的增加和删除某一路stream。
-    std::map<std::string /*stream_id*/, std::shared_ptr<DataHandler>> source_map_;
+    std::map<std::string /*stream_id*/, std::shared_ptr<SourceHandler>> source_map_;
   };
 
 使用说明
@@ -78,7 +78,7 @@
     }
   }
 
-其他配置字段可以参考 ``data_source.hpp`` 中详细注释。
+其他配置字段可以参考 ``data_source.hpp`` 中详细注释或者通过cnstream_inspect工具查看。
 
 神经网络推理模块
 ---------------------------
@@ -94,7 +94,7 @@
 
   "detector" : {
     "class_name" : "cnstream::Inferencer",    // 推理类名。               
-    "parallelism" : 32,                       // 并行度。 
+    "parallelism" : 2,                       // 并行度。 
     "max_input_queue_size" : 20,              // 最大队列深度。   
     "next_modules" : ["tracker"],             // 下一个连接模块的名称。  
     "custom_params" : {                       // 特有参数 。
@@ -117,7 +117,7 @@
 追踪模块
 ---------------
 
-追踪（Tracker）模块用于对检测到的物体进行追踪并输出检查结果。主要应用于车辆等检测和追踪。目前支持FeatureMatch和KCF两种追踪方法。该模块连接在神经网络推理模块后，通过在配置文件中指定追踪使用的离线模型以及使用的追踪方法来配置模块。
+追踪（Tracker）模块用于对检测到的物体进行追踪。主要应用于车辆行人等检测物的追踪。目前支持FeatureMatch和KCF两种追踪方法。该模块连接在神经网络推理模块后，通过在配置文件中指定追踪使用的离线模型以及使用的追踪方法来配置模块。
 
 使用说明
 ^^^^^^^^^
@@ -153,13 +153,6 @@ RTSP Sink模块处理数据流程如下：
 .. figure:: ../images/rtsp_sink.png
 
    RTSP Sink模块数据处理流程
-
-使用依赖
-^^^^^^^^^
-
-RTSP Sink模块依赖于Live555。用户需要先安装Live555后，才可以使用该模块。
-
-在CNStream github仓库 ``tools`` 目录下，运行 ``download_live.sh`` 和 ``build_live555.sh`` 脚本，即可下载和安装live555。
 
 使用说明
 ^^^^^^^^^
@@ -272,7 +265,7 @@ RTSP Sink模块依赖于Live555。用户需要先安装Live555后，才可以使
 示例代码
 ^^^^^^^^^
 
-CNStream提供两个示例，位于CNStream github仓库 ``samples/demo`` 目录下：
+CNStream提供两个示例，位于CNStream github仓库 ``samples/demo/rtsp`` 目录下：
 
 - run_rtsp.sh：示例使用single模式。对应配置文件 ``RTSP.json``。
 - run_rtsp_mosaic.sh：示例使用mosaic模式。对应配置文件 ``RTSP_mosaic.json``。
@@ -282,7 +275,7 @@ CNStream提供两个示例，位于CNStream github仓库 ``samples/demo`` 目录
 执行下面步骤运行示例代码：
 
 1. 运行run_rtsp.sh或run_rtsp_mosaic.sh脚本。
-2. 使用VLC Media Player打开生成的URL。例如：``rtsp://本机ip:9554/rtsp_live``。URL保存在 ``samples/demo`` 目录下的 ``RTSP_url_names.txt`` 文件中。
+2. 使用VLC Media Player打开生成的URL。例如：``rtsp://本机ip:9554/rtsp_live``。URL保存在 ``samples/demo/rtsp`` 目录下的 ``RTSP_url_names.txt`` 文件中。
 
 .. _单进程单Pipeline:
 
@@ -291,7 +284,7 @@ CNStream提供两个示例，位于CNStream github仓库 ``samples/demo`` 目录
 
 在单进程、单个pipeline场景下，CNStream支持不同模块在不同的MLU卡上运行。用户可以通过设置模块的 ``device_id`` 参数指定使用的MLU卡。
 
-下面以Decode和Inference模块使用场景为例，配置Decode模块使用MLU卡0，Inference模块使用MLU卡1。单进程中一般建议在source module中复用codec的buffer，即应设置 ``reuse_codec_buf`` 为 ``true``。
+下面以Decode和Inference模块使用场景为例，配置Decode模块使用MLU卡0，Inference模块使用MLU卡1。单进程中建议在source module中复用codec的buffer，即应设置 ``reuse_codec_buf`` 为 ``true``。
 
 ::
 
@@ -345,7 +338,7 @@ CNStream支持在单个pipeline中，不同的进程使用不同的MLU卡执行�
    - 设置 ``ipc_type`` 参数值为 **client**，做为多进程通信的客户端。
    - 设置 ``memmap_type`` 参数值为 **cpu**。当前仅支持CPU内存共享方式。后续会支持MLU内存共享方式。
    - 设置 ``socket_address`` 参数值为进程间通信地址。用户需定义一个字符串来表示通信地址。
-   - 设置不同进程使用不同的MLU卡：设置Decode进程使用MLU卡1。但配置ModuleIPC模块时，无需设置 ``device_id``。另外，多进程使用中，不建议在source module中复用codec的buffer，即应设置 ``reuse_codec_buf`` 设为false。
+   - 设置不同进程使用不同的MLU卡：设置Decode进程使用MLU卡0。但配置ModuleIPC模块时，无需设置 ``device_id``。另外，多进程使用中，不建议在source module中复用codec的buffer，即应设置 ``reuse_codec_buf`` 设为false。
    
    示例如下：
 

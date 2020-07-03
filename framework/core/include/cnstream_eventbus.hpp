@@ -36,11 +36,11 @@
 #include <utility>
 
 #include "cnstream_common.hpp"
+#include "util/cnstream_queue.hpp"
 
 namespace cnstream {
 
 class Pipeline;
-class EventBusPrivate;
 
 /**
  * @brief Flag to specify the way in which bus watcher handled one event.
@@ -107,7 +107,8 @@ class EventBus {
 
  public:
 #endif
-  EventBus();
+  EventBus() = default;
+
   ~EventBus();
 
   /**
@@ -139,10 +140,13 @@ class EventBus {
   void EventLoop();
 
  private:
-  std::mutex watcher_mut_;
-
-  DECLARE_PRIVATE(d_ptr_, EventBus);
   DISABLE_COPY_AND_ASSIGN(EventBus);
+
+  std::mutex watcher_mtx_;
+  ThreadSafeQueue<Event> queue_;
+  std::list<std::pair<BusWatcher, Pipeline *>> bus_watchers_;
+  std::thread event_thread_;
+  std::atomic<bool> running_{false};
 };  // class EventBus
 
 }  // namespace cnstream

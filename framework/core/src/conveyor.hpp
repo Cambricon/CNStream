@@ -49,7 +49,8 @@ class Connector;
 class Conveyor {
  public:
   friend class Connector;
-  // ~Conveyor();
+
+  ~Conveyor() = default;
   void PushDataBuffer(CNFrameInfoPtr data);
   CNFrameInfoPtr PopDataBuffer();
   std::vector<CNFrameInfoPtr> PopAllDataBuffer();
@@ -62,11 +63,12 @@ class Conveyor {
   Conveyor(Connector* container, size_t max_size, bool enable_drop = false);
 
  private:
+  DISABLE_COPY_AND_ASSIGN(Conveyor);
+
+  ThreadSafeQueue<CNFrameInfoPtr> dataq_;
   Connector* container_;
   size_t max_size_;
   bool enable_drop_;
-  ThreadSafeQueue<CNFrameInfoPtr> dataq_;
-  DISABLE_COPY_AND_ASSIGN(Conveyor);
 };  // class Conveyor
 
 }  // namespace cnstream

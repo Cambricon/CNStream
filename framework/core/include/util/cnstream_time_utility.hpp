@@ -66,7 +66,9 @@ class TimeStampBase {
    * @brief generate timestamp
    * @return timestamp as uint64_t
    */
-  static uint64_t Current() { return duration_cast<precision>(steady_clock::now().time_since_epoch()).count(); }
+  static uint64_t Current() {
+    return duration_cast<precision>(std::chrono::system_clock::now().time_since_epoch()).count();
+  }
 
   /**
    * @brief generate timestamp

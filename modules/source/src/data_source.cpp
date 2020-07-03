@@ -50,6 +50,9 @@ DataSource::DataSource(const std::string &name) : SourceModule(name) {
   param_register_.Register("output_buf_number",
                            "Codec buffer number for storing output data."
                            " Basically, we do not need to set it, as it will be allocated automatically.");
+  param_register_.Register("apply_stride_align_for_scaler",
+                           "The output data will align the scaler(hardware on mlu220) requirements."
+                           " Recommended for use with scaler on mlu220 platforms.");
 }
 
 DataSource::~DataSource() {}
@@ -95,6 +98,7 @@ bool DataSource::Open(ModuleParamSet paramSet) {
       LOG(ERROR) << "interval : invalid";
       return false;
     }
+    param_.interval_ = interval;
   }
 
   if (paramSet.find("decoder_type") != paramSet.end()) {
@@ -139,6 +143,10 @@ bool DataSource::Open(ModuleParamSet paramSet) {
     std::stringstream ss;
     ss << paramSet["output_buf_number"];
     ss >> param_.output_buf_number_;
+  }
+
+  if (paramSet.find("apply_stride_align_for_scaler") != paramSet.end()) {
+    param_.apply_stride_align_for_scaler_ = paramSet["apply_stride_align_for_scaler"] == "true";
   }
 
   return true;
