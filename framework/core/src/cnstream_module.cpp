@@ -131,9 +131,12 @@ bool Module::TransmitData(std::shared_ptr<CNFrameInfo> data) {
   RwLockReadGuard guard(container_lock_);
   if (container_) {
     return container_->ProvideData(this, data);
-  } else {
+  }
+#ifdef UNIT_TEST
+  else {  // NOLINT
     output_frame_queue_.Push(data);
   }
+#endif
   return false;
 }
 

@@ -29,6 +29,8 @@ extern "C" {
 #include <libavutil/log.h>
 };
 
+#include <unistd.h>
+
 #include <iostream>
 #include <thread>
 #include <future>
@@ -43,10 +45,6 @@ extern "C" {
 class RingBuffer {
  public:
   explicit RingBuffer(size_t capacity);
-  RingBuffer(RingBuffer &&) = delete;
-  RingBuffer& operator=(RingBuffer&& other) = delete;
-  RingBuffer(const RingBuffer &) = delete;
-  RingBuffer& operator=(const RingBuffer& other) = delete;
   ~RingBuffer() { delete[] data_;}
   size_t Size() const {
     std::lock_guard<std::mutex> guard(mutex_);
@@ -57,7 +55,12 @@ class RingBuffer {
   }
   size_t Write(const void *data, size_t bytes);
   size_t Read(void *data, size_t bytes);
+
  private:
+  RingBuffer(RingBuffer &&) = delete;
+  RingBuffer& operator=(RingBuffer&&) = delete;
+  RingBuffer(const RingBuffer &) = delete;
+  RingBuffer& operator=(const RingBuffer&) = delete;
   size_t front_, rear_, size_, capacity_;
   uint8_t *data_;
   mutable std::mutex mutex_;
@@ -88,47 +91,91 @@ class StreamParser {
   void Close();
   int Parse(unsigned char *bitstream, int size);
   bool GetInfo(VideoStreamInfo &info);  // NOLINT
- private:
-  StreamParserImpl *impl_ = nullptr;
-};
 
-class StreamParserImpl {
+ private:
+  StreamParser(const StreamParser &) = delete;
+  StreamParser & operator=(const StreamParser &) = delete;
+  StreamParserImpl *impl_ = nullptr;
+};  // class StreamParser
+
+class ParserHelper {
  public:
-  StreamParserImpl() {}
-  ~StreamParserImpl() {}
-  int Open(std::string fmt) {
-    queue_ = new (std::nothrow) RingBuffer(256 * 1024);
-    if (!queue_) return -1;
-    fmt_ = fmt;
-    thread_ = std::thread(&StreamParserImpl::FindInfo, this);
+  ParserHelper() : status_(STATUS_NONE) {}
+
+  int Init(std::string fmt) {
+    std::unique_lock<std::mutex> lk(mutex_);
+    if (status_ == STATUS_NONE) {
+      if (parser_.Open(fmt) < 0) {
+        return -1;
+      }
+      status_ = STATUS_INIT;
+    }
     return 0;
   }
 
-  void Close() {
-    if (thread_.joinable()) {
-      thread_.join();
+  int Parse(unsigned char *bitstream, int size) {
+    std::unique_lock<std::mutex> lk(mutex_);
+    if (status_ == STATUS_INIT) {
+      if (parser_.Parse(bitstream, size) < 0) {
+        return -1;
+      }
+      usleep(1000 * 30);  // FIXME
+      VideoStreamInfo info;
+      if (GetInfo(info) == true) {
+        status_ = STATUS_DONE;
+      }
     }
-    if (queue_) {
-      delete queue_, queue_ = nullptr;
+    return 0;
+  }
+
+  void Free() {
+    std::unique_lock<std::mutex> lk(mutex_);
+    if (status_ != STATUS_NONE && status_ != STATUS_END) {
+      parser_.Close();
+      status_ = STATUS_END;
     }
   }
 
-  int Parse(unsigned char *bitstream, int size);
-  bool GetInfo(VideoStreamInfo &info);  // NOLINT
+  bool GetInfo(VideoStreamInfo &info) {  // NOLINT
+    return parser_.GetInfo(info);
+  }
 
  private:
-  void FindInfo();
-  static constexpr int io_buffer_size_ = 32768;
-  std::string fmt_;
-  RingBuffer *queue_ = nullptr;
-  std::promise<VideoStreamInfo> promise_;
-  std::atomic<int> info_got_{0};
-  std::atomic<int> info_ready_{0};
-  VideoStreamInfo info_;
-  std::thread thread_;
-};  // class StreamParserImpl
+  ParserHelper(const ParserHelper&) = delete;
+  ParserHelper& operator=(const ParserHelper&) = delete;
+  enum {
+    STATUS_NONE,
+    STATUS_INIT,
+    STATUS_DONE,
+    STATUS_END
+  } status_;
+  std::mutex mutex_;
+  StreamParser parser_;
+};  // class ParserHelper
 
 bool GetVideoStreamInfo (const AVFormatContext *ic, int &video_index, VideoStreamInfo &info);  // NOLINT
+
+struct NalDesc {
+  unsigned char *nal = nullptr;
+  int len = 0;
+  int type = -1;
+};
+
+class H2645NalSplitter {
+ public:
+  virtual ~H2645NalSplitter();
+  int SplitterInit(bool isH264) {
+    isH264_ = isH264;
+    return 0;
+  }
+  int SplitterWriteFrame(unsigned char *buf, int len);
+  int SplitterWriteChunk(unsigned char *buf, int len);
+  virtual void SplitterOnNal(NalDesc &desc, bool eos) = 0;  // NOLINT
+ private:
+  bool isH264_ = true;
+  unsigned char *es_buffer_ = nullptr;
+  int es_len_ = 0;
+};  // class H2645NalSplitter
 
 }  // namespace cnstream
 

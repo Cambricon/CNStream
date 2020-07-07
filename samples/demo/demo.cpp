@@ -180,6 +180,7 @@ int main(int argc, char** argv) {
         FILE* fp = fopen(filename.c_str(), "rb");
         if (fp) {
           auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+          memHandler->SetDataType(cnstream::ESMemHandler::H264);
           unsigned char buf[4096];
           while (thread_running_) {
             if (!feof(fp)) {

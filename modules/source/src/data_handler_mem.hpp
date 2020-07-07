@@ -46,25 +46,36 @@ extern "C" {
 
 namespace cnstream {
 
-class ESMemHandlerImpl : public IHandler {
+class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
  public:
   explicit ESMemHandlerImpl(DataSource *module, ESMemHandler &handler)  // NOLINT
     : module_(module), handler_(handler) {
       stream_id_ = handler_.GetStreamId();
   }
 
-  ~ESMemHandlerImpl() {
-    if (es_buffer_) delete []es_buffer_;
-  }
+  ~ESMemHandlerImpl() {}
 
   bool Open();
   void Close();
-  void SetDataType(ESMemHandler::DataType data_type) {
+
+  int SetDataType(ESMemHandler::DataType data_type) {
     data_type_ = data_type;
+    int ret = -1;
+    if (data_type_ == ESMemHandler::H264) {
+      ret = parser_.Init("h264");
+      this->SplitterInit(true);
+    } else if (data_type_ == ESMemHandler::H265) {
+      ret = parser_.Init("h265");
+      this->SplitterInit(false);
+    } else {
+      ret = -1;
+    }
+    return ret;
   }
 
   int Write(ESPacket *pkt);
   int Write(unsigned char *data, int len);
+  void SplitterOnNal(NalDesc &desc, bool eos) override;
 
  private:
   DataSource *module_ = nullptr;
@@ -73,11 +84,7 @@ class ESMemHandlerImpl : public IHandler {
   std::string stream_id_;
   DataSourceParam param_;
   size_t interval_ = 1;
-  ESMemHandler::DataType data_type_ = ESMemHandler::AUTO;
-
-  unsigned char *es_buffer_ = nullptr;
-  int es_len_ = 0;
-  static const int max_es_buffer_size = 1024 * 1024;
+  ESMemHandler::DataType data_type_ = ESMemHandler::INVALID;
 
  private:
 #ifdef UNIT_TEST
@@ -94,8 +101,7 @@ class ESMemHandlerImpl : public IHandler {
   std::thread thread_;
   bool eos_sent_ = false;
 
-  StreamParser parser_;
-  std::atomic<int> parse_done_{0};
+  ParserHelper parser_;
   BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
 
  private:

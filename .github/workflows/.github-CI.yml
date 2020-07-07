@@ -17,8 +17,6 @@ jobs:
     runs-on: self-hosted
     steps:
     - uses: actions/checkout@v2
-    - name: install live555
-      run: ./tools/download_live.sh 
     - name: configure
       run: mkdir build && cd build && cmake -DMLU=MLU270 .. && make -j
     - name: test

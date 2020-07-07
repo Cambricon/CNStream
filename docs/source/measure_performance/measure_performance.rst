@@ -25,7 +25,7 @@ CNStream提供性能统计机制，帮助用户统计各模块及整条pipeline�
 
 CNStream使用SQLite3数据库保存计算性能所需的数据。
 
-用户在初始化PerfManager时，可以通过 ``Init`` 函数传入数据库文件名。随后，通过调用 ``RegisterPerfType`` 注册perf类型并在数据库中生成表。再通过调用 ``Record`` 函数，基于数据库中的表和字段，将相关数据记录到数据库中。最后CNStream读取该数据库的数据对模块和pipeline进行性能计算。
+用户在初始化PerfManager时，可以通过 ``Init`` 函数传入数据库文件名。随后，通过调用 ``RegisterPerfType`` 函数注册perf类型并在数据库中生成表。再通过调用 ``Record`` 函数，基于数据库中的表和字段，将相关数据记录到数据库中。最后CNStream读取该数据库的数据对模块和pipeline进行性能计算。
 
 性能统计机制中，将为每一路视频创建一个PerfManager。
 

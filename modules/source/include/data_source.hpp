@@ -179,8 +179,9 @@ class RtspHandler : public SourceHandler {
   /*
    * "reconnect" is valid when "use_ffmpeg" set false
    */
-  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
-                                               const std::string &url_name, bool use_ffmpeg = false, int reconnect = 1);
+  static std::shared_ptr<SourceHandler>
+    Create(DataSource *module, const std::string &stream_id,
+           const std::string &url_name, bool use_ffmpeg = false, int reconnect = 10);
   ~RtspHandler();
   /**/
   bool Open() override;
@@ -208,13 +209,14 @@ class ESMemHandler : public SourceHandler {
   bool Open() override;
   void Close() override;
 
+  enum DataType { INVALID, H264, H265};
+  int SetDataType(DataType type);  // must be called before Write() invoked
+
   /*Write()
    *   Send H264/H265 bitstream with prefix-startcode.
    */
-  enum DataType { AUTO, H264, H265 };
-  void SetDataType(DataType type = AUTO);
-  int Write(ESPacket *pkt);
-  int Write(unsigned char *buf, int len);
+  int Write(ESPacket *pkt);  // frame mode
+  int Write(unsigned char *buf, int len);  // chunk mode
 
  private:
   explicit ESMemHandler(DataSource *module, const std::string &stream_id);

@@ -151,7 +151,7 @@ Pipeline::Pipeline(const std::string& name) : name_(name) {
 
   event_bus_ = new (std::nothrow) EventBus();
   LOG_IF(FATAL, nullptr == event_bus_) << "Pipeline::Pipeline() failed to alloc EventBus";
-  GetEventBus()->AddBusWatch(std::bind(&Pipeline::DefaultBusWatch, this, std::placeholders::_1), this);
+  GetEventBus()->AddBusWatch(std::bind(&Pipeline::DefaultBusWatch, this, std::placeholders::_1));
 
   idxManager_ = new (std::nothrow) IdxManager();
   LOG_IF(FATAL, nullptr == idxManager_) << "Pipeline::Pipeline() failed to alloc IdxManager";

@@ -229,9 +229,11 @@ class Live555Demuxer : public IDemuxer, public IRtspCB {
     :IDemuxer(), queue_(queue), url_(url), reconnect_(reconnect) {
   }
 
-  virtual ~Live555Demuxer() {}
+  virtual ~Live555Demuxer() {
+    parser_.Free();
+  }
+
   bool PrepareResources(std::atomic<int> &exit_flag) override {
-    parser_.Open();
     // start rtsp_client
     cnstream::OpenParam param;
     param.url = url_;
@@ -248,13 +250,15 @@ class Live555Demuxer : public IDemuxer, public IRtspCB {
       if (exit_flag) {
         break;
       }
-      usleep(1000 * 10);
+      if (connect_failed_) {
+        return false;
+      }
     }
     if (exit_flag) {
       return false;
     }
     this->SetInfo(info);
-    parser_.Close();
+    parser_.Free();
     return true;
   }
 
@@ -268,17 +272,29 @@ class Live555Demuxer : public IDemuxer, public IRtspCB {
   }
 
  private:
-  std::atomic<int> parse_done_{0};
-
   void OnFrame(unsigned char *data, size_t size, FrameInfo *frame_info)  override {
     if (data && size && frame_info) {
+      switch (frame_info->codec_type) {
+      case FrameInfo::H264: parser_.Init("h264"); break;
+      case FrameInfo::H265: parser_.Init("h265"); break;
+      default: {
+          LOG(ERROR) << "unsupported codec type";
+          return;
+        }
+      }
       ESPacket pkt;
       pkt.data = data;
       pkt.size = size;
       pkt.flags = 0;
       pkt.pts = frame_info->pts;
       this->Write(&pkt);
+      if (!connect_done_) connect_done_.store(true);
     } else {
+      if (!connect_done_) {
+        // Failed to connect server...
+        connect_failed_.store(true);
+        return;
+      }
       ESPacket pkt;
       pkt.flags = ESPacket::FLAG_EOS;
       this->Write(&pkt);
@@ -289,10 +305,7 @@ class Live555Demuxer : public IDemuxer, public IRtspCB {
 
   int Write(ESPacket *pkt) {
     if (pkt && pkt->data && pkt->size) {
-      if (!parse_done_.load()) {
         parser_.Parse(pkt->data, pkt->size);
-        usleep(1000);
-      }
     }
     if (queue_) {
       queue_->Push(std::make_shared<EsPacket>(pkt));
@@ -304,8 +317,10 @@ class Live555Demuxer : public IDemuxer, public IRtspCB {
   FrameQueue *queue_ = nullptr;
   std::string url_;
   int reconnect_ = 0;
-  StreamParser parser_;
+  ParserHelper parser_;
   RtspSession rtsp_session_;
+  std::atomic<bool> connect_done_{false};
+  std::atomic<bool> connect_failed_{false};
 };  // class Live555Demuxer
 
 RtspHandler::RtspHandler(DataSource *module, const std::string &stream_id, const std::string &url_name, bool use_ffmpeg,
@@ -387,6 +402,7 @@ void RtspHandlerImpl::Close() {
 }
 
 void RtspHandlerImpl::DemuxLoop() {
+  LOG(INFO) << "DemuxLoop Start...";
   std::shared_ptr<IDemuxer> demuxer;
   if (use_ffmpeg_) {
     demuxer.reset(new (std::nothrow) FFmpegDemuxer(queue_, url_name_));
@@ -415,9 +431,11 @@ void RtspHandlerImpl::DemuxLoop() {
     }
   }
   demuxer->ClearResources(demux_exit_flag_);
+  LOG(INFO) << "DemuxLoop Exit";
 }
 
 void RtspHandlerImpl::DecodeLoop() {
+  LOG(INFO) << "DecodeLoop Start...";
   /*meet cnrt requirement*/
   if (param_.device_id_ >=0) {
     try {
@@ -480,10 +498,11 @@ void RtspHandlerImpl::DecodeLoop() {
   using EsPacketPtr = std::shared_ptr<EsPacket>;
   while (!decode_exit_flag_) {
     EsPacketPtr in;
-    int timeoutMs = 10000;
+    int timeoutMs = 1000;
     bool ret = this->queue_->Pop(timeoutMs, in);
     if (!ret) {
       LOG(INFO) << "Read Timeout";
+      continue;
     } else {
       if (perf_manager_ != nullptr) {
         std::string thread_name = "cn-" + module_->GetName() + stream_id_;
@@ -493,8 +512,8 @@ void RtspHandlerImpl::DecodeLoop() {
       }
     }
 
-    if ((!ret) || (in->pkt_.flags & ESPacket::FLAG_EOS)) {
-      LOG(INFO) << "Read EOS or Timeout";
+    if (in->pkt_.flags & ESPacket::FLAG_EOS) {
+      LOG(INFO) << "Read EOS";
       ESPacket pkt;
       pkt.data = in->pkt_.data;
       pkt.size = in->pkt_.size;
@@ -502,7 +521,7 @@ void RtspHandlerImpl::DecodeLoop() {
       pkt.flags = ESPacket::FLAG_EOS;
       decoder_->Process(&pkt);
       break;
-    }  // if (!ret)
+    }  // if (eos)
 
     ESPacket pkt;
     pkt.data = in->pkt_.data;
@@ -517,6 +536,7 @@ void RtspHandlerImpl::DecodeLoop() {
   if (decoder_.get()) {
     decoder_->Destroy();
   }
+  LOG(INFO) << "DecodeLoop Exit";
 }
 
 }  // namespace cnstream

@@ -53,9 +53,9 @@ void EventBus::Stop() {
 }
 
 // @return The number of bus watchers that has been added to this event bus.
-uint32_t EventBus::AddBusWatch(BusWatcher func, Pipeline *watcher) {
+uint32_t EventBus::AddBusWatch(BusWatcher func) {
   std::lock_guard<std::mutex> lk(watcher_mtx_);
-  bus_watchers_.push_front(std::make_pair(func, watcher));
+  bus_watchers_.push_front(func);
   return bus_watchers_.size();
 }
 
@@ -64,7 +64,7 @@ void EventBus::ClearAllWatchers() {
   bus_watchers_.clear();
 }
 
-const std::list<std::pair<BusWatcher, Pipeline *>> &EventBus::GetBusWatchers() const {
+const std::list<BusWatcher> &EventBus::GetBusWatchers() const {
   return bus_watchers_;
 }
 
@@ -91,7 +91,7 @@ Event EventBus::PollEvent() {
 }
 
 void EventBus::EventLoop() {
-  const std::list<std::pair<BusWatcher, Pipeline *>> &kWatchers = GetBusWatchers();
+  const std::list<BusWatcher> &kWatchers = GetBusWatchers();
   EventHandleFlag flag = EVENT_HANDLE_NULL;
 
   SetThreadName("cn-EventLoop", pthread_self());
@@ -107,7 +107,7 @@ void EventBus::EventLoop() {
     }
     std::unique_lock<std::mutex> lk(watcher_mtx_);
     for (auto &watcher : kWatchers) {
-      flag = watcher.first(event, watcher.second);
+      flag = watcher(event);
       if (flag == EVENT_HANDLE_INTERCEPTION || flag == EVENT_HANDLE_STOP) {
         break;
       }

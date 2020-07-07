@@ -915,7 +915,7 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
   if (param_.output_type_ == OUTPUT_MLU) {
     dataframe->ctx.dev_type = DevContext::MLU;
     dataframe->ctx.dev_id = param_.device_id_;
-    dataframe->ctx.ddr_channel = data->GetStreamIndex() % 4;  // FIXME
+    dataframe->ctx.ddr_channel = 0;  // FIXME
   } else {
     dataframe->ctx.dev_type = DevContext::CPU;
     dataframe->ctx.dev_id = -1;

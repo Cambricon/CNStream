@@ -35,7 +35,7 @@ const EventType g_type = EVENT_ERROR;
 const char *g_message = "test post event";
 std::thread::id g_thread_id;
 
-EventHandleFlag TestBusWatcher(const Event &event, Pipeline *pipeline) {
+EventHandleFlag TestBusWatcher(const Event &event) {
   EXPECT_EQ(event.type, g_type);
   EXPECT_STREQ(event.message.c_str(), g_message);
   // EXPECT_EQ(event.module_name, module);
@@ -46,7 +46,7 @@ EventHandleFlag TestBusWatcher(const Event &event, Pipeline *pipeline) {
 TEST(CoreEventBus, AddBusWatcher) {
   Pipeline pipe("pipe");
   auto bus = pipe.GetEventBus();
-  uint32_t num = bus->AddBusWatch(TestBusWatcher, &pipe);
+  uint32_t num = bus->AddBusWatch(TestBusWatcher);
   EXPECT_EQ(num, (uint32_t)2);
   pipe.Start();
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -56,7 +56,7 @@ TEST(CoreEventBus, AddBusWatcher) {
 TEST(CoreEventBus, PostEvent) {
   Pipeline pipe("pipe");
   auto bus = pipe.GetEventBus();
-  bus->AddBusWatch(TestBusWatcher, &pipe);
+  bus->AddBusWatch(TestBusWatcher);
   Event event;
   event.type = g_type;
   event.message = g_message;
@@ -93,7 +93,7 @@ TEST(CoreEventBus, ClearAllBusWatchers) {
   Pipeline pipe("pipe");
   auto bus = pipe.GetEventBus();
   EXPECT_EQ(bus->GetBusWatchers().size(), uint32_t(1));
-  bus->AddBusWatch(TestBusWatcher, &pipe);
+  bus->AddBusWatch(TestBusWatcher);
   EXPECT_EQ(bus->GetBusWatchers().size(), uint32_t(2));
   bus->ClearAllWatchers();
   EXPECT_EQ(bus->GetBusWatchers().size(), uint32_t(0));

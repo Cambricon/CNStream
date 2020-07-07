@@ -109,6 +109,8 @@ ModuleConfigs（JSON）的示例如下。JSON配置文件支持C和C++风格的�
     }
   }
 
+.. _module:
+
 cnstream::Module类
 -------------------
 
@@ -119,8 +121,7 @@ CNStream SDK要求所有的Module类使用统一接口和数据结构 **cnstream
 
 配置搭建pipeline的基础是实现根据module类名字创建module实例，因此具体module类还需要继承 **cnstream::ModuleCreator** 。
 
-一个module的实例，会使用一个或者多个线程对多路数据流进行处理，每一路数据流使用pipeline范围内唯一的 ``stream_id`` 进行标识。此外从 **cnstream::IModuleObserver** 接口类继承实现一个观察者，并通过 ``SetObserver`` 注册到module中，应用程序就可以观察每个module处理结果。
-具体的代码编写结构可以参考 ``example/example.cpp``
+一个module的实例，会使用一个或者多个线程对多路数据流进行处理，每一路数据流使用pipeline范围内唯一的 ``stream_id`` 进行标识。此外从 **cnstream::IModuleObserver** 接口类继承实现一个观察者，并通过 ``SetObserver`` 注册到module中，应用程序就可以观察每个module处理结果。详细代码编写结构，可参考 ``example/example.cpp``。
 
 **cnstream::Module** 类在 ``cnstream_module.hpp`` 文件定义，主要接口如下。``cnstream_module.hpp`` 文件存放在 ``framework/core/include`` 文件夹下。源代码中有详细的注释，这里仅给出必要的说明。接口详情，查看《CNStream Developer Guide》。
 
@@ -156,12 +157,14 @@ CNStream SDK要求所有的Module类使用统一接口和数据结构 **cnstream
     void SetObserver(IModuleObserver *observer);
   };
 
+.. _CNFrameInfo:
+
 cnstream::CNFrameInfo类
 ------------------------
 
 **cnstream::CNFrameInfo** 类是module之间传递的数据结构，即pipeline的Context。该类在 ``cnstream_frame.hpp`` 文件中定义。``cnstream_frame.hpp`` 文件存放在 ``framework/core/include`` 文件夹下。这个类主要包括 ``ThreadSafeUnorderedMap<int, cnstream::any> datas`` ，用于存放任意数据类型的数据帧和推理结果。
-cnstream::any等同于C++17标准的 std::any类型, 即C++弱类型特性。使用该类型定义 ``datas`` 能够支持用户自定义任意数据类型，且依然具备类型安全功能。
-比如CNStream内置插件库中针对智能视频分析场景专门定义了 ``CNDataFrame``  和 ``CNInferObject``, 分别用户存放视频帧数据和神经网络推理结果，详述如下。用户使用该类型数据前需要cast成自定义类型，例如：
+
+``cnstream::any`` 等同于C++17标准的 ``std::any`` 类型, 即C++弱类型特性。使用该类型定义 ``datas`` 能够支持用户自定义任意数据类型，且依然具备类型安全功能。比如CNStream内置插件库中针对智能视频分析场景专门定义了 ``CNDataFrame`` 和 ``CNInferObject``, 分别用于存放视频帧数据和神经网络推理结果，详述如下。用户使用该类型数据前需要转换成自定义类型，例如：
 
 ::
 
