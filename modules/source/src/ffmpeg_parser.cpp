@@ -27,6 +27,7 @@ extern "C" {
 
 #include <string>
 #include <algorithm>
+#include <vector>
 
 #include "ffmpeg_parser.hpp"
 #include "glog/logging.h"
@@ -119,6 +120,42 @@ struct local_ffmpeg_init {
 static local_ffmpeg_init init_ffmpeg;
 
 namespace cnstream {
+
+class StreamParserImpl {
+ public:
+  StreamParserImpl() {}
+  ~StreamParserImpl() {}
+  int Open(std::string fmt) {
+    queue_ = new (std::nothrow) RingBuffer(256 * 1024);
+    if (!queue_) return -1;
+    fmt_ = fmt;
+    thread_ = std::thread(&StreamParserImpl::FindInfo, this);
+    return 0;
+  }
+
+  void Close() {
+    if (thread_.joinable()) {
+      thread_.join();
+    }
+    if (queue_) {
+      delete queue_, queue_ = nullptr;
+    }
+  }
+
+  int Parse(unsigned char *bitstream, int size);
+  bool GetInfo(VideoStreamInfo &info);  // NOLINT
+
+ private:
+  void FindInfo();
+  static constexpr int io_buffer_size_ = 32768;
+  std::string fmt_;
+  RingBuffer *queue_ = nullptr;
+  std::promise<VideoStreamInfo> promise_;
+  std::atomic<int> info_got_{0};
+  std::atomic<int> info_ready_{0};
+  VideoStreamInfo info_;
+  std::thread thread_;
+};  // class StreamParserImpl
 
 StreamParser::StreamParser() {
   impl_ = new (std::nothrow) StreamParserImpl();
@@ -322,6 +359,146 @@ bool StreamParserImpl::GetInfo(VideoStreamInfo &info) {
     return true;
   }
   return false;
+}
+
+static int FindStartCode(unsigned char *buf) {
+  if (buf[0] == 0 && buf[1] == 0 && buf[2] == 0 && buf[3] == 1) {
+    return 4;
+  }
+  if (buf[0] == 0 && buf[1] == 0 && buf[2] == 1) {
+    return 3;
+  }
+  return 0;
+}
+
+static int GetNaluH2645(unsigned char *buf, int len, bool isH264, std::vector<NalDesc> &vec_desc) {  // NOLINT
+  std::vector<int> vec_pos;
+  for (int i = 0; i < len - 4; i++) {
+    int size = FindStartCode(buf + i);
+    if (!size) {
+      continue;
+    }
+    vec_pos.push_back(i);
+    i += size - 1;
+  }
+  if (vec_pos.empty()) {
+    return 0;
+  }
+
+  int num = vec_pos.size();
+  for (int i = 0; i < num - 1; i++) {
+    NalDesc desc;
+    desc.nal = buf + vec_pos[i];
+    desc.len = vec_pos[i + 1] - vec_pos[i];
+    int type_idx = (desc.nal[2] == 1) ? 3 : 4;
+    if (desc.len < type_idx) {
+      LOG(ERROR) << "INVALID nal size";
+      return -1;
+    }
+    if (isH264) {
+      desc.type = desc.nal[type_idx] & 0x1F;
+    } else {
+      desc.type = (desc.nal[type_idx] >> 1) & 0x3F;
+    }
+    vec_desc.push_back(desc);
+  }
+
+  // handle the last nal
+  if (vec_pos[num - 1]) {
+    NalDesc desc;
+    desc.nal = buf + vec_pos[num - 1];
+    desc.len = len - vec_pos[num - 1];
+    int type_idx = (desc.nal[2] == 1) ? 3 : 4;
+    if (desc.len >= type_idx) {
+      if (isH264) {
+        desc.type = desc.nal[type_idx] & 0x1F;
+      } else {
+        desc.type = (desc.nal[type_idx] >> 1) & 0x3F;
+      }
+    }
+    vec_desc.push_back(desc);
+  }
+  return 0;
+}
+
+H2645NalSplitter::~H2645NalSplitter() {
+  if (es_buffer_) {
+    delete es_buffer_, es_buffer_ = nullptr;
+  }
+}
+
+int H2645NalSplitter::SplitterWriteFrame(unsigned char *buf, int len) {
+  if (buf && len) {
+    std::vector<NalDesc> vec_desc;
+    if (GetNaluH2645(buf, len, isH264_, vec_desc) < 0) {
+      return -1;
+    }
+    for (auto &it : vec_desc) {
+      this->SplitterOnNal(it, false);
+    }
+  } else {
+    NalDesc desc;
+    this->SplitterOnNal(desc, true);
+  }
+  return 0;
+}
+
+int H2645NalSplitter::SplitterWriteChunk(unsigned char *buf, int len) {
+  static const int max_es_buffer_size = 1024 * 1024;
+  if (buf && len) {
+    if (!es_buffer_) {
+      es_buffer_ = new(std::nothrow) unsigned char[max_es_buffer_size];
+      if (!es_buffer_) {
+        LOG(ERROR) << "Failed to alloc es_buffer";
+        return -1;
+      }
+      es_len_ = 0;
+    }
+    if (es_len_ + len > max_es_buffer_size) {
+      LOG(ERROR) << "Buffer overflow...FIXME";
+      return -1;
+    }
+    memcpy(es_buffer_ + es_len_, buf, len);
+    es_len_ += len;
+
+    std::vector<NalDesc> vec_desc;
+    int ret = GetNaluH2645(es_buffer_, es_len_, isH264_, vec_desc);
+    if (ret < 0) {
+      return ret;
+    }
+    // remove the last one
+    if (vec_desc.size()) {
+      NalDesc desc = vec_desc[vec_desc.size() - 1];
+      vec_desc.pop_back();
+
+      for (auto &it : vec_desc) {
+       this->SplitterOnNal(it, false);
+      }
+
+      if (desc.len != es_len_) {
+        memmove(es_buffer_, desc.nal, desc.len);
+        es_len_ = desc.len;
+      }
+    }
+    return 0;
+  }
+
+  // flush data...
+  if (es_buffer_ && es_len_) {
+    NalDesc desc;
+    desc.nal = es_buffer_;
+    desc.len = es_len_;
+    if (es_len_ > 4) {
+      int type_idx = (desc.nal[2] == 1) ? 3 : 4;
+      if (isH264_) {
+        desc.type = desc.nal[type_idx] & 0x1F;
+      } else {
+        desc.type = (desc.nal[type_idx] >> 1)& 0x3F;
+      }
+    }
+    this->SplitterOnNal(desc, true);
+  }
+  return 0;
 }
 
 }  // namespace cnstream

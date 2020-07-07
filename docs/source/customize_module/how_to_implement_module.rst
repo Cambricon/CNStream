@@ -19,12 +19,12 @@ CNStream支持用户创建自定义模块。使用CNStream框架创建自定义�
    public:
     explicit ExampleModule(const std::string &name) : super(name) {}
     bool Open(cnstream::ModuleParamSet paramSet) override {
-      // do something ...
+      // Your codes. 
       return true;
     }
     void Close() override { std::cout << this->GetName() << " Close called" << std::endl; }
     int Process(std::shared_ptr<cnstream::CNFrameInfo> data) override {
-      // do something ...
+      // Your codes.
       return 0;
     }
   
@@ -46,7 +46,7 @@ CNStream支持用户创建自定义模块。使用CNStream框架创建自定义�
    public:
     explicit ExampleModuleSource(const std::string &name) : super(name) {}
     bool Open(cnstream::ModuleParamSet paramSet) override {
-      // do something ...
+      // Your codes.
       return true;
     }
     void Close() override { std::cout << this->GetName() << " Close called" << std::endl; }
@@ -76,14 +76,14 @@ CNStream支持用户创建自定义模块。使用CNStream框架创建自定义�
    public:
     explicit ExampleModuleEx(const std::string &name) : super(name) {}
     bool Open(cnstream::ModuleParamSet paramSet) override {
-      // do something ...
+      // Your codes.
       return true;
     }
     void Close() override {
-      // do something ...
+      // Your codes.
     }
     int Process(FrameInfoPtr data) override {
-      // do something ...
+      // Your codes.
       /*notify that data handle by the module*/
       return 1;
     }

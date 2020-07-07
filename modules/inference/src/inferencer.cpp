@@ -464,6 +464,10 @@ int Inferencer::Process(CNFrameInfoPtr data) {
     CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
     if (frame->ctx.dev_id != d_ptr_->device_id_ && frame->ctx.dev_type == DevContext::MLU) {
       frame->CopyToSyncMemOnDevice(d_ptr_->device_id_);
+    } else if (frame->ctx.dev_type == DevContext::CPU) {
+      for (int i = 0; i < frame->GetPlanes(); i++) {
+        frame->data[i]->SetMluDevContext(d_ptr_->device_id_, 0);
+      }
     }
   }
 

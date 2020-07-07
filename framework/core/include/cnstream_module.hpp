@@ -289,7 +289,9 @@ class Module {
     }
   }
 
+#ifdef UNIT_TEST
   ThreadSafeQueue<std::shared_ptr<CNFrameInfo>> output_frame_queue_;
+#endif
 
  protected:
   std::atomic<bool> showPerfInfo_{false};

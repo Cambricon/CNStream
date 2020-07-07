@@ -609,13 +609,15 @@ class RtspSessionImpl {
 
  private:
   void TaskRoutine() {
+    int reconnect = param_.reconnect;
     while (!exit_flag_) {
       TaskRoutine_();
 
       // FIXME, apply reconnect strategy
-      if (!param_.reconnect) {
+      if (reconnect < 0) {
         break;
       }
+      --reconnect;
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 

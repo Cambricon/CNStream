@@ -70,7 +70,7 @@ struct Event {
  *
  * @return Returns the flag that specifies how the event is handled.
  */
-using BusWatcher = std::function<EventHandleFlag(const Event &, Pipeline *)>;
+using BusWatcher = std::function<EventHandleFlag(const Event &)>;
 
 /**
  * @brief The event bus that transmits events from modules to a pipeline.
@@ -87,11 +87,10 @@ class EventBus {
    * @brief Adds the watcher to the event bus.
    *
    * @param func The bus watcher to be added.
-   * @param watcher The module that adds this bus watcher.
    *
    * @return The number of bus watchers that has been added to this event bus.
    */
-  uint32_t AddBusWatch(BusWatcher func, Pipeline *watcher);
+  uint32_t AddBusWatch(BusWatcher func);
 
   /**
    * @brief Posts an event to bus.
@@ -123,7 +122,7 @@ class EventBus {
    *
    * @return A list with pairs of bus_watcher and module.
    */
-  const std::list<std::pair<BusWatcher, Pipeline *>> &GetBusWatchers() const;
+  const std::list<BusWatcher> &GetBusWatchers() const;
 
   /**
    * @brief Removes all bus watchers.
@@ -144,7 +143,7 @@ class EventBus {
 
   std::mutex watcher_mtx_;
   ThreadSafeQueue<Event> queue_;
-  std::list<std::pair<BusWatcher, Pipeline *>> bus_watchers_;
+  std::list<BusWatcher> bus_watchers_;
   std::thread event_thread_;
   std::atomic<bool> running_{false};
 };  // class EventBus

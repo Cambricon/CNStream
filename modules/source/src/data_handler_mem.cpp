@@ -84,10 +84,11 @@ void ESMemHandler::Close() {
   }
 }
 
-void ESMemHandler::SetDataType(ESMemHandler::DataType type) {
+int ESMemHandler::SetDataType(ESMemHandler::DataType type) {
   if (impl_) {
-    impl_->SetDataType(type);
+    return impl_->SetDataType(type);
   }
+  return -1;
 }
 
 int ESMemHandler::Write(ESPacket *pkt) {
@@ -121,7 +122,7 @@ bool ESMemHandlerImpl::Open() {
   if (!queue_) {
     return false;
   }
-  parser_.Open();
+
   // start demuxer
   running_.store(1);
   thread_ = std::move(std::thread(&ESMemHandlerImpl::DecodeLoop, this));
@@ -135,22 +136,17 @@ void ESMemHandlerImpl::Close() {
       thread_.join();
     }
   }
-  parser_.Close();
   if (queue_) {
     delete queue_;
     queue_ = nullptr;
   }
+  parser_.Free();
 }
 
 int ESMemHandlerImpl::Write(ESPacket *pkt) {
   if (pkt && pkt->data && pkt->size) {
-    // send data to parser if needed
-    if (!parse_done_.load() && running_.load()) {
-      int ret = parser_.Parse(pkt->data, pkt->size);
-      if (ret < 0) {
-        return -1;
-      }
-      usleep(40 * 1000);  // FIXME
+    if (parser_.Parse(pkt->data, pkt->size) < 0) {
+      return -1;
     }
   }
   if (queue_) {
@@ -161,76 +157,34 @@ int ESMemHandlerImpl::Write(ESPacket *pkt) {
   return 0;
 }
 
-int ESMemHandlerImpl::Write(unsigned char *data, int len) {
-  if (data && len) {
-    // send data to parser if needed
-    if (!parse_done_.load() && running_.load()) {
-      int ret = parser_.Parse(data, len);
-      if (ret < 0) {
-        return -1;
-      }
-      usleep(40 * 1000);  // FIXME
-    }
+void ESMemHandlerImpl::SplitterOnNal(NalDesc &desc, bool eos) {
+  if (!eos) {
+    parser_.Parse(desc.nal, desc.len);
   }
+  if (queue_) {
+    ESPacket pkt;
+    pkt.data = desc.nal;
+    pkt.size = desc.len;
+    pkt.pts = pts_++;
+    if (eos) {
+      pkt.flags = ESPacket::FLAG_EOS;
+    }
+    queue_->Push(std::make_shared<EsPacket>(&pkt));
+  }
+}
 
+int ESMemHandlerImpl::Write(unsigned char *data, int len) {
   if (!queue_) {
     return -1;
   }
-
-  if (!es_buffer_) {
-    es_buffer_ = new (std::nothrow) unsigned char[max_es_buffer_size];
-    if (!es_buffer_) {
+  if (data && len) {
+    if (this->SplitterWriteChunk(data, len) < 0) {
       return -1;
     }
-    es_len_ = 0;
-  }
-
-  if (!len || !data) {
-    ESPacket pkt;
-    if (es_len_) {
-      pkt.data = es_buffer_;
-      pkt.size = es_len_;
-      es_len_ = 0;
+  } else {
+    if (this->SplitterWriteChunk(nullptr, 0) < 0) {
+      return -1;
     }
-    pkt.flags = ESPacket::FLAG_EOS;
-    queue_->Push(std::make_shared<EsPacket>(&pkt));
-    return 0;
-  }
-
-  if (len + es_len_ > max_es_buffer_size) {
-    return -1;
-  }
-
-  memcpy(es_buffer_ + es_len_, data, len);
-  es_len_ += len;
-
-  if (es_len_ <= 4) {
-    return 0;
-  }
-
-  int pos = 0;
-  int i = 4;
-  while (i < es_len_ - 4) {
-    if (es_buffer_[i + 0] == 0x00
-        && es_buffer_[i + 1] == 0x00
-        && es_buffer_[i + 2] == 0x00
-        && es_buffer_[i + 3] == 0x01) {
-      if (i - pos > 1000) {  // FIXME, parse nal type instead
-        ESPacket pkt;
-        pkt.data = &es_buffer_[pos];
-        pkt.size = i - pos;
-        pkt.pts = pts_++;
-        queue_->Push(std::make_shared<EsPacket>(&pkt));
-        pos = i;
-      }
-      i += 4;
-    } else {
-      ++i;
-    }
-  }
-  if (pos != 0) {
-    memmove(es_buffer_, &es_buffer_[pos], es_len_ - pos);
-    es_len_ -= pos;
   }
   return 0;
 }
@@ -263,20 +217,22 @@ void ESMemHandlerImpl::DecodeLoop() {
   }
 
   ClearResources();
+  LOG(INFO) << "DecodeLoop Exit";
 }
 
 bool ESMemHandlerImpl::PrepareResources() {
   VideoStreamInfo info;
-  while (1) {
+  while (running_.load()) {
     if (parser_.GetInfo(info) > 0) {
-      parse_done_.store(1);
-      break;
-    }
-    if (!running_.load()) {
       break;
     }
     usleep(1000 * 10);
   }
+
+  if (!running_.load()) {
+    return false;
+  }
+
   if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
     decoder_ = std::make_shared<MluDecoder>(this);
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
@@ -313,13 +269,12 @@ bool ESMemHandlerImpl::Process() {
   using EsPacketPtr = std::shared_ptr<EsPacket>;
 
   EsPacketPtr in;
-  int timeoutMs  = 10000;
+  int timeoutMs  = 1000;
   bool ret = this->queue_->Pop(timeoutMs, in);
+
   if (!ret) {
-    ESPacket pkt;
-    pkt.flags = ESPacket::FLAG_EOS;
-    decoder_->Process(&pkt);
-    return false;
+    // continue.. not exit
+    return true;
   }
 
   if (perf_manager_ != nullptr) {
@@ -330,7 +285,7 @@ bool ESMemHandlerImpl::Process() {
   }
 
   if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-    LOG(INFO) << "Read EOS from file";
+    LOG(INFO) << "Eos reached";
     ESPacket pkt;
     pkt.data = in->pkt_.data;
     pkt.size = in->pkt_.size;

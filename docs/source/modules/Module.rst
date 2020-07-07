@@ -33,7 +33,7 @@
 - 支持动态增加和减少数据流。
 - 支持通过配置文件修改和选择source module的具体功能，而不是在编译时选择。
 
-**cnstream::DataSource** 类在 ``data_source.hpp`` 文件中定义。 ``data_source.hpp`` 文件存放在 ``modules/source/include`` 文件夹下。 ``DataSource`` 主要功能继承至 ``SourceModule`` 类，存放在 ``framework/core/include`` 目录下。主要接口如下。源代码中有详细的注释，这里仅给出必要的说明。
+**cnstream::DataSource** 类在 ``data_source.hpp`` 文件中定义。 ``data_source.hpp`` 文件存放在 ``modules/source/include`` 文件夹下。 ``DataSource`` 主要功能继承自 ``SourceModule`` 类，存放在 ``framework/core/include`` 目录下。主要接口如下。源代码中有详细的注释，这里仅给出必要的说明。
 
 ::
 
@@ -78,7 +78,7 @@
     }
   }
 
-其他配置字段可以参考 ``data_source.hpp`` 中详细注释或者通过cnstream_inspect工具查看。
+其他配置字段可以参考 ``data_source.hpp`` 中详细注释或者通过CNStream Inspect工具查看。
 
 神经网络推理模块
 ---------------------------
