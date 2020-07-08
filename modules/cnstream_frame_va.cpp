@@ -66,6 +66,7 @@ CNDataFrame::~CNDataFrame() {
 
 #ifdef HAVE_OPENCV
 cv::Mat* CNDataFrame::ImageBGR() {
+  std::lock_guard<std::mutex> lk(mtx);
   if (bgr_mat != nullptr) {
     return bgr_mat;
   }

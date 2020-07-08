@@ -269,6 +269,7 @@ struct CNDataFrame {
   void* map_mem_ptr = nullptr;     ///< A pointer to the mapped memory for MLU or CPU.
   int shared_mem_fd = -1;          ///< A pointer to the shared memory file descriptor for CPU shared memory.
   int map_mem_fd = -1;             ///< A pointer to the mapped memory file descriptor for CPU mapped memory.
+  std::mutex mtx;
 };                                 // struct CNDataFrame
 
 /**
