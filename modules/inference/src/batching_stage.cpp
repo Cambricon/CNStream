@@ -26,6 +26,7 @@
 #include <memory>
 #include <vector>
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 #include "infer_resource.hpp"
 #include "infer_task.hpp"
 #include "preproc.hpp"
@@ -71,50 +72,6 @@ void CpuPreprocessingBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo>
   preprocessor_->Execute(net_inputs, model_, finfo);
 }
 
-YUVSplitBatchingStage::YUVSplitBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-                                             std::shared_ptr<MluInputResource> mlu_input_res)
-    : IOBatchingStage(model, batchsize, mlu_input_res) {}
-
-YUVSplitBatchingStage::~YUVSplitBatchingStage() {}
-
-void YUVSplitBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx,
-                                            const IOResValue& value) {
-  CHECK_EQ(value.datas.size(), 2) << "Internel error, yuv split model. input number not 2";
-  // copy y plane
-  void* dst_y = value.datas[0].Offset(batch_idx);
-  void* src_y = finfo->frame.data[0]->GetMutableMluData();
-  cnrtRet_t ret = cnrtMemcpy(dst_y, src_y, finfo->frame.GetPlaneBytes(0), CNRT_MEM_TRANS_DIR_DEV2DEV);
-  CHECK_EQ(ret, CNRT_RET_SUCCESS) << "memcpy d2d failed. dst, src, size:" << dst_y << ", " << src_y << ", "
-                                  << finfo->frame.GetPlaneBytes(0);
-  void* dst_uv = value.datas[1].Offset(batch_idx);
-  void* src_uv = finfo->frame.data[1]->GetMutableMluData();
-  ret = cnrtMemcpy(dst_uv, src_uv, finfo->frame.GetPlaneBytes(1), CNRT_MEM_TRANS_DIR_DEV2DEV);
-  CHECK_EQ(ret, CNRT_RET_SUCCESS) << "memcpy d2d failed. dst, src, size:" << dst_uv << ", " << src_uv << ", "
-                                  << finfo->frame.GetPlaneBytes(1);
-}
-
-YUVPackedBatchingStage::YUVPackedBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-                                               std::shared_ptr<MluInputResource> mlu_input_res)
-    : IOBatchingStage(model, batchsize, mlu_input_res) {}
-
-YUVPackedBatchingStage::~YUVPackedBatchingStage() {}
-
-void YUVPackedBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx,
-                                             const IOResValue& value) {
-  CHECK_EQ(value.datas.size(), 1) << "Internel error, yuv packed model. input number not 1";
-  // copy y plane
-  void* dst_y = value.datas[0].Offset(batch_idx);
-  void* src_y = finfo->frame.data[0]->GetMutableMluData();
-  cnrtRet_t ret = cnrtMemcpy(dst_y, src_y, finfo->frame.GetPlaneBytes(0), CNRT_MEM_TRANS_DIR_DEV2DEV);
-  CHECK_EQ(ret, CNRT_RET_SUCCESS) << "memcpy d2d failed. dst, src, size:" << dst_y << ", " << src_y << ", "
-                                  << finfo->frame.GetPlaneBytes(0);
-  void* dst_uv = reinterpret_cast<void*>(reinterpret_cast<char*>(dst_y) + value.datas[0].shape.hw() / 3 * 2);
-  void* src_uv = finfo->frame.data[1]->GetMutableMluData();
-  ret = cnrtMemcpy(dst_uv, src_uv, finfo->frame.GetPlaneBytes(1), CNRT_MEM_TRANS_DIR_DEV2DEV);
-  CHECK_EQ(ret, CNRT_RET_SUCCESS) << "memcpy d2d failed. dst, src, size, y offset:" << dst_uv << ", " << src_uv << ", "
-                                  << finfo->frame.GetPlaneBytes(1) << ", " << value.datas[0].shape.hw() / 3 * 2;
-}
-
 ResizeConvertBatchingStage::ResizeConvertBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
                                                        int dev_id, std::shared_ptr<RCOpResource> rcop_res)
     : BatchingStage(model, batchsize), rcop_res_(rcop_res), dev_id_(dev_id) {}
@@ -122,41 +79,43 @@ ResizeConvertBatchingStage::ResizeConvertBatchingStage(std::shared_ptr<edk::Mode
 ResizeConvertBatchingStage::~ResizeConvertBatchingStage() {}
 
 std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<CNFrameInfo> finfo) {
-  void* src_y = finfo->frame.data[0]->GetMutableMluData();
-  void* src_uv = finfo->frame.data[1]->GetMutableMluData();
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(finfo->datas[CNDataFramePtrKey]);
+  void* src_y = frame->data[0]->GetMutableMluData();
+  void* src_uv = frame->data[1]->GetMutableMluData();
   QueuingTicket ticket = rcop_res_->PickUpTicket();
   std::shared_ptr<RCOpValue> value = rcop_res_->WaitResourceByTicket(&ticket);
   edk::MluResizeConvertOp::ColorMode cmode = edk::MluResizeConvertOp::ColorMode::YUV2ABGR_NV12;
-  if (finfo->frame.fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12) {
+  if (frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12) {
     cmode = edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV12;
-  } else if (finfo->frame.fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) {
+  } else if (frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) {
     cmode = edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV21;
   } else {
-    throw CnstreamError("Can not handle this frame with format :" + std::to_string(static_cast<int>(finfo->frame.fmt)));
+    throw CnstreamError("Can not handle this frame with format :" + std::to_string(static_cast<int>(frame->fmt)));
   }
   if (!rcop_res_->Initialized()) {
-    uint32_t src_w = finfo->frame.width;
-    uint32_t src_h = finfo->frame.height;
-    uint32_t src_stride = finfo->frame.stride[0];
     uint32_t dst_w = model_->InputShapes()[0].w;
     uint32_t dst_h = model_->InputShapes()[0].h;
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id_);
     mlu_ctx.ConfigureForThisThread();
     edk::CoreVersion core_ver = mlu_ctx.GetCoreVersion();
-    rcop_res_->Init(src_w, src_h, src_stride, dst_w, dst_h, cmode, core_ver);
+    rcop_res_->Init(dst_w, dst_h, cmode, core_ver);
   } else {
     edk::MluResizeConvertOp::Attr rc_attr = value->op.GetAttr();
-    if (static_cast<int>(rc_attr.src_w) != finfo->frame.width ||
-        static_cast<int>(rc_attr.src_h) != finfo->frame.height ||
-        static_cast<int>(rc_attr.src_stride) != finfo->frame.stride[0] || cmode != rc_attr.color_mode) {
+    if (cmode != rc_attr.color_mode) {
       throw CnstreamError(
           "Resize convert operator should be reinitialized, but we can not do this."
-          " Maybe you have different attributes between each frame, wo can not use mlu preprocessing to deal with "
+          " Maybe you have different pixel format between each frame, wo can not use mlu preprocessing to deal with "
           "this.");
     }
   }
-  value->op.BatchingUp(src_y, src_uv);
+  edk::MluResizeConvertOp::InputData input_data;
+  input_data.src_w = frame->width;
+  input_data.src_h = frame->height;
+  input_data.src_stride = frame->stride[0];
+  input_data.planes[0] = src_y;
+  input_data.planes[1] = src_uv;
+  value->op.BatchingUp(input_data);
   rcop_res_->DeallingDone();
   return NULL;
 }
@@ -169,8 +128,9 @@ ScalerBatchingStage::~ScalerBatchingStage() {}
 
 void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx,
                                           const IOResValue& value) {
-  void* src_y = finfo->frame.data[0]->GetMutableMluData();
-  void* src_uv = finfo->frame.data[1]->GetMutableMluData();
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(finfo->datas[CNDataFramePtrKey]);
+  void* src_y = frame->data[0]->GetMutableMluData();
+  void* src_uv = frame->data[1]->GetMutableMluData();
   void* dst = value.datas[0].Offset(batch_idx);
   cncodecWorkInfo work_info;
   cncodecFrame src_frame;
@@ -179,17 +139,30 @@ void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, ui
   memset(&src_frame, 0, sizeof(src_frame));
   memset(&dst_frame, 0, sizeof(dst_frame));
 
-  src_frame.pixelFmt = CNCODEC_PIX_FMT_NV21;
+  cncodecPixelFormat fmt = CNCODEC_PIX_FMT_NV12;
+  switch (frame->fmt) {
+    case CN_PIXEL_FORMAT_YUV420_NV21:
+      fmt = CNCODEC_PIX_FMT_NV21;
+      break;
+    case CN_PIXEL_FORMAT_YUV420_NV12:
+      fmt = CNCODEC_PIX_FMT_NV12;
+      break;
+    default:
+      LOG(ERROR) << "Scaler: unsupport fmt: " + std::to_string(frame->fmt);
+      break;
+  }
+
+  src_frame.pixelFmt = fmt;
   src_frame.colorSpace = CNCODEC_COLOR_SPACE_BT_709;
-  src_frame.width = finfo->frame.width;
-  src_frame.height = finfo->frame.height;
-  src_frame.planeNum = finfo->frame.GetPlanes();
-  src_frame.plane[0].size = finfo->frame.GetPlaneBytes(0);
+  src_frame.width = frame->width;
+  src_frame.height = frame->height;
+  src_frame.planeNum = frame->GetPlanes();
+  src_frame.plane[0].size = frame->GetPlaneBytes(0);
   src_frame.plane[0].addr = reinterpret_cast<u64_t>(src_y);
-  src_frame.plane[1].size = finfo->frame.GetPlaneBytes(1);
+  src_frame.plane[1].size = frame->GetPlaneBytes(1);
   src_frame.plane[1].addr = reinterpret_cast<u64_t>(src_uv);
-  src_frame.stride[0] = finfo->frame.stride[0];
-  src_frame.stride[1] = finfo->frame.stride[1];
+  src_frame.stride[0] = frame->stride[0];
+  src_frame.stride[1] = frame->stride[1];
   src_frame.channel = 1;
   src_frame.deviceId = 0;  // FIXME
 

@@ -25,6 +25,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "cnstream_frame_va.hpp"
 #include "postproc.hpp"
 
 using std::cerr;
@@ -58,11 +59,12 @@ class PostprocFakeYolov3 : public cnstream::Postproc {
 IMPLEMENT_REFLEX_OBJECT_EX(PostprocFakeYolov3, cnstream::Postproc)
 
 int PostprocFakeYolov3::Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
-                         const cnstream::CNFrameInfoPtr& package) {
+                                const cnstream::CNFrameInfoPtr& package) {
   auto data = net_outputs[0];
   auto box_num = data[0];
   data += 64;
 
+  cnstream::CNObjsVec objs;
   for (decltype(box_num) bi = 0; bi < box_num; ++bi) {
     if (threshold_ > 0 && data[2] < threshold_) continue;
     std::shared_ptr<cnstream::CNInferObject> object = std::make_shared<cnstream::CNInferObject>();
@@ -73,9 +75,9 @@ int PostprocFakeYolov3::Execute(const std::vector<float*>& net_outputs, const st
     object->bbox.w = data[5] - object->bbox.x;
     object->bbox.h = data[6] - object->bbox.y;
 
-    package->objs.push_back(object);
+    objs.push_back(object);
     data += 7;
   }
+  package->datas[cnstream::CNObjsVecKey] = objs;
   return 0;
 }
-

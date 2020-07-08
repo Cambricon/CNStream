@@ -5,9 +5,10 @@
 #include <ctime>
 #include <memory>
 #include <string>
-#include <vector>
 #include <thread>
+#include <vector>
 
+#include "cnstream_frame_va.hpp"
 #include "displayer.hpp"
 
 namespace cnstream {
@@ -70,21 +71,20 @@ TEST(Display, Process) {
 
   cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 127, 0));
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
-  CNDataFrame &frame = data->frame;
-  data->channel_idx = 0;
-  frame.frame_id = 1;
-  frame.timestamp = 1000;
-  frame.width = width;
-  frame.height = height;
-  frame.ptr_cpu[0] = img.data;
-  frame.stride[0] = width;
-  frame.ctx.dev_type = DevContext::DevType::CPU;
-  frame.fmt = CN_PIXEL_FORMAT_BGR24;
-  frame.CopyToSyncMem();
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+  data->SetStreamIndex(0);
+  frame->frame_id = 1;
+  data->timestamp = 1000;
+  frame->width = width;
+  frame->height = height;
+  frame->ptr_cpu[0] = img.data;
+  frame->stride[0] = width;
+  frame->ctx.dev_type = DevContext::DevType::CPU;
+  frame->fmt = CN_PIXEL_FORMAT_BGR24;
+  frame->CopyToSyncMem();
+  data->datas[CNDataFramePtrKey] = frame;
   EXPECT_EQ(display->Process(data), 0);
-  auto thread_loop = [&display]() {
-    display->GUILoop(nullptr);
-  };
+  auto thread_loop = [&display]() { display->GUILoop(nullptr); };
   std::thread thread_ = std::thread(thread_loop);
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
   display->Close();

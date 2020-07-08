@@ -34,9 +34,9 @@ typedef void* RtspStreamHandle;
 extern "C" {
 #endif
 
-StreamPipeCtx *StreamPipeCreate(const RtspParam& rtsp_param);
+StreamPipeCtx* StreamPipeCreate(const RtspParam& rtsp_param);
 int StreamPipePutPacket(StreamPipeCtx* ctx, uint8_t* data, int64_t timestamp = 0);
-int StreamPipePutPacketMlu(StreamPipeCtx* ctx, void *y, void *uv, int64_t timestamp = 0);
+// int StreamPipePutPacketMlu(StreamPipeCtx* ctx, void *y, void *uv, int64_t timestamp = 0);
 int StreamPipeClose(StreamPipeCtx* ctx);
 
 #ifdef __cplusplus

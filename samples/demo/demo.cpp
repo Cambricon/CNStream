@@ -23,15 +23,18 @@
 #include <future>
 #include <iostream>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
 #include "cnstream_core.hpp"
+#include "data_handler_file.hpp"
+#include "data_handler_mem.hpp"
+#include "data_handler_rtsp.hpp"
 #include "data_source.hpp"
 #include "displayer.hpp"
 #include "util.hpp"
-
 #ifdef BUILD_IPC
 #include "module_ipc.hpp"
 #endif
@@ -39,7 +42,6 @@
 DEFINE_string(data_path, "", "video file list.");
 DEFINE_int32(src_frame_rate, 25, "frame rate for send data");
 DEFINE_int32(wait_time, 0, "time of one test case");
-DEFINE_bool(rtsp, false, "use rtsp");
 DEFINE_bool(loop, false, "display repeat");
 DEFINE_string(config_fname, "", "pipeline config filename");
 #ifdef HAVE_SQLITE
@@ -58,8 +60,8 @@ class MsgObserver : cnstream::StreamMsgObserver {
   void Update(const cnstream::StreamMsg& smsg) override {
     if (stop_) return;
     if (smsg.type == cnstream::StreamMsgType::EOS_MSG) {
-      eos_chn_.push_back(smsg.chn_idx);
-      LOG(INFO) << "[Observer] received EOS from channel:" << smsg.chn_idx;
+      eos_chn_.push_back(smsg.stream_id);
+      LOG(INFO) << "[Observer] received EOS from channel:" << smsg.stream_id;
       if (static_cast<int>(eos_chn_.size()) == chn_cnt_) {
         LOG(INFO) << "[Observer] received all EOS";
         stop_ = true;
@@ -77,11 +79,13 @@ class MsgObserver : cnstream::StreamMsgObserver {
     pipeline_->Stop();
   }
 
+  void SetChnCnt(int chn_cnt) { chn_cnt_ = chn_cnt; }
+
  private:
-  const int chn_cnt_ = 0;
+  int chn_cnt_ = 0;
   cnstream::Pipeline* pipeline_ = nullptr;
   bool stop_ = false;
-  std::vector<int> eos_chn_;
+  std::vector<std::string> eos_chn_;
   std::promise<int> wakener_;
 };
 
@@ -157,30 +161,67 @@ int main(int argc, char** argv) {
   /*
     add stream sources...
   */
+  std::vector<std::thread> vec_threads_mem;
+  bool thread_running_ = true;
   int streams = static_cast<int>(video_urls.size());
   auto url_iter = video_urls.begin();
-
   for (int i = 0; i < streams; i++, url_iter++) {
     const std::string& filename = *url_iter;
-    if (source)
-      source->AddVideoSource(std::to_string(i), filename, FLAGS_src_frame_rate, FLAGS_loop);
+    if (filename.find("rtsp://") != std::string::npos) {
+      auto handler = cnstream::RtspHandler::Create(source, std::to_string(i), filename);
+      source->AddSource(handler);
+    } else if (filename.find(".h264") != std::string::npos) {
+      // es-mem handler
+      auto handler = cnstream::ESMemHandler::Create(source, std::to_string(i));
+      source->AddSource(handler);
+      // use a separate thread to read data from memory and feed pipeline
+      vec_threads_mem.push_back(
+        std::thread([=]() {
+        FILE* fp = fopen(filename.c_str(), "rb");
+        if (fp) {
+          auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+          memHandler->SetDataType(cnstream::ESMemHandler::H264);
+          unsigned char buf[4096];
+          while (thread_running_) {
+            if (!feof(fp)) {
+              int size = fread(buf, 1, 4096, fp);
+              memHandler->Write(buf, size);
+            } else {
+              if (FLAGS_loop) {
+                fseek(fp, 0, SEEK_SET);
+              } else {
+                break;
+              }
+            }
+          }
+          memHandler->Write(nullptr, 0);
+          fclose(fp);
+        }
+      }));
+    } else {
+      auto handler =
+          cnstream::FileHandler::Create(source, std::to_string(i), filename, FLAGS_src_frame_rate, FLAGS_loop);
+      source->AddSource(handler);
+    }
   }
 
-  gdisplayer = dynamic_cast<cnstream::Displayer*>(pipeline.GetModule("displayer"));
-
-  auto quit_callback = [&pipeline, streams, &source]() {
+  auto quit_callback = [&pipeline, streams, &source, &thread_running_]() {
+    // stop feed-data threads before remove-sources...
+    thread_running_ = false;
     for (int i = 0; i < streams; i++) {
       source->RemoveSource(std::to_string(i));
     }
     pipeline.Stop();
   };
 
+  gdisplayer = dynamic_cast<cnstream::Displayer*>(pipeline.GetModule("displayer"));
+
   if (gdisplayer && gdisplayer->Show()) {
     gdisplayer->GUILoop(quit_callback);
   } else {
-      /*
-       * close pipeline
-       */
+    /*
+     * close pipeline
+     */
     if (FLAGS_loop) {
       /*
        * loop, must stop by hand or by FLAGS_wait_time
@@ -190,6 +231,8 @@ int main(int argc, char** argv) {
       } else {
         getchar();
       }
+
+      thread_running_ = false;
 
       for (int i = 0; i < streams; i++) {
         source->RemoveSource(std::to_string(i));
@@ -202,6 +245,7 @@ int main(int argc, char** argv) {
        */
       if (FLAGS_wait_time) {
         std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_time));
+        thread_running_ = false;
         for (int i = 0; i < streams; i++) {
           source->RemoveSource(std::to_string(i));
         }
@@ -210,6 +254,10 @@ int main(int argc, char** argv) {
         msg_observer.WaitForStop();
       }
     }
+  }
+
+  for (auto& thread_id : vec_threads_mem) {
+    thread_id.join();
   }
 
   google::ShutdownGoogleLogging();

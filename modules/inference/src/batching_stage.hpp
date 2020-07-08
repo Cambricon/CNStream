@@ -43,6 +43,7 @@ class BatchingStage {
   BatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize) : model_(model), batchsize_(batchsize) {}
   virtual ~BatchingStage() {}
   virtual std::shared_ptr<InferTask> Batching(std::shared_ptr<CNFrameInfo> finfo) = 0;
+  virtual void Reset() {}
 
  protected:
   std::shared_ptr<edk::ModelLoader> model_;
@@ -55,6 +56,7 @@ class IOBatchingStage : public BatchingStage {
       : BatchingStage(model, batchsize), output_res_(output_res) {}
   virtual ~IOBatchingStage() {}
   std::shared_ptr<InferTask> Batching(std::shared_ptr<CNFrameInfo> finfo) override;
+  void Reset() override { batch_idx_ = 0; }
 
  protected:
   virtual void ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx, const IOResValue& value) = 0;
@@ -75,26 +77,6 @@ class CpuPreprocessingBatchingStage : public IOBatchingStage {
   void ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx, const IOResValue& value) override;
   std::shared_ptr<Preproc> preprocessor_;
 };  // class CpuPreprocessingBatchingStage
-
-class YUVSplitBatchingStage : public IOBatchingStage {
- public:
-  YUVSplitBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-                        std::shared_ptr<MluInputResource> mlu_input_res);
-  ~YUVSplitBatchingStage();
-
- private:
-  void ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx, const IOResValue& value) override;
-};  // class YUVSplitBatchingStage
-
-class YUVPackedBatchingStage : public IOBatchingStage {
- public:
-  YUVPackedBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-                         std::shared_ptr<MluInputResource> mlu_input_res);
-  ~YUVPackedBatchingStage();
-
- private:
-  void ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx, const IOResValue& value) override;
-};  // class YUVPackedBatchingStage
 
 class ResizeConvertBatchingStage : public BatchingStage {
  public:

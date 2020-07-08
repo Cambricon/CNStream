@@ -21,8 +21,10 @@ CNStream :ref:`install` 完成后，输入下面命令进入工具所在目录�
 
   cd $CNSTREAM_HOME/tools/bin
 
+``bin`` 目录是编译成功后创建的。
+
 打印工具帮助信息
->>> >>>>>>>>>>>>>>>
+>>>>>>>>>>>>>>>>>>
 
 输入下面命令打印工具帮助信息：
 
@@ -74,9 +76,9 @@ CNStream :ref:`install` 完成后，输入下面命令进入工具所在目录�
 ::
 
   DataSource Details:
-    Parameter                               Description
-    source_type                             Input source type, must be ffmpeg or raw.
-    ...                                     ...
+  Common Parameter              Description
+  class_name                    Module class name.
+  ...                           ...
 
 检查配置文件的合法性
 >>>>>>>>>>>>>>>>>>>>>
@@ -121,7 +123,7 @@ CNStream :ref:`install` 完成后，输入下面命令进入工具所在目录�
 
   ./cnstream_inspect -v
 
-命令返回示例如下：
+命令返回示例如下，版本号为CNStream最新版本号：
 
 ::
 

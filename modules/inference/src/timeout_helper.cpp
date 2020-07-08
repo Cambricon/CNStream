@@ -49,7 +49,6 @@ int TimeoutHelper::SetTimeout(float timeout) {
 }
 
 int TimeoutHelper::Reset(const std::function<void()>& func) {
-  std::unique_lock<std::mutex> lk(mtx_);
   if (STATE_EXIT == state_) {
     LOG(WARNING) << "Timeout Operator has been exit.";
     return 1;

@@ -19,11 +19,12 @@
  *************************************************************************/
 
 #include <cnrt.h>
+#include <glog/logging.h>
+
 #include <atomic>
 #include <iostream>
 #include <string>
 
-#include "cxxutil/logger.h"
 #include "cxxutil/spinlock.h"
 #include "easyinfer/mlu_context.h"
 
@@ -55,7 +56,7 @@ class CnrtInitTool {
       if (0 == dev_cnt) {
         throw MluContextError("No device found.");
       }
-      LOG(INFO, "Cambricon runtime init success.");
+      LOG(INFO) << "Cambricon runtime init success.";
       is_initialized_ = true;
     }
   }
@@ -111,12 +112,12 @@ void MluContext::ConfigureForThisThread() {
     switch (device_info.core_version) {
       case CNRT_MLU220: {
         version_tmp = CoreVersion::MLU220;
-        LOG(INFO, "Get Core Version MLU220");
+        LOG(INFO) << "Get Core Version MLU220";
         break;
       }
       case CNRT_MLU270: {
         version_tmp = CoreVersion::MLU270;
-        LOG(INFO, "Get Core Version MLU270");
+        LOG(INFO) << "Get Core Version MLU270";
         break;
       }
       default: throw MluContextError(

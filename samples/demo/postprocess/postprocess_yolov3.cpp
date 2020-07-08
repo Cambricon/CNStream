@@ -22,6 +22,7 @@
 #include <cmath>
 #include <vector>
 
+#include "cnstream_frame_va.hpp"
 #include "postproc.hpp"
 
 class PostprocYolov3 : public cnstream::Postproc {
@@ -52,6 +53,7 @@ class PostprocYolov3 : public cnstream::Postproc {
     const int box_num = static_cast<int>(net_output[0]);
     int box_step = 7;
     auto range_0_1 = [](float num) { return std::max(.0f, std::min(1.0f, num)); };
+    cnstream::CNObjsVec objs;
     for (int box_idx = 0; box_idx < box_num; ++box_idx) {
       float left = range_0_1(net_output[64 + box_idx * box_step + 3]);
       float right = range_0_1(net_output[64 + box_idx * box_step + 5]);
@@ -79,8 +81,10 @@ class PostprocYolov3 : public cnstream::Postproc {
 
       if (obj->bbox.h <= 0 || obj->bbox.w <= 0 || (obj->score < threshold_ && threshold_ > 0)) continue;
 
-      package->objs.push_back(obj);
+      objs.push_back(obj);
     }
+    package->datas[cnstream::CNObjsVecKey] = objs;
+
     return 0;
   }
 
@@ -89,4 +93,3 @@ class PostprocYolov3 : public cnstream::Postproc {
 };  // class PostprocessYolov3
 
 IMPLEMENT_REFLEX_OBJECT_EX(PostprocYolov3, cnstream::Postproc);
-

@@ -19,15 +19,17 @@ CNStream作为寒武纪视频结构化分析特定领域的框架，在整个寒
 文件目录
 ----------
 
-在CNStream SDK目录下，主要由以下部分组成：
+在CNStream源码目录下，主要由以下部分组成：
 
-* 头文件：CNStream头文件存放在 ``include`` 文件夹下，包含所有的数据类型和接口。
-* 动态库：CNStream动态库存放在 ``libcnstream.so`` 文件中，位于 ``lib64`` 目录下。
+* 核心框架：在 ``framework/core`` 文件夹下，包含创建Pipeline，Module等基础核心源码。
+* 内置模块：在 ``modules`` 文件夹下，内置一套标准的视频结构化模块组件。
+* 动态库：编译成功后，CNStream核心框架存放在 ``libcnstream_core.so`` 文件中，内置的视频结构化模块存放在 ``libcnstream_va.so`` 中。位于 ``lib`` 目录下。
 * 示例程序源码：一系列示例程序存放在 ``samples`` 文件夹下。
+* 样例数据：示例程序和测试程序所用到的数据文件，包括图片、短视频等。另外程序运行过程中从Model Zoo下载的离线模型文件也会存放在该文件夹下。
 
-CNStream文件目录结构如下图所示：
+CNStream仓库主要目录结构如下图所示：
 
-    .. figure::  ../images/dir.*
+    .. figure::  ../images/dir.png
        :align: center
 
        CNStream文件目录结构图
@@ -43,7 +45,7 @@ CNStream是典型的基于pipeline和模块机制的编程模型。支持在pipe
 
   #. 创建一个pipeline对象。
   #. 读入预先编排的JSON文件构建数据流pipeline。
-  #. 创建消息监测模块，并设置到pipeline。
+  #. 创建消息监测模块，并注册到pipeline。
   #. 启动pipeline。
   #. 动态增加数据源。
   

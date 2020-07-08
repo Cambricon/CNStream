@@ -24,6 +24,7 @@
 #include <string>
 
 #include "cnencoder.hpp"
+#include "cnstream_frame_va.hpp"
 #include "easycodec/easy_encode.h"
 #include "easycodec/vformat.h"
 #include "easyinfer/mlu_context.h"
@@ -49,12 +50,14 @@ CNEncoder::CNEncoder(const std::string &name) : Module(name) {
 
 CNEncoderContext *CNEncoder::GetCNEncoderContext(CNFrameInfoPtr data) {
   CNEncoderContext *ctx = nullptr;
-  auto search = ctxs_.find(data->channel_idx);
+  std::lock_guard<std::mutex> lk(mutex_);
+  auto search = ctxs_.find(data->stream_id);
   if (search != ctxs_.end()) {
     ctx = search->second;
-  } else {
+  } else if (!data->IsEos()) {
+    CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[0]);
     ctx = new CNEncoderContext;
-    switch (data->frame.fmt) {
+    switch (frame->fmt) {
       case cnstream::CNDataFormat::CN_PIXEL_FORMAT_BGR24:
         cn_format_ = CNEncoderStream::BGR24;
         break;
@@ -69,11 +72,12 @@ CNEncoderContext *CNEncoder::GetCNEncoderContext(CNFrameInfoPtr data) {
         break;
     }
     // build cnencoder
-    ctx->stream_ =
-        new CNEncoderStream(data->frame.width, data->frame.height, dst_width_, dst_height_, frame_rate_, cn_format_,
-                            bit_rate_, gop_size_, cn_type_, data->channel_idx, device_id_, pre_type_);
+    ctx->stream_ = new CNEncoderStream(frame->width, frame->height, dst_width_, dst_height_, frame_rate_, cn_format_,
+                                       bit_rate_, gop_size_, cn_type_, data->GetStreamIndex(), device_id_, pre_type_);
     /* add into map */
-    ctxs_[data->channel_idx] = ctx;
+    ctxs_[data->stream_id] = ctx;
+  } else {
+    LOG(WARNING) << "[CNEncoder] get CNEncoderContext failed.";
   }
   return ctx;
 }
@@ -149,32 +153,38 @@ void CNEncoder::Close() {
 }
 
 int CNEncoder::Process(CNFrameInfoPtr data) {
-  bool eos = data->frame.flags & CNFrameFlag::CN_FRAME_FLAG_EOS;
+  bool eos = data->IsEos();
   CNEncoderContext *ctx = GetCNEncoderContext(data);
-
+  if (!ctx) {
+    return -1;
+  }
   if (pre_type_ == "opencv" || pre_type_ == "ffmpeg") {
     cv::Mat image;
-    if (!eos) image = *data->frame.ImageBGR();
-    ctx->stream_->Update(image, data->frame.timestamp, eos);
+    if (!eos) {
+      CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+      image = *frame->ImageBGR();
+    }
+    ctx->stream_->Update(image, data->timestamp, eos);
   } else if (pre_type_ == "mlu") {
     uint8_t *image_data = nullptr;
     if (!eos) {
-      image_data = new uint8_t[data->frame.GetBytes()];
-      uint8_t *plane_0 = reinterpret_cast<uint8_t *>(data->frame.data[0]->GetMutableCpuData());
-      uint8_t *plane_1 = reinterpret_cast<uint8_t *>(data->frame.data[1]->GetMutableCpuData());
-      memcpy(image_data, plane_0, data->frame.GetPlaneBytes(0) * sizeof(uint8_t));
-      memcpy(image_data + data->frame.GetPlaneBytes(0), plane_1, data->frame.GetPlaneBytes(1) * sizeof(uint8_t));
-      data->frame.deAllocator_.reset();
+      CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+      image_data = new uint8_t[frame->GetBytes()];
+      uint8_t *plane_0 = reinterpret_cast<uint8_t *>(frame->data[0]->GetMutableCpuData());
+      uint8_t *plane_1 = reinterpret_cast<uint8_t *>(frame->data[1]->GetMutableCpuData());
+      memcpy(image_data, plane_0, frame->GetPlaneBytes(0) * sizeof(uint8_t));
+      memcpy(image_data + frame->GetPlaneBytes(0), plane_1, frame->GetPlaneBytes(1) * sizeof(uint8_t));
+      frame->deAllocator_.reset();
     }
-    ctx->stream_->Update(image_data, data->frame.timestamp, eos);
+    ctx->stream_->Update(image_data, data->timestamp, eos);
     delete[] image_data;
     image_data = nullptr;
   } else {
     LOG(WARNING) << "pre_type err !!!" << pre_type_;
     return 0;
   }
-  // TransmitData(data);
-  return 0;
+  TransmitData(data);
+  return 1;
 }
 
 bool CNEncoder::CheckParamSet(const ModuleParamSet &paramSet) {
@@ -196,8 +206,9 @@ bool CNEncoder::CheckParamSet(const ModuleParamSet &paramSet) {
   }
 
   std::string err_msg;
-  if (!checker.IsNum({"dst_width", "dst_height, frame_rate", "bit_rate", "gop_size", "device_id",
-                      "pre_type", "enc_type"}, paramSet, err_msg, true)) {
+  if (!checker.IsNum(
+          {"dst_width", "dst_height, frame_rate", "bit_rate", "gop_size", "device_id", "pre_type", "enc_type"},
+          paramSet, err_msg, true)) {
     LOG(ERROR) << "[CNEncoder] " << err_msg;
     return false;
   }

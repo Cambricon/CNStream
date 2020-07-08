@@ -28,8 +28,8 @@
 
 #include "cnrt.h"
 #include "cnstream_source.hpp"
+#include "data_handler_file.hpp"
 #include "easyinfer/mlu_context.h"
-#include "fr_controller.hpp"
 #include "test_base.hpp"
 
 namespace cnstream {

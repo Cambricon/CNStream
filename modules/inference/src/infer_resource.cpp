@@ -148,9 +148,10 @@ void MluOutputResource::Deallocate(std::shared_ptr<edk::ModelLoader> model, uint
   if (value.ptrs) mem_op.FreeArrayMlu(value.ptrs, input_num);
 }
 
-RCOpResource::RCOpResource(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize)
-    : InferResource(model, batchsize) {
+RCOpResource::RCOpResource(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, bool keep_aspect_ratio)
+    : InferResource(model, batchsize), keep_aspect_ratio_(keep_aspect_ratio) {
   value_ = std::make_shared<RCOpValue>();
+  core_number_ = model_->ModelParallelism();
 }
 
 RCOpResource::~RCOpResource() {
@@ -159,71 +160,26 @@ RCOpResource::~RCOpResource() {
   }
 }
 
-void RCOpResource::Init(uint32_t src_w, uint32_t src_h, uint32_t src_stride, uint32_t dst_w, uint32_t dst_h,
-                        edk::MluResizeConvertOp::ColorMode cmode, edk::CoreVersion core_ver) {
+void RCOpResource::Init(uint32_t dst_w, uint32_t dst_h, edk::MluResizeConvertOp::ColorMode cmode,
+                        edk::CoreVersion core_ver) {
   if (Initialized()) {
     Destroy();
   }
   edk::MluResizeConvertOp::Attr op_attr;
-  op_attr.src_w = src_w;
-  op_attr.src_h = src_h;
-  op_attr.src_stride = src_stride;
   op_attr.dst_w = dst_w;
   op_attr.dst_h = dst_h;
   op_attr.color_mode = cmode;
   op_attr.batch_size = batchsize_;
   op_attr.core_version = core_ver;
+  op_attr.keep_aspect_ratio = keep_aspect_ratio_;
+  op_attr.core_number = core_number_;
   value_->op.Init(op_attr);
   value_->initialized = true;
-  AllocateFakeData();
 }
 
 void RCOpResource::Destroy() {
   value_->op.Destroy();
-  DeallocateFakeData();
   value_->initialized = false;
-}
-
-void RCOpResource::AllocateFakeData() {
-  CHECK_EQ(true, Initialized());
-  edk::MluResizeConvertOp::Attr op_attr = value_->op.GetAttr();
-  uint32_t h = op_attr.src_h;
-  uint32_t stride = op_attr.src_stride;
-  uint32_t y_plane_size = stride * h;
-  uint32_t uv_plane_size = stride * h / 2;
-  void** y_planes = new (std::nothrow) void*[batchsize_];
-  LOG_IF(FATAL, nullptr == y_planes) << "RCOpResource::AllocateFakeData() new y_planes failed";
-  void** uv_planes = new (std::nothrow) void*[batchsize_];
-  LOG_IF(FATAL, nullptr == uv_planes) << "RCOpResource::AllocateFakeData() new uv_planes failed";
-  for (uint32_t bidx = 0; bidx < batchsize_; ++bidx) {
-    if (CNRT_RET_SUCCESS != cnrtMalloc(&y_planes[bidx], y_plane_size)) {
-      throw CnstreamError(std::string("RCOp malloc fake data(y plane) on device failed, size:") +
-                          std::to_string(y_plane_size));
-    }
-    if (CNRT_RET_SUCCESS != cnrtMalloc(&uv_planes[bidx], uv_plane_size)) {
-      throw CnstreamError(std::string("RCOp malloc fake data(uv plane) on device failed, size:") +
-                          std::to_string(uv_plane_size));
-    }
-  }
-  value_->y_plane_fake_data = y_planes;
-  value_->uv_plane_fake_data = uv_planes;
-}
-
-void RCOpResource::DeallocateFakeData() {
-  if (value_->initialized) {
-    value_->initialized = false;
-    value_->op.Destroy();
-    for (uint32_t bidx = 0; bidx < batchsize_; ++bidx) {
-      CHECK_EQ(CNRT_RET_SUCCESS, cnrtFree(value_->y_plane_fake_data[bidx]))
-          << "Internel error: RCOpResource free y plane fake data failed.";
-      CHECK_EQ(CNRT_RET_SUCCESS, cnrtFree(value_->uv_plane_fake_data[bidx]))
-          << "Internel error: RCOpResource free y plane fake data failed.";
-    }
-    delete[] value_->y_plane_fake_data;
-    delete[] value_->uv_plane_fake_data;
-    value_->y_plane_fake_data = nullptr;
-    value_->uv_plane_fake_data = nullptr;
-  }
 }
 
 }  // namespace cnstream

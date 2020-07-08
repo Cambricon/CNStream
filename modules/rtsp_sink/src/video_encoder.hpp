@@ -36,7 +36,7 @@ class VideoEncoder {
     EOS,
   };
 
-  explicit VideoEncoder(uint32_t input_queue_size = 0, size_t output_buffer_size = 0x100000);
+  explicit VideoEncoder(size_t output_buffer_size = 0x100000);
   virtual ~VideoEncoder();
 
   void Start();
@@ -53,14 +53,14 @@ class VideoEncoder {
  protected:
   class VideoFrame {
    public:
-    VideoFrame() { }
-    virtual ~VideoFrame() { }
+    VideoFrame() {}
+    virtual ~VideoFrame() {}
     virtual void Fill(uint8_t *data, int64_t timestamp) = 0;
   };
 
   virtual VideoFrame *NewFrame() = 0;
   virtual void EncodeFrame(VideoFrame *frame) = 0;
-  virtual void EncodeFrame(void *y, void *uv, int64_t timestamp) = 0;
+  // virtual void EncodeFrame(void *y, void *uv, int64_t timestamp) = 0;
 
   bool PushOutputBuffer(uint8_t *data, size_t size, uint32_t frame_id, int64_t timestamp);
 
@@ -95,17 +95,13 @@ class VideoEncoder {
     int64_t timestamp;
   };
 
-  void Loop();
-
   int64_t init_timestamp_ = -1;
 
   bool running_ = false;
+  bool is_client_running_ = false;
   std::thread *encode_thread_ = nullptr;
 
   std::mutex input_mutex_;
-  std::queue<VideoFrame *> input_data_q_;
-  std::queue<VideoFrame *> input_free_q_;
-  uint32_t input_queue_size_ = 0;
   VideoFrame *sync_input_frame_ = nullptr;
 
   std::mutex output_mutex_;

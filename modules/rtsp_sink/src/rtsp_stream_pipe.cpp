@@ -22,12 +22,12 @@
 #include <glog/logging.h>
 #include <thread>
 
-#include "cnstream_time_utility.hpp"
 #include "cn_video_encoder.hpp"
 #include "ffmpeg_video_encoder.hpp"
 #include "live_rtsp_server.hpp"
-#include "video_encoder.hpp"
 #include "rtsp_sink.hpp"
+#include "util/cnstream_time_utility.hpp"
+#include "video_encoder.hpp"
 
 namespace cnstream {
 
@@ -40,13 +40,11 @@ struct StreamPipeCtx {
 
 static void RunServer(void *server) { ((RtspStreaming::LiveRtspServer *)server)->Run(); }
 
-StreamPipeCtx *StreamPipeCreate(const RtspParam& rtsp_param) {
+StreamPipeCtx *StreamPipeCreate(const RtspParam &rtsp_param) {
   StreamPipeCtx *pipe_ctx = new StreamPipeCtx;
   if (rtsp_param.enc_type == FFMPEG) {
-    LOG(INFO) << "[Rtsp SINK] Use FFMPEG encoder";
     pipe_ctx->video_encoder = new FFmpegVideoEncoder(rtsp_param);
   } else {
-    LOG(INFO) << "[Rtsp SINK] Use MLU encoder";
     pipe_ctx->video_encoder = new CNVideoEncoder(rtsp_param);
   }
 
@@ -63,14 +61,11 @@ int StreamPipePutPacket(StreamPipeCtx *ctx, uint8_t *data, int64_t timestamp) {
     LOG(INFO) << "Init stream pipe firstly\n";
     return -1;
   }
-
-  // uint64_t ts1 = TimeStampBase<std::chrono::nanoseconds>::Current();
   ctx->video_encoder->SendFrame(data, timestamp);
-  // uint64_t ts2 = TimeStampBase<std::chrono::nanoseconds>::Current();
-  // std::cout<<"Put Packet need: " << (ts2 - t1) / 1000 <<" ms"<<std::endl;
   return 0;
 }
 
+/*
 int StreamPipePutPacketMlu(StreamPipeCtx *ctx, void *y, void *uv, int64_t timestamp) {
   if (!ctx->init_flag) {
     LOG(INFO) << "Init stream pipe firstly!";
@@ -79,6 +74,7 @@ int StreamPipePutPacketMlu(StreamPipeCtx *ctx, void *y, void *uv, int64_t timest
   ctx->video_encoder->SendFrame(y, uv, timestamp);
   return 0;
 }
+*/
 
 int StreamPipeClose(StreamPipeCtx *ctx) {
   if (!ctx->init_flag) {

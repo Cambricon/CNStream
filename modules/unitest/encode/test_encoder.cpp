@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "cnstream_frame_va.hpp"
 #include "encoder.hpp"
 #include "test_base.hpp"
 
@@ -56,17 +57,18 @@ TEST(EncoderModule, Process) {
   int height = 1080;
   cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
-  CNDataFrame &frame = data->frame;
-  data->channel_idx = 0;
-  frame.frame_id = 1;
-  frame.timestamp = 1000;
-  frame.width = width;
-  frame.height = height;
-  frame.ptr_cpu[0] = img.data;
-  frame.stride[0] = width;
-  frame.ctx.dev_type = DevContext::DevType::CPU;
-  frame.fmt = CN_PIXEL_FORMAT_BGR24;
-  frame.CopyToSyncMem();
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+  data->SetStreamIndex(0);
+  frame->frame_id = 1;
+  data->timestamp = 1000;
+  frame->width = width;
+  frame->height = height;
+  frame->ptr_cpu[0] = img.data;
+  frame->stride[0] = width;
+  frame->ctx.dev_type = DevContext::DevType::CPU;
+  frame->fmt = CN_PIXEL_FORMAT_BGR24;
+  frame->CopyToSyncMem();
+  data->datas[CNDataFramePtrKey] = frame;
   EXPECT_EQ(ptr->Process(data), 0);
   ptr->Close();
 
@@ -85,9 +87,6 @@ TEST(EncoderModule, CheckParamSet) {
 
   params["fake_key"] = "fake_value";
   EXPECT_TRUE(module.CheckParamSet(params));
-
-  params["dump_type"] = "fake";
-  EXPECT_FALSE(module.CheckParamSet(params));
 }
 
 }  // namespace cnstream

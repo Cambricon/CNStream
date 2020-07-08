@@ -22,8 +22,14 @@
 #include <easyinfer/easy_infer.h>
 #include <easyinfer/mlu_memory_op.h>
 #include <glog/logging.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #include <memory>
+#include <string>
 #include <vector>
+
+#include "cnrt.h"
 #include "infer_engine.hpp"
 #include "infer_resource.hpp"
 #include "infer_task.hpp"
@@ -31,6 +37,8 @@
 #include "queuing_server.hpp"
 
 #include "batching_done_stage.hpp"
+#include "cnstream_frame_va.hpp"
+#include "perf_manager.hpp"
 
 namespace cnstream {
 
@@ -70,13 +78,29 @@ std::vector<std::shared_ptr<InferTask>> ResizeConvertBatchingDoneStage::Batching
     std::shared_ptr<RCOpValue> rcop_value = this->rcop_res_->WaitResourceByTicket(&rcopr_ticket);
     IOResValue mlu_value = this->mlu_input_res_->WaitResourceByTicket(&mir_tickett);
     CHECK_EQ(mlu_value.datas.size(), 1) << "Internal error, maybe model input num not 1";
-    // batched frame is less than batchsize, feed some fake data to resize convert operator.
-    for (size_t bidx = finfos.size(); bidx < batchsize_; ++bidx) {
-      rcop_value->op.BatchingUp(rcop_value->y_plane_fake_data[bidx], rcop_value->uv_plane_fake_data[bidx]);
+
+    std::shared_ptr<CNFrameInfo> info = nullptr;
+    std::string pts_str;
+
+    if (perf_manager_) {
+      info = finfos.back().first;
+      if (!info->IsEos()) {
+        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(info->datas[CNDataFramePtrKey]);
+        pts_str = std::to_string(frame->frame_id * 100 + info->GetStreamIndex());
+        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_start_time");
+        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_cnt",
+                              std::to_string(finfos.size()));
+      }
     }
+
     if (!rcop_value->op.SyncOneOutput(mlu_value.datas[0].ptr)) {
       throw CnstreamError("resize convert failed.");
     }
+
+    if (perf_manager_) {
+      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_end_time");
+    }
+
     this->rcop_res_->DeallingDone();
     this->mlu_input_res_->DeallingDone();
     return 0;
@@ -106,12 +130,54 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
   InferTaskSptr task;
   QueuingTicket mlu_input_res_ticket = mlu_input_res_->PickUpNewTicket();
   QueuingTicket mlu_output_res_ticket = mlu_output_res_->PickUpNewTicket();
-  task = std::make_shared<InferTask>([mlu_input_res_ticket, mlu_output_res_ticket, this]() -> int {
+  task = std::make_shared<InferTask>([mlu_input_res_ticket, mlu_output_res_ticket, this, finfos]() -> int {
     QueuingTicket mir_ticket = mlu_input_res_ticket;
     QueuingTicket mor_ticket = mlu_output_res_ticket;
     IOResValue mlu_input_value = this->mlu_input_res_->WaitResourceByTicket(&mir_ticket);
     IOResValue mlu_output_value = this->mlu_output_res_->WaitResourceByTicket(&mor_ticket);
+
+    std::shared_ptr<CNFrameInfo> info = nullptr;
+    std::string pts_str;
+    if (perf_manager_) {
+      info = finfos.back().first;
+      if (!info->IsEos()) {
+        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(info->datas[CNDataFramePtrKey]);
+        pts_str = std::to_string(frame->frame_id * 100 + info->GetStreamIndex());
+        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_start_time");
+        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_cnt",
+                              std::to_string(finfos.size()));
+      }
+    }
+    if (!dump_resized_image_dir_.empty()) {
+      int batch_offset = mlu_input_value.datas[0].batch_offset;
+      int frame_num = finfos.size();
+      int len = batch_offset * frame_num;
+      std::vector<char> cpu_input_value(len);
+      for (const auto& data : mlu_input_value.datas) {
+        cnrtMemcpy(reinterpret_cast<void*>(cpu_input_value.data()), data.ptr, len, CNRT_MEM_TRANS_DIR_DEV2HOST);
+        for (int  i = 0; i < frame_num; i++) {
+          info = finfos[i].first;
+          CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(info->datas[CNDataFramePtrKey]);
+          char *img = reinterpret_cast<char*>(cpu_input_value.data()) + batch_offset * i;
+          cv::Mat bgr(data.shape.h, data.shape.w, CV_8UC3);
+          cv::Mat bgra(data.shape.h, data.shape.w, CV_8UC4, img);
+          cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
+          std::string stream_index = std::to_string(info->GetStreamIndex());
+          if (0 != access(dump_resized_image_dir_.c_str(), 0)) {
+            mkdir(dump_resized_image_dir_.c_str(), 0777);
+          }
+          cv::imwrite(dump_resized_image_dir_ + "/ch" + stream_index + "_stream" + stream_index + "_frame" +
+                                      std::to_string(frame->frame_id) + ".jpg",
+                                                      bgr);
+        }
+      }
+    }
     this->easyinfer_->Run(mlu_input_value.ptrs, mlu_output_value.ptrs);
+
+    if (perf_manager_) {
+      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_end_time");
+    }
+
     this->mlu_input_res_->DeallingDone();
     this->mlu_output_res_->DeallingDone();
     return 0;
@@ -163,7 +229,35 @@ std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::Batchin
         net_outputs.push_back(reinterpret_cast<float*>(cpu_output_value.datas[output_idx].Offset(bidx)));
       }
       this->postprocessor_->Execute(net_outputs, this->model_, finfo.first);
-      finfo.second->set_value();
+      this->cpu_output_res_->DeallingDone();
+      return 0;
+    });
+    tasks.push_back(task);
+  }
+  return tasks;
+}
+
+std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjBatchingDone(
+    const BatchingDoneInput& finfos, const std::vector<std::shared_ptr<CNInferObject>>& objs) {
+  CHECK_EQ(finfos.size(), objs.size()) << "Internal error.";
+  std::vector<InferTaskSptr> tasks;
+  for (int bidx = 0; bidx < static_cast<int>(finfos.size()); ++bidx) {
+    auto finfo = finfos[bidx];
+    auto obj = objs[bidx];
+    QueuingTicket cpu_output_res_ticket;
+    if (0 == bidx) {
+      cpu_output_res_ticket = cpu_output_res_->PickUpNewTicket(true);
+    } else {
+      cpu_output_res_ticket = cpu_output_res_->PickUpTicket(true);
+    }
+    InferTaskSptr task = std::make_shared<InferTask>([cpu_output_res_ticket, this, finfo, obj, bidx]() -> int {
+      QueuingTicket cor_ticket = cpu_output_res_ticket;
+      IOResValue cpu_output_value = this->cpu_output_res_->WaitResourceByTicket(&cor_ticket);
+      std::vector<float*> net_outputs;
+      for (size_t output_idx = 0; output_idx < cpu_output_value.datas.size(); ++output_idx) {
+        net_outputs.push_back(reinterpret_cast<float*>(cpu_output_value.datas[output_idx].Offset(bidx)));
+      }
+      this->postprocessor_->Execute(net_outputs, this->model_, finfo.first, obj);
       this->cpu_output_res_->DeallingDone();
       return 0;
     });

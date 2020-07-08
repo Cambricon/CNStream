@@ -58,7 +58,7 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "next_modules" : ["tracker"],
     "show_perf_info" : true,
     "custom_params" : {
-      "model_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon",
+      "model_path" : "../data/models/resnet34ssd/resnet34_ssd.cambricon",
       "func_name" : "subnet0",
       "postproc_name" : "PostprocSsd",
       "device_id" : 0
@@ -73,7 +73,7 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "next_modules" : ["osd"],
     "show_perf_info" : true,
     "custom_params" : {
-      "model_path" : "../data/models/MLU100/Track/track.cambricon",
+      "model_path" : "../data/models/Track/track.cambricon",
       "func_name" : "subnet0"
     }
   },
@@ -87,7 +87,7 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "show_perf_info" : true,
     "custom_params" : {
       "chinese_label_flag" : "false", 
-      "label_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/label_voc.txt"
+      "label_path" : "../data/models/resnet34ssd/label_voc.txt"
     }
   },
 

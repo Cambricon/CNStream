@@ -1,83 +1,93 @@
 {
-	"package": [
-		"\\\\usepackage[table]{xcolor}",
-		"\\\\usepackage{eso-pic}",
-		"\\\\usepackage{wallpaper}",
-                "\\\\usepackage{titlesec}",
-                "\\\\usepackage{tocbibind}",
-		"% \\\\usepackage{draftwatermark}"
-	],
-        "replacepackage":{
+    "package": [
+        "\\\\usepackage{amsmath}",
+        "\\\\usepackage[table]{xcolor}",
+        "\\\\usepackage{eso-pic}",
+        "\\\\usepackage{wallpaper}",
+        "%\\\\usepackage{titlesec}",
+        "\\\\usepackage{tocbibind}",
+        "% \\\\usepackage{draftwatermark}",
+        "\\\\usepackage{enumitem}"
+    ],
+    "replacepackage":{
                 "comment": "该章节内容是为了替换现有tex里面包的配置，左边为tex文件现有内容，右边是替换内容。",
                 "\\\\usepackage{hyperref}": "\\\\usepackage[bookmarksnumbered=true]{hyperref}",
                 "\\\\sphinxtableofcontents" : "\\\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}\n\\\\sphinxtableofcontents",           
-                "\\\\listoffigures" : "\\\\clearpage\n\\\\clearpage\n\\\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}\n\\\\listoffigures",           
-                "\\\\listoftables" : "\\\\clearpage\n\\\\clearpage\n\\\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}\n\\\\listoftables",
-				"\\\\chapter{([\\s\\S].*)}": "\\\\chapter{\\1}\n\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}",
-                "\\\\footnotesize\\\\raggedright\\\\printindex": "% \\\\footnotesize\\\\raggedright\\\\printindex",
-                "\\\\begin{itemize}":"\\\\begin{itemize}[leftmargin=*]",
-                "\\\\begin{enumerate}":"\\\\begin{enumerate}[leftmargin=*]",
-				"\\\\renewcommand{\\\\releasename}{发布}":"\\\\renewcommand{\\\\releasename}{版本}"
+                "\\\\chapter{([\\s\\S].*)}": "\\\\chapter{\\1}\n\\\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}",
+                "\\\\listoffigures" : "\\\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}\n\\\\listoffigures",           
+                "\\\\listoftables" : "\\\\listoftables\n\\\\ThisURCornerWallPaper{1}{chapterbkpaper.pdf}",
+                "\\\\footnotesize\\\\raggedright\\\\printindex": "% \\\\footn    otesize\\\\raggedright\\\\printindex",
+                "\\\\begin{itemize}" : "\\\\begin{itemize}[leftmargin=*]",
+                "\\\\begin{enumerate}" : "\\\\begin{enumerate}[leftmargin=*]",
+                "\\\\renewcommand{\\\\releasename}{发布}":"\\\\renewcommand{\\\\releasename}{版本}",
+                "\\\\setmainfont{FreeSerif}\\[[\\s\\S]*?\\]":"",
+                "\\\\setsansfont{FreeSans}\\[[\\s\\S]*?\\]":"",
+                "\\\\setmonofont{FreeMono}\\[[\\s\\S]*?\\]":""
         },
-	"customoptions": [
-                "\\\\titleformat{\\\\chapter}{\\\\raggedleft\\\\huge\\\\bfseries\\\\color{white}}{\\\\thechapter}{0.5em}{}",
-				"\\\\titlespacing{\\\\chapter}{0pt}{50pt}{25pt}",
-		"\\\\definecolor{camblue}{RGB}{0,89,196}",
-		"% \\\\SetWatermarkText{Cambricon}",
-		"% \\\\SetWatermarkLightness{0.9}",
-		"% \\\\SetWatermarkScale{1}",
+    "customoptions": [
+        "\\\\numberwithin{figure}{chapter}",
+        "\\\\numberwithin{table}{chapter}",
+        "\\\\titleformat{\\\\chapter}{\\\\raggedleft\\\\huge\\\\bfseries\\\\color{white}}{\\\\thechapter}{0.5em}{}",
+        "\\\\titlespacing{\\\\chapter}{0pt}{50pt}{25pt}",
+        "\\\\definecolor{camblue}{RGB}{0,89,196}",
+        "% \\\\SetWatermarkText{Cambricon}",
+        "% \\\\SetWatermarkLightness{0.9}",
+        "% \\\\SetWatermarkScale{1}",
         "\\\\renewcommand{\\\\labelitemi}{$\\\\vcenter{\\\\hbox{\\\\scriptsize$\\\\bullet$}}$}"
-	],
+    ],
         "isfiguretabletoc": {
-		"comment": "插图目录英文：List of  Figures;表格目录英文：List of Tables.",
+        "comment": "插图目录英文：List of  Figures;表格目录英文：List of Tables.",
                 "isfigurestoc": true,
                 "istablestoc": false,
                 "figurestoc": [
-                           "\\\\renewcommand\\listfigurename{插\\ 图\\ 目\\ 录}",
-                           "\\listoffigures"
+                           "\\\\renewcommand\\\\listfigurename{插\\ 图\\ 目\\ 录}",
+                           "\\\\listoffigures"
                 ],
                 "tablestoc": [
-                           "\\\\renewcommand\\listtablename{表\\ 格\\ 目\\ 录}",
-                           "\\listoftables"
+                           "\\\\renewcommand\\\\listtablename{表\\ 格\\ 目\\ 录}",
+                           "\\\\listoftables"
                 ]
         },
-	"tables": {
-		"rowtype": "",
-		"headtype": "\\rowcolor{camblue!100}",
-		"headfontcolor": "\\textbf{\\textcolor{white}{}}",
-		"styles": [{
-			"align": "centering",
-			"caption": "MLU特殊算子",
-			"captionalign": "left",
-			"isLongTable": true,
-			"isVertical": true
-		},
+    "tables": {
+        "comment":"isLongTable:true-强制设置为长表格，false-不设置长表格。isVertical:true-对第一列进行渲染，false-不对第一列进行渲染。isCusHead：true-对第一行进行渲染，false-不对第一行进行渲染。",
+        "rowtype": "",
+        "headtype": "{camblue!100}",
+        "headfontcolor": "\\textbf{\\textcolor{white}{}}",
+        "styles": [{
+            "align": "centering",
+            "caption": "cnmon info回显信息说明",
+            "captionalign": "left",
+            "isLongTable": true,
+            "isVertical": true,
+            "isCusHead": true
+        },
                 {
-			"align": "centering",
-			"caption": "更新历史",
-			"captionalign": "left",
-			"isLongTable": true,
-			"isVertical": true
+            "align": "centering",
+            "caption": "更新历史",
+            "captionalign": "left",
+            "isLongTable": true,
+            "isVertical": true,
+            "isCusHead": true
                  }]
-	},
-	"image": {
-		"styles": [{
-			"name": "",
-			"align": "",
-			"caption": ""
-		}]
-	},
-	"sensitivewords": [
-		"安防",
-		"监听",
-		"stream",
-		"hisi",
-		"展讯",
-		"英伟达",
-		"nivida",
-		"讯飞",
-		"展锐",
-		"c10",
-		"c20"
-	]
+    },
+    "image": {
+        "styles": [{
+            "name": "",
+            "align": "",
+            "caption": ""
+        }]
+    },
+    "sensitivewords": [
+        "安防",
+        "监听",
+        "stream",
+        "hisi",
+        "展讯",
+        "英伟达",
+        "nivida",
+        "讯飞",
+        "展锐",
+        "c10",
+        "c20"
+    ]
 }

@@ -25,10 +25,6 @@
 
 #include "easyinfer/mlu_context.h"
 
-#ifdef HAVE_OPENCV
-#include "opencv2/opencv.hpp"
-#endif
-
 #include "rtsp_sink.hpp"
 #include "rtsp_stream_pipe.hpp"
 
@@ -37,8 +33,8 @@
 namespace cnstream {
 
 bool RtspSinkJoinStream::Open(const RtspParam& rtsp_params) {
-  if (rtsp_params.src_width < 1 || rtsp_params.src_height < 1
-     || rtsp_params.udp_port < 1 || rtsp_params.http_port < 1) {
+  if (rtsp_params.src_width < 1 || rtsp_params.src_height < 1 || rtsp_params.udp_port < 1 ||
+      rtsp_params.http_port < 1) {
     return false;
   }
   if ("mosaic" == rtsp_params.view_mode) {
@@ -56,27 +52,26 @@ bool RtspSinkJoinStream::Open(const RtspParam& rtsp_params) {
   *rtsp_param_ = rtsp_params;
 
   running_ = true;
-
-  LOG(INFO) << "[Rtsp Sink] FrameRate: " << rtsp_params.frame_rate
-            << " GOP: " << rtsp_params.gop << " KBPS: " << rtsp_params.kbps;
+  LOG(INFO) << "==================================================================";
+  if (rtsp_params.enc_type == FFMPEG)
+    LOG(INFO) << "[Rtsp SINK] Use FFMPEG encoder";
+  else if (rtsp_params.enc_type == MLU)
+    LOG(INFO) << "[Rtsp SINK] Use MLU encoder";
+  LOG(INFO) << "[Rtsp Sink] FrameRate: " << rtsp_params.frame_rate << "  GOP: " << rtsp_params.gop
+            << "  KBPS: " << rtsp_params.kbps;
+  LOG(INFO) << "==================================================================";
 
   ctx_ = StreamPipeCreate(rtsp_params);
-  canvas_ = cv::Mat(rtsp_params.dst_height, rtsp_params.dst_width, CV_8UC3);  // for bgr24
+  canvas_ = cv::Mat(rtsp_params.dst_height, rtsp_params.dst_width, CV_8UC3);           // for bgr24
   canvas_data_ = new uint8_t[rtsp_params.dst_height * rtsp_params.dst_width * 3 / 2];  // for nv21
 
   if (("cpu" == rtsp_params.preproc_type && MULTI_THREAD) || "bgr" == rtsp_params.color_mode) {
-    LOG(INFO);
     refresh_thread_ = new std::thread(&RtspSinkJoinStream::RefreshLoop, this);
   }
-  std::cout << std::endl;
-  std::cout << "========================================================" << std::endl;
-  std::cout << "  Start Rtsp server, UDP port: " << rtsp_params.udp_port
-            << ", HTTP port:" << rtsp_params.http_port << std::endl;
-  std::cout << "========================================================" << std::endl;;
   return true;
 }
 
-void RtspSinkJoinStream::EncodeFrame(const cv::Mat &bgr24, int64_t timestamp) {
+void RtspSinkJoinStream::EncodeFrameBGR(const cv::Mat& bgr24, int64_t timestamp) {
   cv::Mat bgr_tmp = cv::Mat(rtsp_param_->dst_height, rtsp_param_->dst_width, CV_8UC3);
   if (rtsp_param_->src_width != rtsp_param_->dst_width || rtsp_param_->src_height != rtsp_param_->dst_height) {
     cv::resize(bgr24, bgr_tmp, cv::Size(rtsp_param_->dst_width, rtsp_param_->dst_height), cv::INTER_CUBIC);
@@ -86,17 +81,19 @@ void RtspSinkJoinStream::EncodeFrame(const cv::Mat &bgr24, int64_t timestamp) {
   uint8_t* nv_data = new uint8_t[rtsp_param_->dst_width * rtsp_param_->dst_height * 3 / 2];
   Bgr2Yuv420nv(bgr_tmp, nv_data);
   StreamPipePutPacket(ctx_, nv_data, timestamp);
-  delete []nv_data;
+  delete[] nv_data;
   bgr_tmp.release();
 }
 
-void RtspSinkJoinStream::EncodeFrame(uint8_t *s_data, int64_t timestamp) {
+void RtspSinkJoinStream::EncodeFrameYUV(uint8_t* s_data, int64_t timestamp) {
   StreamPipePutPacket(ctx_, s_data, timestamp);
 }
 
-void RtspSinkJoinStream::EncodeFrame(void *y, void *uv, int64_t timestamp) {
+/*
+void RtspSinkJoinStream::EncodeFrameYUVs(void *y, void *uv, int64_t timestamp) {
   StreamPipePutPacketMlu(ctx_, y, uv, timestamp);
 }
+*/
 
 void RtspSinkJoinStream::Close() {
   running_ = false;
@@ -112,7 +109,7 @@ void RtspSinkJoinStream::Close() {
   LOG(INFO) << "Release stream resources !!!" << std::endl;
 }
 
-bool RtspSinkJoinStream::Update(cv::Mat image, int64_t timestamp, int channel_id) {
+bool RtspSinkJoinStream::UpdateBGR(cv::Mat image, int64_t timestamp, int channel_id) {
   canvas_lock_.lock();
   if (is_mosaic_style_ && channel_id >= 0) {
     if (3 == rtsp_param_->view_cols && 2 == rtsp_param_->view_rows) {
@@ -147,24 +144,26 @@ bool RtspSinkJoinStream::Update(cv::Mat image, int64_t timestamp, int channel_id
   return true;
 }
 
-bool RtspSinkJoinStream::Update(uint8_t *image, int64_t timestamp) {
+bool RtspSinkJoinStream::UpdateYUV(uint8_t* image, int64_t timestamp) {
   canvas_lock_.lock();
   ResizeYuvNearest(image, canvas_data_);
   if (!MULTI_THREAD) {
-    EncodeFrame(canvas_data_, timestamp);
+    EncodeFrameYUV(canvas_data_, timestamp);
   }
   canvas_lock_.unlock();
   return true;
 }
 
-bool RtspSinkJoinStream::Update(void *y, void *uv, int64_t timestamp) {
+/*
+bool RtspSinkJoinStream::UpdateYUVs(void *y, void *uv, int64_t timestamp) {
   canvas_lock_.lock();
   y_ptr_ = y;
   uv_ptr_ = uv;
-  EncodeFrame(y_ptr_, uv_ptr_, timestamp);
+  EncodeFrameYUVs(y_ptr_, uv_ptr_, timestamp);
   canvas_lock_.unlock();
   return true;
 }
+*/
 
 void RtspSinkJoinStream::RefreshLoop() {
   edk::MluContext context;
@@ -192,9 +191,9 @@ void RtspSinkJoinStream::RefreshLoop() {
       canvas_lock_.lock();
       if ("cpu" == rtsp_param_->preproc_type) {
         if ("nv" == rtsp_param_->color_mode) {
-          EncodeFrame(canvas_data_, pts_us / 1000);
+          EncodeFrameYUV(canvas_data_, pts_us / 1000);
         } else if ("bgr" == rtsp_param_->color_mode) {
-          EncodeFrame(canvas_, pts_us / 1000);
+          EncodeFrameBGR(canvas_, pts_us / 1000);
         }
       }
       canvas_lock_.unlock();
@@ -203,7 +202,7 @@ void RtspSinkJoinStream::RefreshLoop() {
   }
 }
 
-void RtspSinkJoinStream::Bgr2Yuv420nv(const cv::Mat &bgr, uint8_t *nv_data) {
+void RtspSinkJoinStream::Bgr2Yuv420nv(const cv::Mat& bgr, uint8_t* nv_data) {
   uint32_t width, height, stride;
   width = bgr.cols;
   height = bgr.rows;
@@ -267,7 +266,7 @@ void RtspSinkJoinStream::ResizeYuvNearest(uint8_t* src, uint8_t* dst) {
     for (int x = 0; x < (rtsp_param_->dst_width & ~7); ++x) {
       srcx = (x * xrIntFloat_16) >> 16;
       dst_y_slice[x] = src_y_slice[srcx];
-      if ((y & 1) == 0) {  // y is even
+      if ((y & 1) == 0) {    // y is even
         if ((x & 1) == 0) {  // x is even
           src_index = (srcx / 2) * 2;
           sp = dst_uv_yScanline + x;

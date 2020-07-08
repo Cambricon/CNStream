@@ -51,9 +51,9 @@ using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
  *
  * @detail
  * The input could come from Decoder or other plugins, in MLU memory
- * or CPU memory. Also, If the ``preproc_name`` parameter is set to ``PreprocCpu`` 
+ * or CPU memory. Also, If the ``preproc_name`` parameter is set to ``PreprocCpu``
  * in the Open function or configuration file,
- * CPU is used for image preprocessing. Otherwise, if the ``preproc_name`` parameter is not 
+ * CPU is used for image preprocessing. Otherwise, if the ``preproc_name`` parameter is not
  * set, MLU is used for image preprocessing. The image preprocessing includes
  * data shape resizing and color space convertion.
  * Afterwards, you can infer with offline model loading from the model path.
@@ -78,14 +78,33 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
    *
    * @param paramSet:
    * @verbatim
-   * model_path: The path of the offline model.
-   * func_name: The function name that is defined in the offline model. It could be found in Cambricon twins file. For most cases, it is "subnet0".
-   * postproc_name: The class name for postprocessing. See cnstream::Postproc.
-   * preproc_name: The class name for preprocessing on CPU. See cnstream::Preproc.
-   * device_id: MLU device ordinal number.
-   * batch_size: The batch size. The maximum value is 32. The default value if 1. Only active on MLU100.
-   * batching_timeout: The batching timeout. The default value is 3000.0[ms]. type[float]. unit[ms].
-   *@endverbatim
+   *   model_path: Required. The path of the offline model.
+   *   func_name: Required. The function name that is defined in the offline model.
+                  It could be found in Cambricon twins file. For most cases, it is "subnet0".
+   *   postproc_name: Required. The class name for postprocess. The class specified by this name must
+                      inherited from class cnstream::Postproc when [object_infer] is false, otherwise the
+                      class specified by this name must inherit from class cnstream::ObjPostproc.
+   *   preproc_name: Optional. The class name for preprocessing on CPU. The class specified by this name must
+                     inherited from class cnstream::Preproc when [object_infer] is false, otherwise the class
+                     specified by this name must inherit from class cnstream::ObjPreproc. Preprocessing will be
+                     done on MLU by ResizeYuv2Rgb (cambricon Bang op) when this parameter not set.
+   *   use_scaler: Optional. Whether use the scaler to preprocess the input. The scaler will not be used by default.
+   *   device_id: Optional. MLU device ordinal number. The default value is 0.
+   *   batching_timeout: Optional. The batching timeout. The default value is 3000.0[ms]. type[float]. unit[ms].
+   *   data_order: Optional. Data format. The default format is NHWC.
+   *   threshold: Optional. The threshold of the confidence. By default it is 0.
+   *   infer_interval: Optional. Process one frame for every ``infer_interval`` frames.
+   *   show_stats: Optional. Whether show inferencer performance statistics. It will not be shown by default.
+   *   stats_db_name: Required when show_stats is set to ``true``. The directory to store the db file.
+                      e.g., ``dir1/dir2/detect.db``.
+   *   object_infer: Optional. if object_infer is set to true, the detection target is used as the input to
+                     inferencing. if it is set to false, the video frame is used as the input to inferencing.
+                     False by default.
+   *   obj_filter_name: Optional. The class name for object filter. See cnstream::ObjFilter. This parameter is valid
+   when object_infer is true. When this parameter not set, no object will be filtered.
+   *   keep_aspect_ratio: Optional. As the mlu is used for image processing, the scale remains constant.
+   *
+   * @endverbatim
    *
    * @return Returns ture if the inferencer has been opened successfully.
    */

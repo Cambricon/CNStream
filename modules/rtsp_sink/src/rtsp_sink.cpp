@@ -24,13 +24,14 @@
 #include <sstream>
 #include <string>
 
+#include "cnstream_frame_va.hpp"
+
 namespace cnstream {
 
 RtspSinkContext RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {
   RtspSinkContext ctx = nullptr;
-
   if (is_mosaic_style_) {
-    if (data->channel_idx >= static_cast<uint32_t>(params_.view_cols * params_.view_rows)) {
+    if (data->GetStreamIndex() >= static_cast<uint32_t>(params_.view_cols * params_.view_rows)) {
       LOG(INFO) << "================================================================================";
       LOG(ERROR) << "[RtspSink] Input stream number must no more than " << params_.view_cols * params_.view_rows
                  << " (view window col: " << params_.view_cols << " row: " << params_.view_rows << ")";
@@ -48,11 +49,11 @@ RtspSinkContext RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {
     ctx_lock_.unlock();
   } else {
     ctx_lock_.lock();
-    auto search = ctxs_.find(data->channel_idx);
+    auto search = ctxs_.find(data->GetStreamIndex());
     if (search != ctxs_.end()) {
       ctx = search->second;
     } else {
-      ctx = CreateRtspSinkContext(data, data->channel_idx);
+      ctx = CreateRtspSinkContext(data, data->GetStreamIndex());
     }
     ctx_lock_.unlock();
   }
@@ -73,43 +74,53 @@ RtspSinkContext RtspSink::CreateRtspSinkContext(CNFrameInfoPtr data, int channel
 }
 
 RtspParam RtspSink::GetRtspParam(CNFrameInfoPtr data) {
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  switch (frame->fmt) {
+    case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
+      params_.color_format = BGR24;
+      if (params_.color_mode != "bgr") {
+        params_.color_mode = "bgr";
+        LOG(WARNING) << "Color mode should be bgr.";
+      }
+      break;
+    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
+      params_.color_format = NV12;
+      break;
+    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
+      params_.color_format = NV21;
+      break;
+    default:
+      LOG(WARNING) << "[CNEncoder] unsuport color format.";
+      params_.color_format = BGR24;
+      if (params_.color_mode != "bgr") {
+        params_.color_mode = "bgr";
+        LOG(WARNING) << "Color mode should be bgr.";
+      }
+      break;
+  }
+
   RtspParam rtsp_params;
   rtsp_params = params_;
   if (!is_mosaic_style_) {
-    rtsp_params.udp_port += data->channel_idx;
+    rtsp_params.udp_port += data->GetStreamIndex();
   }
 
   if (rtsp_params.dst_width <= 0) {
-    rtsp_params.dst_width = data->frame.width;
+    rtsp_params.dst_width = frame->width;
   }
   if (rtsp_params.dst_height <= 0) {
-    rtsp_params.dst_height = data->frame.height;
+    rtsp_params.dst_height = frame->height;
   }
 
-  rtsp_params.src_width = data->frame.width;
-  rtsp_params.src_height = data->frame.height;
-
-  switch (data->frame.fmt) {
-    case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
-      rtsp_params.color_format = BGR24;
-      break;
-    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
-      rtsp_params.color_format = NV12;
-      break;
-    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
-      rtsp_params.color_format = NV21;
-      break;
-    default:
-      LOG(ERROR) << "[CNEncoder] unsuport color format.";
-      break;
-  }
+  rtsp_params.src_width = frame->width;
+  rtsp_params.src_height = frame->height;
 
   return rtsp_params;
 }
 
 RtspSink::~RtspSink() { Close(); }
 
-void RtspSink::SetParam(const ModuleParamSet& paramSet, std::string name, int* variable, int default_value) {
+void RtspSink::SetParam(const ModuleParamSet &paramSet, std::string name, int *variable, int default_value) {
   if (paramSet.find(name) == paramSet.end()) {
     *variable = default_value;
   } else {
@@ -117,8 +128,8 @@ void RtspSink::SetParam(const ModuleParamSet& paramSet, std::string name, int* v
   }
 }
 
-void RtspSink::SetParam(const ModuleParamSet& paramSet, std::string name,
-                        std::string* variable, std::string default_value) {
+void RtspSink::SetParam(const ModuleParamSet &paramSet, std::string name, std::string *variable,
+                        std::string default_value) {
   if (paramSet.find(name) == paramSet.end()) {
     *variable = default_value;
   } else {
@@ -153,6 +164,7 @@ bool RtspSink::Open(ModuleParamSet paramSet) {
     SetParam(paramSet, "view_cols", &params_.view_cols, 4);
     SetParam(paramSet, "view_rows", &params_.view_rows, 4);
   }
+
   return true;
 }
 
@@ -169,37 +181,37 @@ void RtspSink::Close() {
 int RtspSink::Process(CNFrameInfoPtr data) {
   RtspSinkContext ctx = GetRtspSinkContext(data);
   if (!ctx) return -1;
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
   if ("cpu" == params_.preproc_type) {
-    if ("bgr" == params_.color_mode) {
-      cv::Mat image = *data->frame.ImageBGR();
-      ctx->Update(image, data->frame.timestamp, data->channel_idx);
+    if ("bgr" == params_.color_mode || params_.color_format == BGR24) {
+      cv::Mat image = *frame->ImageBGR();
+      ctx->UpdateBGR(image, data->timestamp, data->GetStreamIndex());
     } else if ("nv" == params_.color_mode) {
       uint8_t *image_data = nullptr;
-      image_data = new uint8_t[data->frame.GetBytes()];
-      uint8_t *plane_0 = reinterpret_cast<uint8_t *>(data->frame.data[0]->GetMutableCpuData());
-      uint8_t *plane_1 = reinterpret_cast<uint8_t *>(data->frame.data[1]->GetMutableCpuData());
-      memcpy(image_data, plane_0, data->frame.GetPlaneBytes(0)*sizeof(uint8_t));
-      memcpy(image_data + data->frame.GetPlaneBytes(0), plane_1,
-                          data->frame.GetPlaneBytes(1)*sizeof(uint8_t));
-      data->frame.deAllocator_.reset();
-      ctx->Update(image_data, data->frame.timestamp);
-      delete []image_data;
+      image_data = new uint8_t[frame->GetBytes()];
+      uint8_t *plane_0 = reinterpret_cast<uint8_t *>(frame->data[0]->GetMutableCpuData());
+      uint8_t *plane_1 = reinterpret_cast<uint8_t *>(frame->data[1]->GetMutableCpuData());
+      memcpy(image_data, plane_0, frame->GetPlaneBytes(0) * sizeof(uint8_t));
+      memcpy(image_data + frame->GetPlaneBytes(0), plane_1, frame->GetPlaneBytes(1) * sizeof(uint8_t));
+      frame->deAllocator_.reset();
+      ctx->UpdateYUV(image_data, data->timestamp);
+      delete[] image_data;
       image_data = nullptr;
     } else {
       LOG(ERROR) << "color type must be set nv or bgr !!!";
       return -1;
     }
-  /*
-  } else if ("mlu" == preproc_type_) {
-    ctx->Update(data->frame.data[0]->GetMutableMluData(), 
-                  data->frame.data[1]->GetMutableMluData(), data->frame.timestamp);
-    data->frame.deAllocator_.reset();
-  */
+    /*
+    } else if ("mlu" == preproc_type_) {
+      ctx->UpdateYUVs(data->frame.data[0]->GetMutableMluData(),
+                    data->frame.data[1]->GetMutableMluData(), data->frame.timestamp);
+      data->frame.deAllocator_.reset();
+    */
   }
   return 0;
 }
 
-bool RtspSink::CheckParamSet(const ModuleParamSet& paramSet) const {
+bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
@@ -208,8 +220,9 @@ bool RtspSink::CheckParamSet(const ModuleParamSet& paramSet) const {
   }
 
   std::string err_msg;
-  if (!checker.IsNum({"http_port", "udp_port", "frame_rate", "kbit_rate", "gop_size",
-                      "view_cols", "view_rows", "device_id", "dst_width", "dst_height"}, paramSet, err_msg, true)) {
+  if (!checker.IsNum({"http_port", "udp_port", "frame_rate", "kbit_rate", "gop_size", "view_cols", "view_rows",
+                      "device_id", "dst_width", "dst_height"},
+                     paramSet, err_msg, true)) {
     LOG(ERROR) << "[RtspSink] (ERROR) " << err_msg;
     return false;
   }
@@ -248,10 +261,10 @@ bool RtspSink::CheckParamSet(const ModuleParamSet& paramSet) const {
         LOG(WARNING) << "[RtspSink] (WARNING) view mode is \"mosaic\". Only support plane type \"bgr\"!";
       }
       if (paramSet.find("view_cols") == paramSet.end()) {
-        LOG(WARNING) << "[RtspSink] (WARNING) View *column* number is not given. Default 6.";
+        LOG(WARNING) << "[RtspSink] (WARNING) View *column* number is not given. Default 4.";
       }
       if (paramSet.find("view_rows") == paramSet.end()) {
-        LOG(WARNING) << "[RtspSink] (WARNING) View *row* number is not given. Default 6.";
+        LOG(WARNING) << "[RtspSink] (WARNING) View *row* number is not given. Default 4.";
       }
     }
   }
@@ -280,9 +293,11 @@ RtspSink::RtspSink(const std::string &name) : Module(name) {
   param_register_.Register("view_rows", "Divide the screen vertically, set only for mosaic mode.");
   param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
   param_register_.Register("frame_rate", "Frame rate of the encoded video.");
-  param_register_.Register("kbit_rate", "The amount data encoded for a unit of time."
+  param_register_.Register("kbit_rate",
+                           "The amount data encoded for a unit of time."
                            "A higher bitrate means a higher quality video.");
-  param_register_.Register("gop_size", "Group of pictures is known as GOP."
+  param_register_.Register("gop_size",
+                           "Group of pictures is known as GOP."
                            "gop_size is the number of frames between two I-frames.");
   hasTransmit_.store(0);  // for receive eos
 }

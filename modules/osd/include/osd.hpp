@@ -40,6 +40,13 @@
 #include FT_FREETYPE_H
 #endif
 
+#ifdef HAVE_OPENCV
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#else
+#error OpenCV required
+#endif
+
 #include "cnstream_core.hpp"
 #include "cnstream_module.hpp"
 
@@ -188,9 +195,14 @@ class Osd : public Module, public ModuleCreator<Osd> {
 
  private:
   OsdContext* GetOsdContext(CNFrameInfoPtr data);
-  std::unordered_map<int, OsdContext*> osd_ctxs_;
+  std::unordered_map<std::string, OsdContext*> osd_ctxs_;
+  std::mutex mutex_;
   std::vector<std::string> labels_;
+  std::vector<std::string> secondary_labels_;
+  std::vector<std::string> attr_keys_;
   bool chinese_label_flag_ = false;
+  float text_scale_coef_ = 0.002;
+  float text_thickness_coef_ = 0.008;
 };  // class osd
 
 }  // namespace cnstream

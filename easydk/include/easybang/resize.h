@@ -29,7 +29,7 @@
 
 #include <string>
 #include "cxxutil/exception.h"
-#include "easyinfer/easy_infer.h"
+#include "cnrt.h"
 
 struct ResizeKernelParam;
 
@@ -70,16 +70,22 @@ class MluResize {
   /**
    * @brief Set the mlu task queue
    *
-   * @param queue[in] Shared mlu task queue on which run kernel
+   * @param queue[in] mlu task queue on which run kernel
+   * @param exclusive[in] mlu task queue is exclusive. Therefore it could be destroied.
    */
-  void SetMluQueue(MluTaskQueue_t queue);
+  void SetMluQueue(cnrtQueue_t queue, bool exclusive = false);
+
+  /**
+   * @brief Destroy the mlu task queue
+   */
+  void DestroyMluQueue();
 
   /**
    * @brief Get the mlu task queue
    *
-   * @return MluTaskQueue_t
+   * @return cnrtQueue_t
    */
-  MluTaskQueue_t GetMluQueue() const;
+  cnrtQueue_t GetMluQueue() const;
 
   /**
    * @brief Initialize operator
@@ -95,6 +101,16 @@ class MluResize {
    */
   const Attr& GetAttr();
 
+  /**
+   * @brief Excute operator, use BatchingUp and SyncOneOutput instead
+   * @deprecated
+   *
+   * @param dst[out] Operator output MLU memory
+   * @param src_y[in] Operator input y plane in MLU memory
+   * @param src_uv[in] Operator input uv plane in MLU memory
+   * @return Return 0 if invoke succeeded, otherwise return -1
+   */
+  int InvokeOp(void* dst, void* src_y, void* src_uv);
   /**
    * @brief Deinitialize resources
    */

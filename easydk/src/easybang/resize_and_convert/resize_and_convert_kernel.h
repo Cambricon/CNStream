@@ -26,17 +26,33 @@ extern "C" {
 
 typedef uint16_t half;
 
-void ResizeAndConvertKernelMlu270(half* dst, half* srcY, half* srcUV, half* yuvFilter, half* yuvBias, int s_row,
-                                  int s_col, int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h,
-                                  int channelIn, int channelOut, int layerIn, int layerOut, int input2half,
-                                  int output2uint, int scaleXInt, int scaleYInt, int batchNum, int pad,
-                                  uint32_t* cycleNum);
+void ResizeYuvToRgbaKernel_V2_MLU270(
+     half* dst_gdram,
+     half** srcY_gdram,
+     half** srcUV_gdram,
+     int** srcWH_gdram,
+     int** roiRect_gdram,
+     half* fill_color_gdram,
+     half* yuvFilter_gdram,
+     half* yuvBias_gdram,
+     int d_row_final, int d_col_final,
+     int input2half, int output2uint,
+     int batchNum,
+     int keepAspectRatio);
 
-void ResizeAndConvertKernelMlu220(half* dst, half* srcY, half* srcUV, half* yuvFilter, half* yuvBias, int s_row,
-                                  int s_col, int d_row, int d_col, int roi_x, int roi_y, int roi_w, int roi_h,
-                                  int channelIn, int channelOut, int layerIn, int layerOut, int input2half,
-                                  int output2uint, int scaleXInt, int scaleYInt, int batchNum, int pad,
-                                  uint32_t* cycleNum);
+void ResizeYuvToRgbaKernel_V2_MLU220(
+     half* dst_gdram,
+     half** srcY_gdram,
+     half** srcUV_gdram,
+     int** srcWH_gdram,
+     int** roiRect_gdram,
+     half* fill_color_gdram,
+     half* yuvFilter_gdram,
+     half* yuvBias_gdram,
+     int d_row_final, int d_col_final,
+     int input2half, int output2uint,
+     int batchNum,
+     int keepAspectRatio);
 
 #ifdef __cplusplus
 }

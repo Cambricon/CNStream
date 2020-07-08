@@ -21,19 +21,33 @@
 #include "osd.hpp"
 
 #include <fstream>
-#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "cnosd.h"
 #ifdef HAVE_OPENCV
-#include "opencv2/opencv.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#if (CV_MAJOR_VERSION >= 3)
+#include "opencv2/imgcodecs/imgcodecs.hpp"
+#endif
 #else
 #error OpenCV required
 #endif
+#include "cnstream_frame_va.hpp"
 
-static std::vector<string> LoadLabels(const std::string& label_path) {
+static std::vector<std::string> StringSplit(const std::string &s, char c) {
+  std::stringstream ss(s);
+  std::string piece;
+  std::vector<std::string> result;
+  while (std::getline(ss, piece, c)) {
+    result.push_back(piece);
+  }
+  return result;
+}
+
+static std::vector<std::string> LoadLabels(const std::string& label_path) {
   std::vector<std::string> labels;
   std::ifstream ifs(label_path);
   if (!ifs.is_open()) return labels;
@@ -133,8 +147,7 @@ int CnFont::putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) {
   wchar_t* w_str;
   ToWchar(text, w_str);
 
-  int i;
-  for (i = 0; w_str[i] != '\0'; ++i) {
+  for (int i = 0; w_str[i] != '\0'; ++i) {
     putWChar(img, w_str[i], pos, color);
   }
 
@@ -189,17 +202,24 @@ Osd::Osd(const std::string& name) : Module(name) {
   param_register_.SetModuleDesc("Osd is a module for drawing objects on image. Output image is BGR24 format.");
   param_register_.Register("label_path", "The path of the label file.");
   param_register_.Register("chinese_label_flag", "Whether chinese label will be used.");
+  param_register_.Register("text_scale_coef",
+                           "The coefficient of text scale, which can change the size of text put on image.");
+  param_register_.Register("text_thickness_coef",
+                           "The coefficient of text thickness, which can change the thickness of text put on image.");
+  param_register_.Register("secondary_label_path", "The path of the secondary inference file");
+  param_register_.Register("attr_keys", "The keys of attribute which you want to draw on image");
 }
 
 Osd::~Osd() { Close(); }
 
 OsdContext* Osd::GetOsdContext(CNFrameInfoPtr data) {
-  if (data->channel_idx >= GetMaxStreamNumber()) {
+  if (data->GetStreamIndex() >= GetMaxStreamNumber()) {
     return nullptr;
   }
 
   OsdContext* ctx = nullptr;
-  auto it = osd_ctxs_.find(data->channel_idx);
+  std::unique_lock<std::mutex> guard(mutex_);
+  auto it = osd_ctxs_.find(data->stream_id);
   if (it != osd_ctxs_.end()) {
     ctx = it->second;
   } else {
@@ -209,7 +229,7 @@ OsdContext* Osd::GetOsdContext(CNFrameInfoPtr data) {
       return nullptr;
     }
     ctx->frame_index_ = 0;
-    osd_ctxs_[data->channel_idx] = ctx;
+    osd_ctxs_[data->stream_id] = ctx;
   }
   return ctx;
 }
@@ -225,6 +245,12 @@ bool Osd::Open(cnstream::ModuleParamSet paramSet) {
     if (labels_.empty()) {
       LOG(WARNING) << "Empty label file or wrong file path.";
     } else {
+      if (paramSet.find("text_scale_coef") != paramSet.end()) {
+        text_scale_coef_ = std::stof(paramSet["text_scale_coef"]);
+      }
+      if (paramSet.find("text_thickness_coef") != paramSet.end()) {
+        text_thickness_coef_ = std::stof(paramSet["text_thickness_coef"]);
+      }
 #ifdef HAVE_FREETYPE
       if (paramSet.find("chinese_label_flag") != paramSet.end()) {
         if (paramSet.find("chinese_label_flag")->second == "true") {
@@ -237,6 +263,16 @@ bool Osd::Open(cnstream::ModuleParamSet paramSet) {
         }
       }
 #endif
+    }
+  }
+  if (paramSet.find("secondary_label_path") != paramSet.end()) {
+    label_path = paramSet["secondary_label_path"];
+    label_path = GetPathRelativeToTheJSONFile(label_path, paramSet);
+    secondary_labels_ = ::LoadLabels(label_path);
+    if (paramSet.find("attr_keys") != paramSet.end()) {
+      std::string attr_key = paramSet["attr_keys"];
+      attr_key.erase(std::remove_if(attr_key.begin(), attr_key.end(), ::isspace), attr_key.end());
+      attr_keys_ = StringSplit(attr_key, ',');
     }
   }
   // 1, one channel binded to one thread, it can't be one channel binded to multi threads.
@@ -261,7 +297,6 @@ void Osd::Close() {
   osd_ctxs_.clear();
 }
 
-#define CLIP(x) x < 0 ? 0 : (x > 1 ? 1 : x)
 static thread_local auto font_ =
     static_cast<std::shared_ptr<CnFont>>(new (std::nothrow) CnFont("/usr/include/wqy-zenhei.ttc"));
 
@@ -271,11 +306,14 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
     LOG(ERROR) << "Get Osd Context Failed.";
     return -1;
   }
-  if (data->frame.width < 0 || data->frame.height < 0) {
+
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  if (frame->width < 0 || frame->height < 0) {
     LOG(ERROR) << "OSD module processed illegal frame: width or height may < 0.";
     return -1;
   }
-  if (data->frame.ptr_cpu[0] == nullptr && data->frame.ptr_mlu[0] == nullptr) {
+  if (frame->ptr_cpu[0] == nullptr && frame->ptr_mlu[0] == nullptr && frame->cpu_data == nullptr &&
+      frame->mlu_data == nullptr) {
     LOG(ERROR) << "OSD module processed illegal frame: data ptr point to nullptr.";
     return -1;
   }
@@ -286,28 +324,19 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
       LOG(ERROR) << "Osd::Process() new CnOsd failed";
       return -1;
     }
+    ctx->processer_->SetTextScaleCoef(text_scale_coef_);
+    ctx->processer_->SetTextThicknessCoef(text_thickness_coef_);
+    ctx->processer_->SetSecondaryLabels(secondary_labels_);
   }
-
-  std::vector<DetectObject> objs;
-  for (const auto& it : data->objs) {
-    DetectObject obj;
-    obj.label = it->id.empty() ? -1 : std::stoi(it->id);
-    obj.score = it->score;
-    obj.x = CLIP(it->bbox.x);
-    obj.y = CLIP(it->bbox.y);
-    obj.width = CLIP(it->bbox.w);
-    obj.height = CLIP(it->bbox.h);
-    obj.width = (obj.x + obj.width > 1) ? (1 - obj.x) : obj.width;
-    obj.height = (obj.y + obj.height > 1) ? (1 - obj.y) : obj.height;
-    obj.track_id = it->track_id.empty() ? -1 : std::stoi(it->track_id);
-    objs.push_back(obj);
+  CNObjsVec input_objs;
+  if (data->datas.find(CNObjsVecKey) != data->datas.end()) {
+    input_objs = (cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]));
   }
-
-  if (!chinese_label_flag_) {
-    ctx->processer_->DrawLabel(*data->frame.ImageBGR(), objs);
-  } else {
-    ctx->processer_->DrawLabel(*data->frame.ImageBGR(), objs, font_.get());
+  CnFont* font = nullptr;
+  if (chinese_label_flag_) {
+    font = font_.get();
   }
+  ctx->processer_->DrawLabel(*frame->ImageBGR(), input_objs, font, false, attr_keys_);
   return 0;
 }
 
@@ -329,6 +358,17 @@ bool Osd::CheckParamSet(const ModuleParamSet& paramSet) const {
       LOG(ERROR) << "[Osd] [chinese_label_flag] must be true or false.";
       return false;
     }
+  }
+  if (paramSet.find("secondary_label_path") != paramSet.end()) {
+    if (!checker.CheckPath(paramSet.at("secondary_label_path"), paramSet)) {
+      LOG(ERROR) << "[Osd] [secondary_label_path] : " << paramSet.at("secondary_label_path") << " non-existence.";
+      return false;
+    }
+  }
+  std::string err_msg;
+  if (!checker.IsNum({"text_scale_coef", "text_thickness_coef"}, paramSet, err_msg)) {
+    LOG(ERROR) << "[Osd] " << err_msg;
+    return false;
   }
   return true;
 }

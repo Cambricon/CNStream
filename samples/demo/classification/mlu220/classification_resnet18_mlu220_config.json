@@ -1,0 +1,31 @@
+{
+  "source" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "next_modules" : ["classifier"],
+    "custom_params" : {
+      "source_type" : "ffmpeg",
+      "reuse_cndec_buf" : "true",
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "input_buf_number" : 8, 
+      "output_buf_number" : 8,
+      "device_id" : "0"
+    }
+  },
+
+  "classifier" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 2,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path" : "../../../../data/models/MLU220/classification/resnet18/resnet18_bs4_c4.cambricon",
+      "using_scaler" : "true",
+//      "preproc_name" : "PreprocCpu",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocClassification",
+      "batching_timeout" : 30,
+      "device_id" : "0"
+    }
+  }
+}

@@ -19,6 +19,7 @@
  *************************************************************************/
 
 #include <glog/logging.h>
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -31,8 +32,19 @@ int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);
   ::gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  CHECK_NE(FLAGS_offline_model.size(), 0);
-  CHECK_NE(FLAGS_function_name.size(), 0);
+  if (FLAGS_offline_model.size() == 0) {
+    std::cout << "usage: get_model_io -offline_model  model_name" << std::endl;
+    return 0;
+  } else {
+    std::fstream fs;
+    fs.open(FLAGS_offline_model, std::ios::in);
+    if (!fs) {
+      std::cout << FLAGS_offline_model << " doesn't exist " << std::endl;
+      fs.close();
+      return 0;
+    }
+    fs.close();
+  }
 
   edk::ModelLoader model(FLAGS_offline_model, FLAGS_function_name);
 
@@ -45,9 +57,10 @@ int main(int argc, char *argv[]) {
   for (uint32_t i = 0; i < model.OutputNum(); ++i) {
     std::cout << "model output shape " << i << ": " << model.OutputShapes()[i] << std::endl;
   }
+  std::cout << "model's parallelism: " << model.ModelParallelism() << std::endl;
 
   std::cout << "[INFO] succeed in getting input & output format\n";
+
   ::google::ShutdownGoogleLogging();
   return 0;
 }
-

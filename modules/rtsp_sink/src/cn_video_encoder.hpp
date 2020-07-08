@@ -34,7 +34,7 @@ namespace cnstream {
 
 class CNVideoEncoder : public VideoEncoder {
  public:
-  explicit CNVideoEncoder(const RtspParam& rtsp_param);
+  explicit CNVideoEncoder(const RtspParam &rtsp_param);
   ~CNVideoEncoder();
   friend class CNVideoFrame;
   uint32_t GetBitRate() { return rtsp_param_.kbps * 1000; }
@@ -54,12 +54,12 @@ class CNVideoEncoder : public VideoEncoder {
 
   virtual VideoFrame *NewFrame();
   virtual void EncodeFrame(VideoFrame *frame);
-  virtual void EncodeFrame(void *y, void *uv, int64_t timestamp);
+  // virtual void EncodeFrame(void *y, void *uv, int64_t timestamp);
 
   void Destroy();
   void EosCallback();
   void PacketCallback(const edk::CnPacket &packet);
-  uint32_t GetOffset(const uint8_t* data);
+  uint32_t GetOffset(const uint8_t *data);
 
   RtspParam rtsp_param_;
   uint32_t frame_count_ = 0;

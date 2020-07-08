@@ -36,6 +36,7 @@
 #include "reflex_object.h"
 
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 
 namespace cnstream {
 
@@ -49,20 +50,20 @@ using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 class Preproc : virtual public ReflexObjectEx<Preproc> {
  public:
   /**
-   * @brief do nothong
+   * @brief do nothing
    */
   virtual ~Preproc() {}
   /**
    * @brief create relative preprocess
    *
-   * @param pre_name preprocess class name
+   * @param proc_name preprocess class name
    *
    * @return None
    */
   static Preproc* Create(const std::string& proc_name);
 
   /**
-   * @brief Execute preproc on neural network outputs
+   * @brief Execute preproc on neural network inputs
    *
    * @param net_inputs: neural network inputs
    * @param model: model information(you can get input shape and output shape from model)
@@ -73,6 +74,38 @@ class Preproc : virtual public ReflexObjectEx<Preproc> {
   virtual int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
                       const CNFrameInfoPtr& package) = 0;
 };  // class Preproc
+
+/**
+ * @brief Base class of pre process for object
+ */
+class ObjPreproc : virtual public ReflexObjectEx<ObjPreproc> {
+ public:
+  /**
+   * @brief do nothing
+   */
+  virtual ~ObjPreproc() {}
+  /**
+   * @brief create relative object preprocess
+   *
+   * @param proc_name preprocess class name
+   *
+   * @return None
+   */
+  static ObjPreproc* Create(const std::string& proc_name);
+
+  /**
+   * @brief Execute preproc on neural network inputs
+   *
+   * @param net_inputs: neural network inputs
+   * @param model: model information(you can get input shape and output shape from model)
+   * @param finfo: smart pointer of struct to store origin frame data
+   * @param obj: object infomations
+   *
+   * @return return 0 if succeed
+   */
+  virtual int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
+                      const CNFrameInfoPtr& finfo, const std::shared_ptr<CNInferObject>& pobj) = 0;
+};  // class ObjPreproc
 
 }  // namespace cnstream
 

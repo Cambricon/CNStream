@@ -40,14 +40,19 @@ class ModelLoader;
 namespace cnstream {
 
 class BatchingStage;
+class ObjBatchingStage;
 class MluInputResource;
 class CpuOutputResource;
 class RCOpResource;
 class ScalerResource;
 class Preproc;
+class ObjFilter;
+class ObjPreproc;
 class Postproc;
+class ObjPostproc;
 class InferThreadPool;
 class CNFrameInfo;
+class PerfManager;
 
 struct BatchingParams {
   uint32_t batchsize = 0;
@@ -66,7 +71,12 @@ class InferEngine {
   };  // class ResultWaitingCard
   InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, std::shared_ptr<Preproc> preprocessor,
               std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, float batch_timeout, bool use_scaler,
-              const std::function<void(const std::string& err_msg)>& error_func = NULL);
+              std::shared_ptr<PerfManager> perf_manager, std::string infer_thread_id,
+              const std::function<void(const std::string& err_msg)>& error_func = NULL, bool keep_aspect_ratio = false,
+              bool batching_by_obj = false, const std::shared_ptr<ObjPreproc>& obj_preprocessor = nullptr,
+              const std::shared_ptr<ObjPostproc>& obj_postprocessor = nullptr,
+              const std::shared_ptr<ObjFilter>& obj_filter = nullptr,
+              std::string dump_resized_image_dir = "");
   ~InferEngine();
   ResultWaitingCard FeedData(std::shared_ptr<CNFrameInfo> finfo);
 
@@ -90,11 +100,21 @@ class InferEngine {
   std::shared_ptr<RCOpResource> rcop_res_;
 
   TimeoutHelper timeout_helper_;
-  std::mutex mtx_;
   std::shared_ptr<InferThreadPool> tp_;
   std::function<void(const std::string& err_msg)> error_func_ = NULL;
   int dev_id_ = 0;
   bool use_scaler_ = false;
+  bool batching_by_obj_ = false;
+  /* batch up object, preprocessing */
+  std::shared_ptr<ObjBatchingStage> obj_batching_stage_ = nullptr;
+  std::shared_ptr<ObjPreproc> obj_preprocessor_ = nullptr;
+  std::shared_ptr<ObjPostproc> obj_postprocessor_ = nullptr;
+  std::shared_ptr<ObjFilter> obj_filter_ = nullptr;
+  std::vector<std::shared_ptr<CNInferObject>> batched_objs_;
+  std::shared_ptr<ObjPostprocessingBatchingDoneStage> obj_postproc_stage_ = nullptr;
+  std::shared_ptr<PerfManager> infer_perf_manager_;
+  std::string infer_thread_id_;
+  std::string dump_resized_image_dir_ = "";
 };  // class InferEngine
 
 }  // namespace cnstream

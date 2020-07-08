@@ -1,3 +1,21 @@
+changes for 5.0.0
+* rename cntream-toolkit.so to easydk.so
+* add IModuleObserver support Apps observer each module's output
+* add ThreadSafeUnorderedMap<int, cnstream::any> datas in CNFrameInfo to support any user-defined data struct
+* support sub-pipeline feature
+* change data struct CNInferFeature
+* compatible with Neuware 1.3.0, 1.4.0
+* add classification, detection(yolov3), track, secondary, rtsp demos
+* add cpu decoder support apply stride align for scaler
+
+changes for 4.5.0
+* Inferencer support infer detection objects
+* fix dead-lock in Inferencer
+* add demo for infer detection objects, see samples/demo/run_ssd_and_resnet50_mlu270_config.json
+* add built-in rtsp_sink module
+* support multi devices
+* only works based on Neuware 1.3.0
+
 changes for 4.4.0
 * add Ubuntu 18.04 CentOS dockerfile
 * add performance statistics mechanism

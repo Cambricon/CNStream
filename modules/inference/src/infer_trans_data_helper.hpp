@@ -26,6 +26,7 @@
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <string>
 #include <thread>
 #include <utility>
 #include "infer_engine.hpp"
@@ -37,7 +38,7 @@ class CNFrameInfo;
 
 class InferTransDataHelper {
  public:
-  explicit InferTransDataHelper(Inferencer* infer);
+  explicit InferTransDataHelper(Inferencer* infer, int batchsize);
   ~InferTransDataHelper();
 
   void SubmitData(const std::pair<std::shared_ptr<CNFrameInfo>, InferEngine::ResultWaitingCard>& data);
@@ -50,6 +51,7 @@ class InferTransDataHelper {
   Inferencer* infer_ = nullptr;
   std::thread th_;
   std::atomic<bool> running_;
+  int batchsize_ = 1;
 };  // class InferTransDataHelper
 
 }  // namespace cnstream

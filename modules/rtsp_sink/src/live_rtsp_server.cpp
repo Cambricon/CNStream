@@ -57,7 +57,7 @@ void LiveRtspServer::Run() {
     auth_db = new UserAuthenticationDatabase;
     auth_db->addUserRecord(user_name, password);
   }
-  OutPacketBuffer::increaseMaxSizeTo(1920 * 1080 * 3 / 2);  // 2M
+  OutPacketBuffer::increaseMaxSizeTo(1920 * 1080 * 3 / 2);
   RTSPServer* rtsp_server = RTSPServer::createNew(*env, port_number_, auth_db);
   if (rtsp_server == nullptr) {
     *env << "LIVE555: Failed to create RTSP server:" << env->getResultMsg() << "\n";
@@ -89,9 +89,9 @@ void LiveRtspServer::Run() {
       out_file << url << std::endl;
       out_file.close();
     }
-    LOG(INFO) << "=======================================================================";
-    LOG(INFO) << " Play this stream using the URL \"" << url << "\"\n";
-    LOG(INFO) << "=======================================================================";
+    LOG(INFO) << "================================================================";
+    LOG(INFO) << " Stream URL \"" << url << "\"\n";
+    LOG(INFO) << "================================================================";
     delete[] url;
 
     // signal(SIGNIT,sighandler);

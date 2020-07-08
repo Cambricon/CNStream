@@ -36,6 +36,7 @@
 #include "reflex_object.h"
 
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 
 namespace cnstream {
 /**
@@ -83,6 +84,49 @@ class Postproc : virtual public ReflexObjectEx<Postproc> {
  protected:
   float threshold_ = 0;
 };  // class Postproc
+
+/**
+ * @brief Base class of object post process
+ */
+class ObjPostproc : virtual public ReflexObjectEx<ObjPostproc> {
+ public:
+  /**
+   * @brief do nothing
+   */
+  virtual ~ObjPostproc() {}
+  /**
+   * @brief create relative postprocess
+   *
+   * @param proc_name postprocess class name
+   *
+   * @return None
+   */
+  static ObjPostproc* Create(const std::string& proc_name);
+  /**
+   * @brief set threshold
+   *
+   * @param threshold the value between 0 and 1
+   *
+   * @return void
+   */
+  void SetThreshold(const float threshold);
+
+  /**
+   * @brief Execute postproc on neural network outputs
+   *
+   * @param net_outputs: neural network outputs
+   * @param model: model information(you can get input shape and output shape from model)
+   * @param finfo: smart pointer of struct to store processed result
+   * @param obj: object infomations
+   *
+   * @return return 0 if succeed
+   */
+  virtual int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
+                      const CNFrameInfoPtr& finfo, const std::shared_ptr<CNInferObject>& pobj) = 0;
+
+ protected:
+  float threshold_ = 0;
+};  // class ObjPostproc
 
 }  // namespace cnstream
 

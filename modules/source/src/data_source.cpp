@@ -18,7 +18,6 @@
  * THE SOFTWARE.
  *************************************************************************/
 #include "data_source.hpp"
-
 #include <algorithm>
 #include <atomic>
 #include <functional>
@@ -26,8 +25,6 @@
 #include <memory>
 #include <string>
 
-#include "data_handler_ffmpeg.hpp"
-#include "data_handler_raw.hpp"
 #include "glog/logging.h"
 
 namespace cnstream {
@@ -36,32 +33,26 @@ DataSource::DataSource(const std::string &name) : SourceModule(name) {
   param_register_.SetModuleDesc(
       "DataSource is a module for handling input data (videos or images)."
       " Feed data to codec and send decoded data to the next module if there is one.");
-  param_register_.Register("source_type", "Input source type. It could be ffmpeg or raw.");
-  param_register_.Register("output_type", "Where the outputs will be stored. It could be cpu or mlu.");
+  param_register_.Register("output_type",
+                           "Where the outputs will be stored. It could be cpu or mlu,"
+                           "It is used when decoder_type is cpu.");
   param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
   param_register_.Register("interval",
                            "How many frames will be discarded between two frames"
                            " which will be sent to codec.");
   param_register_.Register("decoder_type", "Which the input data will be decoded by. It could be cpu or mlu.");
-  param_register_.Register("output_width", "After decoding, the width of the output frames.");
-  param_register_.Register("output_height", "After decoding, the height of the output frames.");
   param_register_.Register("reuse_cndec_buf",
                            "This parameter decides whether the codec buffer that stores output data"
                            "will be held and reused by the framework afterwards. It should be true or false.");
-  param_register_.Register("chunk_size",
-                           "How many bytes will be sent to codec once."
-                           " Chunk size is used when source_type is raw.");
-  param_register_.Register("width", "When source_type is raw, we need to set it to  the width of input data.");
-  param_register_.Register("height", "When source_type is raw, we need to set it to the height of input data.");
-  param_register_.Register("interlaced",
-                           "When source_type is raw, we need to set interlaced to fasle or true."
-                           " It should be set according to the input data.");
   param_register_.Register("input_buf_number",
                            "Codec buffer number for storing input data."
                            " Basically, we do not need to set it, as it will be allocated automatically.");
   param_register_.Register("output_buf_number",
                            "Codec buffer number for storing output data."
                            " Basically, we do not need to set it, as it will be allocated automatically.");
+  param_register_.Register("apply_stride_align_for_scaler",
+                           "The output data will align the scaler(hardware on mlu220) requirements."
+                           " Recommended for use with scaler on mlu220 platforms.");
 }
 
 DataSource::~DataSource() {}
@@ -79,23 +70,11 @@ static int GetDeviceId(ModuleParamSet paramSet) {
 }
 
 bool DataSource::Open(ModuleParamSet paramSet) {
-  if (paramSet.find("source_type") != paramSet.end()) {
-    std::string source_type = paramSet["source_type"];
-    if (source_type == "ffmpeg") {
-      param_.source_type_ = SOURCE_FFMPEG;
-    } else if (source_type == "raw") {
-      param_.source_type_ = SOURCE_RAW;
-    } else {
-      LOG(ERROR) << "source_type " << paramSet["source_type"] << " not supported";
-      return false;
-    }
-  }
-
   if (paramSet.find("output_type") != paramSet.end()) {
-    std::string dec_type = paramSet["output_type"];
-    if (dec_type == "cpu") {
+    std::string out_type = paramSet["output_type"];
+    if (out_type == "cpu") {
       param_.output_type_ = OUTPUT_CPU;
-    } else if (dec_type == "mlu") {
+    } else if (out_type == "mlu") {
       param_.output_type_ = OUTPUT_MLU;
     } else {
       LOG(ERROR) << "output_type " << paramSet["output_type"] << " not supported";
@@ -119,6 +98,7 @@ bool DataSource::Open(ModuleParamSet paramSet) {
       LOG(ERROR) << "interval : invalid";
       return false;
     }
+    param_.interval_ = interval;
   }
 
   if (paramSet.find("decoder_type") != paramSet.end()) {
@@ -140,19 +120,6 @@ bool DataSource::Open(ModuleParamSet paramSet) {
     }
   }
 
-  if (paramSet.find("output_width") != paramSet.end()) {
-    std::string str_w = paramSet["output_width"];
-    std::string str_h = paramSet["output_height"];
-    size_t w = std::stoi(str_w);
-    size_t h = std::stoi(str_h);
-    if (w != 0) {
-      param_.output_w = w;
-    }
-    if (h != 0) {
-      param_.output_h = h;
-    }
-  }
-
   if (param_.decoder_type_ == DECODER_MLU) {
     param_.reuse_cndec_buf = false;
     if (paramSet.find("reuse_cndec_buf") != paramSet.end()) {
@@ -161,35 +128,6 @@ bool DataSource::Open(ModuleParamSet paramSet) {
       } else {
         param_.reuse_cndec_buf = false;
       }
-    }
-  }
-
-  if (param_.source_type_ == SOURCE_RAW) {
-    if (paramSet.find("chunk_size") == paramSet.end() || paramSet.find("width") == paramSet.end() ||
-        paramSet.find("height") == paramSet.end() || paramSet.find("interlaced") == paramSet.end()) {
-      return false;
-    }
-    {
-      std::stringstream ss;
-      ss << paramSet["chunk_size"];
-      ss >> param_.chunk_size_;
-    }
-    {
-      std::stringstream ss;
-      ss << paramSet["width"];
-      ss >> param_.width_;
-    }
-    {
-      std::stringstream ss;
-      ss << paramSet["height"];
-      ss >> param_.height_;
-    }
-    {
-      std::stringstream ss;
-      size_t interlaced;
-      ss << paramSet["interlaced"];
-      ss >> interlaced;
-      param_.interlaced_ = (interlaced == 0) ? false : true;
     }
   }
 
@@ -207,36 +145,14 @@ bool DataSource::Open(ModuleParamSet paramSet) {
     ss >> param_.output_buf_number_;
   }
 
+  if (paramSet.find("apply_stride_align_for_scaler") != paramSet.end()) {
+    param_.apply_stride_align_for_scaler_ = paramSet["apply_stride_align_for_scaler"] == "true";
+  }
+
   return true;
 }
 
 void DataSource::Close() { RemoveSources(); }
-
-std::shared_ptr<SourceHandler> DataSource::CreateSource(const std::string &stream_id, const std::string &filename,
-                                                        int framerate, bool loop) {
-  if (stream_id.empty() || filename.empty()) {
-    LOG(ERROR) << "invalid stream_id or filename";
-    return nullptr;
-  }
-  SourceHandler *ptr = nullptr;
-  if (param_.source_type_ == SOURCE_RAW) {
-    DataHandlerRaw *DataHandlerRaw_ptr = new (std::nothrow) DataHandlerRaw(this, stream_id, filename, framerate, loop);
-    LOG_IF(FATAL, nullptr == DataHandlerRaw_ptr) << "DataSource::CreateSource() new DataHandlerRaw failed";
-    ptr = dynamic_cast<SourceHandler *>(DataHandlerRaw_ptr);
-  } else if (param_.source_type_ == SOURCE_FFMPEG) {
-    DataHandlerFFmpeg *DataHandlerFFmpeg_ptr =
-        new (std::nothrow) DataHandlerFFmpeg(this, stream_id, filename, framerate, loop);
-    LOG_IF(FATAL, nullptr == DataHandlerFFmpeg_ptr) << "DataSource::CreateSource() new DataHandlerFFmpeg failed";
-    ptr = dynamic_cast<SourceHandler *>(DataHandlerFFmpeg_ptr);
-  } else {
-    LOG(ERROR) << "source, not supported yet";
-  }
-  if (ptr != nullptr) {
-    std::shared_ptr<SourceHandler> source(ptr);
-    return source;
-  }
-  return nullptr;
-}
 
 bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
   ParametersChecker checker;
@@ -246,22 +162,7 @@ bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
     }
   }
 
-  if (paramSet.find("source_type") != paramSet.end()) {
-    std::string source_type = paramSet.at("source_type");
-    if (source_type != "ffmpeg" && source_type != "raw") {
-      LOG(ERROR) << "[DataSource] [source_type] " << paramSet.at("source_type") << " not supported";
-      return false;
-    }
-    if (source_type == "raw") {
-      if (paramSet.find("chunk_size") == paramSet.end() || paramSet.find("width") == paramSet.end() ||
-          paramSet.find("height") == paramSet.end() || paramSet.find("interlaced") == paramSet.end()) {
-        LOG(ERROR) << "[DataSource] [source_type] raw : "
-                   << "[chunk_size], [width], [height], [interlaced] must be set." << std::endl;
-        return false;
-      }
-    }
-  }
-
+  std::string output_type;
   if (paramSet.find("output_type") != paramSet.end()) {
     if (paramSet.at("output_type") != "cpu" && paramSet.at("output_type") != "mlu") {
       LOG(ERROR) << "[DataSource] [output_type] " << paramSet.at("output_type") << " not supported";
@@ -274,12 +175,11 @@ bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
         return false;
       }
     }
+    output_type = paramSet.at("output_type");
   }
 
   std::string err_msg;
-  if (!checker.IsNum({"interval", "output_width", "output_height", "chunk_size", "width", "height", "input_buf_number",
-                      "output_buf_number"},
-                     paramSet, err_msg, true)) {
+  if (!checker.IsNum({"interval", "input_buf_number", "output_buf_number"}, paramSet, err_msg, true)) {
     LOG(ERROR) << "[DataSource] " << err_msg;
     return false;
   }
@@ -297,7 +197,6 @@ bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
         LOG(ERROR) << "[DataSource] [decoder_type] MLU : device_id must be set";
         return false;
       }
-
       if (paramSet.find("reuse_cndec_buf") != paramSet.end()) {
         std::string reuse = paramSet.at("reuse_cndec_buf");
         if (reuse != "true" && reuse != "false") {

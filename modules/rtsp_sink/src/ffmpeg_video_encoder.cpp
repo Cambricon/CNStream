@@ -23,7 +23,6 @@
 #include <glog/logging.h>
 #include <string.h>
 
-#define INPUT_QUEUE_SIZE 0
 #define OUTPUT_BUFFER_SIZE 0x200000
 
 namespace cnstream {
@@ -82,8 +81,7 @@ void FFmpegVideoEncoder::FFmpegVideoFrame::Fill(uint8_t *data, int64_t timestamp
   }
 }
 
-FFmpegVideoEncoder::FFmpegVideoEncoder(const RtspParam& rtsp_param)
-    : VideoEncoder(INPUT_QUEUE_SIZE, OUTPUT_BUFFER_SIZE) {
+FFmpegVideoEncoder::FFmpegVideoEncoder(const RtspParam &rtsp_param) : VideoEncoder(OUTPUT_BUFFER_SIZE) {
   switch (rtsp_param.color_format) {
     case YUV420:
       picture_format_ = AV_PIX_FMT_YUV420P;
@@ -190,7 +188,7 @@ FFmpegVideoEncoder::FFmpegVideoEncoder(const RtspParam& rtsp_param)
   }
 
 #if LIBAVCODEC_VERSION_MAJOR < 59
-  avpacket_ = reinterpret_cast<AVPacket*>(av_mallocz(sizeof(AVPacket)));
+  avpacket_ = reinterpret_cast<AVPacket *>(av_mallocz(sizeof(AVPacket)));
 #else
   avpacket_ = av_packet_alloc();
 #endif
@@ -230,7 +228,7 @@ void FFmpegVideoEncoder::Destroy() {
 
 VideoEncoder::VideoFrame *FFmpegVideoEncoder::NewFrame() { return new FFmpegVideoFrame(this); }
 
-uint32_t FFmpegVideoEncoder::GetOffset(const uint8_t* data) {
+uint32_t FFmpegVideoEncoder::GetOffset(const uint8_t *data) {
   uint32_t offset = 0;
   const uint8_t *p = data;
   if (p[0] == 0x00 && p[1] == 0x00) {
@@ -241,10 +239,6 @@ uint32_t FFmpegVideoEncoder::GetOffset(const uint8_t* data) {
     }
   }
   return offset;
-}
-
-void FFmpegVideoEncoder::EncodeFrame(void *y, void *uv, int64_t timestamp) {
-  return;
 }
 
 void FFmpegVideoEncoder::EncodeFrame(VideoFrame *frame) {

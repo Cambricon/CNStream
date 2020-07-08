@@ -18,155 +18,142 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include "feature_extractor.h"
-
 #include <glog/logging.h>
-#include <opencv2/core/core.hpp>
-#include <opencv2/features2d/features2d.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
 
-#include <algorithm>
-#include <fstream>
-#include <iosfwd>
-#include <iostream>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
-#include "easyinfer/easy_infer.h"
-#include "easyinfer/mlu_context.h"
-
-#ifdef CNS_MLU100
-bool FeatureExtractor::Init(const std::string &model_path, const std::string &func_name, int dev_id,
-                            uint32_t batch_size) {
-  if (model_path.empty() || func_name.empty()) {
-    LOG(WARNING) << "[FeatureExtractor] Do not need to init if extract feature on CPU";
-    LOG(INFO) << "[FeatureExtractor] Model not set, using opencv to extract feature on CPU";
-    extract_feature_mlu_ = false;
-    return true;
-  }
-  model_ = std::make_shared<edk::ModelLoader>(model_path, func_name);
-  model_->InitLayout();
-  device_id_ = dev_id;
-  batch_size_ = batch_size;
-
-  // 1. init runtime_lib and device
-  edk::MluContext context;
-  context.SetDeviceId(device_id_);
-  context.ConfigureForThisThread();
-
-  // Check model I/O
-  if (model_->InputNum() != 1) {
-    LOG(ERROR) << "[FeatureExtractor] model should have exactly one input";
-    return false;
-  }
-  if (model_->OutputNum() != 2) {
-    LOG(ERROR) << "[FeatureExtractor] model should have exactly two output";
-    return false;
-  }
-  if (model_->InputShapes()[0].c != 3) {
-    LOG(ERROR) << "[FeatureExtractor] track model wrong input shape!";
-  }
-
-  // prepare input and output memory
-  mem_op_.SetLoader(model_);
-  input_cpu_ptr_ = mem_op_.AllocCpuInput(batch_size_);
-  input_mlu_ptr_ = mem_op_.AllocMluInput(batch_size_);
-  output_mlu_ptr_ = mem_op_.AllocMluOutput(batch_size_);
-  output_cpu_ptr_ = mem_op_.AllocCpuOutput(batch_size_);
-
-  // init cninfer
-  infer_.Init(model_, batch_size_, device_id_);
-  LOG(INFO) << "[FeatureExtractor] to extract feature on MLU";
-  extract_feature_mlu_ = true;
-  return true;
-}
+#ifdef HAVE_OPENCV
+#include <opencv2/features2d/features2d.hpp>
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#if (CV_MAJOR_VERSION >= 3)
+#include "opencv2/imgcodecs/imgcodecs.hpp"
+#endif
+#else
+#error OpenCV required
 #endif
 
-FeatureExtractor::~FeatureExtractor() { Destroy(); }
+#include "cnstream_frame_va.hpp"
+#include "feature_extractor.hpp"
 
-void FeatureExtractor::Destroy() {
-  if (extract_feature_mlu_) {
-#ifdef CNS_MLU100
-    LOG(INFO) << "[FeatureExtractor] release resources";
-    if (input_mlu_ptr_) mem_op_.FreeArrayMlu(input_mlu_ptr_, model_->InputNum());
-    if (output_mlu_ptr_) mem_op_.FreeArrayMlu(output_mlu_ptr_, model_->OutputNum());
+namespace cnstream {
+
+FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& model_loader, uint32_t batch_size,
+                                   int device_id)
+    : model_loader_(model_loader) {
+  if (!model_loader_) {
+    LOG(INFO) << "[FeatureExtractor] Model not set, using opencv to extract feature on CPU";
+  } else {
+    model_loader_->InitLayout();
+    device_id_ = device_id;
+    batch_size_ = batch_size;
+
+    // 1.Check model I/O
+    if (model_loader_->InputNum() != 1) {
+      LOG(ERROR) << "[FeatureExtractor] model should have exactly one input";
+      return;
+    }
+
+    // 2.prepare input and output memory
+    mem_op_.SetLoader(model_loader_);
+    input_cpu_ptr_ = mem_op_.AllocCpuInput(batch_size_);
+    input_mlu_ptr_ = mem_op_.AllocMluInput(batch_size_);
+    output_mlu_ptr_ = mem_op_.AllocMluOutput(batch_size_);
+    output_cpu_ptr_ = mem_op_.AllocCpuOutput(batch_size_);
+
+    // 3.init cninfer
+    infer_.Init(model_loader_, batch_size_, device_id_);
+    LOG(INFO) << "[FeatureExtractor] to extract feature on MLU";
+  }
+}
+
+FeatureExtractor::~FeatureExtractor() {
+  LOG(INFO) << "[FeatureExtractor] release resources";
+  if (model_loader_) {
+    if (input_mlu_ptr_) mem_op_.FreeArrayMlu(input_mlu_ptr_, model_loader_->InputNum());
+    if (output_mlu_ptr_) mem_op_.FreeArrayMlu(output_mlu_ptr_, model_loader_->OutputNum());
     if (input_cpu_ptr_) mem_op_.FreeCpuInput(input_cpu_ptr_);
     if (output_cpu_ptr_) mem_op_.FreeCpuOutput(output_cpu_ptr_);
     input_mlu_ptr_ = output_mlu_ptr_ = input_cpu_ptr_ = output_cpu_ptr_ = nullptr;
-#endif
   }
 }
 
-static float CalcFeatureOfRow(cv::Mat img, int n) {
-  float result = 0;
-  for (int i = 0; i < img.cols; i++) {
-    int grey = img.ptr<uchar>(n)[i];
-    result += grey > 127 ? static_cast<float>(grey) / 255 : -static_cast<float>(grey) / 255;
+void FeatureExtractor::ExtractFeature(CNFrameInfoPtr data, ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
+                                      std::vector<std::vector<float>>* features) {
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  if (!model_loader_) {
+    ExtractFeatureOnCpu(*frame->ImageBGR(), inputs, features);
+  } else {
+    ExtractFeatureOnMlu(data, inputs, features);
   }
-  return result;
 }
 
-std::vector<float> FeatureExtractor::ExtractFeature(const edk::TrackFrame &frame, const edk::DetectObject &obj) {
-  if (frame.format != edk::TrackFrame::ColorSpace::RGB24) {
-    LOG(ERROR) << "[FeatureExtractor] input image has non-support pixel format";
-    return {};
-  }
+void FeatureExtractor::ExtractFeatureOnMlu(CNFrameInfoPtr data,
+                                           ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
+                                           std::vector<std::vector<float>>* features) {
+  uint64_t data_count = model_loader_->InputShapes()[0].hwc();
+  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  for (uint32_t i = 0; i < inputs.size(); ++i) {
+    auto obj = inputs[i];
+    cv::Mat obj_image = CropImage(*(frame->ImageBGR()), obj->bbox);
+    // do pre-process
 
-  cv::Mat image(frame.height, frame.width, CV_8UC3, frame.data);
-  cv::Mat obj_img(image, cv::Rect(obj.bbox.x * frame.width, obj.bbox.y * frame.height, obj.bbox.width * frame.width,
-                                  obj.bbox.height * frame.height));
-  std::vector<float> result;
+    cv::Mat preproc_image = Preprocess(obj_image);
+    float* cpu_input = static_cast<float*>(input_cpu_ptr_[0]);
+    memcpy(cpu_input, preproc_image.data, data_count * sizeof(float));
 
-  if (extract_feature_mlu_) {
-#ifdef CNS_MLU100
-    std::lock_guard<std::mutex> lk(mlu_proc_mutex_);
-    Preprocess(obj_img);
-
+    // do copy and inference
     mem_op_.MemcpyInputH2D(input_mlu_ptr_, input_cpu_ptr_, batch_size_);
-
     infer_.Run(input_mlu_ptr_, output_mlu_ptr_);
-
     mem_op_.MemcpyOutputD2H(output_cpu_ptr_, output_mlu_ptr_, batch_size_);
 
-    const float *begin = reinterpret_cast<float *>(output_cpu_ptr_[1]);
-    const float *end = begin + model_->OutputShapes()[1].DataCount();
-    result.swap(std::vector<float>(begin, end));
-#endif
-  } else {
-#if (CV_MAJOR_VERSION == 2)
-    cv::Ptr<cv::ORB> processer = new (std::nothrow) cv::ORB(128);
-    if (!processer) {
-      LOG(ERROR) << "[FeatureExtractor] new cv::ORB(128) failed";
-      return {};
-    }
-#elif (CV_MAJOR_VERSION >= 3)  // NOLINT
+    // do post-process
+    const float* begin = reinterpret_cast<float*>(output_cpu_ptr_[0]);
+    const float* end = begin + model_loader_->OutputShapes()[0].hwc();
+    features->push_back(std::vector<float>(begin, end));
+  }
+}
+
+void FeatureExtractor::ExtractFeatureOnCpu(const cv::Mat& image,
+                                           ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
+                                           std::vector<std::vector<float>>* features) {
+  for (uint32_t num = 0; num < inputs.size(); ++num) {
+    auto obj = inputs[num];
+    cv::Rect rect = cv::Rect(obj->bbox.x * image.cols, obj->bbox.y * image.rows, obj->bbox.w * image.cols,
+                             obj->bbox.h * image.rows);
+    cv::Mat obj_img(image, rect);
+#if (CV_MAJOR_VERSION == 2)  // NOLINT
+    cv::Ptr<cv::ORB> processer = new cv::ORB(128);
+#elif (CV_MAJOR_VERSION >= 3)  //  NOLINT
     cv::Ptr<cv::ORB> processer = cv::ORB::create(128);
-    if (!processer) {
-      LOG(ERROR) << "[FeatureExtractor] new cv::ORB(128) failed";
-      return {};
-    }
 #endif
     std::vector<cv::KeyPoint> keypoints;
     processer->detect(obj_img, keypoints);
     cv::Mat desc;
     processer->compute(obj_img, keypoints, desc);
-
-    std::vector<float> features(128);
+    std::vector<float> feature;
     for (int i = 0; i < 128; i++) {
-      features[i] = i < desc.rows ? CalcFeatureOfRow(desc, i) : 0;
+      feature.push_back((i < desc.rows ? CalcFeatureOfRow(desc, i) : 0));
     }
-    result.swap(features);
+    features->push_back(feature);
   }
-  return result;
 }
 
-#ifdef CNS_MLU100
-void FeatureExtractor::Preprocess(const cv::Mat &image) {
+cv::Mat FeatureExtractor::CropImage(const cv::Mat& image, const CNInferBoundingBox& bbox) {
+  int x = CLIP(bbox.x) * image.cols;
+  int y = CLIP(bbox.y) * image.rows;
+  int w = CLIP(bbox.w) * image.cols;
+  int h = CLIP(bbox.h) * image.rows;
+
+  cv::Rect rect(x, y, w, h);
+  return image(rect);
+}
+
+cv::Mat FeatureExtractor::Preprocess(const cv::Mat& image) {
   // resize image
-  edk::Shape in_shape = model_->InputShapes()[0];
+  edk::Shape in_shape = model_loader_->InputShapes()[0];
   cv::Mat image_resized;
   if (image.rows != static_cast<int>(in_shape.h || image.cols != static_cast<int>(in_shape.w))) {
     cv::resize(image, image_resized, cv::Size(in_shape.w, in_shape.h));
@@ -174,11 +161,20 @@ void FeatureExtractor::Preprocess(const cv::Mat &image) {
     image_resized = image;
   }
 
-  // convert data type to float 32
-  cv::Mat image_float;
-  image_resized.convertTo(image_float, CV_32FC3);
-
-  cv::Mat image_normalized(in_shape.h, in_shape.w, CV_32FC3, reinterpret_cast<float *>(input_cpu_ptr_[0]));
-  cv::divide(image_float, 255.0, image_normalized);
+  // convert data type to float 32 and normalize
+  cv::Mat image_normalized;
+  image_resized.convertTo(image_normalized, CV_32FC3, 1 / 255.0);
+  cv::cvtColor(image_normalized, image_normalized, CV_BGR2BGRA);
+  return image_normalized;
 }
-#endif
+
+float FeatureExtractor::CalcFeatureOfRow(const cv::Mat& image, int n) {
+  float result = 0;
+  for (int i = 0; i < image.cols; i++) {
+    int grey = image.ptr<uchar>(n)[i];
+    result += grey > 127 ? static_cast<float>(grey) / 255 : -static_cast<float>(grey) / 255;
+  }
+  return result;
+}
+
+}  // namespace cnstream

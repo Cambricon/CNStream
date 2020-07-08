@@ -30,11 +30,17 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+
 #ifdef HAVE_OPENCV
-#include <opencv2/opencv.hpp>
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#if (CV_MAJOR_VERSION >= 3)
+#include "opencv2/imgcodecs/imgcodecs.hpp"
+#endif
 #else
 #error OpenCV required
 #endif
+
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
 
@@ -118,8 +124,8 @@ class Encoder : public Module, public ModuleCreator<Encoder> {
   std::mutex encoder_mutex_;
   EncoderContext* GetEncoderContext(CNFrameInfoPtr data);
   std::string output_dir_;
-  bool dump_as_image_ = false;
-  std::unordered_map<int, EncoderContext*> encode_ctxs_;
+  bool dump_as_image_;
+  std::unordered_map<std::string, EncoderContext*> encode_ctxs_;
 };  // class Encoder
 
 }  // namespace cnstream
