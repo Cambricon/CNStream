@@ -1,0 +1,15 @@
+{
+  "source" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "custom_params" : {
+      "source_type" : "ffmpeg",
+      "reuse_cndec_buf" : "true",
+      "input_buf_number" : "3",
+      "output_buf_number":"3",
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "device_id" : "0"
+    }
+  }
+}
