@@ -40,7 +40,7 @@ namespace cnstream {
 void InferEngine::ResultWaitingCard::WaitForCall() { promise_->get_future().share().get(); }
 
 InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, std::shared_ptr<Preproc> preprocessor,
-                         std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, float batching_timeout,
+                         std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, uint32_t batching_timeout,
                          bool use_scaler, std::shared_ptr<PerfManager> perf_manager, std::string infer_thread_id,
                          const std::function<void(const std::string& err_msg)>& error_func, bool keep_aspect_ratio,
                          bool batching_by_obj, const std::shared_ptr<ObjPreproc>& obj_preprocessor,

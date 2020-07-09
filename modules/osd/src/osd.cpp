@@ -208,6 +208,7 @@ Osd::Osd(const std::string& name) : Module(name) {
                            "The coefficient of text thickness, which can change the thickness of text put on image.");
   param_register_.Register("secondary_label_path", "The path of the secondary inference file");
   param_register_.Register("attr_keys", "The keys of attribute which you want to draw on image");
+  param_register_.Register("logo", "draw 'logo' on each frame");
 }
 
 Osd::~Osd() { Close(); }
@@ -275,6 +276,9 @@ bool Osd::Open(cnstream::ModuleParamSet paramSet) {
       attr_keys_ = StringSplit(attr_key, ',');
     }
   }
+  if (paramSet.find("logo") != paramSet.end()) {
+    logo_ = paramSet["logo"];
+  }
   // 1, one channel binded to one thread, it can't be one channel binded to multi threads.
   // 2, the hash value, each channel_idx (key) mapped to, is unique. So, each bucket stores one value.
   // 3, set the buckets number of the unordered map to the maximum channel number before the threads are started,
@@ -335,6 +339,9 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
   CnFont* font = nullptr;
   if (chinese_label_flag_) {
     font = font_.get();
+  }
+  if (!logo_.empty()) {
+    ctx->processer_->DrawLogo(frame->ImageBGR(), logo_);
   }
   ctx->processer_->DrawLabel(*frame->ImageBGR(), input_objs, font, false, attr_keys_);
   return 0;

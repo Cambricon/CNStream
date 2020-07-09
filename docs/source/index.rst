@@ -12,12 +12,12 @@
    :caption: 目录
 
    ./copyright/Copyright
+   ./quickstart/quickstart
    ./overview/Overview
    ./framework/Framework
    ./modules/Module
-   ./programming_mode/ProgrammingModel
-   ./configure/Configure
    ./customize_module/how_to_implement_module
+   ./programming_mode/ProgrammingModel
    ./application/how_to_build_apps
    ./tool/Inspect_tool
    ./measure_performance/measure_performance

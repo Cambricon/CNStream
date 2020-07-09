@@ -217,6 +217,7 @@ CNEncoderStream::~CNEncoderStream() {
     }
   }
 
+  if (p_file == nullptr) fclose(p_file);
   if (encoder_) {
     delete encoder_;
     encoder_ = nullptr;
@@ -454,7 +455,9 @@ void CNEncoderStream::PacketCallback(const edk::CnPacket &packet) {
     LOG(ERROR) << "ERROR: written size: " << (uint)written << "!="
                << "data length: " << length;
   }
+  if (packet.codec_type == edk::CodecType::JPEG) fclose(p_file);
 #endif
+  encoder_->ReleaseBuffer(packet.buf_id);
 }
 
 void CNEncoderStream::EosCallback() {

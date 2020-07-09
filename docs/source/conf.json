@@ -54,11 +54,11 @@
         "headtype": "{camblue!100}",
         "headfontcolor": "\\textbf{\\textcolor{white}{}}",
         "styles": [{
-            "align": "centering",
-            "caption": "cnmon info回显信息说明",
+            "align": "left",
+            "caption": "CNStream示例和源码介绍",
             "captionalign": "left",
             "isLongTable": true,
-            "isVertical": true,
+            "isVertical": false,
             "isCusHead": true
         },
                 {

@@ -100,6 +100,14 @@ CnOsd::CnOsd(size_t rows, size_t cols, const std::vector<std::string>& labels) :
   colors_ = ::GenerateColors(labels_.size());
 }
 
+void CnOsd::DrawLogo(cv::Mat *image, std::string logo) const {
+  cv::Point logo_pos(5, image->rows - 5);
+  uint32_t scale = 1;
+  uint32_t thickness = 2;
+  cv::Scalar color(200, 200, 200);
+  cv::putText(*image, logo, logo_pos, font_, scale, color, thickness);
+}
+
 #define CLIP(x) x < 0 ? 0 : (x > 1 ? 1 : x)
 void CnOsd::DrawLabel(cv::Mat image, cnstream::CNObjsVec& objects, cnstream::CnFont* cn_font,
                       bool tiled, std::vector<std::string> attr_keys) const {
