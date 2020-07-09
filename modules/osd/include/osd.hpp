@@ -201,6 +201,7 @@ class Osd : public Module, public ModuleCreator<Osd> {
   std::vector<std::string> secondary_labels_;
   std::vector<std::string> attr_keys_;
   bool chinese_label_flag_ = false;
+  std::string logo_ = "";
   float text_scale_coef_ = 0.002;
   float text_thickness_coef_ = 0.008;
 };  // class osd

@@ -182,17 +182,15 @@ PerfStats PerfCalculator::CalcLatency(const std::string &sql_name, const std::st
   // Calculate latency
   stats = method_->CalcLatency(integer_item_vec);
 
-  // Update latency
-  if (stats.latency_max > stats_latency.latency_max) {
-    stats_latency.latency_max = stats.latency_max;
-  }
-  if (stats_latency.latency_min == 0) {
-    stats_latency.latency_min = stats.latency_min;
-  } else if (stats.latency_min < stats_latency.latency_min) {
-    stats_latency.latency_min = stats.latency_min;
-  }
-
   if (stats.frame_cnt > 0) {
+    // Update latency
+    if (stats.latency_max > stats_latency.latency_max) {
+      stats_latency.latency_max = stats.latency_max;
+    }
+    if (stats_latency.latency_min == 0 || stats.latency_min < stats_latency.latency_min) {
+      stats_latency.latency_min = stats.latency_min;
+    }
+
     size_t old_total_time = stats_latency.latency_avg * stats_latency.frame_cnt;
     size_t additional_total_time = stats.latency_avg * stats.frame_cnt;
     stats_latency.frame_cnt += stats.frame_cnt;
@@ -354,8 +352,12 @@ PerfStats PerfCalculatorForPipeline::CalcThroughput(const std::string &sql_name,
       first = true;
     }
 
-    std::vector<size_t> max_values =
-        perf_utils_->FindMaxValues(perf_type, end_key, end_key + " > " + std::to_string(pre_time));
+    std::vector<size_t> max_values;
+    if (first) {
+      max_values = perf_utils_->FindMaxValues(perf_type, end_key, end_key + " >= " + std::to_string(pre_time));
+    } else {
+      max_values = perf_utils_->FindMaxValues(perf_type, end_key, end_key + " > " + std::to_string(pre_time));
+    }
 
     end_time = ~(0);
     for (auto it : max_values) {
@@ -566,8 +568,7 @@ PerfStats PerfCalculationMethod::CalcLatency(const std::vector<DbIntegerItem> &i
   }
   if (frame_cnt != 0) {
     stats.latency_avg = latency_total / frame_cnt;
-  }
-  if (stats.latency_min == ~((size_t)0)) {
+  } else {
     stats.latency_min = 0;
   }
   return stats;

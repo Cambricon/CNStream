@@ -40,6 +40,7 @@ namespace cnstream {
 CNSTREAM_REGISTER_EXCEPTION(Inferencer);
 
 class InferencerPrivate;
+class InferParamManager;
 
 /**
  * @brief Constructs a pointer to CNFrameInfo.
@@ -124,16 +125,18 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
    * @retval -1: The process is failed.
    */
   int Process(CNFrameInfoPtr data) final;
-  /**
-   * @brief Checks parameters for a module.
-   *
-   * @param paramSet Parameters of this module.
-   *
-   * @return Returns true if this function has run successfully. Otherwise, returns false.
-   */
-  bool CheckParamSet(const ModuleParamSet& paramSet) const override;
 
- protected:
+  /**
+   * @brief Check ParamSet for inferencer..
+   *
+   * @param param_set Parameters for this module.
+   *
+   * @return Returns true if this API run successfully. Otherwise, returns false.
+   */
+  bool CheckParamSet(const ModuleParamSet &param_set) const override;
+
+ private:
+  InferParamManager *param_manager_ = nullptr;
   DECLARE_PRIVATE(d_ptr_, Inferencer);
 };  // class Inferencer
 

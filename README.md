@@ -150,7 +150,7 @@ After finished prerequisites, you can build instructions with the following step
 
 ### **Demo Overview** ###
 
-![demo](demo.gif)
+![demo](./data/images/demo.gif)
 
 This demo shows how to detect objects using CNStream. It includes the following plug-in modules: 
 

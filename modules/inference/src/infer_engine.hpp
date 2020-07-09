@@ -54,11 +54,6 @@ class InferThreadPool;
 class CNFrameInfo;
 class PerfManager;
 
-struct BatchingParams {
-  uint32_t batchsize = 0;
-  float batch_timeout = 0.f;
-};  // struct BatchingParams
-
 class InferEngine {
  public:
   class ResultWaitingCard {
@@ -70,7 +65,7 @@ class InferEngine {
     std::shared_ptr<std::promise<void>> promise_;
   };  // class ResultWaitingCard
   InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, std::shared_ptr<Preproc> preprocessor,
-              std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, float batch_timeout, bool use_scaler,
+              std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, uint32_t batching_timeout, bool use_scaler,
               std::shared_ptr<PerfManager> perf_manager, std::string infer_thread_id,
               const std::function<void(const std::string& err_msg)>& error_func = NULL, bool keep_aspect_ratio = false,
               bool batching_by_obj = false, const std::shared_ptr<ObjPreproc>& obj_preprocessor = nullptr,
@@ -87,7 +82,7 @@ class InferEngine {
   std::shared_ptr<Preproc> preprocessor_;
   std::shared_ptr<Postproc> postprocessor_;
   const uint32_t batchsize_ = 0;
-  const float batching_timeout_ = 0.f;
+  const uint32_t batching_timeout_ = 0;
   BatchingDoneInput batched_finfos_;
   /* batch up data , preprocessing */
   std::shared_ptr<BatchingStage> batching_stage_ = nullptr;

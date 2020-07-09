@@ -34,16 +34,6 @@
 
 
 class CnOsd {
- private:
-  size_t rows_ = 1;
-  size_t cols_ = 1;
-  float text_scale_coef_ = 0.002;
-  float text_thickness_coef_ = 0.008;
-  std::vector<std::string> labels_;
-  std::vector<std::string> secondary_labels_;
-  std::vector<cv::Scalar> colors_;
-  int font_ = cv::FONT_HERSHEY_SIMPLEX;
-
  public:
   CnOsd() = delete;
   CnOsd(size_t rows, size_t cols, const std::vector<std::string>& labels);
@@ -59,6 +49,17 @@ class CnOsd {
   inline void SetSecondaryLabels(std::vector<std::string>labels) { secondary_labels_ = labels; }
   void DrawLabel(cv::Mat image, cnstream::CNObjsVec& objects, cnstream::CnFont* cn_font = nullptr, // NOLINT
                  bool tiled = false, std::vector<std::string> attr_keys = {}) const;
-};
+  void DrawLogo(cv::Mat *image, std::string logo) const;
+
+ private:
+  size_t rows_ = 1;
+  size_t cols_ = 1;
+  float text_scale_coef_ = 0.002;
+  float text_thickness_coef_ = 0.008;
+  std::vector<std::string> labels_;
+  std::vector<std::string> secondary_labels_;
+  std::vector<cv::Scalar> colors_;
+  int font_ = cv::FONT_HERSHEY_SIMPLEX;
+};  // class CnOsd
 
 #endif  // _CNOSD_H_

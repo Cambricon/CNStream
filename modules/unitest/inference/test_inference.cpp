@@ -21,6 +21,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -126,15 +127,11 @@ TEST(Inferencer, Construct) {
 TEST(Inferencer, CheckParamSet) {
   std::shared_ptr<Module> infer = std::make_shared<Inferencer>(name);
   ModuleParamSet param;
-  EXPECT_FALSE(infer->CheckParamSet(param));
 
-  param["fake_key"] = "fake_value";
+  // the type of batching_timeout is uint32_t
+  param["batching_timeout"] = std::to_string(std::numeric_limits<uint64_t>::max());
   EXPECT_FALSE(infer->CheckParamSet(param));
-
-  param["model_path"] = "fake_path";
-  param["func_name"] = g_func_name;
-  param["postproc_name"] = "fake_name";
-  EXPECT_FALSE(infer->CheckParamSet(param));
+  param.clear();
 
   param["model_path"] = GetExePath() + g_model_path;
   param["func_name"] = g_func_name;
