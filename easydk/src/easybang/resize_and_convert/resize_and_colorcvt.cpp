@@ -32,7 +32,7 @@ using std::string;
 extern
 bool PrepareKernelParam(int d_row, int d_col, int color_mode, int data_type,
                         int batchsize, bool keep_aspect_ratio, KernelParam** param,
-                        int dev_type,
+                        int dev_type, int padMethod,
                         string* estr);
 
 extern
@@ -167,7 +167,7 @@ bool MluResizeConvertOp::Init(const MluResizeConvertOp::Attr& attr) {
                               static_cast<int>(d_ptr_->attr_.data_mode),
                               d_ptr_->attr_.batch_size,
                               d_ptr_->attr_.keep_aspect_ratio, &d_ptr_->kparam_,
-                              static_cast<int>(d_ptr_->attr_.core_version), &d_ptr_->estr_);
+                              static_cast<int>(d_ptr_->attr_.core_version), d_ptr_->attr_.padMethod, &d_ptr_->estr_);
 }
 
 bool MluResizeConvertPrivate::PrepareTaskQueue() {

@@ -38,7 +38,8 @@ void ResizeYuvToRgbaKernel_V2_MLU270(
      int d_row_final, int d_col_final,
      int input2half, int output2uint,
      int batchNum,
-     int keepAspectRatio);
+     int keepAspectRatio,
+     int padMethod);
 
 void ResizeYuvToRgbaKernel_V2_MLU220(
      half* dst_gdram,
@@ -52,7 +53,8 @@ void ResizeYuvToRgbaKernel_V2_MLU220(
      int d_row_final, int d_col_final,
      int input2half, int output2uint,
      int batchNum,
-     int keepAspectRatio);
+     int keepAspectRatio,
+     int padMethod);
 
 #ifdef __cplusplus
 }

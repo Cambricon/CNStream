@@ -42,6 +42,7 @@ struct KernelParam {
   int keep_aspect_ratio = 0;
   cnrtKernelInitParam_t init_param = nullptr;
   void *kernel_func = nullptr;
+  int padMethod = 0;
 };
 
 void FreeKernelParam(KernelParam* param) {
@@ -123,7 +124,7 @@ static uint16_t float2half(const float f) {
   } while (0)
 
 bool PrepareKernelParam(int d_row, int d_col, int color_mode, int data_type,
-  int batchsize, bool keep_aspect_ratio, KernelParam** param, int dev_type, string* estr) {
+  int batchsize, bool keep_aspect_ratio, KernelParam** param, int dev_type, int padMethod, string* estr) {
   const int CI = 64;
   const int CO = 256;
   const int LT_NUM = 64;
@@ -410,6 +411,7 @@ bool PrepareKernelParam(int d_row, int d_col, int color_mode, int data_type,
   (*param)->output2uint = output2uint;
   (*param)->batchNum = batchsize;
   (*param)->keep_aspect_ratio = keep_aspect_ratio ? 1 : 0;
+  (*param)->padMethod = padMethod;
   return true;
 }
 
@@ -435,6 +437,7 @@ float ResizeAndConvert(void* dst, void** y_plane_addrs, void** uv_plane_addrs,
   cnrtKernelParamsBufferAddParam(params, &kparam->output2uint, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &kparam->batchNum, sizeof(int));
   cnrtKernelParamsBufferAddParam(params, &kparam->keep_aspect_ratio, sizeof(int));
+  cnrtKernelParamsBufferAddParam(params, &kparam->padMethod, sizeof(int));
 
   int ecode;
 
