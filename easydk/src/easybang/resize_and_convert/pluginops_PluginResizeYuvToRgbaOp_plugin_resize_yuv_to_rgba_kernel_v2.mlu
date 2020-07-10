@@ -22,10 +22,9 @@
  *************************************************************************/
 #include <mlu.h>
 #include <algorithm>
-#include "plugin_resize_yuv_to_rgba_macro.h"
-using namespace std;
 
-// #define __BANG_ARCH__ 270
+#include "plugin_resize_yuv_to_rgba_macro.h"
+
 #define MAX_SRCNUM 8192
 #define BUFFER_SIZE 250 * 1024
 #define SCALE 1.0
@@ -84,7 +83,7 @@ __mlu_func__ void loadFilters(half* yuvSyn, half* yuvBias, half* cpySyn,
  */
 __mlu_func__ void genMaskAndWeights(half* weightX, half* maskX0, half* maskX1,
                                     int maskNum, int scaleX, int PosX, int dstDealNum,
-                                    int mult, int colLimit) {
+                                    int mult, int colLimit, int roi_x) {
   int posX = PosX;
   half fx = 0.0;    // fractional part
   int sx = 0;       // integer part
@@ -102,7 +101,7 @@ __mlu_func__ void genMaskAndWeights(half* weightX, half* maskX0, half* maskX1,
     fx = (half)((posX & 0xFFFF) >> 1) / 32768 * (int)(posX > 0);
     sx = (posX >> 16) * (int)(posX > 0);
     fx = fx * (int)(sx < colLimit);
-    sx = min(sx, colLimit);
+    sx = std::min(sx, colLimit);
     wx0 = (((half)1.f - fx) * SCALE);
     wx1 = (half)SCALE - wx0;
     posX += scaleX;
@@ -116,19 +115,22 @@ __mlu_func__ void genMaskAndWeights(half* weightX, half* maskX0, half* maskX1,
     sxPrev = sx;
     int offsetW0 = j * 4;
     int offsetW1 = (j + dstDealNum) * 4;
-    int trueIdx0 = (sx * mult + (j - jPrev)) * 4;
-    int trueIdx1 = ((sx + 1) * mult + (j - jPrev)) * 4;
+    int trueIdx0 = 0;
+    int trueIdx1 = 0;
+    if (roi_x % 2 == 0) {
+      trueIdx0 = (sx * mult + (j - jPrev)) * 4;
+      trueIdx1 = ((sx + 1) * mult + (j - jPrev)) * 4;
+    } else {
+      trueIdx0 = (sx * mult + (j - jPrev)) * 4 + 4 * mult;
+      trueIdx1 = ((sx + 1) * mult + (j - jPrev)) * 4 + 4 * mult;
+    }
     for (int k = 0; k < 4; k++) {
       weightX[offsetW0++] = wx0;
       weightX[offsetW1++] = wx1;
-      // if (trueIdx0 < maskNum)
-      //   maskX0[trueIdx0++] = 1;
-      // if (trueIdx1 < maskNum)
-      //   maskX1[trueIdx1++] = 1;
-      maskX0[trueIdx0] = ((trueIdx0 < maskNum) * 1) + ((trueIdx0 >= maskNum) * maskX0[trueIdx0]);
-      trueIdx0++;
-      maskX1[trueIdx1] = ((trueIdx1 < maskNum) * 1) + ((trueIdx1 >= maskNum) * maskX1[trueIdx1]);
-      trueIdx1++;
+      if (trueIdx0 < maskNum)
+        maskX0[trueIdx0++] = 1;
+      if (trueIdx1 < maskNum)
+        maskX1[trueIdx1++] = 1;
     }
   }
 }
@@ -140,13 +142,13 @@ __mlu_func__ int find_limit(int roi_w, int d_col, int mult, int channel) {
     int size = (lower_bound + upper_bound) / 2;
     int size_pad = PAD_UP(size * channel, PAD_SIZE) / channel;
 
-    int src_size = min(roi_w + PAD_SIZE,
+    int src_size = std::min(roi_w + PAD_SIZE,
                        roi_w * (size_pad - 1) / d_col + 2 + PAD_SIZE / channel);
     int src_size_pad = PAD_UP(src_size * channel, PAD_SIZE) / channel;
 
     int malloc_size = (2 * mult * src_size_pad + 2 * size_pad +
-                       max(4 * size_pad, 2 * src_size_pad) +
-                       max(4 * size_pad, 2 * mult * src_size_pad)) *
+                       std::max(4 * size_pad, 2 * src_size_pad) +
+                       std::max(4 * size_pad, 2 * mult * src_size_pad)) *
                           channel * 2 +
                       2 * MAX_SRCNUM;
     if (malloc_size <= 2 * BUFFER_SIZE)  // half
@@ -208,31 +210,14 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
     int d_row_final, int d_col_final,
     int input2half, int output2uint,
     int batchNum,
-    int keepAspectRatio) {
+    int keepAspectRatio,
+    int padMethod) {
 #if (__BANG_ARCH__ >= 200) && (__RECORD_TIME__ >= 1)
   struct timeval tstart;
   struct timeval tend;
   gettimeofday(&tstart, NULL);
 #endif
   /**---------------------- Initialization ----------------------**/
-
-  if (coreId == 0x80) return;
-
-  // fill color
-  if (keepAspectRatio != 0) {
-    ((unsigned char*)dst_gdram)[0] = ((unsigned char*)fill_color_gdram)[0];
-    ((unsigned char*)dst_gdram)[1] = ((unsigned char*)fill_color_gdram)[1];
-    ((unsigned char*)dst_gdram)[2] = ((unsigned char*)fill_color_gdram)[2];
-    ((unsigned char*)dst_gdram)[3] = 0;
-    float padColor = ((float*)dst_gdram)[0];
-    int dst_count = batchNum * d_row_final * d_col_final;
-    int set_count = PAD_DN(dst_count, 64);
-    __gdramset(((float*)dst_gdram), set_count, padColor);
-    int tail = dst_count - set_count;
-    for (int i = 0; i < tail; i++) {
-      ((float*)dst_gdram)[set_count + i] = padColor;
-    }
-  }
 
   __wram__ half yuvSyn[2 * CI * CO];
 #if __BANG_ARCH__ == 220
@@ -262,6 +247,7 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
     int roi_y = roiRect_gdram[batch][1];
     int roi_w = roiRect_gdram[batch][2];
     int roi_h = roiRect_gdram[batch][3];
+    int roi_x_ = roi_x / 2 * 2;
 
     int d_row = 0;
     int d_col = 0;
@@ -275,33 +261,251 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
 
     // only YUV2RGB0?
     int only_yuv2rgba = 0;
-    if (roi_w == d_col_final && roi_h == d_row_final)
-      only_yuv2rgba = 1;
+    only_yuv2rgba = (roi_w == d_col_final && roi_h == d_row_final);
 
-    if (keepAspectRatio && only_yuv2rgba == 0) {
-      src_aspect_ratio = (float)roi_w / roi_h;
-      dst_aspect_ratio = (float)d_col_final / d_row_final;
+    src_aspect_ratio = (float)roi_w / roi_h;
+    dst_aspect_ratio = (float)d_col_final / d_row_final;
+    if (keepAspectRatio && only_yuv2rgba == 0 && (src_aspect_ratio != dst_aspect_ratio)) {
       if (src_aspect_ratio >= dst_aspect_ratio) {
         // pad top && bottom
         d_col = d_col_final;
-        // d_row = d_col_final / src_aspect_ratio;
         d_row = __float2int_rd(d_col_final / src_aspect_ratio);
         pad_mode = 0;
-        pad_half1 = (d_row_final - d_row) / 2;
-        pad_half2 = d_row_final - d_row - pad_half1;
-      } else {
+        if (padMethod == 0) {
+          pad_half1 = (d_row_final - d_row) / 2;
+          pad_half2 = d_row_final - d_row - pad_half1;
+        } else if (padMethod == 1) {
+          pad_half1 = 0;
+          pad_half2 = d_row_final - d_row;
+        }
+
+        if (taskDim == 1 && coreId != 0x80) {
+          unsigned char* item_line = (unsigned char*)buffer;
+          unsigned char* fill_line = item_line + 4;
+
+          ((unsigned char*)item_line)[0] = ((unsigned char*)fill_color_gdram)[0];
+          ((unsigned char*)item_line)[1] = ((unsigned char*)fill_color_gdram)[1];
+          ((unsigned char*)item_line)[2] = ((unsigned char*)fill_color_gdram)[2];
+          ((unsigned char*)item_line)[3] = 0;
+
+          __memcpy(fill_line,
+                   item_line,
+                   4,
+                   NRAM2NRAM,
+                   4,
+                   0,
+                   d_col - 1);
+          // fill top
+          if (pad_half1 != 0) {
+            __memcpy((unsigned char*)dst_gdram + batch * d_row_final * d_col_final * 4,
+                     fill_line,
+                     d_col * 4,
+                     NRAM2GDRAM,
+                     d_col * 4,
+                     0,
+                     pad_half1 - 1);
+          }
+          // fill bottom
+          if (pad_half2 != 0) {
+            __memcpy((unsigned char*)dst_gdram + batch * d_row_final * d_col_final * 4 +
+                     (d_row + pad_half1) * d_col * 4,
+                     fill_line,
+                     d_col * 4,
+                     NRAM2GDRAM,
+                     d_col * 4,
+                     0,
+                     pad_half2 - 1);
+          }
+        }
+        if (taskDim != 1 && coreId == 0x80) {
+          __mlu_shared__ unsigned char fill_sram[40000];
+          unsigned char* item_line = fill_sram;
+          unsigned char* fill_line = item_line + 4;
+
+          item_line[0] = ((unsigned char*)fill_color_gdram)[0];
+          item_line[1] = ((unsigned char*)fill_color_gdram)[1];
+          item_line[2] = ((unsigned char*)fill_color_gdram)[2];
+          item_line[3] = 0;
+
+          __memcpy(fill_line,
+                   item_line,
+                   4,
+                   SRAM2SRAM,
+                   4,
+                   0,
+                   d_col - 1,
+                   clusterId);
+
+          if (batchNum % taskDim == 0) {
+            int fillStartBatch = clusterId * (batchNum / clusterDim);
+            int fillEndBatch = fillStartBatch + (batchNum / clusterDim);
+            for (int fill_batch = fillStartBatch; fill_batch < fillEndBatch; fill_batch++) {
+              // fill top
+              if (pad_half1 != 0) {
+                __memcpy((unsigned char*)dst_gdram + fill_batch * d_row_final * d_col_final * 4,
+                         fill_line,
+                         d_col * 4,
+                         SRAM2GDRAM,
+                         d_col * 4,
+                         0,
+                         pad_half1 - 1);
+              }
+              // fill bottom
+              if (pad_half2 != 0) {
+                __memcpy((unsigned char*)dst_gdram + fill_batch * d_row_final * d_col_final * 4 +
+                         (d_row + pad_half1) * d_col * 4,
+                         fill_line,
+                         d_col * 4,
+                         SRAM2GDRAM,
+                         d_col * 4,
+                         0,
+                         pad_half2 - 1);
+              }
+            }
+          } else {
+            // fill top
+            if (pad_half1 != 0) {
+              __memcpy((unsigned char*)dst_gdram + batch * d_row_final * d_col_final * 4,
+                       fill_line,
+                       d_col * 4,
+                       SRAM2GDRAM,
+                       d_col * 4,
+                       0,
+                       pad_half1 - 1);
+            }
+            // fill bottom
+            if (pad_half2 != 0) {
+              __memcpy((unsigned char*)dst_gdram + batch * d_row_final * d_col_final * 4 +
+                       (d_row + pad_half1) * d_col * 4,
+                       fill_line,
+                       d_col * 4,
+                       SRAM2GDRAM,
+                       d_col * 4,
+                       0,
+                       pad_half2 - 1);
+            }
+          }
+        }
+      } else { // src_aspect_ratio >= dst_aspect_ratio
         // pad left && right
         d_row = d_row_final;
-        // d_col = d_row * src_aspect_ratio;
         d_col = __float2int_rd(d_row * src_aspect_ratio);
         pad_mode = 1;
-        pad_half1 = (d_col_final - d_col) / 2;
-        pad_half2 = d_col_final - d_col - pad_half1;
-      }
-    } else {
+        if (padMethod == 0) {
+          pad_half1 = (d_col_final - d_col) / 2;
+          pad_half2 = d_col_final - d_col - pad_half1;
+        } else if (padMethod == 1) {
+          pad_half1 = 0;
+          pad_half2 = d_col_final - d_col;
+        }
+
+        if (taskDim == 1 && coreId != 0x80) {
+          unsigned char* left_line = (unsigned char*)buffer;
+          unsigned char* right_line = (unsigned char*)buffer + pad_half1 * 4;
+
+          for (int i = 0; i < pad_half1; i++) {
+            left_line[i * 4 + 0] = ((unsigned char*)fill_color_gdram)[0];
+            left_line[i * 4 + 1] = ((unsigned char*)fill_color_gdram)[1];
+            left_line[i * 4 + 2] = ((unsigned char*)fill_color_gdram)[2];
+            left_line[i * 4 + 3] = 0;
+          }
+          for (int i = 0; i < pad_half2; i++) {
+            right_line[i * 4 + 0] = ((unsigned char*)fill_color_gdram)[0];
+            right_line[i * 4 + 1] = ((unsigned char*)fill_color_gdram)[1];
+            right_line[i * 4 + 2] = ((unsigned char*)fill_color_gdram)[2];
+            right_line[i * 4 + 3] = 0;
+          }
+          // fill left
+          if (pad_half1 != 0) {
+            __memcpy((unsigned char*)dst_gdram + batch * d_row_final * d_col_final * 4,
+                     left_line,
+                     pad_half1 * 4,
+                     NRAM2GDRAM,
+                     d_col_final * 4,
+                     0,
+                     d_row - 1);
+          }
+          // fill right
+          if (pad_half2 != 0) {
+            __memcpy((unsigned char*)dst_gdram + batch * d_row_final * d_col_final * 4 + (d_col + pad_half1) * 4,
+                     right_line,
+                     pad_half2 * 4,
+                     NRAM2GDRAM,
+                     d_col_final * 4,
+                     0,
+                     d_row - 1);
+          }
+        }
+        if (taskDim != 1 && coreId == 0x80) {
+          __mlu_shared__ unsigned char buffer_sram[20000];
+          unsigned char* left_line = (unsigned char*)buffer_sram;
+          unsigned char* right_line = (unsigned char*)buffer_sram + pad_half1 * 4;
+
+          for (int i = 0; i < pad_half1; i++) {
+            left_line[i * 4 + 0] = ((unsigned char*)fill_color_gdram)[0];
+            left_line[i * 4 + 1] = ((unsigned char*)fill_color_gdram)[1];
+            left_line[i * 4 + 2] = ((unsigned char*)fill_color_gdram)[2];
+            left_line[i * 4 + 3] = 0;
+          }
+          for (int i = 0; i < pad_half2; i++) {
+            right_line[i * 4 + 0] = ((unsigned char*)fill_color_gdram)[0];
+            right_line[i * 4 + 1] = ((unsigned char*)fill_color_gdram)[1];
+            right_line[i * 4 + 2] = ((unsigned char*)fill_color_gdram)[2];
+            right_line[i * 4 + 3] = 0;
+          }
+          if (batchNum % taskDim == 0) {
+            int fillStartBatch = clusterId * (batchNum / clusterDim);
+            int fillEndBatch = fillStartBatch + (batchNum / clusterDim);
+            for (int fill_batch = fillStartBatch; fill_batch < fillEndBatch; fill_batch++) {
+              // fill left
+              if (pad_half1 != 0) {
+                __memcpy((unsigned char*)dst_gdram + fill_batch * d_row_final * d_col_final * 4,
+                         left_line,
+                         pad_half1 * 4,
+                         SRAM2GDRAM,
+                         d_col_final * 4,
+                         0,
+                         d_row - 1);
+              }
+              // fill right
+              if (pad_half2 != 0) {
+                __memcpy((unsigned char*)dst_gdram + fill_batch * d_row_final * d_col_final * 4 + (d_col + pad_half1) * 4,
+                         right_line,
+                         pad_half2 * 4,
+                         SRAM2GDRAM,
+                         d_col_final * 4,
+                         0,
+                         d_row - 1);
+              }
+            }
+          } else {
+            // fill left
+            if (pad_half1 != 0) {
+              __memcpy((unsigned char*)dst_gdram + batch * d_row_final * d_col_final * 4,
+                       left_line,
+                       pad_half1 * 4,
+                       SRAM2GDRAM,
+                       d_col_final * 4,
+                       0,
+                       d_row - 1);
+            }
+            // fill right
+            if (pad_half2 != 0) {
+              __memcpy((unsigned char*)dst_gdram + batch * d_row_final * d_col_final * 4 + (d_col + pad_half1) * 4,
+                       right_line,
+                       pad_half2 * 4,
+                       SRAM2GDRAM,
+                       d_col_final * 4,
+                       0,
+                       d_row - 1);
+            }
+          }
+        }
+      } // src_aspect_ratio < dst_aspect_ratio
+    } else { // keepAspectRatio
       d_row = d_row_final;
       d_col = d_col_final;
-    }
+    } // keepAspectRatio
     scaleX = (roi_w << 16) / d_col;
     scaleY = (roi_h << 16) / d_row;
 
@@ -334,8 +538,12 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
      *             + 2(pre&post) + aligned_bytes / c - 1
      */
 
-    // int srcDealNum = roi_w + 1;
-    int srcDealNum = roi_w;
+    int srcDealNum = 0;
+    if (roi_x % 2 == 0) {
+      srcDealNum = roi_w;
+    } else {
+      srcDealNum = (roi_w % 2 == 0 ? roi_w + 2 : roi_w + 1);
+    }
     int srcDealNumPad = PAD_UP(srcDealNum, PAD_SIZE);
 
     // Multi-core related params
@@ -376,12 +584,13 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
     half* maskX0 = maskUV + MAX_SRCNUM;
     half* maskX1 = maskX0 + maskNum;
     half* src = maskX1 + maskNum + 64;
-    half* sLine0 = src + max(4 * dstNum, maskNum * 2);
-    half* sLine1 = sLine0 + max(2 * dstNum, srcNum);
-    half* dstBuffer = sLine1 + max(2 * dstNum, srcNum) + 64;
+    half* sLine0 = src + std::max(4 * dstNum, maskNum * 2);
+    half* sLine1 = sLine0 + std::max(2 * dstNum, srcNum);
+    half* dstBuffer = sLine1 + std::max(std::max(2 * dstNum, srcNum) + 64,
+                                        dstNum + maskNum);
 
     int rowCopyNum = (BUFFER_SIZE - (int)(dstBuffer - temp)) / dstNum;
-    rowCopyNum = min(rowCopyNum, d_row_seg) / 2 * 2;
+    rowCopyNum = std::min(rowCopyNum, d_row_seg) / 2 * 2;
     int dstCount = 0;
     // rowCopyNum = 1;
 
@@ -416,7 +625,12 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
         dst_gdram + (batch * dstRGBASizePerBatch + batch_start_offset +
         d_row_seg * d_col_final * 4 * taskId * (d_row_seg < d_row)) / (output2uint + 1);
     int rowLimit = roi_h - 1;
-    int colLimit = roi_w - 1;
+    int colLimit = 0;
+    if (roi_x % 2 == 0) {
+      colLimit = roi_w - 1;
+    } else {
+      colLimit = (roi_w % 2 == 0 ? roi_w + 1 : roi_w);
+    }
 
 #ifdef ZERO_COORDINATE
     int posX = 0;
@@ -446,7 +660,7 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
       __bang_write_zero(maskX0, srcNum * mult);
       __bang_write_zero(maskX1, srcNum * mult);
       genMaskAndWeights(weightX, maskX0, maskX1,
-                        maskNum, scaleX, posX, dstDealNum, mult, colLimit);
+                        maskNum, scaleX, posX, dstDealNum, mult, colLimit, roi_x);
       __nramset_short((int16_t*)maskUV, MAX_SRCNUM, 0xFFFF);
 
       /*############################################*/
@@ -468,15 +682,18 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
       half wy0 = 0.0;
       half wy1 = 0.0;
       for (int j = 0; j < d_row_core; ++j) {
-        sy = (posY >> 16) * (int)(posY > 0);
-        sy = min(sy, rowLimit - 1) + roi_y;
-        if (only_yuv2rgba) sy = taskId * d_row_seg + j;
+        if (only_yuv2rgba) {
+          sy = (batchNum % taskDim != 0) * taskId * d_row_seg + j;
+        } else {
+          sy = (posY >> 16) * (int)(posY > 0);
+          sy = std::min(sy, rowLimit - 1) + roi_y;
+        }
 
         // compute offsets for each row
-        int offsetY1 = (sy * s_col) + roi_x;
-        int offsetY2 = (sy + 1) * s_col + roi_x;
-        int offsetUV1 = (sy / 2) * s_col + roi_x;
-        int offsetUV2 = ((sy + 1) / 2) * s_col + roi_x;
+        int offsetY1 = (sy * s_col) + roi_x_;
+        int offsetY2 = (sy + 1) * s_col + roi_x_;
+        int offsetUV1 = (sy / 2) * s_col + roi_x_;
+        int offsetUV2 = ((sy + 1) / 2) * s_col + roi_x_;
 
         if (input2half) {
           /*#################################*/
@@ -490,11 +707,13 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
 
           // Load two lines of Y and two line of UV
           __memcpy(Y, (char*)srcYAddrsBat + offsetY1, loadSize, GDRAM2NRAM);
-          __memcpy((char*)Y + dealNum, (char*)srcYAddrsBat + offsetY2, loadSize,
-                   GDRAM2NRAM);
           __memcpy(UV, (char*)srcUVAddrsBat + offsetUV1, loadSize, GDRAM2NRAM);
-          __memcpy((char*)UV + dealNum, (char*)srcUVAddrsBat + offsetUV2,
-                   loadSize, GDRAM2NRAM);
+          if (!only_yuv2rgba) {
+            __memcpy((char*)Y + dealNum, (char*)srcYAddrsBat + offsetY2, loadSize,
+                     GDRAM2NRAM);
+            __memcpy((char*)UV + dealNum, (char*)srcUVAddrsBat + offsetUV2,
+                     loadSize, GDRAM2NRAM);
+          }
           __bang_uchar2half(src, (unsigned char*)Y, dealNum * 4);
 
           /*######################*/
@@ -613,8 +832,8 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
           __bang_collect(sLine1, src + maskNum, maskX0, maskNum);
           __bang_collect(sLine1 + dstNum, src + maskNum, maskX1, maskNum);
 
-          int NextPosY = min(((posY >> 16) + 1) << 16, finalPosY);
-          int srcReuseNum = max(1, (NextPosY - posY) / scaleY);
+          int NextPosY = std::min(((posY >> 16) + 1) << 16, finalPosY);
+          int srcReuseNum = std::max(1, (NextPosY - posY) / scaleY);
           for (int srcReuse = 0; srcReuse < srcReuseNum; srcReuse++) {
             int trueRowIdx = d_row_seg * taskId * (d_row_seg < d_row) + j;
             // move calculation from [Module 2] to here to optimize

@@ -103,6 +103,9 @@ class MluResizeConvertOp {
     /// the number of ipu cores used per execution.
     /// When this value is 0, the number of cores used per execution is equal to batch_size
     int core_number = 0;
+    /// A flag indicates the pad method, 0:padding is on both sides, 1: padding is on the right or
+    /// bottom side.
+    int padMethod = 0;
   };
 
   /**
