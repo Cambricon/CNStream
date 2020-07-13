@@ -54,18 +54,16 @@ option(SANITIZE_UNDEFINED "Enable UndefinedBehaviorSanitizer for sanitized targe
 
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
-CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
 if(COMPILER_SUPPORTS_CXX11)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wl,--as-needed -D_REENTRANT")
-elseif(COMPILER_SUPPORTS_CXX0X)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x -Wl,--as-needed -D_REENTRANT")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -D_REENTRANT")
 else()
   message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
 endif()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_REENTRANT")
-#set runtime path
-SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--as-needed")
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")  #set runtime path
+
 #######################################################################
 if(MLU STREQUAL MLU270)
   message("generate MLU270/MLU220 M.2 Makefile")
