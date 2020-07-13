@@ -12,7 +12,7 @@ set(SRC cnstream_inspect.cpp)
 get_filename_component(name "${SRC}" NAME_WE)
 message("target :  ${name}")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,--no-as-needed")
+set(CMAKE_EXE_LINKER_FLAGS "-Wl,--as-needed")
 
 add_executable(${name} ${SRC})
 

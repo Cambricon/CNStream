@@ -43,7 +43,7 @@
 
 namespace cnstream {
 
-class PerfStats;
+struct PerfStats;
 
 struct InferContext {
   std::shared_ptr<InferEngine> engine;

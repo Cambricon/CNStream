@@ -30,7 +30,7 @@
 namespace edk {
 class ModelLoader;
 class EasyInfer;
-class MluTaskQueue;
+struct MluTaskQueue;
 }  // namespace edk
 
 namespace cnstream {
@@ -43,8 +43,8 @@ class MluInputResource;
 class MluOutputResource;
 class RCOpResource;
 class InferTask;
-class CNFrameInfo;
-class CNInferObject;
+struct CNFrameInfo;
+struct CNInferObject;
 class FrameInfoResource;
 class PerfManager;
 

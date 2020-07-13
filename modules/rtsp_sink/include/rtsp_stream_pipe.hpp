@@ -26,8 +26,8 @@
 
 namespace cnstream {
 
-class RtspParam;
-class StreamPipeCtx;
+struct RtspParam;
+struct StreamPipeCtx;
 typedef void* RtspStreamHandle;
 
 #ifdef __cplusplus

@@ -41,7 +41,6 @@ namespace cnstream {
 // since from version 3.1(libavformat/version:57.40.100)
 #define FFMPEG_VERSION_3_1 AV_VERSION_INT(57, 40, 100)
 
-static std::mutex decoder_mutex;
 static CNDataFormat PixelFmt2CnDataFormat(cncodecPixelFormat pformat) {
   switch (pformat) {
     case CNCODEC_PIX_FMT_NV12:

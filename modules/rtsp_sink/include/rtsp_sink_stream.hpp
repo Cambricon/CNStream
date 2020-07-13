@@ -42,8 +42,8 @@
 
 namespace cnstream {
 
-class RtspParam;
-class StreamPipeCtx;
+struct RtspParam;
+struct StreamPipeCtx;
 
 class RtspSinkJoinStream {
  public:
@@ -67,11 +67,8 @@ class RtspSinkJoinStream {
   cv::Mat canvas_;
   uint8_t *canvas_data_;
 
-  void *y_ptr_;
-  void *uv_ptr_;
   std::thread *refresh_thread_ = nullptr;
   bool running_ = false;
-  bool start_refresh_ = false;
   bool is_mosaic_style_ = false;
   int mosaic_win_width_;
   int mosaic_win_height_;

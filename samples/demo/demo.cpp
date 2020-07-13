@@ -20,6 +20,11 @@
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <future>
 #include <iostream>
 #include <list>
@@ -27,6 +32,14 @@
 #include <mutex>
 #include <string>
 #include <vector>
+
+#ifdef HAVE_OPENCV
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#if (CV_MAJOR_VERSION >= 3)
+#include "opencv2/imgcodecs/imgcodecs.hpp"
+#endif
+#endif
 
 #include "cnstream_core.hpp"
 #include "data_handler_file.hpp"
@@ -50,8 +63,11 @@ DEFINE_bool(perf, true, "measure performance");
 DEFINE_bool(perf, false, "measure performance");
 #endif
 DEFINE_string(perf_db_dir, "", "directory of performance database");
+DEFINE_bool(jpeg_from_mem, false, "Jpeg bitstream from mem.");
+DEFINE_bool(raw_img_input, false, "feed raw image to source");
 
 cnstream::Displayer* gdisplayer = nullptr;
+static std::mutex g_vcap_mtx;
 
 class MsgObserver : cnstream::StreamMsgObserver {
  public:
@@ -175,8 +191,7 @@ int main(int argc, char** argv) {
       auto handler = cnstream::ESMemHandler::Create(source, std::to_string(i));
       source->AddSource(handler);
       // use a separate thread to read data from memory and feed pipeline
-      vec_threads_mem.push_back(
-        std::thread([=]() {
+      vec_threads_mem.push_back(std::thread([=]() {
         FILE* fp = fopen(filename.c_str(), "rb");
         if (fp) {
           auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
@@ -198,10 +213,132 @@ int main(int argc, char** argv) {
           fclose(fp);
         }
       }));
-    } else {
-      auto handler =
-          cnstream::FileHandler::Create(source, std::to_string(i), filename, FLAGS_src_frame_rate, FLAGS_loop);
+    } else if (filename.find(".jpg") != std::string::npos && FLAGS_jpeg_from_mem) {
+      // Jpeg decoder maximum resolution 8K
+      int max_width = 7680;  // FIXME
+      int max_height = 4320;  // FIXME
+      // es-jpeg-mem handler
+      auto handler = cnstream::ESJpegMemHandler::Create(source, std::to_string(i), max_width, max_height);
       source->AddSource(handler);
+      // use a separate thread to read data from memory and feed pipeline
+      vec_threads_mem.push_back(
+        std::thread([=]() {
+        int index = filename.find_last_of("/");
+        std::string dir_path = filename.substr(0, index);
+        DIR *pDir = nullptr;
+        struct dirent *pEntry;
+        pDir = opendir(dir_path.c_str());
+
+        if (pDir != nullptr) {
+          auto memHandler = std::dynamic_pointer_cast<cnstream::ESJpegMemHandler>(handler);
+          int jpeg_buffer_size_ = 4 * 1024 * 1024;  // FIXME
+          unsigned char *buf = new(std::nothrow) unsigned char[jpeg_buffer_size_];
+          if (!buf) {
+            LOG(FATAL) << "malloc buf failed, size: " << jpeg_buffer_size_;
+          }
+          cnstream::ESPacket pkt;
+          uint64_t pts_ = 0;
+
+          while (thread_running_) {
+            pEntry = readdir(pDir);
+            if (pEntry) {
+              if (strcmp(pEntry->d_name, ".") == 0 || strcmp(pEntry->d_name, "..") == 0) {
+                continue;
+              }
+              std::string file_name = dir_path + "/" + std::string(pEntry->d_name);
+              struct stat file_stat;
+              stat(file_name.c_str(), &file_stat);
+              if (file_stat.st_size > jpeg_buffer_size_) {
+                delete [] buf;
+                buf = new(std::nothrow) unsigned char[file_stat.st_size];
+                if (!buf) {
+                  LOG(FATAL) << "malloc buf failed, size: " << file_stat.st_size;
+                }
+                jpeg_buffer_size_ = file_stat.st_size;
+              }
+              FILE *fp = fopen(file_name.c_str(), "rb");
+              if (fp) {
+                int size = fread(buf, 1, jpeg_buffer_size_, fp);
+                pkt.data = buf;
+                pkt.size = size;
+                pkt.pts = pts_++;
+                memHandler->Write(&pkt);
+                fclose(fp);
+              }
+            } else {
+              if (FLAGS_loop) {
+                rewinddir(pDir);
+              } else {
+                break;
+              }
+            }
+          }
+          pkt.data = nullptr;
+          pkt.size = 0;
+          pkt.flags = cnstream::ESPacket::FLAG_EOS;
+          memHandler->Write(&pkt);
+          closedir(pDir);
+          delete [] buf, buf = nullptr;
+        } else {
+          LOG(ERROR) << "opendir" << dir_path << "failed!";
+        }
+      }));
+    } else {
+      if (FLAGS_raw_img_input) {
+        LOG(INFO) << "feed source with raw image mem.";
+#ifdef HAVE_OPENCV
+        // raw image mem(from cv::Mat or image description) handler
+        auto handler = cnstream::RawImgMemHandler::Create(source, std::to_string(i));
+        source->AddSource(handler);
+        // use a separate thread to read image data from video and feed pipeline
+        vec_threads_mem.push_back(std::thread([=]() {
+          cv::VideoCapture vcapture;
+          g_vcap_mtx.lock();
+          vcapture.open(filename);
+          g_vcap_mtx.unlock();
+
+          if (!vcapture.isOpened()) {
+            LOG(ERROR) << "open file: " << filename << " failed with RawImgMemHandler source type.";
+            return;
+          }
+          cv::Mat bgr_frame;
+          auto memHandler = std::dynamic_pointer_cast<cnstream::RawImgMemHandler>(handler);
+          while (thread_running_) {
+            vcapture >> bgr_frame;
+#if 1
+            // feed bgr24 image mat, with api-Write(cv::Mat)
+            if (bgr_frame.empty()) {
+              memHandler->Write(nullptr);
+              vcapture.release();
+              break;
+            }
+
+            memHandler->Write(&bgr_frame);
+#else
+            // feed rgb24 image data, with api-Write(unsigned char* data, int size, int w, int h,
+            // cnstream::CNDataFormat)
+            if (bgr_frame.empty()) {
+              memHandler->Write(nullptr, 0);
+              vcapture.release();
+              break;
+            }
+
+            cv::Mat rgb_frame(bgr_frame.rows, bgr_frame.cols, CV_8UC3);
+            cv::cvtColor(bgr_frame, rgb_frame, cv::COLOR_BGR2RGB);
+            memHandler->Write(rgb_frame.data, rgb_frame.cols * rgb_frame.rows * 3, rgb_frame.cols, rgb_frame.rows,
+                              cnstream::CN_PIXEL_FORMAT_RGB24);
+#endif
+          }
+#else
+        LOG(ERROR) << "OPENCV is not linked, can not support cv::mat or raw image data with bgr24/rgb24 "
+                      "format." return EXIT_FAILURE;
+#endif
+        }));
+      } else {
+        auto handler =
+            cnstream::FileHandler::Create(source, std::to_string(i), filename, FLAGS_src_frame_rate, FLAGS_loop);
+        source->AddSource(handler);
+      }
     }
   }
 
@@ -252,6 +389,7 @@ int main(int argc, char** argv) {
         pipeline.Stop();
       } else {
         msg_observer.WaitForStop();
+        thread_running_ = false;
       }
     }
   }

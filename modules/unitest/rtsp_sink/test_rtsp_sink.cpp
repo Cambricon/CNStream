@@ -34,7 +34,6 @@
 
 namespace cnstream {
 static constexpr const char *gname = "rtsp";
-static constexpr int g_dev_id = 0;
 static constexpr int g_channel_id = 0;
 
 extern void TestAllCase(std::shared_ptr<Module> ptr, ModuleParamSet params, int line);

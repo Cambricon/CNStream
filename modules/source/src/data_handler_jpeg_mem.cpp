@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2020] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,16 +18,6 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-#ifdef __cplusplus
-}
-#endif
-
 #include <condition_variable>
 #include <mutex>
 #include <queue>
@@ -37,30 +27,33 @@ extern "C" {
 #include <utility>
 #include <memory>
 
-#include "data_handler_mem.hpp"
+#include "data_handler_jpeg_mem.hpp"
 #include "perf_manager.hpp"
 
 namespace cnstream {
 
-std::shared_ptr<SourceHandler> ESMemHandler::Create(DataSource *module, const std::string &stream_id) {
+std::shared_ptr<SourceHandler>
+  ESJpegMemHandler::Create(DataSource *module, const std::string &stream_id, int max_width, int max_height) {
   if (!module || stream_id.empty()) {
     return nullptr;
   }
-  std::shared_ptr<ESMemHandler> handler(new (std::nothrow) ESMemHandler(module, stream_id));
+  std::shared_ptr<ESJpegMemHandler>
+    handler(new (std::nothrow) ESJpegMemHandler(module, stream_id, max_width, max_height));
   return handler;
 }
 
-ESMemHandler::ESMemHandler(DataSource *module, const std::string &stream_id) : SourceHandler(module, stream_id) {
-  impl_ = new (std::nothrow) ESMemHandlerImpl(module, *this);
+ESJpegMemHandler::ESJpegMemHandler(DataSource *module, const std::string &stream_id, int max_width, int max_height)
+  : SourceHandler(module, stream_id) {
+  impl_ = new (std::nothrow) ESJpegMemHandlerImpl(module, *this, max_width, max_height);
 }
 
-ESMemHandler::~ESMemHandler() {
+ESJpegMemHandler::~ESJpegMemHandler() {
   if (impl_) {
     delete impl_, impl_ = nullptr;
   }
 }
 
-bool ESMemHandler::Open() {
+bool ESJpegMemHandler::Open() {
   if (!this->module_) {
     LOG(ERROR) << "module_ null";
     return false;
@@ -78,43 +71,29 @@ bool ESMemHandler::Open() {
   return impl_->Open();
 }
 
-void ESMemHandler::Close() {
+void ESJpegMemHandler::Close() {
   if (impl_) {
     impl_->Close();
   }
 }
 
-int ESMemHandler::SetDataType(ESMemHandler::DataType type) {
-  if (impl_) {
-    return impl_->SetDataType(type);
-  }
-  return -1;
-}
-
-int ESMemHandler::Write(ESPacket *pkt) {
+int ESJpegMemHandler::Write(ESPacket *pkt) {
   if (impl_) {
     return impl_->Write(pkt);
   }
   return -1;
 }
 
-int ESMemHandler::Write(unsigned char *data, int len) {
-  if (impl_) {
-    return impl_->Write(data, len);
-  }
-  return -1;
-}
-
-bool ESMemHandlerImpl::Open() {
+bool ESJpegMemHandlerImpl::Open() {
   // updated with paramSet
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
-#if 0
+
   if (param_.decoder_type_ != DECODER_MLU) {
     LOG(ERROR) << "decoder_type not supported:" << param_.decoder_type_;
     return false;
   }
-#endif
+
   this->interval_ = param_.interval_;
   perf_manager_ = source->GetPerfManager(stream_id_);
   size_t MaxSize = 60;  // FIXME
@@ -125,11 +104,11 @@ bool ESMemHandlerImpl::Open() {
 
   // start demuxer
   running_.store(1);
-  thread_ = std::thread(&ESMemHandlerImpl::DecodeLoop, this);
+  thread_ = std::thread(&ESJpegMemHandlerImpl::DecodeLoop, this);
   return true;
 }
 
-void ESMemHandlerImpl::Close() {
+void ESJpegMemHandlerImpl::Close() {
   if (running_.load()) {
     running_.store(0);
     if (thread_.joinable()) {
@@ -140,15 +119,10 @@ void ESMemHandlerImpl::Close() {
     delete queue_;
     queue_ = nullptr;
   }
-  parser_.Free();
+  // parser_.Free();
 }
 
-int ESMemHandlerImpl::Write(ESPacket *pkt) {
-  if (pkt && pkt->data && pkt->size) {
-    if (parser_.Parse(pkt->data, pkt->size) < 0) {
-      return -1;
-    }
-  }
+int ESJpegMemHandlerImpl::Write(ESPacket *pkt) {
   if (queue_) {
     queue_->Push(std::make_shared<EsPacket>(pkt));
   } else {
@@ -157,39 +131,7 @@ int ESMemHandlerImpl::Write(ESPacket *pkt) {
   return 0;
 }
 
-void ESMemHandlerImpl::SplitterOnNal(NalDesc &desc, bool eos) {
-  if (!eos) {
-    parser_.Parse(desc.nal, desc.len);
-  }
-  if (queue_) {
-    ESPacket pkt;
-    pkt.data = desc.nal;
-    pkt.size = desc.len;
-    pkt.pts = pts_++;
-    if (eos) {
-      pkt.flags = ESPacket::FLAG_EOS;
-    }
-    queue_->Push(std::make_shared<EsPacket>(&pkt));
-  }
-}
-
-int ESMemHandlerImpl::Write(unsigned char *data, int len) {
-  if (!queue_) {
-    return -1;
-  }
-  if (data && len) {
-    if (this->SplitterWriteChunk(data, len) < 0) {
-      return -1;
-    }
-  } else {
-    if (this->SplitterWriteChunk(nullptr, 0) < 0) {
-      return -1;
-    }
-  }
-  return 0;
-}
-
-void ESMemHandlerImpl::DecodeLoop() {
+void ESJpegMemHandlerImpl::DecodeLoop() {
   /*meet cnrt requirement*/
   if (param_.device_id_ >= 0) {
     try {
@@ -220,27 +162,18 @@ void ESMemHandlerImpl::DecodeLoop() {
   LOG(INFO) << "DecodeLoop Exit";
 }
 
-bool ESMemHandlerImpl::PrepareResources() {
+bool ESJpegMemHandlerImpl::PrepareResources() {
   VideoStreamInfo info;
-  while (running_.load()) {
-    if (parser_.GetInfo(info) > 0) {
-      break;
-    }
-    usleep(1000 * 10);
-  }
+  info.codec_id = AV_CODEC_ID_MJPEG;
+  info.codec_width = max_width_;
+  info.codec_height = max_height_;;
 
   if (!running_.load()) {
     return false;
   }
 
-  if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
-    decoder_ = std::make_shared<MluDecoder>(this);
-  } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
-    decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
-  } else {
-    LOG(ERROR) << "unsupported decoder_type";
-    return false;
-  }
+  decoder_ = std::make_shared<MluDecoder>(this);
+
   if (!decoder_) {
     return false;
   }
@@ -248,24 +181,17 @@ bool ESMemHandlerImpl::PrepareResources() {
   if (!ret) {
       return false;
   }
-  if (info.extra_data.size()) {
-    ESPacket pkt;
-    pkt.data = info.extra_data.data();
-    pkt.size = info.extra_data.size();
-    if (!decoder_->Process(&pkt)) {
-      return false;
-    }
-  }
+
   return true;
 }
 
-void ESMemHandlerImpl::ClearResources() {
+void ESJpegMemHandlerImpl::ClearResources() {
   if (decoder_.get()) {
     decoder_->Destroy();
   }
 }
 
-bool ESMemHandlerImpl::Process() {
+bool ESJpegMemHandlerImpl::Process() {
   using EsPacketPtr = std::shared_ptr<EsPacket>;
 
   EsPacketPtr in;

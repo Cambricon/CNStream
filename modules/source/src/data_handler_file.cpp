@@ -82,7 +82,7 @@ bool FileHandlerImpl::Open() {
   perf_manager_ = source->GetPerfManager(stream_id_);
   // start demuxer
   running_.store(1);
-  thread_ = std::move(std::thread(&FileHandlerImpl::Loop, this));
+  thread_ = std::thread(&FileHandlerImpl::Loop, this);
   return true;
 }
 
