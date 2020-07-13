@@ -34,7 +34,7 @@
 namespace cnstream {
 
 class Inferencer;
-class CNFrameInfo;
+struct CNFrameInfo;
 
 class InferTransDataHelper {
  public:

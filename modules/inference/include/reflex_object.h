@@ -151,7 +151,7 @@ bool ReflexObjectEx<T>::Register(const ClassInfo<T>& info) {
   // build base ClassInfo(ClassInfo<ReflexObjectEx>)
   ObjectConstructor<ReflexObject> base_constructor = NULL;
   if (info.constructor() != NULL) {
-    base_constructor = [info]() { return reinterpret_cast<ReflexObject*>(info.constructor()()); };
+    base_constructor = [info]() { return static_cast<ReflexObject*>(info.constructor()()); };
   }
   ClassInfo<ReflexObject> base_info(info.name(), base_constructor);
 

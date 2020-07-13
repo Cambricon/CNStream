@@ -46,7 +46,6 @@ class TimeoutHelperTest {
 
  private:
   TimeoutHelper* th_;
-  enum TimeoutHelper::State state = TimeoutHelper::STATE_NO_FUNC;
 };
 
 TEST(Inferencer, TimeoutHelper_Constructor) {

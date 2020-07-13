@@ -36,11 +36,20 @@ extern "C" {
 }
 #endif
 
+#ifdef HAVE_OPENCV
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#if (CV_MAJOR_VERSION >= 3)
+#include "opencv2/imgcodecs/imgcodecs.hpp"
+#endif
+#endif
+
 #include <memory>
 #include <string>
 #include <utility>
 
 #include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 #include "cnstream_pipeline.hpp"
 #include "cnstream_source.hpp"
 
@@ -58,13 +67,13 @@ enum DecoderType { DECODER_CPU, DECODER_MLU };
  * @brief a structure for private usage
  */
 struct DataSourceParam {
-  OutputType output_type_ = OUTPUT_CPU;     ///< output data to cpu/mlu
-  size_t interval_ = 1;                     ///< output image every "interval" frames
-  DecoderType decoder_type_ = DECODER_CPU;  ///< decoder type
-  bool reuse_cndec_buf = false;             ///< valid when DECODER_MLU used
-  int device_id_ = -1;                      ///< mlu device id, -1 :disable mlu
-  uint32_t input_buf_number_ = 2;           ///< valid when decoder_type = DECODER_MLU
-  uint32_t output_buf_number_ = 3;          ///< valid when decoder_type = DECODER_MLU
+  OutputType output_type_ = OUTPUT_CPU;         ///< output data to cpu/mlu
+  size_t interval_ = 1;                         ///< output image every "interval" frames
+  DecoderType decoder_type_ = DECODER_CPU;      ///< decoder type
+  bool reuse_cndec_buf = false;                 ///< valid when DECODER_MLU used
+  int device_id_ = -1;                          ///< mlu device id, -1 :disable mlu
+  uint32_t input_buf_number_ = 2;               ///< valid when decoder_type = DECODER_MLU
+  uint32_t output_buf_number_ = 3;              ///< valid when decoder_type = DECODER_MLU
   bool apply_stride_align_for_scaler_ = false;  //< recommended for use on m200 platforms
 };
 
@@ -135,7 +144,7 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
 };  // class DataSource
 
 /*SourceHandler for H264/H265 bitstreams in memory(with prefix-start-code)
-*/
+ */
 struct ESPacket {
   unsigned char *data = nullptr;
   int size = 0;
@@ -179,9 +188,9 @@ class RtspHandler : public SourceHandler {
   /*
    * "reconnect" is valid when "use_ffmpeg" set false
    */
-  static std::shared_ptr<SourceHandler>
-    Create(DataSource *module, const std::string &stream_id,
-           const std::string &url_name, bool use_ffmpeg = false, int reconnect = 10);
+  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
+                                               const std::string &url_name, bool use_ffmpeg = false,
+                                               int reconnect = 10);
   ~RtspHandler();
   /**/
   bool Open() override;
@@ -209,13 +218,13 @@ class ESMemHandler : public SourceHandler {
   bool Open() override;
   void Close() override;
 
-  enum DataType { INVALID, H264, H265};
+  enum DataType { INVALID, H264, H265 };
   int SetDataType(DataType type);  // must be called before Write() invoked
 
   /*Write()
    *   Send H264/H265 bitstream with prefix-startcode.
    */
-  int Write(ESPacket *pkt);  // frame mode
+  int Write(ESPacket *pkt);                // frame mode
   int Write(unsigned char *buf, int len);  // chunk mode
 
  private:
@@ -227,6 +236,80 @@ class ESMemHandler : public SourceHandler {
 #endif
   ESMemHandlerImpl *impl_ = nullptr;
 };  // class ESMemHandler
+
+class ESJpegMemHandlerImpl;
+/*
+ * SourceHandler for Jpeg bitstreams in memory
+ */
+class ESJpegMemHandler : public SourceHandler {
+ public:
+  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
+  // Jpeg decoder maximum resolution 8K
+      int max_width = 7680, int max_height = 4320);
+  ~ESJpegMemHandler();
+  /**/
+  bool Open() override;
+  void Close() override;
+
+  /*
+   * Write()
+   * Send Jpeg bitstream.
+   */
+  int Write(ESPacket *pkt);  // frame mode
+
+ private:
+  explicit ESJpegMemHandler(DataSource *module, const std::string &stream_id, int max_width, int max_height);
+
+ private:
+#ifdef UNIT_TEST
+ public:
+#endif
+  ESJpegMemHandlerImpl *impl_ = nullptr;
+};  // class ESJpegMemHandler
+
+class RawImgMemHandlerImpl;
+/*
+ *  SourceHandler for raw image data in memory.
+ */
+class RawImgMemHandler : public SourceHandler {
+ public:
+  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id);
+  ~RawImgMemHandler();
+
+  bool Open() override;
+  void Close() override;
+
+#ifdef HAVE_OPENCV
+  /**
+   * @brief Write raw image with cv::Mat(only support bgr24 format).
+   * @param
+      - mat_data: cv::Mat pointer with bgr24 format image data, feed mat_data as nullptr when feed data end.
+   * @return return 0 when write successfully, othersize return -1.
+   */
+  int Write(cv::Mat *mat_data);
+#endif
+  /**
+   * @brief Write raw image with image data and image infomation (data buffer is one continuous buffer, only support
+   bgr24/rgb24/nv21/nv12 format).
+   * @param
+          - data: image data pointer(one continuous buffer), feed data as nullptr and size as 0 when feed data end
+          - size: image data size
+          - w: image width
+          - h: image height
+          - pixel_fmt: image pixel format, support bgr24/rgb24/nv21/nv12 format.
+   * @return return 0 when write successfully, othersize return -1.
+   */
+  int Write(unsigned char *data, int size, int width = 0, int height = 0, CNDataFormat pixel_fmt = CN_INVALID);
+
+ private:
+  explicit RawImgMemHandler(DataSource *module, const std::string &stream_id);
+
+#ifdef UNIT_TEST
+
+ public:
+#endif
+  RawImgMemHandlerImpl *impl_ = nullptr;
+};  // class RawImgMemHandler
 
 }  // namespace cnstream
 

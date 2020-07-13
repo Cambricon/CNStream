@@ -33,6 +33,7 @@ mkdir -p output
     --src_frame_rate 30   \
     --wait_time 0 \
     --loop=false \
+    --raw_img_input=false \
     --config_fname "detection_config.json" \
     --alsologtostderr
     # uncomment to stop measuring performance

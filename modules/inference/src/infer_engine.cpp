@@ -82,7 +82,7 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
     mlu_input_res_->Init();
     mlu_output_res_->Init();
     StageAssemble();
-    timeout_helper_.SetTimeout(batching_timeout);
+    timeout_helper_.SetTimeout(batching_timeout_);
   } catch (CnstreamError& e) {
     if (error_func_) {
       error_func_(e.what());

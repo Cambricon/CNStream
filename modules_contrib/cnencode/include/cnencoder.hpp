@@ -114,7 +114,7 @@ class CNEncoder : public Module, public ModuleCreator<CNEncoder> {
    *
    * @return Returns true if this API run successfully. Otherwise, returns false.
    */
-  bool CheckParamSet(const ModuleParamSet& paramSet);
+  bool CheckParamSet(const ModuleParamSet& paramSet) const override;
 
  private:
   CNEncoderContext* GetCNEncoderContext(CNFrameInfoPtr data);

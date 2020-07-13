@@ -187,7 +187,7 @@ int CNEncoder::Process(CNFrameInfoPtr data) {
   return 1;
 }
 
-bool CNEncoder::CheckParamSet(const ModuleParamSet &paramSet) {
+bool CNEncoder::CheckParamSet(const ModuleParamSet &paramSet) const {
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {

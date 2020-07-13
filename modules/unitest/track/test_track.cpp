@@ -52,7 +52,7 @@ static constexpr const char *kcf_track = "KCF";
 static constexpr const char *img_path = "../../data/images/19.jpg";
 static constexpr int g_dev_id = 0;
 static constexpr int g_channel_id = 0;
-static constexpr int g_max_cosine_distance = 0.2;
+static constexpr float g_max_cosine_distance = 0.2f;
 
 TEST(Tracker, Construct) {
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);

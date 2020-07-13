@@ -377,9 +377,9 @@ bool RtspHandlerImpl::Open() {
   }
 
   decode_exit_flag_ = 0;
-  decode_thread_ = std::move(std::thread(&RtspHandlerImpl::DecodeLoop, this));
+  decode_thread_ = std::thread(&RtspHandlerImpl::DecodeLoop, this);
   demux_exit_flag_ = 0;
-  demux_thread_ = std::move(std::thread(&RtspHandlerImpl::DemuxLoop, this));
+  demux_thread_ = std::thread(&RtspHandlerImpl::DemuxLoop, this);
   return true;
 }
 

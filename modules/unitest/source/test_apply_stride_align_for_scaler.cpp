@@ -71,7 +71,6 @@ class ImageReceiver : public cnstream::Module, public cnstream::ModuleCreator<Im
 
  private:
   std::vector<cnstream::CNDataFramePtr> frames;
-  size_t fcnt_ = 0;
 };
 
 bool CompareFrames(const std::vector<cnstream::CNDataFramePtr> &src_frames,

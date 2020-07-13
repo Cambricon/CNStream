@@ -94,7 +94,7 @@ cv::Mat* CNDataFrame::ImageBGR() {
         std::memcpy(p + (height + 1) * stride_, img_data + height * stride_, (height * stride_) / 2);
         cv::Mat src = cv::Mat((height + 1) * 3 / 2, stride_, CV_8UC1, p);
         cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV12);
-        delete p;
+        delete[] p;
       } else {
         cv::Mat src = cv::Mat(height * 3 / 2, stride_, CV_8UC1, img_data);
         cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV12);
@@ -107,7 +107,7 @@ cv::Mat* CNDataFrame::ImageBGR() {
         std::memcpy(p + (height + 1) * stride_, img_data + height * stride_, (height * stride_) / 2);
         cv::Mat src = cv::Mat((height + 1) * 3 / 2, stride_, CV_8UC1, p);
         cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV21);
-        delete p;
+        delete[] p;
       } else {
         cv::Mat src = cv::Mat(height * 3 / 2, stride_, CV_8UC1, img_data);
         cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV21);

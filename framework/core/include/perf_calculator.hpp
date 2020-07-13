@@ -138,6 +138,9 @@ class PerfCalculator {
     method_ = std::make_shared<PerfCalculationMethod>();
     print_throughput_ = true;
   }
+
+  virtual ~PerfCalculator() {}
+
   /**
    * @brief Sets PerfUtils.
    *
