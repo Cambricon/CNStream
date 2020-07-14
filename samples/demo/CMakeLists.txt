@@ -40,6 +40,6 @@ target_link_libraries(${name} ${Example_LINKER_LIBS})
 
 if(build_modules_contrib)
   #force load all the modules
-  set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--as-needed")
+  set(CMAKE_EXE_LINKER_FLAGS "-Wl,--no-as-needed")
   target_link_libraries(${name} cnstream_contrib)
 endif()

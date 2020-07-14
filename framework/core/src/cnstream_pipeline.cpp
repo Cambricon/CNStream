@@ -364,9 +364,16 @@ bool Pipeline::Start() {
     const std::string node_name = it.first;
     ModuleAssociatedInfo& module_info = it.second;
     uint32_t parallelism = module_info.parallelism;
+    if ((!parallelism && module_info.input_connectors.size()) ||
+        (parallelism && !module_info.input_connectors.size())) {
+      LOG(ERROR) << "The parallelism of the first module should be 0, and the parallelism of other modules should be "
+                    "larger than 0. "
+                 << "Please check the config of " << node_name << " module.";
+      return false;
+    }
     if ((!parallelism && module_info.connector) || (parallelism && !module_info.connector) ||
         (parallelism && module_info.connector && parallelism != module_info.connector->GetConveyorCount())) {
-      LOG(INFO) << "Module parallelism do not equal input Connector's Conveyor number, name: " << node_name;
+      LOG(ERROR) << "Module parallelism do not equal input Connector's Conveyor number, in module " << node_name;
       return false;
     }
     for (uint32_t conveyor_idx = 0; conveyor_idx < parallelism; ++conveyor_idx) {
@@ -841,7 +848,12 @@ void Pipeline::CalculatePipelinePerfStats(bool final_print) {
       }
       PrintTitleForTotal();
       PrintThroughput(avg_fps);
-
+      double running_seconds = static_cast<double>(avg_fps.latency_max) / 1e6;
+      double running_mins = running_seconds / 60;
+      double running_hours = running_mins / 60;
+      std::cout << "Running time (s):" << running_seconds << std::endl;
+      std::cout << "Running time (m):" << running_mins << std::endl;
+      std::cout << "Running time (h):" << running_hours << std::endl;
       if (final_print) {
         std::cout << "\nTotal : " << avg_fps.fps << std::endl;
       }

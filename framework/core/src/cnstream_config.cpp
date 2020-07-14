@@ -67,6 +67,11 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
       return false;
     }
     this->parallelism = doc["parallelism"].GetUint();
+    if (this->className != "cnstream::DataSource" && this->className != "cnstream::TestDataSource" &&
+        this->parallelism < 1) {
+      LOG(ERROR) << "parallelism must be larger than 0, when class name is " << this->className;
+      return false;
+    }
   } else {
     this->parallelism = 1;
   }
