@@ -761,6 +761,7 @@ TEST(CorePipeline, StartStopPipeline) {
   auto down_node = std::make_shared<TestModule>("down_node");
   EXPECT_TRUE(pipeline.AddModule(up_node));
   EXPECT_TRUE(pipeline.AddModule(down_node));
+  EXPECT_TRUE(pipeline.SetModuleAttribute(up_node, 0, 20));
   std::string link_id = pipeline.LinkModules(up_node, down_node);
   EXPECT_NE(link_id, "");
 
@@ -795,7 +796,7 @@ TEST(CorePipeline, EventLoop) {
   Pipeline pipeline("test pipeline");
   auto module = std::make_shared<TestModule>("test_module");
   EXPECT_TRUE(pipeline.AddModule(module));
-
+  EXPECT_TRUE(pipeline.SetModuleAttribute(module, 0));
   // 1 Error event
   EXPECT_TRUE(pipeline.Start());
   // jump out the event loop
@@ -847,6 +848,7 @@ TEST(CorePipeline, TransmitData) {
   EXPECT_TRUE(pipeline.AddModule(down_node));
   uint32_t seed = (uint32_t)time(0);
   uint32_t paral = rand_r(&seed) % 64 + 1;
+  pipeline.SetModuleAttribute(up_node, 0);
   pipeline.SetModuleAttribute(down_node, paral);
   /* up_node ---- down_node */
   std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
@@ -873,6 +875,7 @@ TEST(CorePipeline, TransmitDataEosFrame) {
   auto down_node = std::make_shared<TestModule>("down_node");
   EXPECT_TRUE(pipeline.AddModule(up_node));
   EXPECT_TRUE(pipeline.AddModule(down_node));
+  pipeline.SetModuleAttribute(up_node, 0);
   /* up_node ---- down_node */
   std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
   EXPECT_EQ(pipeline.LinkModules(up_node, down_node), link_id);
@@ -886,7 +889,7 @@ TEST(CorePipelineDeathTest, TransmitDataFailed) {
   auto module = std::make_shared<TestModule>("test_module");
   auto data = CNFrameInfo::Create("0");
   EXPECT_TRUE(pipeline.AddModule(module));
-
+  pipeline.SetModuleAttribute(module, 0);
   // As there is only one module, there is no links. Data will not be transmitted.
   EXPECT_NO_THROW(pipeline.TransmitData("test_module", data));
   EXPECT_DEATH(pipeline.TransmitData("", data), "");
@@ -897,6 +900,7 @@ void RunTaskLoop(std::shared_ptr<TestModule> up_node, std::shared_ptr<TestModule
   EXPECT_TRUE(pipeline.AddModule(up_node));
   EXPECT_TRUE(pipeline.AddModule(down_node));
   pipeline.SetModuleAttribute(down_node, 1);
+  pipeline.SetModuleAttribute(up_node, 0);
   /* up_node ---- down_node */
   std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
   EXPECT_EQ(pipeline.LinkModules(up_node, down_node), link_id);
@@ -1079,6 +1083,7 @@ TEST(CorePipeline, CreatePerfManager) {
   // add two modules to the pipeline and link
   EXPECT_TRUE(pipeline.AddModule(up_node));
   EXPECT_TRUE(pipeline.AddModule(down_node));
+  pipeline.SetModuleAttribute(up_node, 0);
   std::string link_id = pipeline.LinkModules(up_node, down_node);
 
   std::vector<std::string> stream_ids = {"0", "1", "2", "3"};
@@ -1107,10 +1112,12 @@ TEST(CorePipeline, CreatePerfManagerFailedCase) {
   // add two modules to the pipeline and link
   EXPECT_TRUE(pipeline1.AddModule(up_node));
   EXPECT_TRUE(pipeline1.AddModule(down_node));
+  pipeline1.SetModuleAttribute(up_node, 0);
   pipeline1.LinkModules(up_node, down_node);
 
   EXPECT_TRUE(pipeline2.AddModule(up_node));
   EXPECT_TRUE(pipeline2.AddModule(down_node));
+  pipeline2.SetModuleAttribute(up_node, 0);
   pipeline2.LinkModules(up_node, down_node);
 
   std::vector<std::string> stream_ids = {"0", "1", "2", "3"};
@@ -1136,6 +1143,7 @@ TEST(CorePipeline, PerfTaskLoop) {
   EXPECT_TRUE(pipeline.AddModule(up_node));
   EXPECT_TRUE(pipeline.AddModule(down_node));
   EXPECT_TRUE(pipeline.AddModule(end_node));
+  pipeline.SetModuleAttribute(up_node, 0);
   pipeline.LinkModules(up_node, down_node);
   pipeline.LinkModules(down_node, end_node);
 
