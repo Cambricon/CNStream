@@ -19,10 +19,15 @@
  *************************************************************************/
 
 #include "util.hpp"
-#include <glog/logging.h>
+#if defined(_WIN32) || defined(_WIN64)
+#include <io.h>
+#elif defined(__linux) || defined(__unix)
+#include <dirent.h>
+#include <unistd.h>
+#endif
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <unistd.h>
+#include <glog/logging.h>
 #include <cerrno>
 #include <fstream>
 #include <list>
@@ -108,4 +113,50 @@ bool CheckDir(const std::string &path, std::string *estr) {
     }
   }
   return ret;
+}
+
+std::list<std::string> GetFileNameFromDir(const std::string &dir, const char *filter) {
+  std::list<std::string> files;
+#if defined(_WIN32) || defined(_WIN64)
+  int64_t hFile = 0;
+  struct _finddata_t fileinfo;
+  std::string path;
+  if ((hFile = _findfirst(path.assign(dir).append("/" + std::string(filter)).c_str(), &fileinfo)) != -1) {
+    do {
+      if (!(fileinfo.attrib & _A_SUBDIR)) {  // not directory
+        std::string file_path = dir + "/" + fileinfo.name;
+        files.push_back(file_path);
+      }
+    } while (_findnext(hFile, &fileinfo) == 0);
+    _findclose(hFile);
+  }
+#elif defined(__linux) || defined(__unix)
+  DIR *pDir = nullptr;
+  struct dirent *pEntry;
+  pDir = opendir(dir.c_str());
+  if (pDir != nullptr) {
+    while ((pEntry = readdir(pDir)) != nullptr) {
+      if (strcmp(pEntry->d_name, ".") == 0 || strcmp(pEntry->d_name, "..") == 0
+          || strstr(pEntry->d_name, strstr(filter, "*") + 1) == nullptr || pEntry->d_type != DT_REG) {  // regular file
+        continue;
+      }
+      std::string file_path = dir + "/" + pEntry->d_name;
+      files.push_back(file_path);
+    }
+    closedir(pDir);
+  }
+#endif
+  return files;
+}
+
+size_t GetFileSize(const std::string &filename) {
+#if defined(_WIN32) || defined(_WIN64)
+  struct _stat file_stat;
+  _stat(filename.c_str(), &file_stat);
+  return file_stat.st_size;
+#elif defined(__linux) || defined(__unix)
+  struct stat file_stat;
+  stat(filename.c_str(), &file_stat);
+  return file_stat.st_size;
+#endif
 }

@@ -20,10 +20,6 @@
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-#include <dirent.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #include <future>
 #include <iostream>
@@ -225,63 +221,48 @@ int main(int argc, char** argv) {
         std::thread([=]() {
         int index = filename.find_last_of("/");
         std::string dir_path = filename.substr(0, index);
-        DIR *pDir = nullptr;
-        struct dirent *pEntry;
-        pDir = opendir(dir_path.c_str());
+        std::list<std::string> files = GetFileNameFromDir(dir_path, "*.jpg");
 
-        if (pDir != nullptr) {
-          auto memHandler = std::dynamic_pointer_cast<cnstream::ESJpegMemHandler>(handler);
-          int jpeg_buffer_size_ = 4 * 1024 * 1024;  // FIXME
-          unsigned char *buf = new(std::nothrow) unsigned char[jpeg_buffer_size_];
-          if (!buf) {
-            LOG(FATAL) << "malloc buf failed, size: " << jpeg_buffer_size_;
-          }
-          cnstream::ESPacket pkt;
-          uint64_t pts_ = 0;
+        auto memHandler = std::dynamic_pointer_cast<cnstream::ESJpegMemHandler>(handler);
+        size_t jpeg_buffer_size_ = 4 * 1024 * 1024;  // FIXME
+        unsigned char *buf = new(std::nothrow) unsigned char[jpeg_buffer_size_];
 
-          while (thread_running_) {
-            pEntry = readdir(pDir);
-            if (pEntry) {
-              if (strcmp(pEntry->d_name, ".") == 0 || strcmp(pEntry->d_name, "..") == 0) {
-                continue;
-              }
-              std::string file_name = dir_path + "/" + std::string(pEntry->d_name);
-              struct stat file_stat;
-              stat(file_name.c_str(), &file_stat);
-              if (file_stat.st_size > jpeg_buffer_size_) {
-                delete [] buf;
-                buf = new(std::nothrow) unsigned char[file_stat.st_size];
-                if (!buf) {
-                  LOG(FATAL) << "malloc buf failed, size: " << file_stat.st_size;
-                }
-                jpeg_buffer_size_ = file_stat.st_size;
-              }
-              FILE *fp = fopen(file_name.c_str(), "rb");
-              if (fp) {
-                int size = fread(buf, 1, jpeg_buffer_size_, fp);
-                pkt.data = buf;
-                pkt.size = size;
-                pkt.pts = pts_++;
-                memHandler->Write(&pkt);
-                fclose(fp);
-              }
-            } else {
-              if (FLAGS_loop) {
-                rewinddir(pDir);
-              } else {
-                break;
-              }
-            }
-          }
-          pkt.data = nullptr;
-          pkt.size = 0;
-          pkt.flags = cnstream::ESPacket::FLAG_EOS;
-          memHandler->Write(&pkt);
-          closedir(pDir);
-          delete [] buf, buf = nullptr;
-        } else {
-          LOG(ERROR) << "opendir" << dir_path << "failed!";
+        if (!buf) {
+          LOG(FATAL) << "malloc buf failed, size: " << jpeg_buffer_size_;
         }
+
+        cnstream::ESPacket pkt;
+        uint64_t pts_ = 0;
+        auto itor = files.begin();
+        while (thread_running_ && itor != files.end()) {
+          size_t file_size = GetFileSize(*itor);
+          if (file_size > jpeg_buffer_size_) {
+            delete [] buf;
+            buf = new(std::nothrow) unsigned char[file_size];
+            if (!buf) {
+              LOG(FATAL) << "malloc buf failed, size: " << file_size;
+            }
+            jpeg_buffer_size_ = file_size;
+          }
+          FILE *fp = fopen((*itor).c_str(), "rb");
+          if (fp) {
+            int size = fread(buf, 1, jpeg_buffer_size_, fp);
+            pkt.data = buf;
+            pkt.size = size;
+            pkt.pts = pts_++;
+            memHandler->Write(&pkt);
+            fclose(fp);
+          }
+          itor++;
+          if (itor == files.end() && FLAGS_loop) {
+            itor = files.begin();
+          }
+        }
+        pkt.data = nullptr;
+        pkt.size = 0;
+        pkt.flags = cnstream::ESPacket::FLAG_EOS;
+        memHandler->Write(&pkt);
+        delete [] buf, buf = nullptr;
       }));
     } else {
       if (FLAGS_raw_img_input) {

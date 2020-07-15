@@ -18,395 +18,528 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+//===------------------------------ any -----------------------------------===//
 //
-// Implementation of N4562 std::experimental::any (merged into C++17) for C++11 compilers.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
-// See also:
-//   + http://en.cppreference.com/w/cpp/any
-//   + http://en.cppreference.com/w/cpp/experimental/any
-//   + http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2015/n4562.html#any
-//   + https://cplusplus.github.io/LWG/lwg-active.html#2509
-//
-//
-// Copyright (c) 2016 Denilson das Mercês Amorim
-//
-// Distributed under the Boost Software License, Version 1.0. (See accompanying
-// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-//
+//===----------------------------------------------------------------------===//
+
 #ifndef LINB_ANY_HPP
 #define LINB_ANY_HPP
-#pragma once
-#include <stdexcept>
-#include <type_traits>
+
+#include <memory>
+#include <new>
 #include <typeinfo>
+#include <type_traits>
+#include <iostream>
+#include <cstdlib>
+#include <utility>
 
-#if defined(PARTICLE)
-#if !defined(__cpp_exceptions) && !defined(ANY_IMPL_NO_EXCEPTIONS) && !defined(ANY_IMPL_EXCEPTIONS)
-#define ANY_IMPL_NO_EXCEPTIONS
-#endif
-#else
-// you can opt-out of exceptions by definining ANY_IMPL_NO_EXCEPTIONS,
-// but you must ensure not to cast badly when passing an `any' object to any_cast<T>(any)
-#endif
+template< class T >
+using decay_t = typename std::decay<T>::type;
 
-#if defined(PARTICLE)
-#if !defined(__cpp_rtti) && !defined(ANY_IMPL_NO_RTTI) && !defined(ANY_IMPL_RTTI)
-#define ANY_IMPL_NO_RTTI
-#endif
-#else
-// you can opt-out of RTTI by defining ANY_IMPL_NO_RTTI,
-// in order to disable functions working with the typeid of a type
-#endif
+template< bool B, class T = void >
+using enable_if_t = typename std::enable_if<B,T>::type;
 
-namespace cnstream {
+template< class T >
+using add_const_t = typename std::add_const<T>::type;
+
+template< bool B, class T, class F >
+using conditional_t = typename std::conditional<B,T,F>::type;
+
+template< std::size_t Len, std::size_t Align >
+using aligned_storage_t = typename std::aligned_storage<Len, Align>::type;
+
+template< class T >
+using add_pointer_t = typename std::add_pointer<T>::type;
+
+template <class _Tp>
+struct in_place_type_t {
+  explicit in_place_type_t() = default;
+};
 
 class bad_any_cast : public std::bad_cast {
  public:
   const char* what() const noexcept override { return "bad any cast"; }
 };
 
-class any final {
+
+template <class _Alloc>
+class __allocator_destructor {
+  typedef std::allocator_traits<_Alloc> __alloc_traits;
  public:
-  /// Constructs an object of type any with an empty state.
-  any() : vtable(nullptr) {}
-
-  /// Constructs an object of type any with an equivalent state as other.
-  any(const any& rhs) : vtable(rhs.vtable) {
-    if (!rhs.empty()) {
-      rhs.vtable->copy(rhs.storage, this->storage);
-    }
-  }
-
-  /// Constructs an object of type any with a state equivalent to the original state of other.
-  /// rhs is left in a valid but otherwise unspecified state.
-  any(any&& rhs) noexcept : vtable(rhs.vtable) {
-    if (!rhs.empty()) {
-      rhs.vtable->move(rhs.storage, this->storage);
-      rhs.vtable = nullptr;
-    }
-  }
-
-  /// Same effect as this->clear().
-  ~any() { this->clear(); }
-
-  /// Constructs an object of type any that contains an object of type T direct-initialized with
-  /// std::forward<ValueType>(value).
-  ///
-  /// T shall satisfy the CopyConstructible requirements, otherwise the program is ill-formed.
-  /// This is because an `any` may be copy constructed into another `any` at any time, so a copy should always be
-  /// allowed.
-  template <typename ValueType,
-            typename = typename std::enable_if<!std::is_same<typename std::decay<ValueType>::type, any>::value>::type>
-  any(ValueType&& value) {
-    static_assert(std::is_copy_constructible<typename std::decay<ValueType>::type>::value,
-                  "T shall satisfy the CopyConstructible requirements.");
-    this->construct(std::forward<ValueType>(value));
-  }
-
-  /// Has the same effect as any(rhs).swap(*this). No effects if an exception is thrown.
-  any& operator=(const any& rhs) {
-    any(rhs).swap(*this);
-    return *this;
-  }
-
-  /// Has the same effect as any(std::move(rhs)).swap(*this).
-  ///
-  /// The state of *this is equivalent to the original state of rhs and rhs is left in a valid
-  /// but otherwise unspecified state.
-  any& operator=(any&& rhs) noexcept {
-    any(std::move(rhs)).swap(*this);
-    return *this;
-  }
-
-  /// Has the same effect as any(std::forward<ValueType>(value)).swap(*this). No effect if a exception is thrown.
-  ///
-  /// T shall satisfy the CopyConstructible requirements, otherwise the program is ill-formed.
-  /// This is because an `any` may be copy constructed into another `any` at any time, so a copy should always be
-  /// allowed.
-  template <typename ValueType,
-            typename = typename std::enable_if<!std::is_same<typename std::decay<ValueType>::type, any>::value>::type>
-  any& operator=(ValueType&& value) {
-    static_assert(std::is_copy_constructible<typename std::decay<ValueType>::type>::value,
-                  "T shall satisfy the CopyConstructible requirements.");
-    any(std::forward<ValueType>(value)).swap(*this);
-    return *this;
-  }
-
-  /// If not empty, destroys the contained object.
-  void clear() noexcept {
-    if (!empty()) {
-      this->vtable->destroy(storage);
-      this->vtable = nullptr;
-    }
-  }
-
-  /// Returns true if *this has no contained object, otherwise false.
-  bool empty() const noexcept { return this->vtable == nullptr; }
-
-#ifndef ANY_IMPL_NO_RTTI
-  /// If *this has a contained object of type T, typeid(T); otherwise typeid(void).
-  const std::type_info& type() const noexcept { return empty() ? typeid(void) : this->vtable->type(); }
-#endif
-
-  /// Exchange the states of *this and rhs.
-  void swap(any& rhs) noexcept {
-    if (this->vtable != rhs.vtable) {
-      any tmp(std::move(rhs));
-
-      // move from *this to rhs.
-      rhs.vtable = this->vtable;
-      if (this->vtable != nullptr) {
-        this->vtable->move(this->storage, rhs.storage);
-        // this->vtable = nullptr; -- unneeded, see below
-      }
-
-      // move from tmp (previously rhs) to *this.
-      this->vtable = tmp.vtable;
-      if (tmp.vtable != nullptr) {
-        tmp.vtable->move(tmp.storage, this->storage);
-        tmp.vtable = nullptr;
-      }
-    } else  // same types
-    {
-      if (this->vtable != nullptr) this->vtable->swap(this->storage, rhs.storage);
-    }
-  }
-
- private:  // Storage and Virtual Method Table
-  union storage_union {
-    using stack_storage_t = typename std::aligned_storage<2 * sizeof(void*), std::alignment_of<void*>::value>::type;
-
-    void* dynamic;
-    stack_storage_t stack;  // 2 words for e.g. shared_ptr
-  };
-
-  /// Base VTable specification.
-  struct vtable_type {
-    // Note: The caller is responssible for doing .vtable = nullptr after destructful operations
-    // such as destroy() and/or move().
-
-#ifndef ANY_IMPL_NO_RTTI
-    /// The type of the object this vtable is for.
-    const std::type_info& (*type)() noexcept;
-#endif
-
-    /// Destroys the object in the union.
-    /// The state of the union after this call is unspecified, caller must ensure not to use src anymore.
-    void (*destroy)(storage_union&) noexcept;
-
-    /// Copies the **inner** content of the src union into the yet unitialized dest union.
-    /// As such, both inner objects will have the same state, but on separate memory locations.
-    void (*copy)(const storage_union& src, storage_union& dest);
-
-    /// Moves the storage from src to the yet unitialized dest union.
-    /// The state of src after this call is unspecified, caller must ensure not to use src anymore.
-    void (*move)(storage_union& src, storage_union& dest) noexcept;
-
-    /// Exchanges the storage between lhs and rhs.
-    void (*swap)(storage_union& lhs, storage_union& rhs) noexcept;
-  };
-
-  /// VTable for dynamically allocated storage.
-  template <typename T>
-  struct vtable_dynamic {
-#ifndef ANY_IMPL_NO_RTTI
-    static const std::type_info& type() noexcept { return typeid(T); }
-#endif
-
-    static void destroy(storage_union& storage) noexcept {
-      // assert(reinterpret_cast<T*>(storage.dynamic));
-      delete reinterpret_cast<T*>(storage.dynamic);
-    }
-
-    static void copy(const storage_union& src, storage_union& dest) {
-      dest.dynamic = new T(*reinterpret_cast<const T*>(src.dynamic));
-    }
-
-    static void move(storage_union& src, storage_union& dest) noexcept {
-      dest.dynamic = src.dynamic;
-      src.dynamic = nullptr;
-    }
-
-    static void swap(storage_union& lhs, storage_union& rhs) noexcept {
-      // just exchage the storage pointers.
-      std::swap(lhs.dynamic, rhs.dynamic);
-    }
-  };
-
-  /// VTable for stack allocated storage.
-  template <typename T>
-  struct vtable_stack {
-#ifndef ANY_IMPL_NO_RTTI
-    static const std::type_info& type() noexcept { return typeid(T); }
-#endif
-
-    static void destroy(storage_union& storage) noexcept { reinterpret_cast<T*>(&storage.stack)->~T(); }
-
-    static void copy(const storage_union& src, storage_union& dest) {
-      new (&dest.stack) T(reinterpret_cast<const T&>(src.stack));
-    }
-
-    static void move(storage_union& src, storage_union& dest) noexcept {
-      // one of the conditions for using vtable_stack is a nothrow move constructor,
-      // so this move constructor will never throw a exception.
-      new (&dest.stack) T(std::move(reinterpret_cast<T&>(src.stack)));
-      destroy(src);
-    }
-
-    static void swap(storage_union& lhs, storage_union& rhs) noexcept {
-      storage_union tmp_storage;
-      move(rhs, tmp_storage);
-      move(lhs, rhs);
-      move(tmp_storage, lhs);
-    }
-  };
-
-  /// Whether the type T must be dynamically allocated or can be stored on the stack.
-  template <typename T>
-  struct requires_allocation
-      : std::integral_constant<bool,
-                               !(std::is_nothrow_move_constructible<T>::value  // N4562 §6.3/3 [any.class]
-                                 && sizeof(T) <= sizeof(storage_union::stack) &&
-                                 std::alignment_of<T>::value <=
-                                     std::alignment_of<storage_union::stack_storage_t>::value)> {};
-
-  /// Returns the pointer to the vtable of the type T.
-  template <typename T>
-  static vtable_type* vtable_for_type() {
-    using VTableType =
-        typename std::conditional<requires_allocation<T>::value, vtable_dynamic<T>, vtable_stack<T>>::type;
-    static vtable_type table = {
-#ifndef ANY_IMPL_NO_RTTI
-        VTableType::type,
-#endif
-        VTableType::destroy, VTableType::copy, VTableType::move, VTableType::swap,
-    };
-    return &table;
-  }
-
- protected:
-  template <typename T>
-  friend const T* any_cast(const any* operand) noexcept;
-  template <typename T>
-  friend T* any_cast(any* operand) noexcept;
-
-  /// Casts (with no type_info checks) the storage pointer as const T*.
-  template <typename T>
-  const T* cast() const noexcept {
-    return requires_allocation<typename std::decay<T>::type>::value ? reinterpret_cast<const T*>(storage.dynamic)
-                                                                    : reinterpret_cast<const T*>(&storage.stack);
-  }
-
-  /// Casts (with no type_info checks) the storage pointer as T*.
-  template <typename T>
-  T* cast() noexcept {
-    return requires_allocation<typename std::decay<T>::type>::value ? reinterpret_cast<T*>(storage.dynamic)
-                                                                    : reinterpret_cast<T*>(&storage.stack);
-  }
-
+  typedef typename __alloc_traits::pointer pointer;
+  typedef typename __alloc_traits::size_type size_type;
  private:
-  storage_union storage;  // on offset(0) so no padding for align
-  vtable_type* vtable;
-
-  template <typename ValueType, typename T>
-  typename std::enable_if<requires_allocation<T>::value>::type do_construct(ValueType&& value) {
-    storage.dynamic = new T(std::forward<ValueType>(value));
-  }
-
-  template <typename ValueType, typename T>
-  typename std::enable_if<!requires_allocation<T>::value>::type do_construct(ValueType&& value) {
-    new (&storage.stack) T(std::forward<ValueType>(value));
-  }
-
-  /// Chooses between stack and dynamic allocation for the type decay_t<ValueType>,
-  /// assigns the correct vtable, and constructs the object on our storage.
-  template <typename ValueType>
-  void construct(ValueType&& value) {
-    using T = typename std::decay<ValueType>::type;
-
-    this->vtable = vtable_for_type<T>();
-
-    do_construct<ValueType, T>(std::forward<ValueType>(value));
-  }
+  _Alloc& __alloc_;
+  size_type __s_;
+ public:
+  __allocator_destructor(_Alloc& __a, size_type __s) : __alloc_(__a), __s_(__s) {}
+  void operator()(pointer __p) {__alloc_traits::deallocate(__alloc_, __p, __s_);}
 };
 
-namespace detail {
-template <typename ValueType>
-inline ValueType any_cast_move_if_true(typename std::remove_reference<ValueType>::type* p, std::true_type) {
-  return std::move(*p);
-}
 
-template <typename ValueType>
-inline ValueType any_cast_move_if_true(typename std::remove_reference<ValueType>::type* p, std::false_type) {
-  return *p;
-}
-}  // namespace detail
+template <class _Tp>
+struct __uncvref  {
+  typedef typename std::remove_cv<typename std::remove_reference<_Tp>::type>::type type;
+};
 
-/// Performs *any_cast<add_const_t<remove_reference_t<ValueType>>>(&operand), or throws bad_any_cast on failure.
-template <typename ValueType>
-inline ValueType any_cast(const any& operand) {
-  auto p = any_cast<typename std::add_const<typename std::remove_reference<ValueType>::type>::type>(&operand);
-#ifndef ANY_IMPL_NO_EXCEPTIONS
-  if (p == nullptr) throw bad_any_cast();
+template <class _Tp>
+using __uncvref_t = typename __uncvref<_Tp>::type;
+
+template <class _Tp> struct __is_inplace_type_imp : std::false_type {};
+// template <class _Tp> struct __is_inplace_type_imp<in_place_type_t<_Tp>> : true_type {};
+
+template <class _Tp>
+using __is_inplace_type = __is_inplace_type_imp<__uncvref_t<_Tp>>;
+
+namespace cnstream {
+
+
+namespace __any_imp {
+  using _Buffer = aligned_storage_t<3*sizeof(void*), std::alignment_of<void*>::value>;
+
+  template <class _Tp>
+  using _IsSmallObject = std::integral_constant<bool,
+                                          sizeof(_Tp) <= sizeof(_Buffer) &&
+                                          std::alignment_of<_Buffer>::value % std::alignment_of<_Tp>::value == 0 &&
+                                          std::is_nothrow_move_constructible<_Tp>::value>;
+
+  enum class _Action {
+    _Destroy,
+    _Copy,
+    _Move,
+    _Get,
+    _TypeInfo
+  };
+
+  template <class _Tp> struct _SmallHandler;
+  template <class _Tp> struct _LargeHandler;
+
+  template <class _Tp>
+  struct  __unique_typeinfo { static constexpr int __id = 0; };
+  template <class _Tp> constexpr int __unique_typeinfo<_Tp>::__id;
+
+  template <class _Tp>
+  constexpr const void* __get_fallback_typeid() {
+      return &__unique_typeinfo<decay_t<_Tp>>::__id;
+  }
+
+  template <class _Tp>
+  bool __compare_typeid(std::type_info const* __id, const void* __fallback_id) {
+#if !defined(_LIBCPP_NO_RTTI)
+    if (__id && *__id == typeid(_Tp))
+      return true;
 #endif
-  return *p;
-}
+    if (!__id && __fallback_id == __any_imp::__get_fallback_typeid<_Tp>())
+      return true;
+    return false;
+  }
 
-/// Performs *any_cast<remove_reference_t<ValueType>>(&operand), or throws bad_any_cast on failure.
-template <typename ValueType>
-inline ValueType any_cast(any& operand) {
-  auto p = any_cast<typename std::remove_reference<ValueType>::type>(&operand);
-#ifndef ANY_IMPL_NO_EXCEPTIONS
-  if (p == nullptr) throw bad_any_cast();
+  template <class _Tp>
+  using _Handler = conditional_t<
+    _IsSmallObject<_Tp>::value, _SmallHandler<_Tp>, _LargeHandler<_Tp>>;
+
+} // namespace __any_imp
+
+class any final {
+
+ public:
+  // construct/destruct
+  constexpr any() : __h(nullptr) {}
+
+  any(any const & __other) : __h(nullptr) {
+    if (__other.__h) __other.__call(_Action::_Copy, this);
+  }
+
+  any(any && __other) : __h(nullptr) {
+    if (__other.__h) __other.__call(_Action::_Move, this);
+  }
+
+  template <class _ValueType, class _Tp = decay_t<_ValueType>, 
+            class = enable_if_t< !std::is_same<_Tp, any>::value && 
+                                 !__is_inplace_type<_ValueType>::value && 
+                                 std::is_copy_constructible<_Tp>::value>>
+  any(_ValueType && __value);
+
+  
+  template <class _ValueType, class ..._Args,
+            class _Tp = decay_t<_ValueType>,
+            class = enable_if_t<std::is_constructible<_Tp, _Args...>::value &&
+                                std::is_copy_constructible<_Tp>::value>>
+  explicit any(in_place_type_t<_ValueType>, _Args&&... __args);
+
+  template <class _ValueType, class _Up, class ..._Args,
+    class _Tp = decay_t<_ValueType>,
+    class = enable_if_t<
+        std::is_constructible<_Tp, std::initializer_list<_Up>&, _Args...>::value &&
+        std::is_copy_constructible<_Tp>::value>>
+  explicit any(in_place_type_t<_ValueType>, std::initializer_list<_Up>, _Args&&... __args);
+
+  ~any() { this->reset(); }
+
+  // assignments
+  any & operator=(any const & __rhs) {
+    any(__rhs).swap(*this);
+    return *this;
+  }
+
+  any & operator=(any && __rhs) {
+    any(std::move(__rhs)).swap(*this);
+    return *this;
+  }
+
+  template <class _ValueType, 
+            class _Tp = decay_t<_ValueType>, 
+            class = enable_if_t< !std::is_same<_Tp, any>::value && 
+                                 std::is_copy_constructible<_Tp>::value>>
+  any & operator=(_ValueType && __rhs);
+
+  template <class _ValueType,
+            class ..._Args,
+            class _Tp = decay_t<_ValueType>,
+            class = enable_if_t< std::is_constructible<_Tp, _Args...>::value &&
+                                 std::is_copy_constructible<_Tp>::value>>
+  _Tp& emplace(_Args&&... args);
+
+  template <class _ValueType,
+            class _Up,
+            class ..._Args,
+            class _Tp = decay_t<_ValueType>,
+            class = enable_if_t<std::is_constructible<_Tp, std::initializer_list<_Up>&, _Args...>::value &&
+                    std::is_copy_constructible<_Tp>::value>>
+  _Tp& emplace(std::initializer_list<_Up>, _Args&&...);
+
+  // 6.3.3 any modifiers
+  void reset() { if (__h) this->__call(_Action::_Destroy); }
+
+  void swap(any & __rhs) {
+    if (this == &__rhs)
+      return;
+    if (__h && __rhs.__h) {
+      any __tmp;
+      __rhs.__call(_Action::_Move, &__tmp);
+      this->__call(_Action::_Move, &__rhs);
+      __tmp.__call(_Action::_Move, this);
+    }
+    else if (__h) {
+      this->__call(_Action::_Move, &__rhs);
+    }
+    else if (__rhs.__h) {
+      __rhs.__call(_Action::_Move, this);
+    }
+  }
+
+  // 6.3.4 any observers
+  bool has_value() const { return __h != nullptr; }
+
+#if !defined(_LIBCPP_NO_RTTI)
+  const std::type_info & type() const {
+    if (__h) {
+        return *static_cast<std::type_info const *>(this->__call(_Action::_TypeInfo));
+    } else {
+        return typeid(void);
+    }
+  }
 #endif
-  return *p;
-}
 
-///
-/// If ValueType is MoveConstructible and isn't a lvalue reference, performs
-/// std::move(*any_cast<remove_reference_t<ValueType>>(&operand)), otherwise
-/// *any_cast<remove_reference_t<ValueType>>(&operand). Throws bad_any_cast on failure.
-///
-template <typename ValueType>
-inline ValueType any_cast(any&& operand) {
-  using can_move = std::integral_constant<bool, std::is_move_constructible<ValueType>::value &&
-                                                    !std::is_lvalue_reference<ValueType>::value>;
+ private:
+  typedef __any_imp::_Action _Action;
+  using _HandleFuncPtr =  void* (*)(_Action, any const *, any *, const std::type_info *,
+    const void* __fallback_info);
 
-  auto p = any_cast<typename std::remove_reference<ValueType>::type>(&operand);
-#ifndef ANY_IMPL_NO_EXCEPTIONS
-  if (p == nullptr) throw bad_any_cast();
+  union _Storage {
+    constexpr _Storage() : __ptr(nullptr) {}
+    void*  __ptr;
+    __any_imp::_Buffer __buf;
+  };
+
+  void* __call(_Action __a, any * __other = nullptr,
+                std::type_info const * __info = nullptr,
+                 const void* __fallback_info = nullptr) const {
+    return __h(__a, this, __other, __info, __fallback_info);
+  }
+
+  void* __call(_Action __a, any * __other = nullptr,
+                std::type_info const * __info = nullptr,
+                const void* __fallback_info = nullptr) {
+    return __h(__a, this, __other, __info, __fallback_info);
+  }
+
+  template <class>
+  friend struct __any_imp::_SmallHandler;
+  template <class>
+  friend struct __any_imp::_LargeHandler;
+
+  template <class _ValueType>
+  friend add_pointer_t<add_const_t<_ValueType>> any_cast(any const *);
+
+  template <class _ValueType>
+  friend add_pointer_t<_ValueType> any_cast(any *);
+
+  _HandleFuncPtr __h = nullptr;
+  _Storage __s;
+};
+
+namespace __any_imp {
+  template <class _Tp>
+  struct _SmallHandler {
+    static void* __handle(_Action __act, any const * __this, any * __other,
+                          std::type_info const * __info, const void* __fallback_info) {
+       switch (__act) {
+       case _Action::_Destroy:
+         __destroy(const_cast<any &>(*__this));
+         return nullptr;
+       case _Action::_Copy:
+           __copy(*__this, *__other);
+         return nullptr;
+       case _Action::_Move:
+         __move(const_cast<any &>(*__this), *__other);
+         return nullptr;
+       case _Action::_Get:
+         return __get(const_cast<any &>(*__this), __info, __fallback_info);
+       case _Action::_TypeInfo:
+         return __type_info();
+       }
+       return nullptr;
+   }
+
+  template <class ..._Args>
+  static _Tp& __create(any & __dest, _Args&&... __args) {
+    _Tp* __ret = ::new (static_cast<void*>(&__dest.__s.__buf)) _Tp(std::forward<_Args>(__args)...);
+    __dest.__h = &_SmallHandler::__handle;
+    return *__ret;
+  }
+
+  private:
+    static void __destroy(any & __this) {
+      _Tp & __value = *static_cast<_Tp *>(static_cast<void*>(&__this.__s.__buf));
+      __value.~_Tp();
+      __this.__h = nullptr;
+    }
+
+    static void __copy(any const & __this, any & __dest) {
+      _SmallHandler::__create(__dest, *static_cast<_Tp const *>(
+            static_cast<void const *>(&__this.__s.__buf)));
+    }
+
+    static void __move(any & __this, any & __dest) {
+      _SmallHandler::__create(__dest, std::move(
+          *static_cast<_Tp*>(static_cast<void*>(&__this.__s.__buf))));
+      __destroy(__this);
+    }
+
+    static void* __get(any & __this,
+                       std::type_info const * __info,
+                       const void* __fallback_id) {
+      if (__any_imp::__compare_typeid<_Tp>(__info, __fallback_id))
+        return static_cast<void*>(&__this.__s.__buf);
+      return nullptr;
+    }
+
+    static void* __type_info() {
+#if !defined(_LIBCPP_NO_RTTI)
+      return const_cast<void*>(static_cast<void const *>(&typeid(_Tp)));
+#else
+      return nullptr;
 #endif
-  return detail::any_cast_move_if_true<ValueType>(p, can_move());
+    }
+  };
+
+  template <class _Tp>
+  struct _LargeHandler {
+    static void* __handle(_Action __act, any const * __this,
+                          any * __other, std::type_info const * __info,
+                          void const* __fallback_info) {
+      switch (__act) {
+      case _Action::_Destroy:
+        __destroy(const_cast<any &>(*__this));
+        return nullptr;
+      case _Action::_Copy:
+        __copy(*__this, *__other);
+        return nullptr;
+      case _Action::_Move:
+        __move(const_cast<any &>(*__this), *__other);
+        return nullptr;
+      case _Action::_Get:
+          return __get(const_cast<any &>(*__this), __info, __fallback_info);
+      case _Action::_TypeInfo:
+        return __type_info();
+      }
+      return nullptr;
+    }
+
+    template <class ..._Args>
+    static _Tp& __create(any & __dest, _Args&&... __args) {
+      typedef std::allocator<_Tp> _Alloc;
+      typedef __allocator_destructor<_Alloc> _Dp;
+      _Alloc __a;
+      std::unique_ptr<_Tp, _Dp> __hold(__a.allocate(1), _Dp(__a, 1));
+      _Tp* __ret = ::new ((void*)__hold.get()) _Tp(std::forward<_Args>(__args)...);
+      __dest.__s.__ptr = __hold.release();
+      __dest.__h = &_LargeHandler::__handle;
+      return *__ret;
+    }
+
+  private:
+    static void __destroy(any & __this) {
+      delete static_cast<_Tp*>(__this.__s.__ptr);
+      __this.__h = nullptr;
+    }
+
+    static void __copy(any const & __this, any & __dest) {
+      _LargeHandler::__create(__dest, *static_cast<_Tp const *>(__this.__s.__ptr));
+    }
+
+    static void __move(any & __this, any & __dest) {
+      __dest.__s.__ptr = __this.__s.__ptr;
+      __dest.__h = &_LargeHandler::__handle;
+      __this.__h = nullptr;
+    }
+
+    static void* __get(any & __this, std::type_info const * __info,
+                       void const* __fallback_info) {
+      if (__any_imp::__compare_typeid<_Tp>(__info, __fallback_info))
+        return static_cast<void*>(__this.__s.__ptr);
+      return nullptr;
+    }
+
+    static void* __type_info() {
+#if !defined(_LIBCPP_NO_RTTI)
+      return const_cast<void*>(static_cast<void const *>(&typeid(_Tp)));
+#else
+      return nullptr;
+#endif
+    }
+  };
+
+} // namespace __any_imp
+
+
+template <class _ValueType, class _Tp, class>
+any::any(_ValueType && __v) : __h(nullptr) {
+  __any_imp::_Handler<_Tp>::__create(*this, std::forward<_ValueType>(__v));
 }
 
-/// If operand != nullptr && operand->type() == typeid(ValueType), a pointer to the object
-/// contained by operand, otherwise nullptr.
-template <typename ValueType>
-inline const ValueType* any_cast(const any* operand) noexcept {
-  using T = typename std::decay<ValueType>::type;
-
-  if (operand && operand->vtable == any::vtable_for_type<T>())
-    return operand->cast<ValueType>();
-  else
-    return nullptr;
+template <class _ValueType, class ..._Args, class _Tp, class>
+any::any(in_place_type_t<_ValueType>, _Args&&... __args) {
+  __any_imp::_Handler<_Tp>::__create(*this, std::forward<_Args>(__args)...);
 }
 
-/// If operand != nullptr && operand->type() == typeid(ValueType), a pointer to the object
-/// contained by operand, otherwise nullptr.
-template <typename ValueType>
-inline ValueType* any_cast(any* operand) noexcept {
-  using T = typename std::decay<ValueType>::type;
+template <class _ValueType, class _Up, class ..._Args, class _Tp, class>
+any::any(in_place_type_t<_ValueType>, std::initializer_list<_Up> __il, _Args&&... __args) {
+  __any_imp::_Handler<_Tp>::__create(*this, __il, std::forward<_Args>(__args)...);
+}
 
-  if (operand && operand->vtable == any::vtable_for_type<T>())
-    return operand->cast<ValueType>();
-  else
-    return nullptr;
+template <class _ValueType, class, class>
+any& any::operator=(_ValueType && __v) {
+  any(std::forward<_ValueType>(__v)).swap(*this);
+  return *this;
+}
+
+template <class _ValueType, class ..._Args, class _Tp, class>
+_Tp& any::emplace(_Args&&... __args) {
+  reset();
+  return __any_imp::_Handler<_Tp>::__create(*this, std::forward<_Args>(__args)...);
+}
+
+template <class _ValueType, class _Up, class ..._Args, class _Tp, class>
+_Tp& any::emplace(std::initializer_list<_Up> __il, _Args&&... __args) {
+  reset();
+  return __any_imp::_Handler<_Tp>::__create(*this, __il, std::forward<_Args>(__args)...);
+}
+
+// 6.4 Non-member functions
+/*
+void swap(any & __lhs, any & __rhs) {
+    __lhs.swap(__rhs);
+}
+
+template <class _Tp, class ..._Args>
+any make_any(_Args&&... __args) {
+  return any(in_place_type<_Tp>, std::forward<_Args>(__args)...);
+}
+
+template <class _Tp, class _Up, class ..._Args>
+any make_any(initializer_list<_Up> __il, _Args&&... __args) {
+  return any(in_place_type<_Tp>, __il, std::forward<_Args>(__args)...);
+}
+*/
+template <class _ValueType>
+_ValueType any_cast(any const & __v) {
+  using _RawValueType = __uncvref_t<_ValueType>;
+  static_assert(std::is_constructible<_ValueType, _RawValueType const &>::value,
+                "ValueType is required to be a const lvalue reference "
+                "or a CopyConstructible type");
+  auto __tmp = any_cast<add_const_t<_RawValueType>>(&__v);
+  if (__tmp == nullptr)
+    throw bad_any_cast();
+  return static_cast<_ValueType>(*__tmp);
+}
+
+template <class _ValueType>
+_ValueType any_cast(any & __v) {
+  using _RawValueType = __uncvref_t<_ValueType>;
+  static_assert(std::is_constructible<_ValueType, _RawValueType &>::value,
+                "ValueType is required to be an lvalue reference "
+                "or a CopyConstructible type");
+  auto __tmp = any_cast<_RawValueType>(&__v);
+  if (__tmp == nullptr)
+    throw bad_any_cast();
+  return static_cast<_ValueType>(*__tmp);
+}
+
+template <class _ValueType>
+_ValueType any_cast(any && __v) {
+  using _RawValueType = __uncvref_t<_ValueType>;
+  static_assert(std::is_constructible<_ValueType, _RawValueType>::value,
+                "ValueType is required to be an rvalue reference "
+                "or a CopyConstructible type");
+  auto __tmp = any_cast<_RawValueType>(&__v);
+  if (__tmp == nullptr)
+    throw bad_any_cast();
+  return static_cast<_ValueType>(std::move(*__tmp));
+}
+
+template <class _ValueType>
+add_pointer_t<add_const_t<_ValueType>> any_cast(any const * __any) {
+  static_assert(!std::is_reference<_ValueType>::value,
+                "_ValueType may not be a reference.");
+  return any_cast<_ValueType>(const_cast<any *>(__any));
+}
+
+template <class _RetType>
+_RetType __pointer_or_func_cast(void* __p, /*IsFunction*/std::false_type) noexcept {
+  return static_cast<_RetType>(__p);
+}
+
+template <class _RetType>
+_RetType __pointer_or_func_cast(void*, /*IsFunction*/std::true_type) noexcept {
+  return nullptr;
+}
+
+template <class _ValueType>
+add_pointer_t<_ValueType> any_cast(any * __any) {
+  using __any_imp::_Action;
+  static_assert(!std::is_reference<_ValueType>::value,
+                "_ValueType may not be a reference.");
+  typedef typename std::add_pointer<_ValueType>::type _ReturnType;
+  if (__any && __any->__h) {
+    void *__p = __any->__call(_Action::_Get, nullptr,
+#if !defined(_LIBCPP_NO_RTTI)
+                        &typeid(_ValueType),
+#else
+                        nullptr,
+#endif
+                        __any_imp::__get_fallback_typeid<_ValueType>());
+      return __pointer_or_func_cast<_ReturnType>(
+            __p, std::is_function<_ValueType>{});
+  }
+  return nullptr;
 }
 
 }  // namespace cnstream
-
-namespace std {
-inline void swap(cnstream::any& lhs, cnstream::any& rhs) noexcept { lhs.swap(rhs); }
-}  // namespace std
 
 #endif
