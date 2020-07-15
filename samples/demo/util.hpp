@@ -32,5 +32,7 @@ bool CheckDir(const std::string &path, std::string *estr);
 std::string GetExePath();
 void CheckExePath(const std::string &path);
 std::list<std::string> ReadFileList(const std::string &list);
+std::list<std::string> GetFileNameFromDir(const std::string &dir, const char *filter);
+size_t GetFileSize(const std::string &filename);
 
 #endif  // SAMPLES_COMMON_UTIL_HPP_
