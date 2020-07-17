@@ -28,6 +28,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
@@ -174,7 +175,7 @@ int main(int argc, char** argv) {
     add stream sources...
   */
   std::vector<std::thread> vec_threads_mem;
-  bool thread_running_ = true;
+  std::atomic<bool> thread_running{true};
   int streams = static_cast<int>(video_urls.size());
   auto url_iter = video_urls.begin();
   for (int i = 0; i < streams; i++, url_iter++) {
@@ -187,13 +188,13 @@ int main(int argc, char** argv) {
       auto handler = cnstream::ESMemHandler::Create(source, std::to_string(i));
       source->AddSource(handler);
       // use a separate thread to read data from memory and feed pipeline
-      vec_threads_mem.push_back(std::thread([=]() {
+      vec_threads_mem.push_back(std::thread([=, &thread_running]() {
         FILE* fp = fopen(filename.c_str(), "rb");
         if (fp) {
           auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
           memHandler->SetDataType(cnstream::ESMemHandler::H264);
           unsigned char buf[4096];
-          while (thread_running_) {
+          while (thread_running.load()) {
             if (!feof(fp)) {
               int size = fread(buf, 1, 4096, fp);
               memHandler->Write(buf, size);
@@ -217,8 +218,7 @@ int main(int argc, char** argv) {
       auto handler = cnstream::ESJpegMemHandler::Create(source, std::to_string(i), max_width, max_height);
       source->AddSource(handler);
       // use a separate thread to read data from memory and feed pipeline
-      vec_threads_mem.push_back(
-        std::thread([=]() {
+      vec_threads_mem.push_back(std::thread([=, &thread_running]() {
         int index = filename.find_last_of("/");
         std::string dir_path = filename.substr(0, index);
         std::list<std::string> files = GetFileNameFromDir(dir_path, "*.jpg");
@@ -234,7 +234,7 @@ int main(int argc, char** argv) {
         cnstream::ESPacket pkt;
         uint64_t pts_ = 0;
         auto itor = files.begin();
-        while (thread_running_ && itor != files.end()) {
+        while (thread_running.load() && itor != files.end()) {
           size_t file_size = GetFileSize(*itor);
           if (file_size > jpeg_buffer_size_) {
             delete [] buf;
@@ -272,7 +272,7 @@ int main(int argc, char** argv) {
         auto handler = cnstream::RawImgMemHandler::Create(source, std::to_string(i));
         source->AddSource(handler);
         // use a separate thread to read image data from video and feed pipeline
-        vec_threads_mem.push_back(std::thread([=]() {
+        vec_threads_mem.push_back(std::thread([=, &thread_running]() {
           cv::VideoCapture vcapture;
           g_vcap_mtx.lock();
           vcapture.open(filename);
@@ -284,7 +284,7 @@ int main(int argc, char** argv) {
           }
           cv::Mat bgr_frame;
           auto memHandler = std::dynamic_pointer_cast<cnstream::RawImgMemHandler>(handler);
-          while (thread_running_) {
+          while (thread_running.load()) {
             vcapture >> bgr_frame;
 #if 1
             // feed bgr24 image mat, with api-Write(cv::Mat)
@@ -323,9 +323,9 @@ int main(int argc, char** argv) {
     }
   }
 
-  auto quit_callback = [&pipeline, streams, &source, &thread_running_]() {
+  auto quit_callback = [&pipeline, streams, &source, &thread_running]() {
     // stop feed-data threads before remove-sources...
-    thread_running_ = false;
+    thread_running.store(false);
     for (int i = 0; i < streams; i++) {
       source->RemoveSource(std::to_string(i));
     }
@@ -350,7 +350,7 @@ int main(int argc, char** argv) {
         getchar();
       }
 
-      thread_running_ = false;
+      thread_running.store(false);
 
       for (int i = 0; i < streams; i++) {
         source->RemoveSource(std::to_string(i));
@@ -363,21 +363,24 @@ int main(int argc, char** argv) {
        */
       if (FLAGS_wait_time) {
         std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_time));
-        thread_running_ = false;
+        thread_running.store(false);
         for (int i = 0; i < streams; i++) {
           source->RemoveSource(std::to_string(i));
         }
         pipeline.Stop();
       } else {
         msg_observer.WaitForStop();
-        thread_running_ = false;
+        thread_running.store(false);
       }
     }
   }
 
   for (auto& thread_id : vec_threads_mem) {
-    thread_id.join();
+    if (thread_id.joinable()) {
+      thread_id.join();
+    }
   }
+  vec_threads_mem.clear();
 
   google::ShutdownGoogleLogging();
   return EXIT_SUCCESS;

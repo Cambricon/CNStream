@@ -310,8 +310,8 @@ void InferencerPrivate::PrintPerf(std::string name, std::vector<std::string> key
 }
 
 void InferencerPrivate::PrintPerf() {
-  std::cout << "\n\n#################################################"
-            << "#################################################" << std::endl;
+  std::cout << "\033[1;35m" << "\n\n#################################################"
+            << "#################################################\n" << "\033[0m" << std::endl;
   PrintStr("Inferencer performance.    Module name : " + q_ptr_->GetName());
   PrintTitle("resize and convert (theoretical)");
   PrintPerf("rsz_cvt_batch", {"resize_start_time", "resize_end_time"});

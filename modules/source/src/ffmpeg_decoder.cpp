@@ -254,6 +254,9 @@ static int VideoDecodeCallback(cncodecCbEventType EventType, void *pData, void *
       LOG(ERROR) << "Decode abort error occured, force stop";
       pThis->VideoEosCallback();
       break;
+    case CNCODEC_CB_EVENT_STREAM_CORRUPT:
+      LOG(WARNING) << "Stream corrupt, discard frame";
+      break;
     default:
       LOG(ERROR) << "Unsupported Decode Event: " << EventType;
       break;

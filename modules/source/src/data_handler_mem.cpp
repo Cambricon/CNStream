@@ -136,6 +136,8 @@ void ESMemHandlerImpl::Close() {
       thread_.join();
     }
   }
+
+  std::lock_guard<std::mutex> lk(queue_mutex_);
   if (queue_) {
     delete queue_;
     queue_ = nullptr;
@@ -149,18 +151,21 @@ int ESMemHandlerImpl::Write(ESPacket *pkt) {
       return -1;
     }
   }
-  if (queue_) {
-    queue_->Push(std::make_shared<EsPacket>(pkt));
-  } else {
-    return -1;
+  std::lock_guard<std::mutex> lk(queue_mutex_);
+  int timeoutMs = 1000;
+  while (running_.load() && queue_) {
+    if (queue_->Push(timeoutMs, std::make_shared<EsPacket>(pkt))) {
+      return 0;
+    }
   }
-  return 0;
+  return -1;
 }
 
 void ESMemHandlerImpl::SplitterOnNal(NalDesc &desc, bool eos) {
   if (!eos) {
     parser_.Parse(desc.nal, desc.len);
   }
+  std::lock_guard<std::mutex> lk(queue_mutex_);
   if (queue_) {
     ESPacket pkt;
     pkt.data = desc.nal;
@@ -169,7 +174,12 @@ void ESMemHandlerImpl::SplitterOnNal(NalDesc &desc, bool eos) {
     if (eos) {
       pkt.flags = ESPacket::FLAG_EOS;
     }
-    queue_->Push(std::make_shared<EsPacket>(&pkt));
+    int timeoutMs = 1000;
+    while (running_.load()) {
+      if (queue_->Push(timeoutMs, std::make_shared<EsPacket>(&pkt))) {
+        return;
+      }
+    }
   }
 }
 
@@ -278,10 +288,10 @@ bool ESMemHandlerImpl::Process() {
   }
 
   if (perf_manager_ != nullptr) {
-    std::string thread_name = "cn-" + module_->GetName() + stream_id_;
+    std::string thread_name = "cn-" + module_->GetName() + "-" + NumToFormatStr(handler_.GetStreamUniqueIdx(), 2);
     perf_manager_->Record(false, PerfManager::GetDefaultType(), module_->GetName(), in->pkt_.pts);
     perf_manager_->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(in->pkt_.pts),
-                          module_->GetName() + "_th", "'" + thread_name + "'");
+                          module_->GetName() + PerfManager::GetThreadSuffix(), "'" + thread_name + "'");
   }
 
   if (in->pkt_.flags & ESPacket::FLAG_EOS) {

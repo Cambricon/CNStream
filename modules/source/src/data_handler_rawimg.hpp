@@ -25,6 +25,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <mutex>
 
 #ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
@@ -110,13 +111,17 @@ class RawImgMemHandlerImpl {
   void ProcessLoop();
   bool ProcessOneFrame(ImagePacket *img_pkt);
 
+ private:
   std::atomic<int> running_{0};
   std::thread thread_;
   bool eos_sent_ = false;
   std::atomic<bool> eos_got_{false};
   BoundedQueue<ImagePacket> *img_pktq_ = nullptr;
+  /**
+   * Ensure that the img_pktq_ is not deleted when the push is blocked.
+   */
+  std::mutex img_pktq_mutex_;
 
- private:
   uint64_t pts_ = 0;
   uint64_t frame_id_ = 0;
 

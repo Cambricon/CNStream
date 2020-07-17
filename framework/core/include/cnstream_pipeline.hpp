@@ -45,6 +45,8 @@
 #include "cnstream_eventbus.hpp"
 #include "cnstream_module.hpp"
 #include "cnstream_source.hpp"
+#include "perf_calculator.hpp"
+#include "util/cnstream_rwlock.hpp"
 
 namespace cnstream {
 
@@ -366,7 +368,28 @@ class Pipeline {
    * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
   bool CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir);
-
+  /**
+   * @brief Removes PerfManager of the stream.
+   *
+   * @note Calls this function after calling ``RemoveSource`` and receiving eos of this stream.
+   *
+   * @param stream_id The stream ID.
+   *
+   * @return Returns true if PerfManager of the stream has been removed successfully. Otherwise, returns false.
+   */
+  bool RemovePerfManager(std::string stream_id);
+  /**
+   * @brief Adds PerfManager of the stream.
+   *
+   * @note Calls this function after calling ``CreatePerfManager``.
+   * @note Calls this function before calling ``AddSource`` which will add the stream to source.
+   *
+   * @param stream_id The stream ID.
+   * @param db_dir The directory where database files to be saved.
+   *
+   * @return Returns true if PerfManager of the stream has been added successfully. Otherwise, returns false.
+   */
+  bool AddPerfManager(std::string stream_id, std::string db_dir);
   /**
    * @brief Commits sqlite events to increase the speed of inserting data to the database.
    *
@@ -419,6 +442,13 @@ class Pipeline {
   inline void RegistIPCFrameDoneCallBack(std::function<void(std::shared_ptr<CNFrameInfo>)> callback) {
     frame_done_callback_ = std::move(callback);
   }
+
+ private:
+  std::vector<std::string> GetModuleNames();
+  void SetStartAndEndNodeNames();
+  bool CreatePerfCalculator(std::string db_dir, std::string node_name, bool is_module);
+  PerfStats CalcLatestThroughput(std::string sql_name, std::string perf_type, std::vector<std::string> keys,
+                                 std::shared_ptr<PerfCalculator> calculator, bool final_print);
 
  private:
   /* ------Internal methods------ */
@@ -494,7 +524,6 @@ class Pipeline {
 
   ThreadSafeQueue<StreamMsg> msgq_;
   std::thread smsg_thread_;
-  std::vector<std::string> stream_ids_;
   StreamMsgObserver* smsg_observer_ = nullptr;
   std::atomic<bool> exit_msg_loop_{false};
 
@@ -504,16 +533,19 @@ class Pipeline {
   std::unordered_map<std::string, ModuleAssociatedInfo> modules_;
   std::unordered_map<std::string, CNModuleConfig> modules_config_;
   std::unordered_map<std::string, std::vector<std::string>> connections_config_;
-  std::string start_node_;
-  std::vector<std::string> end_nodes_;
   std::mutex stop_mtx_;
   uint64_t eos_mask_ = 0;
 
+  std::vector<std::string> stream_ids_;
+  std::string start_node_;
+  std::vector<std::string> end_nodes_;
   std::unordered_map<std::string, std::shared_ptr<PerfManager>> perf_managers_;
   std::unordered_map<std::string, std::shared_ptr<PerfCalculator>> perf_calculators_;
   std::thread perf_commit_thread_;
   std::thread calculate_perf_thread_;
   std::atomic<bool> perf_running_{false};
+  RwLock perf_managers_lock_;
+  std::mutex perf_calculation_lock_;
 };  // class Pipeline
 
 }  // namespace cnstream
