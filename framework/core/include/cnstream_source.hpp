@@ -98,6 +98,7 @@ class SourceModule : public Module {
   int RemoveSources();
 
  private:
+  uint64_t source_idx_ = 0;
   std::mutex mutex_;
   std::unordered_map<std::string /*stream_id*/, std::shared_ptr<SourceHandler>> source_map_;
 };
@@ -119,6 +120,8 @@ class SourceHandler {
   virtual void Close() = 0;
 
   std::string GetStreamId() const { return stream_id_; }
+  void SetStreamUniqueIdx(uint64_t idx) { stream_unique_idx_ = idx; }
+  uint64_t GetStreamUniqueIdx() const { return stream_unique_idx_; }
 
  public:
   std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) {
@@ -138,6 +141,7 @@ class SourceHandler {
  protected:
   SourceModule *module_ = nullptr;
   mutable std::string stream_id_;
+  uint64_t stream_unique_idx_;
   uint32_t stream_index_ = INVALID_STREAM_IDX;
 };
 

@@ -25,6 +25,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <mutex>
 
 #include "data_source.hpp"
 #include "easyinfer/mlu_context.h"
@@ -69,15 +70,18 @@ class ESJpegMemHandlerImpl : public IHandler {
   bool Extract();
   void DecodeLoop();
 
+ private:
   /**/
   std::atomic<int> running_{0};
   std::thread thread_;
   bool eos_sent_ = false;
 
-  // ParserHelper parser_;
   BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
+  /*
+   * Ensure that the queue_ is not deleted when the push is blocked.
+   */
+  std::mutex queue_mutex_;
 
- private:
   std::shared_ptr<Decoder> decoder_ = nullptr;
   uint64_t pts_ = 0;
   // maximum resolution 8K

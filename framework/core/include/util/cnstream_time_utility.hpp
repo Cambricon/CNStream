@@ -75,6 +75,21 @@ class TimeStampBase {
    * @return timestamp as string
    */
   static std::string CurrentToString() { return std::to_string(Current()); }
+  /**
+   * @brief generate timestamp and format it to date
+   * @return date as string
+   */
+  static std::string CurrentToDate() {
+    uint64_t now = Current();
+    time_t now_in_sec = now / 1e6;
+    uint64_t remainder = now % 1000000;
+    struct tm now_time;
+    char buf[80];
+    localtime_r(&now_in_sec, &now_time);
+    strftime(buf, sizeof(buf), "%Y-%m-%d-%H.%M.%S", &now_time);
+    std::string result = buf;
+    return result + "." + std::to_string(remainder);
+  }
 };
 
 /**

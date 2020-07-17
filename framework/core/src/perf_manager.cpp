@@ -57,6 +57,26 @@ PerfManager::~PerfManager() {
   }
 }
 
+std::shared_ptr<PerfManager> PerfManager::CreateDefaultManager(const std::string db_name,
+                                                               const std::vector<std::string> &module_names) {
+  std::shared_ptr<PerfManager> manager(new (std::nothrow) PerfManager());
+  if (!manager) {
+    LOG(ERROR) << "PerfManager::CreateDefaultManager() new PerfManager failed.";
+    return nullptr;
+  }
+  if (!manager->Init(db_name)) {
+    LOG(ERROR) << "Init PerfManager " << db_name << " failed.";
+    return nullptr;
+  }
+  std::vector<std::string> keys =
+      PerfManager::GetKeys(module_names, {GetStartTimeSuffix(), GetEndTimeSuffix(), GetThreadSuffix()});
+  if (!manager->RegisterPerfType(GetDefaultType(), GetPrimaryKey(), keys)) {
+    LOG(ERROR) << "PerfManager " << db_name << " register perf type " << GetDefaultType() << "failed.";
+    return nullptr;
+  }
+  return manager;
+}
+
 bool PerfManager::Init(std::string db_name) {
   if (db_name.empty()) {
     LOG(ERROR) << "Please init with database file name.";

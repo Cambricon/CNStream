@@ -37,9 +37,6 @@
 
 namespace cnstream {
 
-std::mutex latency_mutex;
-std::mutex fps_mutex;
-
 void PrintLatency(const PerfStats &stats, uint32_t width) {
   std::cout << std::right << "  -- [latency] avg: " << std::setw(4) << std::setfill(' ')
             << stats.latency_avg / 1000 << "." << stats.latency_avg % 1000 / 100
@@ -65,9 +62,9 @@ void PrintStr(const std::string str, uint32_t width, const char fill_charater) {
 }
 
 void PrintTitle(std::string title) {
-  std::cout << std::endl;
+  std::cout << "\033[32m" << std::endl;
   PrintStr("===================================[ " + title + " ]", 96, '=');
-  std::cout << std::endl;
+  std::cout << "\033[0m" << std::endl;
 }
 
 void PrintTitleForLatestThroughput(const std::string timeframe) {
@@ -88,11 +85,11 @@ void PrintTitleForTotal() {
 }
 
 // --- PerfCalculator  --- //
-PerfStats PerfCalculator::GetLatency(const std::string &sql_name, const std::string &perf_type) const {
+PerfStats PerfCalculator::GetLatency(const std::string &sql_name, const std::string &perf_type) {
   PerfStats stats;
   std::string map_key = sql_name + "_" + perf_type + "_latency";
 
-  std::lock_guard<std::mutex> lg(latency_mutex);
+  std::lock_guard<std::mutex> lg(latency_mutex_);
   if (stats_latency_map_.find(map_key) == stats_latency_map_.end()) {
     LOG(WARNING) << "Can not find latency for " << map_key;
   } else {
@@ -102,11 +99,11 @@ PerfStats PerfCalculator::GetLatency(const std::string &sql_name, const std::str
   return stats;
 }
 
-std::vector<PerfStats> PerfCalculator::GetThroughput(const std::string &sql_name, const std::string &perf_type) const {
+std::vector<PerfStats> PerfCalculator::GetThroughput(const std::string &sql_name, const std::string &perf_type) {
   std::vector<PerfStats> throughput;
   std::string map_key = sql_name + "_" + perf_type + "_throughput";
 
-  std::lock_guard<std::mutex> lg(fps_mutex);
+  std::lock_guard<std::mutex> lg(fps_mutex_);
   if (throughput_.find(map_key) == throughput_.end()) {
     LOG(ERROR) << "Can not find throughput for " << map_key;
   } else {
@@ -146,14 +143,42 @@ PerfStats PerfCalculator::CalculateFinalThroughput(const std::string &sql_name,
   return CalcAvgThroughput(throughput_vec);;
 }
 
+void PerfCalculator::RemoveLatency(const std::string &sql_name, const std::string &perf_type) {
+  std::lock_guard<std::mutex> lg(latency_mutex_);
+  std::string map_key = sql_name + "_" + perf_type + "_latency";
+  if (stats_latency_map_.find(map_key) != stats_latency_map_.end()) {
+    stats_latency_map_.erase(map_key);
+  }
+  if (pre_time_map_.find(map_key) != pre_time_map_.end()) {
+    pre_time_map_.erase(map_key);
+  }
+}
+
+void PerfCalculator::RemovePerfStats(const std::string &sql_name, const std::string &perf_type,
+                                     const std::string &key) {
+  RemoveLatency(sql_name, perf_type);
+}
+
+bool PerfCalculator::CreateDbForStoreUnprocessedData(const std::string &db_name, const std::string &perf_type,
+    const std::string &module_name, const std::vector<std::string> &suffixes) {
+  std::vector<std::string> keys = PerfManager::GetKeys({module_name}, suffixes);
+  std::shared_ptr<Sqlite> sql = PerfUtils::CreateDb(db_name);
+  if (sql == nullptr) {
+    LOG(ERROR) << "Create Database failed. Database name is " << db_name;
+    return false;
+  }
+  if (!PerfUtils::CreateTable(sql, perf_type, "", keys)) {
+    LOG(ERROR) << "Create database table failed. Database name is " << db_name;
+    return false;
+  }
+  return perf_utils_->AddSql("_" + perf_type + "_throughput", sql);
+}
+
 PerfStats PerfCalculator::CalcLatency(const std::string &sql_name, const std::string &perf_type,
                                       const std::vector<std::string> &keys) {
   PerfStats stats;
   const std::string map_key = sql_name + "_" + perf_type + "_latency";
 
-  if (!perf_utils_->SqlIsExisted(sql_name)) {
-    return stats;
-  }
   if (keys.size() != 2 && keys.size() != 3) {
     LOG(ERROR) << "[Calc Latency] Please provide two or three keys for calculation.";
     return PerfStats();
@@ -202,6 +227,35 @@ PerfStats PerfCalculator::CalcLatency(const std::string &sql_name, const std::st
 }
 
 // --- PerfCalculatorForModule  --- //
+void PerfCalculatorForModule::RemovePerfStats(const std::string &sql_name, const std::string &perf_type,
+                                              const std::string &key) {
+  RemoveLatency(sql_name, perf_type);
+  StoreUnprocessedData(sql_name, perf_type, key);
+}
+
+void PerfCalculatorForModule::StoreUnprocessedData(const std::string &sql_name, const std::string &perf_type,
+                                                   const std::string &key) {
+  std::string thread_key = key + PerfManager::GetThreadSuffix();
+  std::string start_key = key + PerfManager::GetStartTimeSuffix();
+  std::string end_key = key + PerfManager::GetEndTimeSuffix();
+
+  std::set<std::string> th_ids = perf_utils_->GetThreadIdFromAllDb(perf_type, thread_key);
+  for (auto th_id : th_ids) {
+    std::string map_key =  th_id + "_" + perf_type + "_throughput";
+    if (pre_time_map_.find(map_key) == pre_time_map_.end()) {
+      pre_time_map_[map_key] = 0;
+    }
+    size_t pre_time = pre_time_map_[map_key];
+    std::string condition = end_key + " > " + std::to_string(pre_time) + " and " + thread_key + " = '" + th_id + "'";
+    std::vector<DbItem> items = perf_utils_->GetItems(sql_name, perf_type, {start_key, end_key, thread_key}, condition);
+    for (auto it : items) {
+      if (it.second.size() != 3) { continue; }
+      it.second[2] = "'" + it.second[2] + "'";
+      perf_utils_->Record("_" + perf_type + "_throughput", perf_type, {start_key, end_key, thread_key}, it.second);
+    }
+  }
+}
+
 PerfStats PerfCalculatorForModule::CalcThroughput(const std::string &sql_name, const std::string &perf_type,
                                                   const std::vector<std::string> &keys) {
   if (keys.size() != 3) {
@@ -260,7 +314,7 @@ PerfStats PerfCalculatorForModule::CalcThroughput(const std::string &sql_name, c
     latest_frame_cnt_digit.push_back(std::to_string(stats.frame_cnt).length());
 
     {
-      std::lock_guard<std::mutex> lg(fps_mutex);
+      std::lock_guard<std::mutex> lg(fps_mutex_);
       if (throughput_.find(map_key) == throughput_.end()) {
         throughput_[map_key] = {};
       }
@@ -291,7 +345,7 @@ PerfStats PerfCalculatorForModule::CalcThroughput(const std::string &sql_name, c
   }
   std::string total_map_key = "_" + perf_type + "_throughput";
   {
-    std::lock_guard<std::mutex> lg(fps_mutex);
+    std::lock_guard<std::mutex> lg(fps_mutex_);
     if (throughput_.find(total_map_key) == throughput_.end()) {
       throughput_[total_map_key] = {};
     }
@@ -302,6 +356,39 @@ PerfStats PerfCalculatorForModule::CalcThroughput(const std::string &sql_name, c
 }
 
 // --- PerfCalculatorForPipeline  --- //
+void PerfCalculatorForPipeline::RemoveThroughput(const std::string &sql_name, const std::string &perf_type) {
+  std::lock_guard<std::mutex> lg(fps_mutex_);
+  std::string map_key = sql_name + "_" + perf_type + "_throughput";
+  if (throughput_.find(map_key) != throughput_.end()) {
+    throughput_.erase(map_key);
+  }
+  if (pre_time_map_.find(map_key) != pre_time_map_.end()) {
+    pre_time_map_.erase(map_key);
+  }
+}
+
+void PerfCalculatorForPipeline::RemovePerfStats(const std::string &sql_name, const std::string &perf_type,
+                                                const std::string &key) {
+  RemoveLatency(sql_name, perf_type);
+  RemoveThroughput(sql_name, perf_type);
+  StoreUnprocessedData(sql_name, perf_type, key);
+}
+
+void PerfCalculatorForPipeline::StoreUnprocessedData(const std::string &sql_name, const std::string &perf_type,
+                                                     const std::string &key) {
+  std::string map_key =  "_" + perf_type + "_throughput";
+  if (pre_time_map_.find(map_key) == pre_time_map_.end()) {
+    pre_time_map_[map_key] = 0;
+  }
+  size_t pre_time = pre_time_map_[map_key];
+  std::string condition = key + " > " + std::to_string(pre_time);
+  std::vector<DbItem> items = perf_utils_->GetItems(sql_name, perf_type, {key}, condition);
+  for (auto it : items) {
+    if (it.second.size() != 1) { continue; }
+    perf_utils_->Record(map_key, perf_type, {key}, it.second);
+  }
+}
+
 PerfStats PerfCalculatorForPipeline::CalcThroughput(const std::string &sql_name, const std::string &perf_type,
                                                     const std::vector<std::string> &keys) {
   if (keys.size() != 1) {
@@ -310,12 +397,6 @@ PerfStats PerfCalculatorForPipeline::CalcThroughput(const std::string &sql_name,
   }
   const std::string &end_key = keys[0];
   std::string map_key = sql_name + "_" + perf_type + "_throughput";
-
-  if (sql_name != "") {
-    if (!perf_utils_->SqlIsExisted(sql_name)) {
-      return PerfStats();
-    }
-  }
 
   if (pre_time_map_.find(map_key) == pre_time_map_.end()) {
     pre_time_map_[map_key] = 0;
@@ -389,7 +470,7 @@ PerfStats PerfCalculatorForPipeline::CalcThroughput(const std::string &sql_name,
   }
 
   {
-    std::lock_guard<std::mutex> lg(fps_mutex);
+    std::lock_guard<std::mutex> lg(fps_mutex_);
     if (throughput_.find(map_key) == throughput_.end()) {
       throughput_[map_key] = {};
     }
@@ -406,9 +487,6 @@ PerfStats PerfCalculatorForPipeline::CalcThroughput(const std::string &sql_name,
 PerfStats PerfCalculatorForInfer::CalcThroughput(const std::string &sql_name, const std::string &perf_type,
                                                  const std::vector<std::string> &keys) {
   PerfStats stats;
-  if (!perf_utils_->SqlIsExisted(sql_name)) {
-    return stats;
-  }
 
   if (keys.size() != 3 && keys.size() != 2) {
     LOG(ERROR) << "[Calc Throughput] Please provide two or three keys for calculation.";
@@ -477,7 +555,7 @@ PerfStats PerfCalculatorForInfer::CalcThroughput(const std::string &sql_name, co
   stats = method_->CalcThroughput(pre_time, integer_item);
 
   {
-    std::lock_guard<std::mutex> lg(fps_mutex);
+    std::lock_guard<std::mutex> lg(fps_mutex_);
     if (throughput_.find(map_key) == throughput_.end()) {
       throughput_[map_key] = {};
     }
@@ -593,8 +671,9 @@ static int Callback(void *data, int argc, char **argv, char **azColName) {
 }
 
 bool PerfUtils::AddSql(const std::string &name, std::shared_ptr<Sqlite> sql) {
+  std::lock_guard<std::mutex> lg(sql_map_lock_);
   if (SqlIsExisted(name)) {
-    LOG(ERROR) << "Add sql handler failed. sql [" << name << "] exists.";
+    LOG(ERROR) << "Add sql handler failed. sql '" << name << "' exists.";
     return false;
   }
   if (name.empty()) {
@@ -610,8 +689,9 @@ bool PerfUtils::AddSql(const std::string &name, std::shared_ptr<Sqlite> sql) {
 }
 
 bool PerfUtils::RemoveSql(const std::string &name) {
+  std::lock_guard<std::mutex> lg(sql_map_lock_);
   if (!SqlIsExisted(name)) {
-    LOG(ERROR) << "Remove sql failed. sql [" << name << "] does not exist.";
+    LOG(ERROR) << "Remove sql failed. sql '" << name << "' does not exist.";
     return false;
   }
   sql_map_.erase(name);
@@ -628,14 +708,27 @@ std::vector<DbItem> PerfUtils::SearchFromDatabase(std::shared_ptr<Sqlite> sql, s
   return item_vec;
 }
 
+std::vector<std::string> PerfUtils::GetSqlNames() {
+  std::vector<std::string> sql_names;
+  std::lock_guard<std::mutex> lg(sql_map_lock_);
+  for (auto sql : sql_map_) {
+    sql_names.push_back(sql.first);
+  }
+  return sql_names;
+}
+
 std::set<std::string> PerfUtils::GetThreadId(std::string name, std::string perf_type, std::string th_key) {
   std::set<std::string> ids;
-  if (!SqlIsExisted(name)) {
-    return ids;
-  }
+  std::vector<DbItem> th_vec;
+  {
+    std::lock_guard<std::mutex> lg(sql_map_lock_);
+    if (!SqlIsExisted(name)) {
+      return ids;
+    }
 
-  std::string select_sql = " select distinct " + th_key + " from " + perf_type + ";";
-  std::vector<DbItem> th_vec = SearchFromDatabase(sql_map_[name], select_sql);
+    std::string select_sql = " select distinct " + th_key + " from " + perf_type + ";";
+    th_vec = SearchFromDatabase(sql_map_[name], select_sql);
+  }
   for (auto it : th_vec) {
     if (!it.second[0].empty()) {
       ids.insert(it.second[0]);
@@ -646,8 +739,8 @@ std::set<std::string> PerfUtils::GetThreadId(std::string name, std::string perf_
 
 std::set<std::string> PerfUtils::GetThreadIdFromAllDb(std::string perf_type, std::string th_key) {
   std::set<std::string> ids;
-  for (auto sql : sql_map_) {
-    std::set<std::string> th_ids = GetThreadId(sql.first, perf_type, th_key);
+  for (auto sql_name : GetSqlNames()) {
+    std::set<std::string> th_ids = GetThreadId(sql_name, perf_type, th_key);
     ids.insert(th_ids.begin(), th_ids.end());
   }
   return ids;
@@ -655,6 +748,7 @@ std::set<std::string> PerfUtils::GetThreadIdFromAllDb(std::string perf_type, std
 
 std::vector<DbItem> PerfUtils::GetItems(std::string name, std::string perf_type, std::vector<std::string> keys,
                                         std::string condition) {
+  std::lock_guard<std::mutex> lg(sql_map_lock_);
   std::vector<DbItem> item_vec;
   if (!SqlIsExisted(name)) {
     return item_vec;
@@ -674,8 +768,8 @@ std::vector<DbItem> PerfUtils::GetItems(std::string name, std::string perf_type,
 std::vector<DbItem> PerfUtils::GetItemsFromAllDb(std::string perf_type, std::vector<std::string> keys,
                                                  std::string condition) {
   std::vector<DbItem> items;
-  for (auto sql : sql_map_) {
-    std::vector<DbItem> item_vec = GetItems(sql.first, perf_type, keys, condition);
+  for (auto sql_name : GetSqlNames()) {
+    std::vector<DbItem> item_vec = GetItems(sql_name, perf_type, keys, condition);
     items.reserve(items.size() + item_vec.size());
     items.insert(items.end(), item_vec.begin(), item_vec.end());
   }
@@ -696,6 +790,7 @@ std::vector<DbIntegerItem> PerfUtils::ToInteger(const std::vector<DbItem> &data)
 }
 
 size_t PerfUtils::FindMaxValue(std::string name, std::string perf_type, std::string key, std::string condition) {
+  std::lock_guard<std::mutex> lg(sql_map_lock_);
   if (!SqlIsExisted(name)) {
     return 0;
   }
@@ -704,13 +799,14 @@ size_t PerfUtils::FindMaxValue(std::string name, std::string perf_type, std::str
 
 std::vector<size_t> PerfUtils::FindMaxValues(std::string perf_type, std::string key, std::string condition) {
   std::vector<size_t> max_values;
-  for (auto sql : sql_map_) {
-    max_values.push_back(FindMaxValue(sql.first, perf_type, key, condition));
+  for (auto sql_name : GetSqlNames()) {
+    max_values.push_back(FindMaxValue(sql_name, perf_type, key, condition));
   }
   return max_values;
 }
 
 size_t PerfUtils::FindMinValue(std::string name, std::string perf_type, std::string key, std::string condition) {
+  std::lock_guard<std::mutex> lg(sql_map_lock_);
   if (!SqlIsExisted(name)) {
     return 0;
   }
@@ -719,13 +815,14 @@ size_t PerfUtils::FindMinValue(std::string name, std::string perf_type, std::str
 
 std::vector<size_t> PerfUtils::FindMinValues(std::string perf_type, std::string key, std::string condition) {
   std::vector<size_t> min_values;
-  for (auto sql : sql_map_) {
-    min_values.push_back(FindMinValue(sql.first, perf_type, key, condition));
+  for (auto sql_name : GetSqlNames()) {
+    min_values.push_back(FindMinValue(sql_name, perf_type, key, condition));
   }
   return min_values;
 }
 
 size_t PerfUtils::GetCount(std::string name, std::string perf_type, std::string key, std::string condition) {
+  std::lock_guard<std::mutex> lg(sql_map_lock_);
   if (!SqlIsExisted(name)) {
     return 0;
   }
@@ -734,19 +831,23 @@ size_t PerfUtils::GetCount(std::string name, std::string perf_type, std::string 
 
 std::vector<size_t> PerfUtils::GetCountFromAllDb(std::string perf_type, std::string key, std::string condition) {
   std::vector<size_t> count_vec;
-  for (auto sql : sql_map_) {
-    count_vec.push_back(GetCount(sql.first, perf_type, key, condition));
+  for (auto sql_name : GetSqlNames()) {
+    count_vec.push_back(GetCount(sql_name, perf_type, key, condition));
   }
   return count_vec;
 }
 
 std::vector<std::string> PerfUtils::GetTableNames(std::string name) {
+  std::vector<DbItem> item;
   std::vector<std::string> table_names;
-  if (!SqlIsExisted(name)) {
-    return table_names;
+  {
+    std::lock_guard<std::mutex> lg(sql_map_lock_);
+    if (!SqlIsExisted(name)) {
+      return table_names;
+    }
+    std::string select_sql = "select name from sqlite_master where type ='table'";
+    item = SearchFromDatabase(sql_map_[name], select_sql);
   }
-  std::string select_sql = "select name from sqlite_master where type ='table'";
-  std::vector<DbItem> item = SearchFromDatabase(sql_map_[name], select_sql);
   for (auto it : item) {
     if (it.first != 1) continue;
     table_names.push_back(it.second[0]);
@@ -761,4 +862,49 @@ bool PerfUtils::SqlIsExisted(std::string name) {
   return true;
 }
 
+std::shared_ptr<Sqlite> PerfUtils::CreateDb(std::string name) {
+  if (name.empty()) {
+    LOG(ERROR) << "Can not create database with empty name";
+    return nullptr;
+  }
+  std::shared_ptr<Sqlite> sql = std::make_shared<Sqlite>(name);
+  if (!sql->Connect()) {
+    LOG(ERROR) << "Can not connect to database " << name;
+    sql->Close();
+    return nullptr;
+  }
+  return sql;
+}
+
+bool PerfUtils::CreateTable(std::shared_ptr<Sqlite> sql, std::string perf_type, std::string primary_key,
+                            std::vector<std::string> keys) {
+  if (sql == nullptr) {
+    LOG(ERROR) << "Can not create table for nullptr";
+    return false;
+  }
+  return sql->CreateTable(perf_type, primary_key, keys);
+}
+
+bool PerfUtils::Record(std::string sql_name, std::string perf_type, std::vector<std::string> keys,
+                       std::vector<std::string>values) {
+  if (keys.size() != values.size()) {
+    LOG(ERROR) << "Record: The size of keys and values is not the same.";
+    return false;
+  }
+  std::string key_str, value_str;
+  for (uint32_t i = 0; i < keys.size(); i++) {
+    key_str += keys[i] + ",";
+    value_str += values[i] + ",";
+  }
+  key_str.pop_back();
+  value_str.pop_back();
+  {
+    std::lock_guard<std::mutex> lg(sql_map_lock_);
+    if (!SqlIsExisted(sql_name)) {
+      LOG(ERROR) << "sql '" << sql_name << "' is not exist.";
+      return false;
+    }
+    return sql_map_[sql_name]->Insert(perf_type, key_str, value_str);
+  }
+}
 }  // namespace cnstream

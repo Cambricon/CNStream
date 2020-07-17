@@ -75,7 +75,11 @@ bool Sqlite::Execution(std::string sql) {
 
 bool Sqlite::CreateTable(std::string table_name, std::string primary_key, std::vector<std::string> key_names) {
   std::string sql;
-  sql = "CREATE TABLE " + table_name + "(" + primary_key + " STRING PRIMARY KEY NOT NULL,";
+  if (primary_key.empty()) {
+    sql = "CREATE TABLE " + table_name + "(id integer PRIMARY KEY autoincrement,";
+  } else {
+    sql = "CREATE TABLE " + table_name + "(" + primary_key + " STRING PRIMARY KEY NOT NULL,";
+  }
   for (auto it : key_names) {
     sql += it + " STRING,";
   }

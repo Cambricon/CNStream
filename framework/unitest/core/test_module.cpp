@@ -119,7 +119,7 @@ TEST(CoreModule, SetAndGetPerfManager) {
   std::vector<std::string> m_names = {"m1", "m2"};
 
   std::vector<std::string> keys = PerfManager::GetKeys(m_names, {PerfManager::GetStartTimeSuffix(),
-      PerfManager::GetEndTimeSuffix(), "_th"});
+      PerfManager::GetEndTimeSuffix(), PerfManager::GetThreadSuffix()});
 
   std::unordered_map<std::string, std::shared_ptr<PerfManager>> managers;
   for (auto it : stream_ids) {

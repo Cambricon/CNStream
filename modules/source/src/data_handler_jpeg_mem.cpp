@@ -115,20 +115,23 @@ void ESJpegMemHandlerImpl::Close() {
       thread_.join();
     }
   }
+
+  std::lock_guard<std::mutex> lk(queue_mutex_);
   if (queue_) {
     delete queue_;
     queue_ = nullptr;
   }
-  // parser_.Free();
 }
 
 int ESJpegMemHandlerImpl::Write(ESPacket *pkt) {
-  if (queue_) {
-    queue_->Push(std::make_shared<EsPacket>(pkt));
-  } else {
-    return -1;
+  std::lock_guard<std::mutex> lk(queue_mutex_);
+  int timeoutMs = 1000;
+  while (running_.load() && queue_) {
+    if (queue_->Push(timeoutMs, std::make_shared<EsPacket>(pkt))) {
+      return 0;
+    }
   }
-  return 0;
+  return -1;
 }
 
 void ESJpegMemHandlerImpl::DecodeLoop() {

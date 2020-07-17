@@ -53,6 +53,18 @@ class PerfManager {
    */
   ~PerfManager();
   /**
+   * @brief Creates default PerfManager.
+   *
+   * Inits PerfManager and creates default table.
+   *
+   * @param db_name The name of the database.
+   * @param module_names The names of the modules.
+   *
+   * @return Returns PerfManager pointer if it has been created successfully, otherwise returns nullptr.
+   */
+  static std::shared_ptr<PerfManager> CreateDefaultManager(const std::string db_name,
+                                                           const std::vector<std::string> &module_names);
+  /**
    * @brief Stops to record data to database.
    *
    * @return Void.
@@ -165,6 +177,12 @@ class PerfManager {
    * @return Returns the start time suffix.
    */
   static inline std::string GetStartTimeSuffix() { return "_stime"; }
+  /**
+   * @brief Gets the thread suffix.
+   *
+   * @return Returns the thread suffix.
+   */
+  static inline std::string GetThreadSuffix() { return "_th"; }
   /**
    * @brief Gets the primary key.
    *

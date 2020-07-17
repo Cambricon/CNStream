@@ -20,6 +20,7 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <ctime>
@@ -30,6 +31,7 @@
 #include <random>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -1103,36 +1105,20 @@ TEST(CorePipeline, CreatePerfManager) {
   EXPECT_TRUE(pipeline.Stop());
 }
 
+
 TEST(CorePipeline, CreatePerfManagerFailedCase) {
-  Pipeline pipeline1("test pipeline");
-  Pipeline pipeline2("test pipeline");
+  Pipeline pipeline("test pipeline");
   auto up_node = std::make_shared<TestModule>("up_node");
   auto down_node = std::make_shared<TestModule>("down_node");
 
   // add two modules to the pipeline and link
-  EXPECT_TRUE(pipeline1.AddModule(up_node));
-  EXPECT_TRUE(pipeline1.AddModule(down_node));
-  pipeline1.SetModuleAttribute(up_node, 0);
-  pipeline1.LinkModules(up_node, down_node);
-
-  EXPECT_TRUE(pipeline2.AddModule(up_node));
-  EXPECT_TRUE(pipeline2.AddModule(down_node));
-  pipeline2.SetModuleAttribute(up_node, 0);
-  pipeline2.LinkModules(up_node, down_node);
-
+  EXPECT_TRUE(pipeline.AddModule(up_node));
+  EXPECT_TRUE(pipeline.AddModule(down_node));
+  pipeline.SetModuleAttribute(up_node, 0);
+  pipeline.LinkModules(up_node, down_node);
   std::vector<std::string> stream_ids = {"0", "1", "2", "3"};
-  EXPECT_TRUE(pipeline1.CreatePerfManager(stream_ids, gTestPerfDir));
-
-  EXPECT_TRUE(pipeline1.Start());
-
-#ifdef HAVE_SQLITE
-  // failed as the db file is opened by pipeline1
-  EXPECT_FALSE(pipeline2.CreatePerfManager(stream_ids, gTestPerfDir));
-#else
-  EXPECT_TRUE(pipeline2.CreatePerfManager(stream_ids, gTestPerfDir));
-#endif
-
-  EXPECT_TRUE(pipeline1.Stop());
+  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, gTestPerfDir));
+  EXPECT_FALSE(pipeline.CreatePerfManager(stream_ids, gTestPerfDir));
 }
 
 TEST(CorePipeline, PerfTaskLoop) {
@@ -1175,4 +1161,148 @@ TEST(CorePipeline, PerfTaskLoop) {
   EXPECT_TRUE(pipeline.Stop());
 }
 
+class MsgObserverPerf : StreamMsgObserver {
+ public:
+  enum StopFlag { STOP_BY_EOS = 0, STOP_BY_ERROR };
+  MsgObserverPerf(int chn_cnt, Pipeline* pipeline) {
+    chn_cnt_.store(chn_cnt);
+    pipeline_ = pipeline;
+  }
+
+  void Update(const StreamMsg& smsg) override {
+    if (stop_) return;
+    if (smsg.type == StreamMsgType::EOS_MSG) {
+      LOG(INFO) << "[Observer] received EOS_MSG from stream_id: " << smsg.stream_id;
+      eos_chn_.push_back(smsg.stream_id);
+      SetFlag(smsg.stream_id);
+      if (static_cast<int>(eos_chn_.size()) == chn_cnt_) {
+        stop_ = true;
+        wakener_.set_value(STOP_BY_EOS);
+      }
+    } else if (smsg.type == StreamMsgType::ERROR_MSG) {
+      LOG(INFO) << "[Observer] received ERROR_MSG";
+      stop_ = true;
+      wakener_.set_value(STOP_BY_ERROR);
+    }
+  }
+
+  StopFlag WaitForStop() {
+    StopFlag stop_flag = wakener_.get_future().get();
+    pipeline_->Stop();
+    return stop_flag;
+  }
+
+  void SetFlag(std::string stream_id) {
+    std::lock_guard<std::mutex> lg(flag_lock_);
+    if (flags_map_.find(stream_id) != flags_map_.end()) {
+      flags_map_[stream_id].set_value(true);
+      flags_map_.erase(stream_id);
+    }
+  }
+  void AddFlag(std::string stream_id, std::promise<bool> flag) {
+    std::lock_guard<std::mutex> lg(flag_lock_);
+    if (flags_map_.find(stream_id) == flags_map_.end()) {
+      flags_map_[stream_id] = std::move(flag);
+    }
+  }
+
+  void AddCnt() {
+    chn_cnt_++;
+  }
+
+ private:
+  std::unordered_map<std::string, std::promise<bool>> flags_map_;
+  std::mutex flag_lock_;
+  std::atomic<int> chn_cnt_;
+  Pipeline* pipeline_ = nullptr;
+  std::vector<std::string> eos_chn_;
+  bool stop_ = false;
+  std::promise<StopFlag> wakener_;
+};
+
+static void GenerateData(std::string stream_id, Pipeline *pipeline, std::string node_name,
+                         uint32_t ts, bool is_eos = false, uint32_t sleep_ms = 10) {
+  auto data = CNFrameInfo::Create(stream_id, is_eos);
+  data->stream_id = stream_id;
+  data->timestamp = ts;
+  EXPECT_NO_THROW(pipeline->TransmitData(node_name, data));
+  std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+}
+
+void SendData(std::vector<std::string> stream_ids, Pipeline *pipeline, std::string node_name,
+              uint32_t data_num, uint32_t stream_0_data_num) {
+  for (uint32_t i = 0; i < data_num; i++) {
+    for (auto it : stream_ids) {
+      if (it == stream_ids[0]) {
+        if (i == stream_0_data_num) { GenerateData(it, pipeline, node_name, 0, true); }
+        if (i >= stream_0_data_num) { continue; }
+      }
+      GenerateData(it, pipeline, node_name, i);
+    }
+  }
+  for (auto it : stream_ids) {
+    GenerateData(it, pipeline, node_name, 0, true);
+  }
+}
+
+TEST(CorePipeline, DynamicAddAndRemovePerfManager) {
+  Pipeline pipeline("test pipeline");
+  auto up_node = std::make_shared<TestModule>("up_node");
+  auto down_node = std::make_shared<TestModule>("down_node");
+  auto end_node = std::make_shared<TestModule>("end_node");
+  EXPECT_TRUE(pipeline.AddModule(up_node));
+  EXPECT_TRUE(pipeline.AddModule(down_node));
+  EXPECT_TRUE(pipeline.AddModule(end_node));
+  pipeline.SetModuleAttribute(up_node, 0);
+  pipeline.SetModuleAttribute(down_node, 2);
+  pipeline.LinkModules(up_node, down_node);
+  pipeline.LinkModules(down_node, end_node);
+
+  down_node->ShowPerfInfo(true);
+  end_node->ShowPerfInfo(true);
+
+  std::vector<std::string> stream_ids = {"0", "1", "2", "3"};
+
+  MsgObserverPerf msg_observer(static_cast<int>(stream_ids.size()), &pipeline);
+  pipeline.SetStreamMsgObserver(reinterpret_cast<cnstream::StreamMsgObserver*>(&msg_observer));
+
+  // This flag will be set to true if observer get eos from stream 0.
+  std::promise<bool> flag_for_stream0;
+  std::future<bool> flag_for_stream0_future = flag_for_stream0.get_future();
+  msg_observer.AddFlag(stream_ids[0], std::move(flag_for_stream0));
+
+  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, gTestPerfDir));
+  EXPECT_TRUE(pipeline.Start());
+
+  uint32_t data_num = 100;
+  uint32_t stream_0_data_num = 40;
+  // Start a thread for sending data to pipeline.
+  std::thread th(SendData, stream_ids, &pipeline, up_node->GetName(), data_num, stream_0_data_num);
+
+  // Wait until stream 0 is finished. And then remove PerfManager of stream 0.
+  flag_for_stream0_future.get();
+  pipeline.RemovePerfManager(stream_ids[0]);
+
+  // Add new streams to pipeline. Note, you need to add PerfManager before adding stream to pipeline.
+  data_num = 50;
+  std::vector<std::string> new_stream_ids = {"0", "4"};
+  for (auto it : new_stream_ids) {
+    pipeline.AddPerfManager(it, gTestPerfDir);
+    msg_observer.AddCnt();
+  }
+
+  // Send data of new streams
+  for (uint32_t i = 0; i < data_num; i++) {
+    for (auto it : new_stream_ids) {
+      GenerateData(it, &pipeline, "up_node", i);
+    }
+  }
+  for (auto it : new_stream_ids) {
+    GenerateData(it, &pipeline, "up_node", 0, true);
+  }
+
+  msg_observer.WaitForStop();
+  th.join();
+  EXPECT_TRUE(pipeline.Stop());
+}
 }  // namespace cnstream

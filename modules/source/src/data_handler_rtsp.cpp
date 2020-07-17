@@ -505,10 +505,10 @@ void RtspHandlerImpl::DecodeLoop() {
       continue;
     } else {
       if (perf_manager_ != nullptr) {
-        std::string thread_name = "cn-" + module_->GetName() + stream_id_;
+        std::string thread_name = "cn-" + module_->GetName() + "-" + NumToFormatStr(handler_.GetStreamUniqueIdx(), 2);
         perf_manager_->Record(false, PerfManager::GetDefaultType(), module_->GetName(), in->pkt_.pts);
         perf_manager_->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(in->pkt_.pts),
-            module_->GetName() + "_th", "'" + thread_name + "'");
+            module_->GetName() + PerfManager::GetThreadSuffix(), "'" + thread_name + "'");
       }
     }
 

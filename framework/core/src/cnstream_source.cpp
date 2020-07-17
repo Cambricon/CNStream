@@ -96,6 +96,10 @@ int SourceModule::AddSource(std::shared_ptr<SourceHandler> handler) {
     LOG(ERROR) << "Duplicate stream_id\n";
     return -1;
   }
+
+  handler->SetStreamUniqueIdx(source_idx_);
+  source_idx_++;
+
   if (handler->Open() != true) {
     LOG(ERROR) << "source Open failed";
     return -1;

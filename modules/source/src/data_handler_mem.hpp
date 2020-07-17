@@ -35,6 +35,7 @@ extern "C" {
 #include <sstream>
 #include <string>
 #include <thread>
+#include <mutex>
 
 #include "data_source.hpp"
 #include "easyinfer/mlu_context.h"
@@ -96,6 +97,7 @@ class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
   bool Extract();
   void DecodeLoop();
 
+ private:
   /**/
   std::atomic<int> running_{0};
   std::thread thread_;
@@ -103,8 +105,11 @@ class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
 
   ParserHelper parser_;
   BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
+  /*
+   * Ensure that the queue_ is not deleted when the push is blocked.
+   */
+  std::mutex queue_mutex_;
 
- private:
   std::shared_ptr<Decoder> decoder_ = nullptr;
   uint64_t pts_ = 0;
 

@@ -216,6 +216,7 @@ void RawImgMemHandlerImpl::Close() {
     thread_.join();
   }
 
+  std::lock_guard<std::mutex> lk(img_pktq_mutex_);
   if (img_pktq_) {
     ImagePacket in;
     while (img_pktq_->Size() > 0) {
@@ -241,6 +242,7 @@ void RawImgMemHandlerImpl::Close() {
 
 #ifdef HAVE_OPENCV
 int RawImgMemHandlerImpl::Write(cv::Mat *mat_data) {
+  std::lock_guard<std::mutex> lk(img_pktq_mutex_);
   if (img_pktq_) {
     ImagePacket img_pkt;
     if (mat_data && mat_data->data) {
@@ -256,9 +258,12 @@ int RawImgMemHandlerImpl::Write(cv::Mat *mat_data) {
       img_pkt.data = nullptr;
       img_pkt.pts = pts_++;
     }
-
-    img_pktq_->Push(img_pkt);
-    return 0;
+    int timeoutMs = 1000;
+    while (running_.load()) {
+      if (img_pktq_->Push(timeoutMs, img_pkt)) {
+        return 0;
+      }
+    }
   }
 
   return -1;
@@ -266,6 +271,7 @@ int RawImgMemHandlerImpl::Write(cv::Mat *mat_data) {
 #endif
 
 int RawImgMemHandlerImpl::Write(unsigned char *img_data, int size, int w, int h, CNDataFormat pixel_fmt) {
+  std::lock_guard<std::mutex> lk(img_pktq_mutex_);
   if (img_pktq_) {
     ImagePacket img_pkt;
     if (CheckRawImageParams(img_data, size, w, h, pixel_fmt)) {
@@ -281,9 +287,12 @@ int RawImgMemHandlerImpl::Write(unsigned char *img_data, int size, int w, int h,
       img_pkt.data = nullptr;
       img_pkt.pts = pts_++;
     }
-
-    img_pktq_->Push(img_pkt);
-    return 0;
+    int timeoutMs = 1000;
+    while (running_.load()) {
+      if (img_pktq_->Push(timeoutMs, img_pkt)) {
+        return 0;
+      }
+    }
   }
 
   return -1;

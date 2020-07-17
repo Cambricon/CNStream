@@ -42,7 +42,8 @@ static void Register(PerfManager* manager) {
   std::string end = PerfManager::GetEndTimeSuffix();
   std::string table_name = PerfManager::GetDefaultType();
   std::string p_key = PerfManager::GetPrimaryKey();
-  std::vector<std::string> keys = PerfManager::GetKeys(module_names, {start, end, "_th"});
+  std::string thread_suffix = PerfManager::GetThreadSuffix();
+  std::vector<std::string> keys = PerfManager::GetKeys(module_names, {start, end, thread_suffix});
   manager->RegisterPerfType(table_name, p_key, keys);
   EXPECT_TRUE(manager->perf_type_.find(table_name) != manager->perf_type_.end());
 }
@@ -93,7 +94,8 @@ TEST(PerfManager, Record) {
     PerfManager::PerfInfo info{};
     EXPECT_TRUE(manager.Record(false, table_name, module_names[i], 0));
     EXPECT_TRUE(manager.Record(true, table_name, module_names[i], 0));
-    EXPECT_TRUE(manager.Record(table_name, PerfManager::GetPrimaryKey(), "0", module_names[i] + "_th", "'th_0'"));
+    EXPECT_TRUE(manager.Record(table_name, PerfManager::GetPrimaryKey(), "0",
+                               module_names[i] + PerfManager::GetThreadSuffix(), "'th_0'"));
     EXPECT_TRUE(manager.Record(table_name, PerfManager::GetPrimaryKey(), "1",
                                module_names[i] + PerfManager::GetStartTimeSuffix()));
   }
@@ -102,7 +104,7 @@ TEST(PerfManager, Record) {
   for (uint32_t i = 0; i < module_names.size(); i++) {
     EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + PerfManager::GetStartTimeSuffix()), (unsigned)2);
     EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + PerfManager::GetEndTimeSuffix()), (unsigned)1);
-    EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + "_th"), (unsigned)1);
+    EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + PerfManager::GetThreadSuffix()), (unsigned)1);
   }
 #endif
 }

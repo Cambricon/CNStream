@@ -27,7 +27,9 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <iomanip>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -113,6 +115,19 @@ uint32_t GetMaxStreamNumber();
 void SetFlowDepth(int flow_depth);
 int GetFlowDepth();
 
+/**
+ * @brief Converts number to string
+ *
+ * @param number the number
+ * @param width Padding with zero
+ * @return Returns string
+ */
+template <typename T>
+std::string NumToFormatStr(const T &number, uint32_t width) {
+    std::stringstream ss;
+    ss << std::setw(width) << std::setfill('0') << number;
+    return ss.str();
+}
 }  // namespace cnstream
 
 #endif  // CNSTREAM_COMMON_HPP_
