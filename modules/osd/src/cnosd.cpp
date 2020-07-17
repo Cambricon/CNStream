@@ -109,7 +109,7 @@ void CnOsd::DrawLogo(cv::Mat *image, std::string logo) const {
 }
 
 #define CLIP(x) x < 0 ? 0 : (x > 1 ? 1 : x)
-void CnOsd::DrawLabel(cv::Mat image, cnstream::CNObjsVec& objects, cnstream::CnFont* cn_font,
+void CnOsd::DrawLabel(cv::Mat image, const cnstream::CNObjsVec& objects, cnstream::CnFont* cn_font,
                       bool tiled, std::vector<std::string> attr_keys) const {
   // check input data
   if (image.rows * image.cols == 0) {

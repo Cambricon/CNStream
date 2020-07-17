@@ -67,14 +67,14 @@ static std::mutex g_vcap_mtx;
 
 class MsgObserver : cnstream::StreamMsgObserver {
  public:
-  MsgObserver(int chn_cnt, cnstream::Pipeline* pipeline) : chn_cnt_(chn_cnt), pipeline_(pipeline) {}
+  MsgObserver(int stream_cnt, cnstream::Pipeline* pipeline) : stream_cnt_(stream_cnt), pipeline_(pipeline) {}
 
   void Update(const cnstream::StreamMsg& smsg) override {
     if (stop_) return;
     if (smsg.type == cnstream::StreamMsgType::EOS_MSG) {
-      eos_chn_.push_back(smsg.stream_id);
-      LOG(INFO) << "[Observer] received EOS from channel:" << smsg.stream_id;
-      if (static_cast<int>(eos_chn_.size()) == chn_cnt_) {
+      eos_stream_.push_back(smsg.stream_id);
+      LOG(INFO) << "[Observer] received EOS from stream:" << smsg.stream_id;
+      if (static_cast<int>(eos_stream_.size()) == stream_cnt_) {
         LOG(INFO) << "[Observer] received all EOS";
         stop_ = true;
         wakener_.set_value(0);
@@ -91,13 +91,13 @@ class MsgObserver : cnstream::StreamMsgObserver {
     pipeline_->Stop();
   }
 
-  void SetChnCnt(int chn_cnt) { chn_cnt_ = chn_cnt; }
+  void SetStreamCnt(int stream_cnt) { stream_cnt_ = stream_cnt; }
 
  private:
-  int chn_cnt_ = 0;
+  int stream_cnt_ = 0;
   cnstream::Pipeline* pipeline_ = nullptr;
   bool stop_ = false;
-  std::vector<std::string> eos_chn_;
+  std::vector<std::string> eos_stream_;
   std::promise<int> wakener_;
 };
 

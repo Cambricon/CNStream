@@ -53,7 +53,7 @@ struct EsPacket {
       pkt_.data = nullptr;
       pkt_.size = 0;
       pkt_.flags = ESPacket::FLAG_EOS;
-      pkt_.pts = 0;
+      pkt_.pts = ~0;
     }
   }
 

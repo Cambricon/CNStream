@@ -119,7 +119,6 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
   std::shared_ptr<edk::ModelLoader> model_loader_ = nullptr;
   std::mutex mutex_;
   int device_id_ = 0;
-  size_t batch_size_ = 1;
   std::string model_path_ = "";
   std::string func_name_ = "";
   std::string track_name_ = "";

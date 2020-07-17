@@ -64,7 +64,20 @@ struct CNFrameInfo {
    */
   static std::shared_ptr<CNFrameInfo> Create(const std::string& stream_id, bool eos = false);
   ~CNFrameInfo();
+  /**
+   * DataFrame is end of stream or not 
+   *
+   * @return true: frame is EOS, false: frame isn't EOS
+   */
   bool IsEos() { return (flags & cnstream::CN_FRAME_FLAG_EOS) ? true : false; }
+  /**
+   * set index(usually is number) to identify stream. This is only for distributing each stream data to appropriate thread.
+   * we don't recommand SDK users to use this API since it will be removed later.
+   *
+   * @param index Number to identify stream
+   *
+   * @return true: frame is EOS, false: frame isn't EOS
+   */
   void SetStreamIndex(uint32_t index) { channel_idx = index; }
   // GetStreamIndex() will be removed later
   uint32_t GetStreamIndex() const { return channel_idx; }

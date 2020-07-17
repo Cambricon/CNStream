@@ -135,6 +135,9 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
 
   auto auto_set_done = std::make_shared<AutoSetDone>(ret_promise);
   if (batching_by_obj_) {
+    if (finfo->datas.find(CNObjsVecKey) == finfo->datas.end()) {
+      return card;
+    }
     CNObjsVec objs = cnstream::any_cast<CNObjsVec>(finfo->datas[CNObjsVecKey]);
     for (const auto& obj : objs) {
       if (obj_filter_) {
