@@ -108,7 +108,8 @@ void Pipeline::SetEOSMask() {
 void Pipeline::ClearEOSMask() { eos_mask_ = 0; }
 
 void Pipeline::UpdateByStreamMsg(const StreamMsg& msg) {
-  LOG(INFO) << "[" << GetName() << "] got stream message: " << msg.type << " " << msg.stream_id;
+  LOG(INFO) << "[" << GetName() << "] "
+            << "stream: " << msg.stream_id << " got message: " << msg.type;
   msgq_.Push(msg);
 }
 
@@ -118,8 +119,10 @@ void Pipeline::StreamMsgHandleFunc() {
     while (!exit_msg_loop_ && !msgq_.WaitAndTryPop(msg, std::chrono::microseconds(200))) {
     }
 
-    if (exit_msg_loop_) return;
-
+    if (exit_msg_loop_) {
+        LOG(INFO) << "[" << GetName() << "] stop updating stream message";
+        return;
+    }
     switch (msg.type) {
       case StreamMsgType::EOS_MSG:
       case StreamMsgType::ERROR_MSG:
@@ -133,7 +136,8 @@ void Pipeline::StreamMsgHandleFunc() {
       case StreamMsgType::USER_MSG7:
       case StreamMsgType::USER_MSG8:
       case StreamMsgType::USER_MSG9:
-        LOG(INFO) << "[" << GetName() << "] notify stream message: " << msg.type << " " << msg.stream_id;
+        LOG(INFO) << "[" << GetName() << "] "
+                  << "stream: " << msg.stream_id << " notify message: " << msg.type;
         if (smsg_observer_) {
           smsg_observer_->Update(msg);
         }
@@ -201,8 +205,7 @@ EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
       ret = EVENT_HANDLE_STOP;
       break;
     case EventType::EVENT_EOS: {
-      LOG(INFO) << "Pipeline received eos from module (" + event.module_name << ")"
-                << " thread " << event.thread_id;
+      LOG(INFO) << "Pipeline received eos from module " + event.module_name << " of stream " << event.message;
       ret = EVENT_HANDLE_SYNCED;
       break;
     }
@@ -439,7 +442,7 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     Event e;
     e.type = EventType::EVENT_EOS;
     e.module_name = moduleName;
-    e.message = moduleName + " received eos from  " + data->stream_id;
+    e.message = data->stream_id;
     e.thread_id = std::this_thread::get_id();
     event_bus_->PostEvent(e);
     const uint64_t eos_mask = data->AddEOSMask(modules_map_[moduleName].get());
@@ -849,11 +852,7 @@ void Pipeline::CalculatePipelinePerfStats(bool final_print) {
       PrintTitleForTotal();
       PrintThroughput(avg_fps);
       double running_seconds = static_cast<double>(avg_fps.latency_max) / 1e6;
-      double running_mins = running_seconds / 60;
-      double running_hours = running_mins / 60;
       std::cout << "Running time (s):" << running_seconds << std::endl;
-      std::cout << "Running time (m):" << running_mins << std::endl;
-      std::cout << "Running time (h):" << running_hours << std::endl;
       if (final_print) {
         std::cout << "\nTotal : " << avg_fps.fps << std::endl;
       }

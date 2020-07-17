@@ -37,13 +37,12 @@
 #define CLIP(x) ((x) < 0 ? 0 : ((x) > 1 ? 1 : (x)))
 namespace cnstream {
 
-using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 using CNInferObjectPtr = std::shared_ptr<CNInferObject>;
 
 class FeatureExtractor {
  public:
   FeatureExtractor() {}
-  explicit FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& model_loader, uint32_t batch_size = 1,
+  explicit FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& model_loader,
                             int device_id = 0);
   ~FeatureExtractor();
 
@@ -55,14 +54,17 @@ class FeatureExtractor {
    * @return return a 128 dimension vector as feature of
    *         object.
    * *****************************************************/
-  void ExtractFeature(CNFrameInfoPtr data, ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,  // NOLINT
+  void ExtractFeature(const cv::Mat& image, const cnstream::CNObjsVec& inputs,
                       std::vector<std::vector<float>>* features);
 
+
  private:
-  void ExtractFeatureOnMlu(CNFrameInfoPtr data, ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,  // NOLINT
+  void ExtractFeatureOnMlu(const cv::Mat& image, const cnstream::CNObjsVec& inputs,
                            std::vector<std::vector<float>>* features);
-  void ExtractFeatureOnCpu(const cv::Mat& image, ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,  // NOLINT
+  void ExtractFeatureOnCpu(const cv::Mat& image, const ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
                            std::vector<std::vector<float>>* features);
+  int RunBatch(const std::vector<std::vector<float*>>& inputs,
+                               std::vector<std::vector<float>>* outputs);
   cv::Mat CropImage(const cv::Mat& image, const CNInferBoundingBox& bbox);
   cv::Mat Preprocess(const cv::Mat& image);
   float CalcFeatureOfRow(const cv::Mat& image, int n);
@@ -70,7 +72,7 @@ class FeatureExtractor {
   edk::EasyInfer infer_;
   edk::MluMemoryOp mem_op_;
   std::shared_ptr<edk::ModelLoader> model_loader_ = nullptr;
-  int batch_size_;
+  int batch_size_ = 1;
   int device_id_;
   void** input_cpu_ptr_;
   void** output_cpu_ptr_;

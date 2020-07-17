@@ -47,7 +47,7 @@ class CnOsd {
   inline size_t chn_num() const { return rows() * cols(); }
   inline const std::vector<std::string> labels() const { return labels_; }
   inline void SetSecondaryLabels(std::vector<std::string>labels) { secondary_labels_ = labels; }
-  void DrawLabel(cv::Mat image, cnstream::CNObjsVec& objects, cnstream::CnFont* cn_font = nullptr, // NOLINT
+  void DrawLabel(cv::Mat image, const cnstream::CNObjsVec& objects, cnstream::CnFont* cn_font = nullptr,
                  bool tiled = false, std::vector<std::string> attr_keys = {}) const;
   void DrawLogo(cv::Mat *image, std::string logo) const;
 

@@ -55,6 +55,14 @@ class ThreadSafeVector {
   void push_back(const T& new_value);
 
   /**
+   * @brief Appends the given element value to the end of the container.
+   *
+   * @param new_value The value of the element to append.
+   *
+   */
+  void emplace_back(const T& new_value);
+
+  /**
    * @brief Removes the last element of the container.
    *        Calling pop_back on an empty container is undefined.
    *        Iterators and references to the last element, as well as the end() iterator, are invalidated
@@ -69,6 +77,7 @@ class ThreadSafeVector {
    * @return T  Reference to the requested element
    */
   T& operator[](typename std::vector<T>::size_type pos);
+  const T& operator[](typename std::vector<T>::size_type pos) const;
 
   /**
    * @brief Erases all elements from the container. After this call, size() returns zero.
@@ -105,6 +114,55 @@ class ThreadSafeVector {
     return v_.begin();
   }
 
+  typename std::vector<T>::const_iterator begin() const {
+    SpinLockGuard lk(data_m_);
+    return v_.begin();
+  }
+
+  /**
+   * @brief Returns an iterator to the first element of the vector.
+   *        If the vector is empty, the returned iterator will be equal to end().
+   * @return Iterator to the first element
+   */
+  typename std::vector<T>::iterator rbegin() {
+    SpinLockGuard lk(data_m_);
+    return v_.rbegin();
+  }
+
+  typename std::vector<T>::const_iterator rbegin() const {
+    SpinLockGuard lk(data_m_);
+    return v_.rbegin();
+  }
+
+  /**
+   * @brief Returns an iterator to the first element of the vector.
+   *        If the vector is empty, the returned iterator will be equal to end().
+   * @return Iterator to the first element
+   */
+  typename std::vector<T>::iterator cbegin() {
+    SpinLockGuard lk(data_m_);
+    return v_.cbegin();
+  }
+
+  typename std::vector<T>::const_iterator cbegin() const {
+    SpinLockGuard lk(data_m_);
+    return v_.cbegin();
+  }
+
+  /**
+   * @brief Returns an iterator to the first element of the vector.
+   *        If the vector is empty, the returned iterator will be equal to end().
+   * @return Iterator to the first element
+   */
+  typename std::vector<T>::iterator crbegin() {
+    SpinLockGuard lk(data_m_);
+    return v_.crbegin();
+  }
+
+  typename std::vector<T>::const_iterator crbegin() const {
+    SpinLockGuard lk(data_m_);
+    return v_.crbegin();
+  }
   /**
    * @brief Returns an iterator to the element following the last element of the vector.
    *
@@ -113,6 +171,56 @@ class ThreadSafeVector {
   typename std::vector<T>::iterator end() {
     SpinLockGuard lk(data_m_);
     return v_.end();
+  }
+
+  typename std::vector<T>::const_iterator end() const {
+    SpinLockGuard lk(data_m_);
+    return v_.end();
+  }
+
+  /**
+   * @brief Returns an iterator to the element following the last element of the vector.
+   *
+   * @return Iterator to the element following the last element.
+   */
+  typename std::vector<T>::iterator rend() {
+    SpinLockGuard lk(data_m_);
+    return v_.rend();
+  }
+
+  typename std::vector<T>::const_iterator rend() const {
+    SpinLockGuard lk(data_m_);
+    return v_.rend();
+  }
+
+  /**
+   * @brief Returns an iterator to the element following the last element of the vector.
+   *
+   * @return Iterator to the element following the last element.
+   */
+  typename std::vector<T>::iterator cend() {
+    SpinLockGuard lk(data_m_);
+    return v_.rend();
+  }
+
+  typename std::vector<T>::const_iterator cend() const {
+    SpinLockGuard lk(data_m_);
+    return v_.rend();
+  }
+
+  /**
+   * @brief Returns an iterator to the element following the last element of the vector.
+   *
+   * @return Iterator to the element following the last element.
+   */
+  typename std::vector<T>::iterator crend() {
+    SpinLockGuard lk(data_m_);
+    return v_.rend();
+  }
+
+  typename std::vector<T>::const_iterator crend() const {
+    SpinLockGuard lk(data_m_);
+    return v_.rend();
   }
 
   /**
@@ -126,6 +234,26 @@ class ThreadSafeVector {
   T* data() noexcept {
     SpinLockGuard lk(data_m_);
     return v_.data();
+  }
+
+  /**
+   *  @brief reserve the container.
+   *  @param sz target size 
+   *
+   */
+  void reserve(typename std::vector<T>::size_type sz) {
+    SpinLockGuard lk(data_m_);
+    v_.reserve(sz);
+  }
+
+  /**
+   *  @brief resize the container.
+   *  @param sz target size
+   *
+   */
+  void resize(typename std::vector<T>::size_type sz) {
+    SpinLockGuard lk(data_m_);
+    v_.resize(sz);
   }
 
   /**
@@ -153,6 +281,8 @@ class ThreadSafeVector {
   typename std::vector<T>::iterator insert(typename std::vector<T>::iterator pos, const T& value);
   template <class InputIt>
   void insert(const typename std::vector<T>::iterator& pos, InputIt first, InputIt last);
+
+  typename std::vector<T>::iterator emplace(const typename std::vector<T>::iterator& pos, const T& value);
 
  private:
   mutable SpinLock data_m_;
@@ -193,7 +323,20 @@ typename std::vector<T>::iterator ThreadSafeVector<T>::insert(typename std::vect
 }
 
 template <typename T>
+typename std::vector<T>::iterator ThreadSafeVector<T>::emplace(const typename std::vector<T>::iterator& pos,
+                                                               const T& value) {
+  SpinLockGuard lk(data_m_);
+  return v_.emplace(pos, value);
+}
+
+template <typename T>
 T& ThreadSafeVector<T>::operator[](typename std::vector<T>::size_type pos) {
+  SpinLockGuard lk(data_m_);
+  return v_[pos];
+}
+
+template <typename T>
+const T& ThreadSafeVector<T>::operator[](typename std::vector<T>::size_type pos) const {
   SpinLockGuard lk(data_m_);
   return v_[pos];
 }
@@ -214,6 +357,12 @@ template <typename T>
 void ThreadSafeVector<T>::push_back(const T& new_value) {
   SpinLockGuard lk(data_m_);
   v_.push_back(new_value);
+}
+
+template <typename T>
+void ThreadSafeVector<T>::emplace_back(const T& new_value) {
+  SpinLockGuard lk(data_m_);
+  v_.emplace_back(new_value);
 }
 
 }  // namespace cnstream

@@ -23,7 +23,6 @@
 
 #include <condition_variable>
 #include <memory>
-#include <mutex>
 #include <queue>
 #include <sstream>
 #include <string>
@@ -35,6 +34,7 @@
 #include "perf_manager.hpp"
 
 #define STRIDE_ALIGN_FOR_SCALER_NV12 128
+#define STRIDE_ALIGN 64
 
 namespace cnstream {
 
@@ -44,26 +44,34 @@ static bool CvtI420ToNV12(uint8_t *src_I420, uint8_t *dst_nv12, int width, int h
     return false;
   }
 
-  if (width % 2 != 0) {
-    LOG(WARNING) << "CvtI420ToNV12 do not support image with width%2 != 0";
-    return false;
-  }
+  int pad_height = height % 2 ? height + 1 : height;
+  int pad_width = width % 2 ? width + 1 : width;
 
   // memcpy y plane
   uint8_t *src_y = src_I420;
   uint8_t *dst_y = dst_nv12;
-  memcpy(dst_y, src_y, width * height);
+  if (dst_stride == pad_width) {
+    memcpy(dst_y, src_y, pad_width * height);
+  } else {
+    for (int row = 0; row < height; ++row) {
+      uint8_t *psrc_yt = src_y + row * pad_width;
+      uint8_t *pdst_yt = dst_y + row * dst_stride;
+      memcpy(pdst_yt, psrc_yt, pad_width);
+    }
+  }
 
   // memcpy u and v
-  int src_u_stride = width / 2;
-  int src_v_stride = width / 2;
-  uint8_t *src_u = src_I420 + width * height;
-  uint8_t *src_v = src_u + width * height / 4;
+  int src_u_stride = pad_width / 2;
+  int src_v_stride = pad_width / 2;
+  uint8_t *src_u = src_I420 + pad_width * pad_height;
+  uint8_t *src_v = src_u + pad_width * pad_height / 4;
   uint8_t *dst_uv = dst_nv12 + dst_stride * height;
+
   for (int row = 0; row < height / 2; ++row) {
     uint8_t *psrc_u = src_u + src_u_stride * row;
     uint8_t *psrc_v = src_v + src_v_stride * row;
     uint8_t *pdst_uvt = dst_uv + dst_stride * row;
+
     for (int col = 0; col < src_u_stride; ++col) {
       pdst_uvt[col * 2] = psrc_u[col];
       pdst_uvt[col * 2 + 1] = psrc_v[col];
@@ -219,14 +227,14 @@ void RawImgMemHandlerImpl::Close() {
   }
 
 #ifdef HAVE_OPENCV
-  if (src_mat) {
-    delete src_mat;
-    src_mat = nullptr;
+  if (src_mat_) {
+    delete src_mat_;
+    src_mat_ = nullptr;
   }
 
-  if (dst_mat) {
-    delete dst_mat;
-    dst_mat = nullptr;
+  if (dst_mat_) {
+    delete dst_mat_;
+    dst_mat_ = nullptr;
   }
 #endif
 }
@@ -352,25 +360,45 @@ bool RawImgMemHandlerImpl::PrepareConvertCtx(ImagePacket *img_pkt) {
 #ifdef HAVE_OPENCV
   if (CNDataFormat::CN_PIXEL_FORMAT_BGR24 == img_pkt->pixel_fmt ||
       CNDataFormat::CN_PIXEL_FORMAT_RGB24 == img_pkt->pixel_fmt) {
-    if (src_mat && dst_mat && src_mat->cols == img_pkt->width && src_mat->rows == img_pkt->height &&
-        dst_mat->cols == img_pkt->width && dst_mat->rows == img_pkt->height && src_fmt_ == img_pkt->pixel_fmt) {
-      return true;
+    int pad_height = img_pkt->height % 2 ? img_pkt->height + 1 : img_pkt->height;
+    int pad_width = img_pkt->width % 2 ? img_pkt->width + 1 : img_pkt->width;
+    if (!(src_mat_ && dst_mat_ && src_mat_->cols == img_pkt->width && src_width_ == img_pkt->width &&
+          src_height_ == img_pkt->height && src_fmt_ == img_pkt->pixel_fmt)) {
+      if (dst_mat_) {
+        delete dst_mat_;
+        dst_mat_ = nullptr;
+      }
+
+      if (src_mat_) {
+        delete src_mat_;
+        src_mat_ = nullptr;
+      }
+
+      src_mat_ = new (std::nothrow) cv::Mat(pad_height, pad_width, CV_8UC3);
+      dst_mat_ = new (std::nothrow) cv::Mat(pad_height * 1.5, pad_width, CV_8UC1);
+      src_fmt_ = img_pkt->pixel_fmt;
+      src_width_ = img_pkt->width;
+      src_height_ = img_pkt->height;
     }
 
-    if (src_mat) {
-      delete src_mat;
-      src_mat = nullptr;
+    if (!src_mat_ || !dst_mat_) return false;
+
+    if ((img_pkt->width % 2) || (img_pkt->height % 2)) {
+      pad_height = img_pkt->height % 2 ? img_pkt->height + 1 : img_pkt->height;
+      pad_width = img_pkt->width % 2 ? img_pkt->width + 1 : img_pkt->width;
+      if (!(img_pkt->width % 2)) {
+        memcpy(src_mat_->data, img_pkt->data, img_pkt->height * pad_width * 3);
+      } else {
+        for (int i = 0; i < img_pkt->height; ++i) {
+          uint8_t *psrc = img_pkt->data + i * img_pkt->width * 3;
+          uint8_t *pdst = src_mat_->data + i * pad_width * 3;
+          memcpy(pdst, psrc, img_pkt->width * 3);
+        }
+      }
+    } else {
+      memcpy(src_mat_->data, img_pkt->data, pad_height * pad_width * 3);
     }
 
-    if (dst_mat) {
-      delete dst_mat;
-      dst_mat = nullptr;
-    }
-
-    int src_stride = img_pkt->width;
-    src_mat = new (std::nothrow) cv::Mat(img_pkt->height, src_stride, CV_8UC3, img_pkt->data);
-    dst_mat = new (std::nothrow) cv::Mat(img_pkt->height, img_pkt->width, CV_8UC1);
-    src_fmt_ = img_pkt->pixel_fmt;
     return true;
   }
 
@@ -387,16 +415,17 @@ bool RawImgMemHandlerImpl::CvtColorWithStride(ImagePacket *img_pkt, uint8_t *dst
 
   int width = img_pkt->width;
   int height = img_pkt->height;
+
   switch (img_pkt->pixel_fmt) {
 #ifdef HAVE_OPENCV
     case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
       if (!PrepareConvertCtx(img_pkt)) return false;
-      cv::cvtColor(*src_mat, *dst_mat, cv::COLOR_BGR2YUV_I420);
-      return CvtI420ToNV12(dst_mat->data, dst_nv12_data, width, height, dst_stride);
+      cv::cvtColor(*src_mat_, *dst_mat_, cv::COLOR_BGR2YUV_I420);
+      return CvtI420ToNV12(dst_mat_->data, dst_nv12_data, width, height, dst_stride);
     case CNDataFormat::CN_PIXEL_FORMAT_RGB24:
       if (!PrepareConvertCtx(img_pkt)) return false;
-      cv::cvtColor(*src_mat, *dst_mat, cv::COLOR_RGB2YUV_I420);
-      return CvtI420ToNV12(dst_mat->data, dst_nv12_data, width, height, dst_stride);
+      cv::cvtColor(*src_mat_, *dst_mat_, cv::COLOR_RGB2YUV_I420);
+      return CvtI420ToNV12(dst_mat_->data, dst_nv12_data, width, height, dst_stride);
 #else
     case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
     case CNDataFormat::CN_PIXEL_FORMAT_RGB24:
@@ -422,6 +451,7 @@ bool RawImgMemHandlerImpl::ProcessOneFrame(ImagePacket *img_pkt) {
   }
 
   int dst_stride = img_pkt->width;
+  dst_stride = std::ceil(1.0 * dst_stride / STRIDE_ALIGN) * STRIDE_ALIGN;  // align stride to 64 by default
   if (param_.apply_stride_align_for_scaler_) {
     dst_stride = std::ceil(1.0 * dst_stride / STRIDE_ALIGN_FOR_SCALER_NV12) * STRIDE_ALIGN_FOR_SCALER_NV12;
   }

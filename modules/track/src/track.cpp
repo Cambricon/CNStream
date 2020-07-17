@@ -64,7 +64,7 @@ TrackerContext *Tracker::GetContext(CNFrameInfoPtr data) {
       LOG(INFO) << "[FeatureExtractor] model not set, extract feature on CPU";
       g_tl_feature_extractor.reset(new FeatureExtractor());
     } else {
-      g_tl_feature_extractor.reset(new FeatureExtractor(model_loader_, batch_size_, device_id_));
+      g_tl_feature_extractor.reset(new FeatureExtractor(model_loader_, device_id_));
     }
   }
 
@@ -175,17 +175,17 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
 
   if (track_name_ == "FeatureMatch") {
     std::vector<std::vector<float>> features;
-    g_tl_feature_extractor->ExtractFeature(data, objs, &features);
+    g_tl_feature_extractor->ExtractFeature(*frame->ImageBGR(), objs, &features);
 
     std::vector<edk::DetectObject> in, out;
     for (size_t i = 0; i < objs.size(); i++) {
       edk::DetectObject obj;
       obj.label = std::stoi(objs[i]->id);
       obj.score = objs[i]->score;
-      obj.bbox.x = CLIP(objs[i]->bbox.x);
-      obj.bbox.y = CLIP(objs[i]->bbox.y);
-      obj.bbox.width = CLIP(objs[i]->bbox.w);
-      obj.bbox.height = CLIP(objs[i]->bbox.h);
+      obj.bbox.x = objs[i]->bbox.x;
+      obj.bbox.y = objs[i]->bbox.y;
+      obj.bbox.width = objs[i]->bbox.w;
+      obj.bbox.height = objs[i]->bbox.h;
       obj.feature = features[i];
       in.push_back(obj);
     }

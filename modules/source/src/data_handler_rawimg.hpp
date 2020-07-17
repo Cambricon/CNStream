@@ -121,9 +121,11 @@ class RawImgMemHandlerImpl {
   uint64_t frame_id_ = 0;
 
 #ifdef HAVE_OPENCV
-  cv::Mat *src_mat = nullptr;  // src mat with bgr24 or rgb24 format
-  cv::Mat *dst_mat = nullptr;  // dst mat with I420 format
+  cv::Mat *src_mat_ = nullptr;  // src mat with bgr24 or rgb24 format
+  cv::Mat *dst_mat_ = nullptr;  // dst mat with I420 format
 #endif
+  int src_width_ = 0;
+  int src_height_ = 0;
   CNDataFormat src_fmt_ = CNDataFormat::CN_INVALID;
 
  public:

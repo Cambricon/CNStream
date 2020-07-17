@@ -35,12 +35,11 @@
 #error OpenCV required
 #endif
 
-#include "cnstream_frame_va.hpp"
 #include "feature_extractor.hpp"
 
 namespace cnstream {
 
-FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& model_loader, uint32_t batch_size,
+FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& model_loader,
                                    int device_id)
     : model_loader_(model_loader) {
   if (!model_loader_) {
@@ -48,7 +47,6 @@ FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& mode
   } else {
     model_loader_->InitLayout();
     device_id_ = device_id;
-    batch_size_ = batch_size;
 
     // 1.Check model I/O
     if (model_loader_->InputNum() != 1) {
@@ -80,44 +78,45 @@ FeatureExtractor::~FeatureExtractor() {
   }
 }
 
-void FeatureExtractor::ExtractFeature(CNFrameInfoPtr data, ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
+void FeatureExtractor::ExtractFeature(const cv::Mat& image,
+                                      const cnstream::CNObjsVec& inputs,
                                       std::vector<std::vector<float>>* features) {
-  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  features->clear();
   if (!model_loader_) {
-    ExtractFeatureOnCpu(*frame->ImageBGR(), inputs, features);
+    ExtractFeatureOnCpu(image, inputs, features);
   } else {
-    ExtractFeatureOnMlu(data, inputs, features);
+    ExtractFeatureOnMlu(image, inputs, features);
   }
 }
 
-void FeatureExtractor::ExtractFeatureOnMlu(CNFrameInfoPtr data,
-                                           ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
+void FeatureExtractor::ExtractFeatureOnMlu(const cv::Mat& image,
+                                           const cnstream::CNObjsVec& inputs,
                                            std::vector<std::vector<float>>* features) {
-  uint64_t data_count = model_loader_->InputShapes()[0].hwc();
-  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
-  for (uint32_t i = 0; i < inputs.size(); ++i) {
-    auto obj = inputs[i];
-    cv::Mat obj_image = CropImage(*(frame->ImageBGR()), obj->bbox);
-    // do pre-process
-
-    cv::Mat preproc_image = Preprocess(obj_image);
-    float* cpu_input = static_cast<float*>(input_cpu_ptr_[0]);
-    memcpy(cpu_input, preproc_image.data, data_count * sizeof(float));
-
-    // do copy and inference
-    mem_op_.MemcpyInputH2D(input_mlu_ptr_, input_cpu_ptr_, batch_size_);
-    infer_.Run(input_mlu_ptr_, output_mlu_ptr_);
-    mem_op_.MemcpyOutputD2H(output_cpu_ptr_, output_mlu_ptr_, batch_size_);
-
-    // do post-process
-    const float* begin = reinterpret_cast<float*>(output_cpu_ptr_[0]);
-    const float* end = begin + model_loader_->OutputShapes()[0].hwc();
-    features->push_back(std::vector<float>(begin, end));
+  uint32_t n = model_loader_->InputShapes()[0].n;
+  std::vector<std::vector<float*>> batch_inputs;
+  std::vector<std::vector<float>> batch_outputs;
+  std::vector<cv::Mat> batch_mats;
+  for (size_t i = 0; i < inputs.size(); i += n) {
+    for (size_t j = 0; j < n; ++j) {
+      size_t idx = i + j;
+      if (idx < inputs.size()) {
+        auto obj = inputs[idx];
+        cv::Mat obj_image = CropImage(image, obj->bbox);
+        cv::Mat preproc_image = Preprocess(obj_image);
+        batch_mats.push_back(preproc_image);
+        batch_inputs.push_back({reinterpret_cast<float*>(preproc_image.data)});
+      }
+    }
+    RunBatch(batch_inputs, &batch_outputs);
+    features->insert(features->end(), batch_outputs.begin(), batch_outputs.end());
+    batch_inputs.clear();
+    batch_outputs.clear();
+    batch_mats.clear();
   }
 }
 
 void FeatureExtractor::ExtractFeatureOnCpu(const cv::Mat& image,
-                                           ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
+                                           const cnstream::CNObjsVec& inputs,
                                            std::vector<std::vector<float>>* features) {
   for (uint32_t num = 0; num < inputs.size(); ++num) {
     auto obj = inputs[num];
@@ -155,7 +154,7 @@ cv::Mat FeatureExtractor::Preprocess(const cv::Mat& image) {
   // resize image
   edk::Shape in_shape = model_loader_->InputShapes()[0];
   cv::Mat image_resized;
-  if (image.rows != static_cast<int>(in_shape.h || image.cols != static_cast<int>(in_shape.w))) {
+  if (image.rows != static_cast<int>(in_shape.h) || image.cols != static_cast<int>(in_shape.w)) {
     cv::resize(image, image_resized, cv::Size(in_shape.w, in_shape.h));
   } else {
     image_resized = image;
@@ -176,5 +175,40 @@ float FeatureExtractor::CalcFeatureOfRow(const cv::Mat& image, int n) {
   }
   return result;
 }
+
+
+int FeatureExtractor::RunBatch(const std::vector<std::vector<float*>>& inputs,
+                               std::vector<std::vector<float>>* outputs) {
+  if (inputs.empty()) {
+    return 0;
+  }
+
+  // prepare inputs
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    for (size_t j = 0; j < model_loader_->InputNum(); ++j) {
+      uint64_t data_count = model_loader_->InputShapes()[j].hwc();
+      float *cpu_input = static_cast<float*>(input_cpu_ptr_[j]) + i * data_count;
+      memcpy(cpu_input, inputs[i][j], data_count * sizeof(float));
+    }
+  }
+
+  // do copy and inference
+  mem_op_.MemcpyInputH2D(input_mlu_ptr_, input_cpu_ptr_, batch_size_);
+  infer_.Run(input_mlu_ptr_, output_mlu_ptr_);
+  mem_op_.MemcpyOutputD2H(output_cpu_ptr_, output_mlu_ptr_, batch_size_);
+
+  // parse outputs
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    std::vector<std::vector<float>> output;
+    for (size_t j = 0; j < model_loader_->OutputNum(); ++j) {
+      uint64_t data_count = model_loader_->OutputShapes()[j].hwc();
+      float *cpu_output = static_cast<float*>(output_cpu_ptr_[j]) + i * data_count;
+      output.push_back(std::vector<float>(cpu_output, cpu_output + data_count));
+    }
+    outputs->push_back(output[0]);
+  }
+  return 0;
+}
+
 
 }  // namespace cnstream

@@ -47,7 +47,13 @@
 #include "util/cnstream_rwlock.hpp"
 
 namespace cnstream {
-
+/**
+ * @brief IModuleObserver virtual base class.
+ *
+ * IModuleObserver is an interfacae class. User need to implement an observer
+ * based on this, and regist it to one module.
+ *
+ */
 class IModuleObserver {
  public:
   /*notify "data" after processed by this module*/
@@ -56,7 +62,6 @@ class IModuleObserver {
 };
 
 class Pipeline;
-class PipelinePrivate;
 class PerfManager;
 
 /**
@@ -78,7 +83,13 @@ class Module {
    */
   explicit Module(const std::string &name) : name_(name) {}
   virtual ~Module();
-
+  /**
+   * Regist an observer to the module.
+   *
+   * @param observer An observer user defined.
+   *
+   * @return Void.
+   */
   void SetObserver(IModuleObserver *observer) {
     RwLockWriteGuard guard(observer_lock_);
     observer_ = observer;
@@ -187,7 +198,6 @@ class Module {
 #endif
 
   friend class Pipeline;
-  friend class PipelinePrivate;
   /**
    * Sets a container to this module and identifies which pipeline the module is added to.
    *
