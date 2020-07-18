@@ -135,7 +135,11 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
 
  public:
   /**
-   * @brief Get module parameters, should be called after Open() invoked.
+   * @brief Get module parameters.
+   *
+   * @return Returns data source parameters.
+   *
+   * @note This function should be called after ``Open`` function.
    */
   DataSourceParam GetSourceParam() const { return param_; }
 
@@ -143,27 +147,55 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
   DataSourceParam param_;
 };  // class DataSource
 
-/*SourceHandler for H264/H265 bitstreams in memory(with prefix-start-code)
+/**
+ * @brief The struct of ES data packet.
  */
 struct ESPacket {
-  unsigned char *data = nullptr;
-  int size = 0;
-  uint64_t pts = 0;
-  uint32_t flags = 0;
+  unsigned char *data = nullptr;  /// the data
+  int size = 0;                   /// the size of the data
+  uint64_t pts = 0;               /// the pts of the data
+  uint32_t flags = 0;             /// the flags of the data
+  /**
+   * @brief The flags of frame
+   */
   enum {
-    FLAG_KEY_FRAME = 0x01,
-    FLAG_EOS = 0x02,
+    FLAG_KEY_FRAME = 0x01,        /// flag of key frame
+    FLAG_EOS = 0x02,              /// flag of eos frame
   };
-};
+};  // struct ESPacket
 
+/**
+ * @brief Source handler for video with format mp4, flv, matroska and etc.
+ */
 class FileHandlerImpl;
 class FileHandler : public SourceHandler {
  public:
+  /**
+   * @brief Creates source handler.
+   *
+   * @param module The data source module.
+   * @param stream_id The stream id of the stream.
+   * @param filename The filename of the stream.
+   * @param framerate Control sending the frames of the stream with specific rate.
+   * @param loop Loop the stream.
+   *
+   * @return Returns source handler if it is created successfully, otherwise returns nullptr.
+   */
   static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
                                                const std::string &filename, int framerate, bool loop = false);
+  /**
+   * @brief The destructor of FileHandler.
+   */
   ~FileHandler();
-  /**/
+  /**
+   * @brief Opens source handler.
+   *
+   * @return Returns true if the source handler is opened successfully, otherwise returns false.
+   */
   bool Open() override;
+  /**
+   * @brief Closes source handler.
+   */
   void Close() override;
 
  private:
@@ -178,22 +210,38 @@ class FileHandler : public SourceHandler {
 };  // class FileHandler
 
 class RtspHandlerImpl;
-/*SourceHandler for rtsp as input
- * use_ffmpeg:
- *   true: use ffmppeg-rtspclient
- *   false: use live555-rtspclient, FIXME(provide interface to set strategies:  reconnect, stream_over_tcp, etc...)
+/**
+ * @brief Source handler for rtsp stream.
  */
 class RtspHandler : public SourceHandler {
  public:
-  /*
-   * "reconnect" is valid when "use_ffmpeg" set false
+  /**
+   * @brief Creates source handler.
+   *
+   * @param module The data source module.
+   * @param stream_id The stream id of the stream.
+   * @param url_name The url of the stream.
+   * @param use_ffmpeg Uses ffmpeg demuxer if it is true, otherwise uses live555 demuxer.
+   * @param reconnect It is valid when "use_ffmpeg" set false.
+   *
+   * @return Returns source handler if it is created successfully, otherwise returns nullptr.
    */
   static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
                                                const std::string &url_name, bool use_ffmpeg = false,
                                                int reconnect = 10);
+  /**
+   * @brief The destructor of RtspHandler.
+   */
   ~RtspHandler();
-  /**/
+  /**
+   * @brief Opens source handler.
+   *
+   * @return Returns true if the source handler is opened successfully, otherwise returns false.
+   */
   bool Open() override;
+  /**
+   * @brief Closes source handler.
+   */
   void Close() override;
 
  private:
@@ -208,24 +256,66 @@ class RtspHandler : public SourceHandler {
 };  // class RtspHandler
 
 class ESMemHandlerImpl;
-/*SourceHandler for H264/H265 bitstreams in memory(with prefix-start-code)
+/**
+ * @brief Source handler for H264/H265 bitstreams in memory(with prefix-start-code).
  */
 class ESMemHandler : public SourceHandler {
  public:
+  /**
+   * @brief Creates source handler.
+   *
+   * @param module The data source module.
+   * @param stream_id The stream id of the stream.
+   *
+   * @return Returns source handler if it is created successfully, otherwise returns nullptr.
+   */
   static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id);
+  /**
+   * @brief The destructor of ESMemHandler.
+   */
   ~ESMemHandler();
-  /**/
+  /**
+   * @brief Opens source handler.
+   *
+   * @return Returns true if the source handler is opened successfully, otherwise returns false.
+   */
   bool Open() override;
+  /**
+   * @brief Closes source handler.
+   */
   void Close() override;
 
+  /**
+   * @brief The enum of data type.
+   */
   enum DataType { INVALID, H264, H265 };
-  int SetDataType(DataType type);  // must be called before Write() invoked
+  /**
+   * @brief Sets data type.
+   *
+   * @param type The data type.
+   *
+   * @return Returns 0 if data type is set successfully, otherwise returns -1.
+   * @note This function must be called before ``Write`` function
+   */
+  int SetDataType(DataType type);
 
-  /*Write()
-   *   Send H264/H265 bitstream with prefix-startcode.
+  /**
+   * @brief Sends data in frame mode.
+   *
+   * @param pkt The data packet
+   *
+   * @return Returns 0 if data is sent successfully, otherwise returns -1.
    */
   int Write(ESPacket *pkt);                // frame mode
-  int Write(unsigned char *buf, int len);  // chunk mode
+  /**
+   * @brief Sends data in chunk mode.
+   *
+   * @param buf The data buffer
+   * @param len The len of the data
+   *
+   * @return Returns 0 if data is sent successfully, otherwise returns -1.
+   */
+  int Write(unsigned char *buf, int len);
 
  private:
   explicit ESMemHandler(DataSource *module, const std::string &stream_id);
@@ -238,24 +328,46 @@ class ESMemHandler : public SourceHandler {
 };  // class ESMemHandler
 
 class ESJpegMemHandlerImpl;
-/*
- * SourceHandler for Jpeg bitstreams in memory
+/**
+ * @brief Source handler for Jpeg bitstreams in memory
  */
 class ESJpegMemHandler : public SourceHandler {
  public:
+  /**
+   * @brief Creates source handler.
+   *
+   * @param module The data source module.
+   * @param stream_id The stream id of the stream.
+   * @param max_width The maximum width of the image.
+   * @param max_height The maximum height of the image.
+   *
+   * @return Returns source handler if it is created successfully, otherwise returns nullptr.
+   */
   static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
-  // Jpeg decoder maximum resolution 8K
-      int max_width = 7680, int max_height = 4320);
+      int max_width = 7680, int max_height = 4320/*Jpeg decoder maximum resolution 8K*/);
+  /**
+   * @brief The destructor of ESJpegMemHandler.
+   */
   ~ESJpegMemHandler();
-  /**/
+  /**
+   * @brief Opens source handler.
+   *
+   * @return Returns true if the source handler is opened successfully, otherwise returns false.
+   */
   bool Open() override;
+  /**
+   * @brief Closes source handler.
+   */
   void Close() override;
 
-  /*
-   * Write()
-   * Send Jpeg bitstream.
+  /**
+   * @brief Sends data in frame mode.
+   *
+   * @param pkt The data packet.
+   *
+   * @return Returns 0 if data is sent successfully, otherwise returns -1.
    */
-  int Write(ESPacket *pkt);  // frame mode
+  int Write(ESPacket *pkt);
 
  private:
   explicit ESJpegMemHandler(DataSource *module, const std::string &stream_id, int max_width, int max_height);
@@ -268,36 +380,59 @@ class ESJpegMemHandler : public SourceHandler {
 };  // class ESJpegMemHandler
 
 class RawImgMemHandlerImpl;
-/*
- *  SourceHandler for raw image data in memory.
+/**
+ * @brief Source handler for raw image data in memory.
  */
 class RawImgMemHandler : public SourceHandler {
  public:
+  /**
+   * @brief Creates source handler.
+   *
+   * @param module The data source module.
+   * @param stream_id The stream id of the stream.
+   *
+   * @return Returns source handler if it is created successfully, otherwise returns nullptr.
+   */
   static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id);
+  /**
+   * @brief The destructor of RawImgMemHandler.
+   */
   ~RawImgMemHandler();
-
+  /**
+   * @brief Opens source handler.
+   *
+   * @return Returns true if the source handler is opened successfully, otherwise returns false.
+   */
   bool Open() override;
+  /**
+   * @brief Closes source handler.
+   */
   void Close() override;
 
 #ifdef HAVE_OPENCV
   /**
-   * @brief Write raw image with cv::Mat(only support bgr24 format).
-   * @param
-      - mat_data: cv::Mat pointer with bgr24 format image data, feed mat_data as nullptr when feed data end.
-   * @return return 0 when write successfully, othersize return -1.
+   * @brief Sends raw image with cv::Mat. Only bgr24 format is supported.
+   *
+   * @param mat_data The bgr24 format image data.
+   *
+   * @return Returns 0 if the data is sent successfully, otherwise returns -1.
+   *
+   * @note Sends nullptr after all data are sent.
    */
   int Write(cv::Mat *mat_data);
 #endif
   /**
-   * @brief Write raw image with image data and image infomation (data buffer is one continuous buffer, only support
-   bgr24/rgb24/nv21/nv12 format).
-   * @param
-          - data: image data pointer(one continuous buffer), feed data as nullptr and size as 0 when feed data end
-          - size: image data size
-          - w: image width
-          - h: image height
-          - pixel_fmt: image pixel format, support bgr24/rgb24/nv21/nv12 format.
-   * @return return 0 when write successfully, othersize return -1.
+   * @brief Sends raw image with image data and image infomation, only support format, bgr24, rgb24, nv21 and nv12.
+   *
+   * @param data The data of the image, which is a continuous buffer.
+   * @param size The size of the data.
+   * @param width The width of the image.
+   * @param height The height of the image.
+   * @param pixel_fmt The pixel format of the image. These formats are supported, bgr24, rgb24, nv21 and nv12.
+   *
+   * @return Returns 0 if the data is sent successfully, otherwise returns -1.
+   *
+   * @note Sends nullptr as data and passes 0 as size after all data are sent.
    */
   int Write(unsigned char *data, int size, int width = 0, int height = 0, CNDataFormat pixel_fmt = CN_INVALID);
 
