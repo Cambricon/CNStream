@@ -34,25 +34,37 @@ namespace cnstream {
 using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 using RtspSinkContext = std::shared_ptr<RtspSinkJoinStream>;
 
+/**
+ * @brief The enum of color format
+ */
 enum ColorFormat {
-  YUV420 = 0, /* Planar Y4-U1-V1 */
-  RGB24,      /* Packed R8G8B8.*/
-  BGR24,      /* Packed B8G8R8.*/
-  NV21,       /* Semi-Planar Y4-V1U1*/
-  NV12,       /* Semi-Planar Y4-U1V1*/
+  YUV420 = 0,  /// Planar Y4-U1-V1
+  RGB24,       /// Packed R8G8B8
+  BGR24,       /// Packed B8G8R8
+  NV21,        /// Semi-Planar Y4-V1U1
+  NV12,        /// Semi-Planar Y4-U1V1
 };
 
+/**
+ * @brief The enum of video codec type
+ */
 enum VideoCodecType {
-  H264 = 0,
-  HEVC,
-  MPEG4,
+  H264 = 0,   /// H264
+  HEVC,       /// HEVC
+  MPEG4,      /// MPEG4
 };
 
+/**
+ * @brief The enum of encoder type
+ */
 enum EncoderType {
-  FFMPEG = 0,
-  MLU,
+  FFMPEG = 0,  /// encoder with ffmpeg
+  MLU,         /// encoder with mlu
 };
 
+/**
+ * @brief The struct of rtsp parameters
+ */
 struct RtspParam {
   int frame_rate = 25;               // Target fps
   int udp_port = 9554;               // UDP port

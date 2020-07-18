@@ -17,7 +17,4 @@ cd $CURRENT_DIR
       exit 1
   fi
 cd -
-if [ -d perf_database ]; then
-  cp -r perf_database perf_database_backup`date '+%Y%m%d%H%M%S'`
-fi
 
