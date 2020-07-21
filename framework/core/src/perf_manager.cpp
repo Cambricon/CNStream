@@ -59,7 +59,7 @@ PerfManager::~PerfManager() {
 
 std::shared_ptr<PerfManager> PerfManager::CreateDefaultManager(const std::string db_name,
                                                                const std::vector<std::string> &module_names) {
-  std::shared_ptr<PerfManager> manager(new (std::nothrow) PerfManager());
+  std::shared_ptr<PerfManager> manager = std::make_shared<PerfManager>();
   if (!manager) {
     LOG(ERROR) << "PerfManager::CreateDefaultManager() new PerfManager failed.";
     return nullptr;

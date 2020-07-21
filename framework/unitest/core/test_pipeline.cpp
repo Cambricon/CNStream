@@ -475,7 +475,7 @@ TEST(CorePipeline, ParseByJSONStr) {
   CNModuleConfig m_cfg;
   std::string source =
       "{\"class_name\":\"cnstream::DataSource\",\"parallelism\":0,\"max_input_queue_size\":30,"
-      "\"next_modules\":[\"detector\"],\"custom_params\":{\"source_type\":\"ffmpeg\","
+      "\"next_modules\":[\"detector\"],\"custom_params\":{"
       "\"output_type\":\"mlu\",\"decoder_type\":\"mlu\",\"device_id\":0}}";
   m_cfg.ParseByJSONStr(source);
   EXPECT_EQ(m_cfg.className, "cnstream::DataSource");
@@ -483,8 +483,7 @@ TEST(CorePipeline, ParseByJSONStr) {
   EXPECT_EQ(m_cfg.maxInputQueueSize, 30);
   EXPECT_EQ(m_cfg.next.size(), (unsigned int)1);
   EXPECT_EQ(m_cfg.next[0], "detector");
-  EXPECT_EQ(m_cfg.parameters.size(), (unsigned int)4);
-  EXPECT_EQ(m_cfg.parameters["source_type"], "ffmpeg");
+  EXPECT_EQ(m_cfg.parameters.size(), (unsigned int)3);
   EXPECT_EQ(m_cfg.parameters["output_type"], "mlu");
   EXPECT_EQ(m_cfg.parameters["decoder_type"], "mlu");
   EXPECT_EQ(m_cfg.parameters["device_id"], "0");
@@ -958,7 +957,6 @@ std::vector<CNModuleConfig> GetCfg() {
   m_cfg_src.parallelism = 0;
   m_cfg_src.maxInputQueueSize = 30;
   m_cfg_src.next.push_back("test_infer");
-  m_cfg_src.parameters["source_type"] = "ffmpeg";
   m_cfg_src.parameters["output_type"] = "mlu";
   m_cfg_src.parameters["decoder_type"] = "mlu";
   m_cfg_src.parameters["device_id"] = "0";
@@ -995,7 +993,7 @@ TEST(CorePipeline, AddAndGetModuleConfig) {
     EXPECT_EQ(m_cfg.maxInputQueueSize, m_cfg_src.maxInputQueueSize);
     EXPECT_EQ(m_cfg.next.size(), (unsigned int)1);
     EXPECT_EQ(m_cfg.next[0], "test_infer");
-    EXPECT_EQ(m_cfg.parameters.size(), (unsigned int)4);
+    EXPECT_EQ(m_cfg.parameters.size(), (unsigned int)3);
     EXPECT_EQ(m_cfg.parameters, m_cfg_src.parameters);
 
     ModuleParamSet params;

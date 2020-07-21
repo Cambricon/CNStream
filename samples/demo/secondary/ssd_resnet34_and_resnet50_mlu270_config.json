@@ -5,7 +5,6 @@
     "next_modules" : ["detector"],
     "show_perf_info" : true,
     "custom_params" : {
-      "source_type" : "ffmpeg",
       "reuse_cndec_buf" : "true",
       "output_type" : "mlu",
       "decoder_type" : "mlu",

@@ -1,11 +1,9 @@
 #!/bin/bash
 #*************************************************************************#
 # @param
-# drop_rate: Decode Drop frame rate (0~1)
 # src_frame_rate: frame rate for send data
 # data_path: Video or image list path
-# model_path: offline model path
-# wait_time: time of one test case. When set tot 0, it will automatically exit after the eos signal arrives
+# wait_time:  When set to 0, it will automatically exit after the eos signal arrives
 # loop = true: loop through video
 #
 # @notice: other flags see ${SAMPLES_DIR}/bin/demo --help

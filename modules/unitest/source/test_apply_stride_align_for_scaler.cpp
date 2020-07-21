@@ -135,7 +135,6 @@ std::vector<cnstream::CNDataFramePtr> GetFrames(const cnstream::ModuleParamSet &
 
 static bool TestFunc(const std::string &decoder_type, const std::string &output_type) {
   cnstream::ModuleParamSet source_params = {
-    std::make_pair("source_type", "ffmpeg"),
     std::make_pair("decoder_type", decoder_type),
     std::make_pair("output_type", decoder_type),
     std::make_pair("device_id", "0")

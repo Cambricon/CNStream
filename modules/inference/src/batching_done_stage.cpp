@@ -54,11 +54,9 @@ std::vector<std::shared_ptr<InferTask>> H2DBatchingDoneStage::BatchingDone(const
     IOResValue mlu_value = this->mlu_input_res_->WaitResourceByTicket(&mir_ticket);
     edk::MluMemoryOp mem_op;
     mem_op.SetLoader(this->model_);
-#ifdef CNS_MLU100
-    mem_op.MemcpyInputH2D(mlu_value.ptrs, cpu_value.ptrs, this->batchsize_);
-#elif CNS_MLU270
+
     mem_op.MemcpyInputH2D(mlu_value.ptrs, cpu_value.ptrs, 1);
-#endif
+
     this->cpu_input_res_->DeallingDone();
     this->mlu_input_res_->DeallingDone();
     return 0;

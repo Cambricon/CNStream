@@ -109,7 +109,7 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
                         Supported values are ``true`` and ``false``.
    *   device_id: Required when MLU is used. Device id. Set the value to -1 for CPU.
                   Set the value for MLU in the range 0 - N.
-   *   interlaced: Required when ``source_type`` is set to ``raw``. Interlaced mode.
+   *   interlaced: Interlaced mode.
    *   input_buf_number: Optional. The input buffer number. The default value is 2.
    *   output_buf_number: Optional. The output buffer number. The default value is 3.
    *   apply_stride_align_for_scaler: Optional. Apply stride align for scaler on m220(m.2/edge).

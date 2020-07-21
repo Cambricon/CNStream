@@ -386,7 +386,7 @@ bool Pipeline::Start() {
     }
   }
   LOG(INFO) << "Pipeline Start";
-  LOG(INFO) << "Total Module's threads :" << threads_.size();
+  LOG(INFO) << "All modules, except the first module, total  threads  is: " << threads_.size();
   return true;
 }
 
@@ -659,7 +659,8 @@ Module* Pipeline::GetModule(const std::string& moduleName) {
 
 bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir) {
   if (perf_running_) return false;
-  if (db_dir.empty()) db_dir = "perf_database";
+  if (db_dir.empty()) db_dir = "perf_database/";
+  PerfManager::PrepareDbFileDir(db_dir);
 
   SetStartAndEndNodeNames();
   std::vector<std::string> module_names = GetModuleNames();
@@ -668,7 +669,10 @@ bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::strin
   for (auto& stream_id : stream_ids) {
     std::string db_name = db_dir + "/stream_" + stream_id + "_" + TimeStamp::CurrentToDate() + ".db";
     std::shared_ptr<PerfManager> manager = PerfManager::CreateDefaultManager(db_name, module_names);
-    if (manager == nullptr) { return false; }
+    if (manager == nullptr) {
+      LOG(ERROR) << stream_id << "Failed to create PerfManager";
+      return false;
+    }
     perf_managers_[stream_id] = manager;
   }
 

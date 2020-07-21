@@ -109,9 +109,8 @@ class ourRTSPClient : public RTSPClient {
   void resetLivenessTimer() {
     s_rtspTimer.remove(timer_id_);
     timer_id_ = s_rtspTimer.add(std::chrono::milliseconds(livenessTimeoutMs), [&](cnstream::timer_id) {
-      //*eventLoopWatchVariable = 1;
+      *eventLoopWatchVariable = 2;
       envir() << "Liveness timeout occured, shutdown stream...\n";
-      shutdownStream(this);
     });
   }
   cnstream::IRtspCB* cb_ = nullptr;

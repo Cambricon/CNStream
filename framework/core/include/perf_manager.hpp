@@ -195,6 +195,14 @@ class PerfManager {
    * @return Returns the default table name.
    */
   static inline std::string GetDefaultType() { return "PROCESS"; }
+  /**
+   * @brief Prepares database file directory.
+   *
+   * @param file_dir The file directory
+   *
+   * @return Returns true is the file directory is prepared successfully, otherwise returns false.
+   */
+  static bool PrepareDbFileDir(std::string file_dir);
 
  private:
 #ifdef UNIT_TEST
@@ -210,8 +218,7 @@ class PerfManager {
 
   void PopInfoFromQueue();
   void InsertInfoToDb(const PerfInfo& info);
-  bool PrepareDbFileDir(std::string file_dir);
-  bool CreateDir(std::string dir);
+  static bool CreateDir(std::string dir);
 
   bool is_initialized_ = false;
   std::unordered_set<std::string> perf_type_;

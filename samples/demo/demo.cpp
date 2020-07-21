@@ -21,6 +21,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <atomic>
 #include <future>
 #include <iostream>
 #include <list>
@@ -28,7 +29,6 @@
 #include <mutex>
 #include <string>
 #include <vector>
-#include <atomic>
 
 #ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
@@ -92,10 +92,11 @@ class MsgObserver : cnstream::StreamMsgObserver {
     pipeline_->Stop();
   }
 
-  void SetStreamCnt(int stream_cnt) { stream_cnt_ = stream_cnt; }
+  void IncreaseStreamCnt() { stream_cnt_++; }
+  void DecreaseStreamCnt() { stream_cnt_--; }
 
  private:
-  int stream_cnt_ = 0;
+  std::atomic<int> stream_cnt_;
   cnstream::Pipeline* pipeline_ = nullptr;
   bool stop_ = false;
   std::vector<std::string> eos_stream_;
@@ -117,7 +118,7 @@ int main(int argc, char** argv) {
   /*
     build pipeline
   */
-  cnstream::Pipeline pipeline("pipeline");
+  cnstream::Pipeline pipeline("MyPipeline");
   // pipeline.BuildPipeline({source_config, detector_config, tracker_config});
 
   if (0 != pipeline.BuildPipelineByJSONFile(FLAGS_config_fname)) {
@@ -153,11 +154,7 @@ int main(int argc, char** argv) {
     create perf recorder
   */
   if (FLAGS_perf) {
-    std::vector<std::string> stream_ids;
-    for (int i = 0; i < static_cast<int>(video_urls.size()); i++) {
-      stream_ids.push_back(std::to_string(i));
-    }
-    if (!pipeline.CreatePerfManager(stream_ids, FLAGS_perf_db_dir)) {
+    if (!pipeline.CreatePerfManager({}, FLAGS_perf_db_dir)) {
       LOG(ERROR) << "Pipeline Create Perf Manager failed.";
       return EXIT_FAILURE;
     }
@@ -180,146 +177,160 @@ int main(int argc, char** argv) {
   auto url_iter = video_urls.begin();
   for (int i = 0; i < streams; i++, url_iter++) {
     const std::string& filename = *url_iter;
+    std::string stream_id = "stream_" + std::to_string(i);
+    if (FLAGS_perf) {
+      pipeline.AddPerfManager(stream_id, FLAGS_perf_db_dir);
+    }
+    int ret = 0;
     if (filename.find("rtsp://") != std::string::npos) {
-      auto handler = cnstream::RtspHandler::Create(source, std::to_string(i), filename);
-      source->AddSource(handler);
+      auto handler = cnstream::RtspHandler::Create(source, stream_id, filename);
+      ret = source->AddSource(handler);
     } else if (filename.find(".h264") != std::string::npos) {
       // es-mem handler
-      auto handler = cnstream::ESMemHandler::Create(source, std::to_string(i));
-      source->AddSource(handler);
-      // use a separate thread to read data from memory and feed pipeline
-      vec_threads_mem.push_back(std::thread([=, &thread_running]() {
-        FILE* fp = fopen(filename.c_str(), "rb");
-        if (fp) {
-          auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
-          memHandler->SetDataType(cnstream::ESMemHandler::H264);
-          unsigned char buf[4096];
-          while (thread_running.load()) {
-            if (!feof(fp)) {
-              int size = fread(buf, 1, 4096, fp);
-              memHandler->Write(buf, size);
-            } else {
-              if (FLAGS_loop) {
-                fseek(fp, 0, SEEK_SET);
+      auto handler = cnstream::ESMemHandler::Create(source, stream_id);
+      ret = source->AddSource(handler);
+      if (ret == 0) {
+        // use a separate thread to read data from memory and feed pipeline
+        vec_threads_mem.push_back(std::thread([=, &thread_running]() {
+          FILE* fp = fopen(filename.c_str(), "rb");
+          if (fp) {
+            auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+            memHandler->SetDataType(cnstream::ESMemHandler::H264);
+            unsigned char buf[4096];
+            while (thread_running.load()) {
+              if (!feof(fp)) {
+                int size = fread(buf, 1, 4096, fp);
+                memHandler->Write(buf, size);
               } else {
-                break;
+                if (FLAGS_loop) {
+                  fseek(fp, 0, SEEK_SET);
+                } else {
+                  break;
+                }
               }
             }
+            memHandler->Write(nullptr, 0);
+            fclose(fp);
           }
-          memHandler->Write(nullptr, 0);
-          fclose(fp);
-        }
-      }));
+        }));
+      }
     } else if (filename.find(".jpg") != std::string::npos && FLAGS_jpeg_from_mem) {
       // Jpeg decoder maximum resolution 8K
       int max_width = 7680;  // FIXME
       int max_height = 4320;  // FIXME
       // es-jpeg-mem handler
-      auto handler = cnstream::ESJpegMemHandler::Create(source, std::to_string(i), max_width, max_height);
-      source->AddSource(handler);
-      // use a separate thread to read data from memory and feed pipeline
-      vec_threads_mem.push_back(std::thread([=, &thread_running]() {
-        int index = filename.find_last_of("/");
-        std::string dir_path = filename.substr(0, index);
-        std::list<std::string> files = GetFileNameFromDir(dir_path, "*.jpg");
+      auto handler = cnstream::ESJpegMemHandler::Create(source, stream_id, max_width, max_height);
+      ret = source->AddSource(handler);
+      if (ret == 0) {
+        // use a separate thread to read data from memory and feed pipeline
+        vec_threads_mem.push_back(std::thread([=, &thread_running]() {
+          int index = filename.find_last_of("/");
+          std::string dir_path = filename.substr(0, index);
+          std::list<std::string> files = GetFileNameFromDir(dir_path, "*.jpg");
 
-        auto memHandler = std::dynamic_pointer_cast<cnstream::ESJpegMemHandler>(handler);
-        size_t jpeg_buffer_size_ = 4 * 1024 * 1024;  // FIXME
-        unsigned char *buf = new(std::nothrow) unsigned char[jpeg_buffer_size_];
+          auto memHandler = std::dynamic_pointer_cast<cnstream::ESJpegMemHandler>(handler);
+          size_t jpeg_buffer_size_ = 4 * 1024 * 1024;  // FIXME
+          unsigned char *buf = new(std::nothrow) unsigned char[jpeg_buffer_size_];
 
-        if (!buf) {
-          LOG(FATAL) << "malloc buf failed, size: " << jpeg_buffer_size_;
-        }
+          if (!buf) {
+            LOG(FATAL) << "malloc buf failed, size: " << jpeg_buffer_size_;
+          }
 
-        cnstream::ESPacket pkt;
-        uint64_t pts_ = 0;
-        auto itor = files.begin();
-        while (thread_running.load() && itor != files.end()) {
-          size_t file_size = GetFileSize(*itor);
-          if (file_size > jpeg_buffer_size_) {
-            delete [] buf;
-            buf = new(std::nothrow) unsigned char[file_size];
-            if (!buf) {
-              LOG(FATAL) << "malloc buf failed, size: " << file_size;
+          cnstream::ESPacket pkt;
+          uint64_t pts_ = 0;
+          auto itor = files.begin();
+          while (thread_running.load() && itor != files.end()) {
+            size_t file_size = GetFileSize(*itor);
+            if (file_size > jpeg_buffer_size_) {
+              delete [] buf;
+              buf = new(std::nothrow) unsigned char[file_size];
+              if (!buf) {
+                LOG(FATAL) << "malloc buf failed, size: " << file_size;
+              }
+              jpeg_buffer_size_ = file_size;
             }
-            jpeg_buffer_size_ = file_size;
+            FILE *fp = fopen((*itor).c_str(), "rb");
+            if (fp) {
+              int size = fread(buf, 1, jpeg_buffer_size_, fp);
+              pkt.data = buf;
+              pkt.size = size;
+              pkt.pts = pts_++;
+              memHandler->Write(&pkt);
+              fclose(fp);
+            }
+            itor++;
+            if (itor == files.end() && FLAGS_loop) {
+              itor = files.begin();
+            }
           }
-          FILE *fp = fopen((*itor).c_str(), "rb");
-          if (fp) {
-            int size = fread(buf, 1, jpeg_buffer_size_, fp);
-            pkt.data = buf;
-            pkt.size = size;
-            pkt.pts = pts_++;
-            memHandler->Write(&pkt);
-            fclose(fp);
-          }
-          itor++;
-          if (itor == files.end() && FLAGS_loop) {
-            itor = files.begin();
-          }
-        }
-        pkt.data = nullptr;
-        pkt.size = 0;
-        pkt.flags = cnstream::ESPacket::FLAG_EOS;
-        memHandler->Write(&pkt);
-        delete [] buf, buf = nullptr;
-      }));
+          pkt.data = nullptr;
+          pkt.size = 0;
+          pkt.flags = cnstream::ESPacket::FLAG_EOS;
+          memHandler->Write(&pkt);
+          delete [] buf, buf = nullptr;
+        }));
+      }
     } else {
       if (FLAGS_raw_img_input) {
         LOG(INFO) << "feed source with raw image mem.";
 #ifdef HAVE_OPENCV
         // raw image mem(from cv::Mat or image description) handler
-        auto handler = cnstream::RawImgMemHandler::Create(source, std::to_string(i));
-        source->AddSource(handler);
-        // use a separate thread to read image data from video and feed pipeline
-        vec_threads_mem.push_back(std::thread([=, &thread_running]() {
-          cv::VideoCapture vcapture;
-          g_vcap_mtx.lock();
-          vcapture.open(filename);
-          g_vcap_mtx.unlock();
+        auto handler = cnstream::RawImgMemHandler::Create(source, stream_id);
+        ret = source->AddSource(handler);
+        if (ret == 0) {
+          // use a separate thread to read image data from video and feed pipeline
+          vec_threads_mem.push_back(std::thread([=, &thread_running]() {
+            cv::VideoCapture vcapture;
+            g_vcap_mtx.lock();
+            vcapture.open(filename);
+            g_vcap_mtx.unlock();
 
-          if (!vcapture.isOpened()) {
-            LOG(ERROR) << "open file: " << filename << " failed with RawImgMemHandler source type.";
-            return;
-          }
-          cv::Mat bgr_frame;
-          auto memHandler = std::dynamic_pointer_cast<cnstream::RawImgMemHandler>(handler);
-          while (thread_running.load()) {
-            vcapture >> bgr_frame;
+            if (!vcapture.isOpened()) {
+              LOG(ERROR) << "open file: " << filename << " failed with RawImgMemHandler source type.";
+              return;
+            }
+            cv::Mat bgr_frame;
+            auto memHandler = std::dynamic_pointer_cast<cnstream::RawImgMemHandler>(handler);
+            while (thread_running.load()) {
+              vcapture >> bgr_frame;
 #if 1
-            // feed bgr24 image mat, with api-Write(cv::Mat)
-            if (bgr_frame.empty()) {
-              memHandler->Write(nullptr);
-              vcapture.release();
-              break;
-            }
+              // feed bgr24 image mat, with api-Write(cv::Mat)
+              if (bgr_frame.empty()) {
+                memHandler->Write(nullptr);
+                vcapture.release();
+                break;
+              }
 
-            memHandler->Write(&bgr_frame);
+              memHandler->Write(&bgr_frame);
 #else
-            // feed rgb24 image data, with api-Write(unsigned char* data, int size, int w, int h,
-            // cnstream::CNDataFormat)
-            if (bgr_frame.empty()) {
-              memHandler->Write(nullptr, 0);
-              vcapture.release();
-              break;
-            }
+              // feed rgb24 image data, with api-Write(unsigned char* data, int size, int w, int h,
+              // cnstream::CNDataFormat)
+              if (bgr_frame.empty()) {
+                memHandler->Write(nullptr, 0);
+                vcapture.release();
+                break;
+              }
 
-            cv::Mat rgb_frame(bgr_frame.rows, bgr_frame.cols, CV_8UC3);
-            cv::cvtColor(bgr_frame, rgb_frame, cv::COLOR_BGR2RGB);
-            memHandler->Write(rgb_frame.data, rgb_frame.cols * rgb_frame.rows * 3, rgb_frame.cols, rgb_frame.rows,
-                              cnstream::CN_PIXEL_FORMAT_RGB24);
+              cv::Mat rgb_frame(bgr_frame.rows, bgr_frame.cols, CV_8UC3);
+              cv::cvtColor(bgr_frame, rgb_frame, cv::COLOR_BGR2RGB);
+              memHandler->Write(rgb_frame.data, rgb_frame.cols * rgb_frame.rows * 3, rgb_frame.cols, rgb_frame.rows,
+                                cnstream::CN_PIXEL_FORMAT_RGB24);
 #endif
-          }
+           }
 #else
-        LOG(ERROR) << "OPENCV is not linked, can not support cv::mat or raw image data with bgr24/rgb24 "
-                      "format." return EXIT_FAILURE;
+          LOG(ERROR) << "OPENCV is not linked, can not support cv::mat or raw image data with bgr24/rgb24 "
+                        "format." return EXIT_FAILURE;
 #endif
-        }));
+          }));
+        }
       } else {
-        auto handler =
-            cnstream::FileHandler::Create(source, std::to_string(i), filename, FLAGS_src_frame_rate, FLAGS_loop);
-        source->AddSource(handler);
+        auto handler = cnstream::FileHandler::Create(source, stream_id, filename, FLAGS_src_frame_rate, FLAGS_loop);
+        ret = source->AddSource(handler);
       }
+    }
+    if (ret != 0) {
+      msg_observer.DecreaseStreamCnt();
+      if (FLAGS_perf) pipeline.RemovePerfManager(stream_id);
     }
   }
 
@@ -327,7 +338,7 @@ int main(int argc, char** argv) {
     // stop feed-data threads before remove-sources...
     thread_running.store(false);
     for (int i = 0; i < streams; i++) {
-      source->RemoveSource(std::to_string(i));
+      source->RemoveSource("stream_" + std::to_string(i));
     }
     pipeline.Stop();
   };
@@ -353,7 +364,7 @@ int main(int argc, char** argv) {
       thread_running.store(false);
 
       for (int i = 0; i < streams; i++) {
-        source->RemoveSource(std::to_string(i));
+        source->RemoveSource("stream_" + std::to_string(i));
       }
 
       pipeline.Stop();
@@ -365,7 +376,7 @@ int main(int argc, char** argv) {
         std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_time));
         thread_running.store(false);
         for (int i = 0; i < streams; i++) {
-          source->RemoveSource(std::to_string(i));
+          source->RemoveSource("stream_" + std::to_string(i));
         }
         pipeline.Stop();
       } else {
