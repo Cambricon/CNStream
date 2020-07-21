@@ -223,7 +223,6 @@ class Pipeline {
    *                 "parallelism" : 0,
    *                 "next_modules" : ["detector"],
    *                 "custom_params" : {
-   *                   "source_type" : "ffmpeg",
    *                   "decoder_type" : "mlu",
    *                   "device_id" : 0
    *                 }

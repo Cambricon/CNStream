@@ -29,6 +29,7 @@
 #define BUFFER_SIZE 250 * 1024
 #define SCALE 1.0
 #define NORM 1.0
+#define MULT_LIMIT 63 // wram limit
 /*------------------------------ HELP FUNCTIONS ------------------------------*/
 // load syn & bias from gdram if needed
 // mult: the multipiler used in upscaling mode
@@ -36,7 +37,7 @@ __mlu_func__ void loadFilters(half* yuvSyn, half* yuvBias, half* cpySyn,
                               half* yuvFilter_gdram, half* yuvBias_gdram,
                               half* multFliter, half* buffer, int mult) {
   // Load weights if need src expansion
-  if (mult > 1) {
+  if (mult > 1 && mult < MULT_LIMIT) {
     half* IdenCI = buffer;
     half* cpyFilter = IdenCI + CI * CI;
     __bang_write_zero(IdenCI, CI * CI);
@@ -100,7 +101,8 @@ __mlu_func__ void genMaskAndWeights(half* weightX, half* maskX0, half* maskX1,
     // of src image later in the code.
     fx = (half)((posX & 0xFFFF) >> 1) / 32768 * (int)(posX > 0);
     sx = (posX >> 16) * (int)(posX > 0);
-    fx = fx * (int)(sx < colLimit);
+    // fx = fx * (int)(sx < colLimit);
+    fx = fx * (int)(sx < (roi_x % 2 == 0 ? colLimit : colLimit - 1));
     sx = std::min(sx, colLimit);
     wx0 = (((half)1.f - fx) * SCALE);
     wx1 = (half)SCALE - wx0;
@@ -540,7 +542,7 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
 
     int srcDealNum = 0;
     if (roi_x % 2 == 0) {
-      srcDealNum = roi_w;
+      srcDealNum = (roi_w % 2 == 0 ? roi_w : roi_w + 1);
     } else {
       srcDealNum = (roi_w % 2 == 0 ? roi_w + 2 : roi_w + 1);
     }
@@ -686,14 +688,14 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
           sy = (batchNum % taskDim != 0) * taskId * d_row_seg + j;
         } else {
           sy = (posY >> 16) * (int)(posY > 0);
-          sy = std::min(sy, rowLimit - 1) + roi_y;
+          sy = std::max(std::min(sy, rowLimit - 1), 0) + roi_y;
         }
 
         // compute offsets for each row
         int offsetY1 = (sy * s_col) + roi_x_;
-        int offsetY2 = (sy + 1) * s_col + roi_x_;
+        int offsetY2 = ((sy + 1) * (roi_h != 1) + sy * (roi_h == 1)) * s_col + roi_x_;
         int offsetUV1 = (sy / 2) * s_col + roi_x_;
-        int offsetUV2 = ((sy + 1) / 2) * s_col + roi_x_;
+        int offsetUV2 = (((sy + 1) / 2) * (roi_h != 1) + (sy / 2) * (roi_h == 1)) * s_col + roi_x_;
 
         if (input2half) {
           /*#################################*/
@@ -806,11 +808,21 @@ __mlu_entry__ void ResizeYuvToRgbaKernel_V2_MLU220(
           /*#################################*/
           /*#[Module 5]: src image expansion#*/
           /*#################################*/
-          if (mult > 1) {
+          if (mult > 1 && mult < MULT_LIMIT) {
             half* Y = sLine0 + srcDealNumPad * 8;
             __bang_half2fix16_rd((int16_t*)Y, sLine0, srcDealNumPad * 8, -7);
             __bang_conv(src, (int16_t*)Y, (int16_t*)cpySyn, CI, 1,
                         srcDealNumPad * 8 / CI, 1, 1, 1, 1, CI * mult, -7);
+          } else if (mult >= MULT_LIMIT) {
+            for (int m = 0; m < mult; m++) {
+              __memcpy(src + m * 4,
+                       sLine0,
+                       4 * sizeof(half),
+                       NRAM2NRAM,
+                       mult * 4 * sizeof(half),
+                       4 * sizeof(half),
+                       mult - 1);
+            }
           }
 
           // Select data using the mask gegerated in [1]

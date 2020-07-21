@@ -97,6 +97,12 @@ int SourceModule::AddSource(std::shared_ptr<SourceHandler> handler) {
     return -1;
   }
 
+  if (source_map_.size() >= GetMaxStreamNumber()) {
+    LOG(WARNING) << handler->GetStreamId()
+                 << " doesn't add to pipeline because of maximum limitation: " << GetMaxStreamNumber();
+    return -1;
+  }
+
   handler->SetStreamUniqueIdx(source_idx_);
   source_idx_++;
 

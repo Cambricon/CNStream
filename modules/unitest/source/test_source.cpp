@@ -114,7 +114,6 @@ TEST(Source, OpenClose) {
   param.clear();
   src->Close();
 
-  param["source_type"] = "ffmpeg";
   param["output_type"] = "cpu";
   param["decoder_type"] = "cpu";
   EXPECT_TRUE(src->Open(param));

@@ -5,7 +5,6 @@
     "show_perf_info" : true,
     "next_modules" : ["ipc"],
     "custom_params" : {
-      "source_type" : "ffmpeg",
       "reuse_cndec_buf" : "false",
       "output_type" : "mlu",
       "decoder_type" : "mlu",
