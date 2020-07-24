@@ -1,4 +1,5 @@
 /*************************************************************************
+:a
  * Copyright (C) [2020] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -89,11 +90,7 @@ bool ESJpegMemHandlerImpl::Open() {
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
 
-  if (param_.decoder_type_ != DECODER_MLU) {
-    LOG(ERROR) << "decoder_type not supported:" << param_.decoder_type_;
-    return false;
-  }
-
+  parser_.Init("mjpeg");
   this->interval_ = param_.interval_;
 
   SetPerfManager(source->GetPerfManager(stream_id_));
@@ -124,9 +121,16 @@ void ESJpegMemHandlerImpl::Close() {
     delete queue_;
     queue_ = nullptr;
   }
+
+  parser_.Free();
 }
 
 int ESJpegMemHandlerImpl::Write(ESPacket *pkt) {
+  if (pkt && pkt->data && pkt->size) {
+    if (parser_.Parse(pkt->data, pkt->size) < 0) {
+      return -1;
+    }
+  }
   std::lock_guard<std::mutex> lk(queue_mutex_);
   int timeoutMs = 1000;
   while (running_.load() && queue_) {
@@ -168,21 +172,36 @@ void ESJpegMemHandlerImpl::DecodeLoop() {
   LOG(INFO) << "DecodeLoop Exit";
 }
 
+
 bool ESJpegMemHandlerImpl::PrepareResources() {
   VideoStreamInfo info;
-  info.codec_id = AV_CODEC_ID_MJPEG;
-  info.codec_width = max_width_;
-  info.codec_height = max_height_;;
-
   if (!running_.load()) {
     return false;
   }
 
-  decoder_ = std::make_shared<MluDecoder>(this);
+  if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
+    info.codec_id = AV_CODEC_ID_MJPEG;
+    info.codec_width = max_width_;
+    info.codec_height = max_height_;
+    decoder_ = std::make_shared<MluDecoder>(this);
+  } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
+    while (running_.load()) {
+      if (parser_.GetInfo(info) > 0) {
+        break;
+      }
+      usleep(1000 * 10);
+    }
+
+    decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
+  } else {
+    LOG(ERROR) << "unsupported decoder_type";
+    return false;
+  }
 
   if (!decoder_) {
     return false;
   }
+
   bool ret = decoder_->Create(&info, interval_);
   if (!ret) {
       return false;

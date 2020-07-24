@@ -85,6 +85,7 @@ class ESJpegMemHandlerImpl : public IHandler {
   // maximum resolution 8K
   int max_width_ = 7680;
   int max_height_ = 4320;
+  ParserHelper parser_;
 
  public:
   void SendFlowEos() override {
