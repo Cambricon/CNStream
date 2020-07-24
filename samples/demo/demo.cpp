@@ -26,7 +26,6 @@
 #include <iostream>
 #include <list>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
@@ -64,7 +63,6 @@ DEFINE_bool(jpeg_from_mem, false, "Jpeg bitstream from mem.");
 DEFINE_bool(raw_img_input, false, "feed raw image to source");
 
 cnstream::Displayer* gdisplayer = nullptr;
-static std::mutex g_vcap_mtx;
 
 class MsgObserver : cnstream::StreamMsgObserver {
  public:
@@ -270,45 +268,36 @@ int main(int argc, char** argv) {
           delete [] buf, buf = nullptr;
         }));
       }
-    } else {
-      if (FLAGS_raw_img_input) {
-        LOG(INFO) << "feed source with raw image mem.";
+    } else if (filename.find(".jpg") != std::string::npos && FLAGS_raw_img_input) {
+      LOG(INFO) << "feed source with raw image mem(image input sample).";
+      /* this is a sample for image process(when implement for video, can use opencv VideoCapture instead).
+       */
 #ifdef HAVE_OPENCV
-        // raw image mem(from cv::Mat or image description) handler
-        auto handler = cnstream::RawImgMemHandler::Create(source, stream_id);
-        ret = source->AddSource(handler);
-        if (ret == 0) {
-          // use a separate thread to read image data from video and feed pipeline
-          vec_threads_mem.push_back(std::thread([=, &thread_running]() {
-            cv::VideoCapture vcapture;
-            g_vcap_mtx.lock();
-            vcapture.open(filename);
-            g_vcap_mtx.unlock();
+      auto handler = cnstream::RawImgMemHandler::Create(source, stream_id);
+      ret = source->AddSource(handler);
+      if (ret == 0) {
+        // use a separate thread to read data from memory and feed pipeline
+        vec_threads_mem.push_back(std::thread([=, &thread_running]() {
+          int index = filename.find_last_of("/");
+          std::string dir_path = filename.substr(0, index);
+          std::list<std::string> files = GetFileNameFromDir(dir_path, "*.jpg");
+          auto memHandler = std::dynamic_pointer_cast<cnstream::RawImgMemHandler>(handler);
+          auto itor = files.begin();
 
-            if (!vcapture.isOpened()) {
-              LOG(ERROR) << "open file: " << filename << " failed with RawImgMemHandler source type.";
-              return;
-            }
-            cv::Mat bgr_frame;
-            auto memHandler = std::dynamic_pointer_cast<cnstream::RawImgMemHandler>(handler);
-            while (thread_running.load()) {
-              vcapture >> bgr_frame;
+          while (thread_running.load() && itor != files.end()) {
+            cv::Mat bgr_frame = cv::imread(*itor);
 #if 1
-              // feed bgr24 image mat, with api-Write(cv::Mat)
-              if (bgr_frame.empty()) {
-                memHandler->Write(nullptr);
-                vcapture.release();
-                break;
-              }
-
+            // feed bgr24 image mat, with api-Write(cv::Mat)
+            if (!bgr_frame.empty()) {
               memHandler->Write(&bgr_frame);
+            } else {
+              continue;
+            }
 #else
               // feed rgb24 image data, with api-Write(unsigned char* data, int size, int w, int h,
               // cnstream::CNDataFormat)
               if (bgr_frame.empty()) {
-                memHandler->Write(nullptr, 0);
-                vcapture.release();
-                break;
+                continue;
               }
 
               cv::Mat rgb_frame(bgr_frame.rows, bgr_frame.cols, CV_8UC3);
@@ -316,17 +305,22 @@ int main(int argc, char** argv) {
               memHandler->Write(rgb_frame.data, rgb_frame.cols * rgb_frame.rows * 3, rgb_frame.cols, rgb_frame.rows,
                                 cnstream::CN_PIXEL_FORMAT_RGB24);
 #endif
-           }
+
+            itor++;
+            if (itor == files.end() && FLAGS_loop) {
+              itor = files.begin();
+            }
+          }
+          memHandler->Write(nullptr);
 #else
           LOG(ERROR) << "OPENCV is not linked, can not support cv::mat or raw image data with bgr24/rgb24 "
                         "format." return EXIT_FAILURE;
 #endif
-          }));
-        }
-      } else {
-        auto handler = cnstream::FileHandler::Create(source, stream_id, filename, FLAGS_src_frame_rate, FLAGS_loop);
-        ret = source->AddSource(handler);
+        }));
       }
+    } else {
+      auto handler = cnstream::FileHandler::Create(source, stream_id, filename, FLAGS_src_frame_rate, FLAGS_loop);
+      ret = source->AddSource(handler);
     }
     if (ret != 0) {
       msg_observer.DecreaseStreamCnt();
