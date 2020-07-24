@@ -133,16 +133,6 @@ TEST(Source, OpenClose) {
   EXPECT_FALSE(src->Process(data));
 }
 
-TEST(Source, SendData) {
-  auto src = std::make_shared<DataSource>(gname);
-  std::shared_ptr<Pipeline> pipeline = std::make_shared<Pipeline>("pipeline");
-  auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
-  data->SetStreamIndex(0);
-  EXPECT_FALSE(src->SendData(data));
-  pipeline->AddModule(src);
-  EXPECT_TRUE(src->SendData(data));
-}
-
 TEST(Source, AddSource) {
   auto src = std::make_shared<DataSource>(gname);
   std::string stream_id1 = "1";

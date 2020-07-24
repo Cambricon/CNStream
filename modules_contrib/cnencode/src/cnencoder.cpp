@@ -74,6 +74,9 @@ CNEncoderContext *CNEncoder::GetCNEncoderContext(CNFrameInfoPtr data) {
     // build cnencoder
     ctx->stream_ = new CNEncoderStream(frame->width, frame->height, dst_width_, dst_height_, frame_rate_, cn_format_,
                                        bit_rate_, gop_size_, cn_type_, data->GetStreamIndex(), device_id_, pre_type_);
+    std::shared_ptr<PerfManager> manager = GetPerfManager(data->stream_id);
+    ctx->stream_->SetPerfManager(manager);
+    ctx->stream_->SetModuleName(GetName());
     /* add into map */
     ctxs_[data->stream_id] = ctx;
   } else {
@@ -213,6 +216,15 @@ bool CNEncoder::CheckParamSet(const ModuleParamSet &paramSet) const {
     return false;
   }
   return true;
+}
+
+void CNEncoder::RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished) {
+  std::shared_ptr<PerfManager> manager = GetPerfManager(data->stream_id);
+  if (!data->IsEos() && manager && !is_finished) {
+    manager->Record(is_finished, PerfManager::GetDefaultType(), this->GetName(), data->timestamp);
+    manager->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(data->timestamp),
+                    this->GetName() + "_th", "'" + GetThreadName(pthread_self()) + "'");
+  }
 }
 
 }  // namespace cnstream

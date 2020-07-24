@@ -181,6 +181,7 @@ void SDLVideoPlayer::Refresh() {
   SDL_UnlockTexture(texture_);
   SDL_RenderCopy(renderer_, texture_, NULL, NULL);
   SDL_RenderPresent(renderer_);
+  RecordEndTime(datas);
 }
 
 void SDLVideoPlayer::SetFullScreen() { SDL_SetWindowFullscreen(window_, SDL_WINDOW_FULLSCREEN); }

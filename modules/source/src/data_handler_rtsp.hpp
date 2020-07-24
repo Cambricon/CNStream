@@ -40,7 +40,6 @@ extern "C" {
 #include "easyinfer/mlu_context.h"
 #include "ffmpeg_decoder.hpp"
 #include "glog/logging.h"
-#include "perf_manager.hpp"
 #include "rtsp_client.hpp"
 #include "data_handler_util.hpp"
 #include "util/cnstream_queue.hpp"
@@ -61,7 +60,6 @@ class RtspHandlerImpl : public IHandler {
 
  private:
   DataSource *module_ = nullptr;
-  std::shared_ptr<PerfManager> perf_manager_;
   std::string url_name_;
   RtspHandler &handler_;
   std::string stream_id_;

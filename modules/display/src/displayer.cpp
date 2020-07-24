@@ -18,6 +18,7 @@
  * THE SOFTWARE.
  *************************************************************************/
 #include <glog/logging.h>
+#include <memory>
 #include <string>
 
 #include "cnstream_eventbus.hpp"
@@ -29,6 +30,7 @@ namespace cnstream {
 
 Displayer::Displayer(const std::string &name) : Module(name) {
   player_ = new (std::nothrow) SDLVideoPlayer;
+  player_->SetModuleName(name);
   LOG_IF(FATAL, nullptr == player_) << "Displayer::Displayer() new SDLVideoPlayer failed.";
   param_register_.SetModuleDesc("Displayer is a module for displaying video.");
   param_register_.Register("window-width", "Width of the displayer window.");
@@ -88,6 +90,9 @@ int Displayer::Process(CNFrameInfoPtr data) {
     CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
     ud.img = *frame->ImageBGR();
     ud.chn_idx = data->GetStreamIndex();
+    ud.stream_id = data->stream_id;
+    ud.pts = data->timestamp;
+    ud.perf_manager = GetPerfManager(data->stream_id);
     player_->FeedData(ud);
   }
   return 0;
@@ -140,6 +145,20 @@ bool Displayer::CheckParamSet(const ModuleParamSet &paramSet) const {
   }
 
   return true;
+}
+
+void Displayer::RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished) {
+  std::shared_ptr<PerfManager> manager = GetPerfManager(data->stream_id);
+  if (data->IsEos() || !manager) {
+    return;
+  }
+  if (!is_finished || !show_) {
+    manager->Record(is_finished, PerfManager::GetDefaultType(), this->GetName(), data->timestamp);
+  }
+  if (!is_finished) {
+    manager->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(data->timestamp),
+                    this->GetName() + "_th", "'" + GetThreadName(pthread_self()) + "'");
+  }
 }
 
 }  // namespace cnstream

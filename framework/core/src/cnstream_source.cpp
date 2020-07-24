@@ -160,12 +160,4 @@ int SourceModule::RemoveSources() {
   return 0;
 }
 
-bool SourceModule::SendData(std::shared_ptr<CNFrameInfo> data) {
-  RwLockReadGuard guard(container_lock_);
-  if (container_) {
-    return container_->ProvideData(this, data);
-  }
-  return false;
-}
-
 }  // namespace cnstream

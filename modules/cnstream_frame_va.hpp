@@ -24,7 +24,7 @@
 /**
  *  @file cnstream_frame_va.hpp
  *
- *  This file contains a declaration of the CNFrameData & CNInferObject struct and its subtructure.
+ *  This file contains a declaration of the CNFrameData & CNInferObject struct and its substructure.
  */
 #ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
@@ -75,7 +75,7 @@ typedef struct {
     INVALID = -1,        ///< Invalid device type.
     CPU = 0,             ///< The data is allocated by CPU.
     MLU = 1,             ///< The data is allocated by MLU.
-    MLU_CPU = 2          ///< Both MLU and CPU. Used for M220_SOC.
+    MLU_CPU = 2          ///< The data is allocated both by MLU and CPU. Used for M220_SOC.
   } dev_type = INVALID;  ///< Device type.
   int dev_id = 0;        ///< Ordinal device ID.
   int ddr_channel = 0;   ///< Ordinal channel ID for MLU. The value should be in the range [0, 4).
@@ -115,7 +115,7 @@ inline int CNGetPlanes(CNDataFormat fmt) {
 }
 
 /**
- * Dedicated deallocator the CNDecoder buffer.
+ * Dedicated deallocator for the CNDecoder buffer.
  */
 class IDataDeallocator {
  public:
@@ -172,7 +172,7 @@ struct CNDataFrame {
   DevContext ctx;                                            ///< The device context of this frame.
   void* ptr_mlu[CN_MAX_PLANES];                              ///< The MLU data addresses for planes.
   void* ptr_cpu[CN_MAX_PLANES];                              ///< The CPU data addresses for planes.
-  std::shared_ptr<IDataDeallocator> deAllocator_ = nullptr;  ///< The dedicated deallocator for CNDecoder Buffer.
+  std::shared_ptr<IDataDeallocator> deAllocator_ = nullptr;  ///< The dedicated deallocator for CNDecoder buffer.
   std::shared_ptr<ICNMediaImageMapper> mapper_ = nullptr;    ///< The dedicated Mapper for M220 CNDecoder.
 
   CNDataFrame() {}
@@ -203,12 +203,12 @@ struct CNDataFrame {
   size_t GetBytes() const;
 
   /**
-   * Syncronizes the source-data to CNSyncedMemory.
+   * Synchronizes the source-data to CNSyncedMemory.
    */
   void CopyToSyncMem();
 
   /**
-   * @brief Syncronizes source data to specific device, and reset ctx.dev_id to device_id when synced, for multi-device
+   * @brief Synchronizes source data to specific device, and resets ctx.dev_id to device_id when synced, for multi-device
    * case.
    * @param device_id The device id.
    * @return Void.
@@ -223,21 +223,21 @@ struct CNDataFrame {
   void MmapSharedMem(MemMapType type, std::string stream_id);
 
   /**
-   * @brief Unmaps the shared memery for multi-process.
+   * @brief Unmaps the shared memory for multi-process.
    * @param memory The type of the mapped or shared memory.
    * @return Void.
    */
   void UnMapSharedMem(MemMapType type);
 
   /**
-   * @brief Copies source-data to shared memery for multi-process.
+   * @brief Copies source-data to shared memory for multi-process.
    * @param memory The type of the mapped or shared memory.
    * @return Void.
    */
   void CopyToSharedMem(MemMapType type, std::string stream_id);
 
   /**
-   * @brief Releases shared memery for multi-process.
+   * @brief Releases shared memory for multi-process.
    * @param memory The type of the mapped or shared memory.
    * @return Void.
    */
@@ -248,7 +248,7 @@ struct CNDataFrame {
  public:
   void* cpu_data = nullptr;  ///< CPU data pointer. You need to allocate it by calling CNStreamMallocHost().
   void* mlu_data = nullptr;  ///< A pointer to the MLU data.
-  std::shared_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Sync data helper.
+  std::shared_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Synchronizes data helper.
 
 #ifdef HAVE_OPENCV
   /**
@@ -277,7 +277,10 @@ struct CNDataFrame {
  * Normalized coordinates.
  */
 struct CNInferBoundingBox {
-  float x, y, w, h;
+  float x;  ///< The x-axis coordinate in the upper left corner of the bounding box.
+  float y;  ///< The y-axis coordinate in the upper left corner of the bounding box.
+  float w;  ///< The width of the bounding box.
+  float h;  ///< The height of the bounding box.
 };
 
 /**
@@ -302,7 +305,7 @@ struct CNInferFeature {
  */
 struct CNInferObject {
  public:
-  std::string id;           ///< The ID of the classification. (label value).
+  std::string id;           ///< The ID of the classification (label value).
   std::string track_id;     ///< The tracking result.
   float score;              ///< The label score.
   CNInferBoundingBox bbox;  ///< The object normalized coordinates.
@@ -314,7 +317,7 @@ struct CNInferObject {
    * @param value The value of the attribute.
    *
    * @return Returns true if the attribute has been added successfully. Returns false if the attribute
-   *         already exists.
+   *         already existed.
    *
    * @note This is a thread-safe function.
    */
@@ -326,7 +329,7 @@ struct CNInferObject {
    * @param attribute The attribute pair (key, value) to be added.
    *
    * @return Returns true if the attribute has been added successfully. Returns false if the attribute
-   *         already exists.
+   *         has already existed.
    *
    * @note This is a thread-safe function.
    */
@@ -351,7 +354,7 @@ struct CNInferObject {
    * @param value The value of the attribute.
    *
    * @return Returns true if the attribute has been added successfully. Returns false if the attribute
-   *        already exists in the object.
+   *         has already existed in the object.
    *
    * @note This is a thread-safe function.
    */
@@ -363,7 +366,7 @@ struct CNInferObject {
    * @param attributes Attributes to be added.
    *
    * @return Returns true if the attribute has been added successfully. Returns false if the attribute
-   *         already exists.
+   *         has already existed.
    * @note This is a thread-safe function.
    */
   bool AddExtraAttribute(const std::vector<std::pair<std::string, std::string>>& attributes);
@@ -383,7 +386,7 @@ struct CNInferObject {
   /**
    * Adds the feature value to a specified object.
    *
-   * @param features The feature value you want to add to.
+   * @param features The feature value to be added to.
    *
    * @return Void.
    *

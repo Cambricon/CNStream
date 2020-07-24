@@ -37,11 +37,11 @@
 namespace cnstream {
 
 /**
- * @brief The data type of database item
+ * @brief The data type of database item.
  */
 using DbItem = std::pair<int, std::vector<std::string>>;
 /**
- * @brief The data type of integer item
+ * @brief The data type of integer item.
  */
 using DbIntegerItem = std::vector<size_t>;
 
@@ -51,16 +51,16 @@ class Sqlite;
  * @brief The basic data structure of performance statistics, including latency, frame count, and throughout.
  */
 struct PerfStats {
-  size_t latency_avg = 0;  /// Average latency
-  size_t latency_min = 0;  /// Min latency
-  size_t latency_max = 0;  /// Max latency
-  size_t frame_cnt = 0;    /// Frame count
-  double fps = 0.f;        /// Throughput
-};                         // struct PerfStats
+  size_t latency_avg = 0;  ///< Average latency.
+  size_t latency_min = 0;  ///< Minimum latency.
+  size_t latency_max = 0;  ///< Maximum latency.
+  size_t frame_cnt = 0;    ///< Frame count.
+  double fps = 0.f;        ///< Throughput.
+};                         // struct PerfStats.
 
 /**
  * @brief Prints latency.
- * @param stats The performance statstics.
+ * @param stats The performance statistics.
  * @param width The width of console output "frame count". Default value is 0.
  *
  * @return Void.
@@ -68,7 +68,7 @@ struct PerfStats {
 void PrintLatency(const PerfStats &stats, uint32_t width = 0);
 /**
  * @brief Prints throughput.
- * @param stats The performance statstics.
+ * @param stats The performance statistics.
  * @param width The width of console output "frame count". Default value is 0.
  *
  * @return Void.
@@ -85,7 +85,7 @@ void PrintStreamId(std::string stream_id);
  * @brief Prints string.
  * @param str The string.
  * @param width The width of the printed string. The default value is 15.
- * @param fill_charater Fills output with fill_charater. The default value is empty char
+ * @param fill_charater Fills output with fill_charater. The default value is empty.
  *
  * @return Void.
  */
@@ -98,53 +98,53 @@ void PrintStr(const std::string str, uint32_t width = 15, const char fill_charat
  */
 void PrintTitle(std::string title);
 /**
- * @brief Prints title for latest throughput.
+ * @brief Prints the title for the latest throughput.
  * @param timeframe The latest throughput is over timeframe. The default value is 2s.
  *
  * @return Void.
  */
 void PrintTitleForLatestThroughput(const std::string timeframe = "2s");
 /**
- * @brief Prints title for average throughput.
+ * @brief Prints the title for average throughput.
  *
  * @return Void.
  */
 void PrintTitleForAverageThroughput();
 /**
- * @brief Prints 'total'.
+ * @brief Prints the title name "total".
  *
  * @return Void.
  */
 void PrintTitleForTotal();
 
 /**
- * @brief Perf Utilities is for getting data from databse.
+ * @brief Perf Utilities is for getting data from database.
  */
 class PerfUtils {
  public:
   /**
-   * @brief Adds sql handler.
+   * @brief Adds SQL handler.
    *
    * @param name sql The handler name.
-   * @param sql The sql handler.
+   * @param sql The SQL handler.
    *
-   * @return Returns true if add sql sucessfully, otherwise false.
+   * @return Returns true if SQL has been added successfully, otherwise returns false.
    */
   bool AddSql(const std::string &name, std::shared_ptr<Sqlite> sql);
   /**
-   * @brief Removes sql handler.
+   * @brief Removes SQL handler.
    *
    * @param name sql The handler name.
    *
-   * @return Returns true if remove sql sucessfully, otherwise false.
+   * @return Returns true if SQL has been removed successfully, otherwise returns false.
    */
   bool RemoveSql(const std::string &name);
 
   /**
-   * @brief Searchs data from database.
+   * @brief Searches data from database.
    *
-   * @param sql The sql handler.
-   * @param sql_statement The sql statement.
+   * @param sql The SQL handler.
+   * @param sql_statement The SQL statement.
    *
    * @return Returns database items.
    */
@@ -152,8 +152,8 @@ class PerfUtils {
   /**
    * @brief Gets thread id.
    *
-   * @param name The sql handler name.
-   * @param perf_type The perf type, i.e., the table name of the database.
+   * @param name The SQL handler name.
+   * @param perf_type The perf type, namely, the table name of the database.
    * @param th_key The thread key.
    *
    * @return Returns thread ids.
@@ -162,7 +162,7 @@ class PerfUtils {
   /**
    * @brief Gets thread id from all database.
    *
-   * @param perf_type The perf type, i.e., the table name of the database.
+   * @param perf_type The perf type, namely, the table name of the database.
    * @param th_key The thread key.
    *
    * @return Returns thread ids.
@@ -172,8 +172,8 @@ class PerfUtils {
   /**
    * @brief Gets items.
    *
-   * @param name The sql handler name.
-   * @param perf_type The perf type, i.e., the table name of the database.
+   * @param name The SQL handler name.
+   * @param perf_type The perf type, namely, the table name of the database.
    * @param keys The item keys.
    * @param condition The condition statement.
    *
@@ -184,7 +184,7 @@ class PerfUtils {
   /**
    * @brief Gets items from all database.
    *
-   * @param perf_type The perf type, i.e., the table name of the database.
+   * @param perf_type The perf type, namely, the table name of the database.
    * @param keys The item keys.
    * @param condition The condition statement.
    *
@@ -194,7 +194,7 @@ class PerfUtils {
                                         std::string condition = "");
 
   /**
-   * @brief Transfers database items to ineger.
+   * @brief Transfers database items to integer items.
    *
    * @param data The database items.
    *
@@ -203,21 +203,21 @@ class PerfUtils {
   static std::vector<DbIntegerItem> ToInteger(const std::vector<DbItem> &data);
 
   /**
-   * @brief Finds max value.
+   * @brief Finds the maximum value.
    *
-   * @param name The sql handler name.
-   * @param perf_type The perf type, i.e., the table name of the database.
-   * @param keys The key.
+   * @param name The SQL handler name.
+   * @param perf_type The perf type, namely, the table name of the database.
+   * @param key The database key.
    * @param condition The condition statement.
    *
    * @return Returns max value.
    */
   size_t FindMaxValue(std::string name, std::string perf_type, std::string key, std::string condition = "");
   /**
-   * @brief Finds max value from each database.
+   * @brief Finds the maximum value from each database.
    *
-   * @param perf_type The perf type, i.e., the table name of the database.
-   * @param keys The key.
+   * @param perf_type The perf type, namely, the table name of the database.
+   * @param key The database key.
    * @param condition The condition statement.
    *
    * @return Returns max values.
@@ -225,21 +225,21 @@ class PerfUtils {
   std::vector<size_t> FindMaxValues(std::string perf_type, std::string key, std::string condition = "");
 
   /**
-   * @brief Finds min value.
+   * @brief Finds the minimum value.
    *
-   * @param name The sql handler name.
-   * @param perf_type The perf type, i.e., the table name of the database.
-   * @param keys The key.
+   * @param name The SQL handler name.
+   * @param perf_type The perf type, namely, the table name of the database.
+   * @param key The database key.
    * @param condition The condition statement.
    *
-   * @return Returns min value.
+   * @return Returns the minimum value.
    */
   size_t FindMinValue(std::string name, std::string perf_type, std::string key, std::string condition = "");
   /**
-   * @brief Finds min value from each database.
+   * @brief Finds the minimum value from each database.
    *
-   * @param perf_type The perf type, i.e., the table name of the database.
-   * @param keys The key.
+   * @param perf_type The perf type, namely, the table name of the database.
+   * @param key The database key.
    * @param condition The condition statement.
    *
    * @return Returns min values.
@@ -247,11 +247,11 @@ class PerfUtils {
   std::vector<size_t> FindMinValues(std::string perf_type, std::string key, std::string condition = "");
 
   /**
-   * @brief Gets count
+   * @brief Gets count from a database.
    *
-   * @param name The sql handler name.
-   * @param perf_type The perf type, i.e., the table name of the database.
-   * @param keys The key.
+   * @param name The SQL handler name.
+   * @param perf_type The perf type, namely, the table name of the database.
+   * @param key The database key.
    * @param condition The condition statement.
    *
    * @return Returns count.
@@ -260,8 +260,8 @@ class PerfUtils {
   /**
    * @brief Finds count from each database.
    *
-   * @param perf_type The perf type, i.e., the table name of the database.
-   * @param keys The key.
+   * @param perf_type The perf type, namely, the table name of the database.
+   * @param keys The database key.
    * @param condition The condition statement.
    *
    * @return Returns counts.
@@ -271,58 +271,58 @@ class PerfUtils {
   /**
    * @brief Gets table names.
    *
-   * @param name The sql handler name.
+   * @param name The SQL handler name.
    *
    * @return Returns table names.
    */
   std::vector<std::string> GetTableNames(std::string name);
 
   /**
-   * @brief Checks if the sql handler exists.
+   * @brief Checks if the SQL handler exists.
    *
-   * @param name The sql handler name.
+   * @param name The SQL handler name.
    *
-   * @return Returns true if the sql handler exists, otherwise false.
+   * @return Returns true if the SQL handler exists, otherwise returns false.
    */
   bool SqlIsExisted(std::string name);
   /**
    * @brief Records data to database.
    *
-   * @param sql_name The sql handler name.
-   * @param perf_type The perf type, i.e., the table name of the database.
-   * @param keys The keys.
-   * @param values The values.
+   * @param sql_name The SQL handler name.
+   * @param perf_type The perf type, namely, the table name of the database.
+   * @param keys The database keys.
+   * @param values The database values.
    *
-   * @return Returns true if the data has been recorded successfully, otherwise false.
+   * @return Returns true if the data has been recorded successfully, otherwise returns false.
    */
   bool Record(std::string sql_name, std::string perf_type, std::vector<std::string> keys,
               std::vector<std::string>values);
   /**
-   * @brief Creates database.
+   * @brief Creates a database.
    *
    * @param name The database name.
    *
-   * @return Returns Sqlite pointer if the database has been created successfully, otherwise false.
+   * @return Returns Sqlite pointer if the database has been created successfully, otherwise returns false.
    */
   static std::shared_ptr<Sqlite> CreateDb(std::string name);
   /**
-   * @brief Creates table to database.
+   * @brief Creates a table in a database.
    *
-   * @param sql The sql handler.
-   * @param perf_type The perf type, i.e., the table name of the database.
+   * @param sql The SQL handler.
+   * @param perf_type The perf type, namely, the table name of the database.
    * @param primary_key The primary key.
-   * @param keys The keys.
+   * @param keys The database keys.
    *
-   * @return Returns true if the table has been created successfully, otherwise false.
+   * @return Returns true if the table has been created successfully, otherwise returns false.
    */
   static bool CreateTable(std::shared_ptr<Sqlite> sql, std::string perf_type,
                           std::string primary_key, std::vector<std::string> keys);
   /**
-   * @brief Gets max value of a vector.
+   * @brief Gets the maximum value of a vector.
    *
-   * @param values The vector contains values.
+   * @param values The values in the vector.
    *
-   * @return Returns max value.
+   * @return Returns the maximum value.
    */
   template <class T>
   static T Max(std::vector<T> values) {
@@ -332,12 +332,12 @@ class PerfUtils {
     return 0;
   }
   /**
-   * @brief Gets max value of a vector.
+   * @brief Gets the maximum value of a vector.
    *
-   * @param values The vector contains values.
-   * @param p It indicates how to find the max value of the vector.
+   * @param values The values in the vector.
+   * @param p Indicates how to find the maximum value of the vector.
    *
-   * @return Returns max value.
+   * @return Returns the maximum value.
    */
   template <class T, typename Proc>
   static T Max(std::vector<T> values, Proc p) {
@@ -347,11 +347,11 @@ class PerfUtils {
     return T();
   }
   /**
-   * @brief Gets min value of a vector.
+   * @brief Gets the minimum value of a vector.
    *
-   * @param values The vector contains values.
+   * @param values The values in the vector.
    *
-   * @return Returns min value.
+   * @return Returns the minimum value.
    */
   template <class T>
   static T Min(std::vector<T> values) {
@@ -364,9 +364,9 @@ class PerfUtils {
   /**
    * @brief Sums a vector.
    *
-   * @param values The vector contains values.
+   * @param values The values in the vector.
    *
-   * @return Returns sum.
+   * @return Returns the sum of values in the vector.
    */
   template <class T>
   static T Sum(std::vector<T> values) {
@@ -379,8 +379,8 @@ class PerfUtils {
   /**
    * @brief Sorts a vector.
    *
-   * @param vec The vector contains values.
-   * @param p It indicates how to sort the vector.
+   * @param vec The values in the vector.
+   * @param p Indicates how to sort the vector.
    *
    * @return Void.
    */
@@ -402,8 +402,8 @@ class PerfCalculationMethod;
 /**
  * @brief Calculates performance statistics.
  *
- * Gets data from database and then calculates performance statistics including average, max and min latency,
- * throughput and frame count.
+ * Gets data from database and then calculates performance statistics including average, maximum and minimum latency,
+ * throughput, and frame count.
  *
  * It has four child classes for extending the calculation. If a new calculator is needed, inherit from this class
  * and override functions.
@@ -422,11 +422,11 @@ class PerfCalculator {
   virtual ~PerfCalculator() {}
 
   /**
-   * @brief Sets PerfUtils.
+   * @brief Sets PerfUtils object.
    *
    * @param perf_utils The perf utils for getting data from database.
    *
-   * @return Returns true if perf_utils is not nullptr, otherwise returns false.
+   * @return Returns true if the value of perf_utils is not nullptr, otherwise returns false.
    */
   bool SetPerfUtils(std::shared_ptr<PerfUtils> perf_utils) {
     if (perf_utils == nullptr) return false;
@@ -434,27 +434,27 @@ class PerfCalculator {
     return true;
   }
   /**
-   * @brief Gets PerfUtils.
+   * @brief Gets PerfUtils object.
    *
    * @return Returns perf utils.
    */
   std::shared_ptr<PerfUtils> GetPerfUtils() { return perf_utils_; }
   /**
-   * @brief Adds database handler to calculator.
+   * @brief Adds a database handler to calculator.
    *
    * @param name The name of the database handler.
    * @param handler The database handler.
    *
-   * @return Returns true if database handler has been added successfully, otherwise returns false.
+   * @return Returns true if the database handler has been added successfully, otherwise returns false.
    */
   bool AddDataBaseHandler(const std::string &name, std::shared_ptr<Sqlite> handler) {
     return perf_utils_->AddSql(name, handler);
   }
   /**
-   * @brief Creates database for storing unprocessed data.
+   * @brief Creates a database for storing unprocessed data.
    *
    * @param db_name The name of the database file.
-   * @param perf_type The perf type, i.e., the table name of the database.
+   * @param perf_type The perf type, namely, the table name of the database.
    * @param module_name The module name.
    * @param suffixes The suffixes will be appended to module name.
    *
@@ -463,12 +463,12 @@ class PerfCalculator {
   bool CreateDbForStoreUnprocessedData(const std::string &db_name, const std::string &perf_type,
                                        const std::string &module_name, const std::vector<std::string> &suffixes);
   /**
-   * @brief Removes data related to performance calculation for one module of one stream.
+   * @brief Removes performance calculation related data from one stream of one module.
    *
-   * This function could be overridden by child class.
+   * This function could be overridden by the child class.
    *
    * @param sql_name The name of the database handler.
-   * @param perf_type The perf type, i.e., the table name of the database.
+   * @param perf_type The perf type, namely, the table name of the database.
    * @param module_name The module name.
    *
    * @return void
@@ -478,7 +478,7 @@ class PerfCalculator {
   /**
    * @brief Gets latency.
    *
-   * @param sql_name The sql name.
+   * @param sql_name The SQL name.
    * @param perf_type The perf type.
    *
    * @return Returns performance statistics.
@@ -487,48 +487,48 @@ class PerfCalculator {
   /**
    * @brief Gets throughput.
    *
-   * @param sql_name The sql name.
+   * @param sql_name The SQL name.
    * @param perf_type The perf type.
    *
    * @return Returns performance statistics vector.
    */
   std::vector<PerfStats> GetThroughput(const std::string &sql_name, const std::string &perf_type);
   /**
-   * @brief Calculates average throughput.
+   * @brief Calculates the average throughput.
    *
-   * @param stats_vec performance statistics vector.
+   * @param stats_vec The performance statistics vector.
    *
    * @return Returns performance statistics.
    */
   PerfStats CalcAvgThroughput(const std::vector<PerfStats> &stats_vec);
   /**
-   * @brief Gets average throughput.
+   * @brief Gets the average throughput.
    *
-   * @param sql_name The sql name.
+   * @param sql_name The SQL name.
    * @param perf_type The perf type.
    *
    * @return Returns performance statistics.
    */
   PerfStats GetAvgThroughput(const std::string &sql_name, const std::string &perf_type);
   /**
-   * @brief Calculates final throughput.
+   * @brief Calculates the final throughput.
    *
-   * @param sql_name The sql name.
+   * @param sql_name The SQL name.
    * @param perf_type The perf type.
-   * @param keys Keys needed by calculating throughput.
+   * @param keys Keys used for calculating throughput.
    *
    * @return Returns performance statistics.
    */
   PerfStats CalculateFinalThroughput(const std::string &sql_name, const std::string &perf_type,
                                      const std::vector<std::string> &keys);
   /**
-   * @brief Calculates latency.
+   * @brief Calculates the latency.
    *
-   * This function could be overridden by child class.
+   * This function could be overridden by the child class.
    *
-   * @param sql_name The sql name.
+   * @param sql_name The SQL name.
    * @param perf_type The perf type.
-   * @param keys Keys needed by calculating latency.
+   * @param keys Keys used for calculating latency.
    *
    * @return Returns performance statistics.
    */
@@ -537,11 +537,11 @@ class PerfCalculator {
   /**
    * @brief Calculates throughput.
    *
-   * This function could be overridden by child class.
+   * This function could be overridden by the child class.
    *
-   * @param sql_name The sql name.
+   * @param sql_name The SQL name.
    * @param perf_type The perf type.
-   * @param keys Keys needed by calculating throughput.
+   * @param keys Keys used for calculating throughput.
    *
    * @return Returns performance statistics.
    */
@@ -551,9 +551,9 @@ class PerfCalculator {
   }
 
   /**
-   * @brief Sets whether print throughput.
+   * @brief Sets whether to enable printing the throughput.
    *
-   * @param enable Whether enable to print throughput.
+   * @param enable Whether enable printing the throughput.
    *
    * @return Void.
    */
@@ -577,16 +577,16 @@ class PerfCalculator {
 /**
  * @brief Calculates performance statistics for module.
  *
- * Gets data from database and then calculates performance statistics including average, max and min latency,
- * throughput and frame count.
+ * Gets data from database and then calculates performance statistics including average, maximum and minimum latency,
+ * throughput, and frame count.
  */
 class PerfCalculatorForModule : public PerfCalculator {
  public:
    /**
-   * @brief Removes data related to performance calculation for one module of one stream.
+   * @brief Removes performance calculation related data from one module of one stream.
    *
    * @param sql_name The name of the database handler.
-   * @param perf_type The perf type, i.e., the table name of the database.
+   * @param perf_type The perf type, namely, the table name of the database.
    * @param module_name The module name.
    *
    * @return void
@@ -594,11 +594,11 @@ class PerfCalculatorForModule : public PerfCalculator {
   void RemovePerfStats(const std::string &sql_name, const std::string &perf_type,
                        const std::string &module_name) override;
   /**
-   * @brief Calculates throughput.
+   * @brief Calculates throughput for a module.
    *
-   * @param sql_name The sql name.
+   * @param sql_name The SQL name.
    * @param perf_type The perf type.
-   * @param keys Keys needed by calculating throughput.
+   * @param keys Keys used for calculating throughput.
    *
    * @return Returns performance statistics.
    */
@@ -613,16 +613,16 @@ class PerfCalculatorForModule : public PerfCalculator {
 /**
  * @brief Calculates performance statistics for pipeline.
  *
- * Gets data from database and then calculates performance statistics including average, max and min latency,
- * throughput and frame count.
+ * Gets data from database and then calculates performance statistics including average, maximum and minimum latency,
+ * throughput, and frame count.
  */
 class PerfCalculatorForPipeline : public PerfCalculator {
  public:
   /**
-   * @brief Removes data related to performance calculation for one end node of the pipeline of one stream.
+   * @brief Removes performance calculation related data from one end node of the pipeline of one stream.
    *
    * @param sql_name The name of the database handler.
-   * @param perf_type The perf type, i.e., the table name of the database.
+   * @param perf_type The perf type, namely, the table name of the database.
    * @param module_name The end node name of the pipeline.
    *
    * @return void
@@ -630,11 +630,11 @@ class PerfCalculatorForPipeline : public PerfCalculator {
   void RemovePerfStats(const std::string &sql_name, const std::string &perf_type,
                        const std::string &key) override;
   /**
-   * @brief Calculates throughput.
+   * @brief Calculates throughput for pipeline.
    *
-   * @param sql_name The sql name.
+   * @param sql_name The SQL name.
    * @param perf_type The perf type.
-   * @param keys Keys needed by calculating throughput.
+   * @param keys Keys used for calculating throughput.
    *
    * @return Returns performance statistics.
    */
@@ -650,17 +650,17 @@ class PerfCalculatorForPipeline : public PerfCalculator {
 /**
  * @brief Calculates performance statistics for inferencer module.
  *
- * Gets data from database and then calculates performance statistics including average, max and min latency,
- * throughput and frame count.
+ * Gets data from database and then calculates performance statistics including average, maximum and minimum latency,
+ * throughput, and frame count.
  */
 class PerfCalculatorForInfer : public PerfCalculator {
  public:
   /**
-   * @brief Calculates throughput.
+   * @brief Calculates throughput for inferencer module.
    *
-   * @param sql_name The sql name.
+   * @param sql_name The SQL name.
    * @param perf_type The perf type.
-   * @param keys Keys needed by calculating throughput.
+   * @param keys Keys used for calculating throughput.
    *
    * @return Returns performance statistics.
    */
@@ -669,9 +669,10 @@ class PerfCalculatorForInfer : public PerfCalculator {
 };  // PerfCalculatorForInfer
 
 /**
- * @brief Calculates performance statistics.
+ * @brief Methods of performance statistics calculation.
  *
- * Calculates performance statistics including average, max and min latency, throughput and frame count.
+ * The methods of calculating performance statistics including average, maximum and minimum latency, 
+ * throughput, and frame count.
  */
 class PerfCalculationMethod {
  public:
@@ -679,7 +680,7 @@ class PerfCalculationMethod {
    * @brief Calculates throughput.
    *
    * @param start_time The start time.
-   * @param item_vec The items including data needed by calculation.
+   * @param item_vec The items including data used for calculation.
    *
    * @return Returns performance statistics.
    */
@@ -697,7 +698,7 @@ class PerfCalculationMethod {
   /**
    * @brief Calculates latency.
    *
-   * @param item_vec The items including data needed by calculation.
+   * @param item_vec The items including data used for calculation.
    *
    * @return Returns performance statistics.
    */

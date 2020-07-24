@@ -31,7 +31,6 @@
 #include "easyinfer/mlu_context.h"
 #include "ffmpeg_decoder.hpp"
 #include "glog/logging.h"
-#include "perf_manager.hpp"
 #include "ffmpeg_parser.hpp"
 #include "data_handler_util.hpp"
 
@@ -54,7 +53,6 @@ class ESJpegMemHandlerImpl : public IHandler {
 
  private:
   DataSource *module_ = nullptr;
-  std::shared_ptr<PerfManager> perf_manager_;
   ESJpegMemHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;

@@ -106,11 +106,13 @@ bool Module::PostEvent(EventType type, const std::string& msg) {
 }
 
 int Module::DoProcess(std::shared_ptr<CNFrameInfo> data) {
+  RecordTime(data, false);
   if (!HasTransmit()) {
     int ret = 0;
     /* Process() for normal module does not need to handle EOS*/
     if (!data->IsEos()) {
       ret = Process(data);
+      RecordTime(data, true);
     }
     RwLockReadGuard guard(container_lock_);
     if (container_) {
@@ -127,6 +129,7 @@ bool Module::TransmitData(std::shared_ptr<CNFrameInfo> data) {
   if (!HasTransmit()) {
     return true;
   }
+  RecordTime(data, true);
 
   RwLockReadGuard guard(container_lock_);
   if (container_) {
@@ -140,11 +143,24 @@ bool Module::TransmitData(std::shared_ptr<CNFrameInfo> data) {
   return false;
 }
 
+void Module::RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished) {
+  std::shared_ptr<PerfManager> manager = GetPerfManager(data->stream_id);
+  if (!data->IsEos() && manager) {
+    manager->Record(is_finished, PerfManager::GetDefaultType(), this->GetName(), data->timestamp);
+    if (!is_finished) {
+      manager->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(data->timestamp),
+                      this->GetName() + "_th", "'" + GetThreadName(pthread_self()) + "'");
+    }
+  }
+}
+
 std::shared_ptr<PerfManager> Module::GetPerfManager(const std::string& stream_id) {
+  std::unordered_map<std::string, std::shared_ptr<PerfManager>> managers;
   RwLockReadGuard guard(container_lock_);
   if (container_) {
-    if (container_->GetPerfManagers().find(stream_id) != container_->GetPerfManagers().end()) {
-      return container_->GetPerfManagers()[stream_id];
+    managers = container_->GetPerfManagers();
+    if (managers.find(stream_id) != managers.end()) {
+      return managers[stream_id];
     }
   }
   return nullptr;

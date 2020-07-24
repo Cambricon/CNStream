@@ -196,7 +196,10 @@ bool RawImgMemHandlerImpl::Open() {
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
   this->interval_ = param_.interval_;
-  perf_manager_ = source->GetPerfManager(stream_id_);
+
+  SetPerfManager(source->GetPerfManager(stream_id_));
+  SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
+
   size_t MaxSize = 60;  // FIXME
   img_pktq_ = new (std::nothrow) cnstream::BoundedQueue<ImagePacket>(MaxSize);
   if (!img_pktq_) {
@@ -348,18 +351,13 @@ bool RawImgMemHandlerImpl::Process() {
     return true;
   }
 
-  if (perf_manager_ != nullptr) {
-    std::string thread_name = "cn-" + module_->GetName() + stream_id_;
-    perf_manager_->Record(false, PerfManager::GetDefaultType(), module_->GetName(), img_pkt.pts);
-    perf_manager_->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(img_pkt.pts),
-                          module_->GetName() + "_th", "'" + thread_name + "'");
-  }
-
   if (img_pkt.flags & ImagePacket::FLAG_EOS) {
     this->SendFlowEos();
     eos_got_.store(true);
     return false;
   }
+
+  RecordStartTime(module_->GetName(), img_pkt.pts);
 
   return ProcessOneFrame(&img_pkt);
 }

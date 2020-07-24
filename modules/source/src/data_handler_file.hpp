@@ -41,7 +41,6 @@ extern "C" {
 #include "easyinfer/mlu_context.h"
 #include "ffmpeg_decoder.hpp"
 #include "glog/logging.h"
-#include "perf_manager.hpp"
 
 namespace cnstream {
 
@@ -58,7 +57,6 @@ class FileHandlerImpl : public IHandler {
 
  private:
   DataSource *module_ = nullptr;
-  std::shared_ptr<PerfManager> perf_manager_;
   std::string filename_;
   int framerate_;
   bool loop_ = false;

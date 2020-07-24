@@ -44,6 +44,7 @@ extern "C" {
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <string>
@@ -51,6 +52,7 @@ extern "C" {
 
 #include "easycodec/easy_encode.h"
 #include "easycodec/vformat.h"
+#include "perf_manager.hpp"
 
 class CNEncoderStream {
  public:
@@ -77,8 +79,11 @@ class CNEncoderStream {
 
   void EosCallback();
   void PacketCallback(const edk::CnPacket &packet);
+  void SetPerfManager(std::shared_ptr<cnstream::PerfManager> manager) { perf_manager_ = manager; }
+  void SetModuleName(std::string name) { module_name_ = name; }
 
  private:
+  void RecordEndTime(int64_t pts);
   bool copy_frame_buffer_ = false;
 
   std::string pre_type_;
@@ -115,6 +120,8 @@ class CNEncoderStream {
   AVFrame *dst_pic_ = nullptr;
   AVPixelFormat src_pix_fmt_ = AV_PIX_FMT_NONE;  // AV_PIX_FMT_BGR24
   AVPixelFormat dst_pix_fmt_ = AV_PIX_FMT_NONE;
+  std::shared_ptr<cnstream::PerfManager> perf_manager_ = nullptr;
+  std::string module_name_ = "";
 };
 
 #endif  // CNEncoder_STREAM_HPP_

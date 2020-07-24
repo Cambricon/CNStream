@@ -43,17 +43,17 @@ namespace cnstream {
 class Pipeline;
 
 /**
- * @brief Flag to specify the way in which bus watcher handled one event.
+ * @brief Flags to specify the way in which bus watchers handled one event.
  */
 enum EventHandleFlag {
-  EVENT_HANDLE_NULL,          ///< Event is not handled.
-  EVENT_HANDLE_INTERCEPTION,  ///< Watcher is informed and intercepts the event.
-  EVENT_HANDLE_SYNCED,        ///< Watcher is informed and informs other watchers.
-  EVENT_HANDLE_STOP           ///< Stops a poll event.
+  EVENT_HANDLE_NULL,          ///< The event is not handled.
+  EVENT_HANDLE_INTERCEPTION,  ///< The bus watcher is informed, and the event is intercepted.
+  EVENT_HANDLE_SYNCED,        ///< The bus watcher is informed, and then other bus watchers are informed.
+  EVENT_HANDLE_STOP           ///< A poll event is stopped.
 };
 
 /**
- * @brief The structure holding the event information.
+ * @brief A structure holding the event information.
  */
 struct Event {
   EventType type;             ///< The event type.
@@ -79,7 +79,7 @@ class EventBus {
  public:
   friend class Pipeline;
   /**
-   * @brief Starts  event bus thread.
+   * @brief Starts an event bus thread.
    */
   bool Start();
   void Stop();
@@ -93,11 +93,11 @@ class EventBus {
   uint32_t AddBusWatch(BusWatcher func);
 
   /**
-   * @brief Posts an event to bus.
+   * @brief Posts an event to a bus.
    *
    * @param event The event to be posted.
    *
-   * @return Returns true if this function run successfully.
+   * @return Returns true if this function run successfully. Otherwise, returns false.
    */
   bool PostEvent(Event event);
 
@@ -120,7 +120,7 @@ class EventBus {
   /**
    * @brief Gets all bus watchers from the event bus.
    *
-   * @return A list with pairs of bus_watcher and module.
+   * @return A list with pairs of bus watcher and module.
    */
   const std::list<BusWatcher> &GetBusWatchers() const;
 

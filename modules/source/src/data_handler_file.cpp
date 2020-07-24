@@ -79,7 +79,10 @@ bool FileHandlerImpl::Open() {
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
   this->interval_ = param_.interval_;
-  perf_manager_ = source->GetPerfManager(stream_id_);
+
+  SetPerfManager(source->GetPerfManager(stream_id_));
+  SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
+
   // start demuxer
   running_.store(1);
   thread_ = std::thread(&FileHandlerImpl::Loop, this);
@@ -282,13 +285,6 @@ bool FileHandlerImpl::Extract() {
 bool FileHandlerImpl::Process() {
   bool ret = Extract();
 
-  if (perf_manager_ != nullptr) {
-    std::string thread_name = "cn-" + module_->GetName() + "-" + NumToFormatStr(handler_.GetStreamUniqueIdx(), 2);
-    perf_manager_->Record(false, PerfManager::GetDefaultType(), module_->GetName(), packet_.pts);
-    perf_manager_->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(packet_.pts),
-                          module_->GetName() + PerfManager::GetThreadSuffix(), "'" + thread_name + "'");
-  }
-
   if (!ret) {
     LOG(INFO) << "Read EOS from file";
     if (this->loop_) {
@@ -305,6 +301,9 @@ bool FileHandlerImpl::Process() {
       return false;
     }
   }  // if (!ret)
+
+  RecordStartTime(module_->GetName(), packet_.pts);
+
   if (!decoder_->Process(&packet_, false)) {
     if (bitstream_filter_ctx_) {
       av_freep(&packet_.data);

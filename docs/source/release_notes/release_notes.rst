@@ -12,7 +12,7 @@ CNStream 2020-07-10 (Version 5.0.0)
 - cnstream-toolkit.so重命名为easydk.so。
 - 新增 **IModuleObserver**，支持应用程序获取每一个Module的输出。详情查看 :ref:`module`。
 - 在 **CNFrameInfo** 类中新增 ``ThreadSafeUnorderedMap<int, cnstream::any> datas``，支持用户自定义任意类型数据。详情查看 :ref:`CNFrameInfo`。
-- 新增Classification,detection(yolov3)、track、secondary、rtsp、multi_process等示例程序。
+- 新增Classification、detection（YOLO v3）、track、secondary、rtsp、multi_process等示例程序。
 - 性能统计功能变更。详情查看 :ref:`性能统计`。
    
 版本兼容

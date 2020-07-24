@@ -22,6 +22,7 @@
 #include <SDL2/SDL.h>
 #endif
 
+#include "perf_manager.hpp"
 #include "util/cnstream_time_utility.hpp"
 
 namespace cnstream {
@@ -29,6 +30,9 @@ namespace cnstream {
 struct UpdateData {
   cv::Mat img;
   int chn_idx = -1;
+  uint32_t pts = ~(0);
+  std::string stream_id;
+  std::shared_ptr<PerfManager> perf_manager;
 };  // struct UpdateData
 
 #ifdef HAVE_SDL
@@ -58,6 +62,8 @@ class SDLVideoPlayer {  // BGR
   inline SDL_Renderer *renderer() const { return renderer_; }
   inline SDL_Texture *texture() const { return texture_; }
 
+  inline void SetModuleName(std::string module_name) { module_name_ = module_name; }
+
  private:
   void Stop();
   std::vector<UpdateData> PopDataBatch();
@@ -65,6 +71,14 @@ class SDLVideoPlayer {  // BGR
   int GetColIdByChnId(int chn_id) { return chn_id % cols_; }
   int GetXByChnId(int chn_id) { return chn_w_ * GetColIdByChnId(chn_id); }
   int GetYByChnId(int chn_id) { return chn_h_ * GetRowIdByChnId(chn_id); }
+  void RecordEndTime(const std::vector<UpdateData>& data_vec) {
+    for (auto& it : data_vec) {
+      if (it.perf_manager != nullptr) {
+        it.perf_manager->Record(true, cnstream::PerfManager::GetDefaultType(), module_name_, it.pts);
+      }
+    }
+  }
+
   int frame_rate_ = 10;
   int window_w_ = 1920;
   int window_h_ = 1080;
@@ -81,6 +95,7 @@ class SDLVideoPlayer {  // BGR
   SDL_Renderer *renderer_ = nullptr;
   SDL_Texture *texture_ = nullptr;
   SDL_Thread *refresh_th_ = nullptr;
+  std::string module_name_;
 };  // class SDLVideoPlayer
 
 #else
@@ -95,11 +110,13 @@ class SDLVideoPlayer {  // BGR
   inline bool FeedData(const UpdateData &data) { return true; }
   void EventLoop(const std::function<void()> &quit_callback) {}
   std::string CalcFps(const UpdateData &data) { return ""; }
+  inline void SetModuleName(std::string module_name) { module_name_ = module_name; }
 
  private:
   std::vector<int> flags_;
   std::vector<TickClock> ticker_;
   std::vector<int> fps_;
+  std::string module_name_;
 };  // class SDLVideoPlayer
 #endif  // HAVE_SDL
 

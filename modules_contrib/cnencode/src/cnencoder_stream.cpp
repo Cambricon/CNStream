@@ -37,6 +37,7 @@
 #include "easyinfer/mlu_context.h"
 
 #define SAVE_PACKET 1
+#define IGNORE_HEAD 1
 #define ALIGN(size, alignment) (((uint32_t)(size) + (alignment)-1) & ~((alignment)-1))
 
 CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, int dst_height, float frame_rate,
@@ -420,6 +421,16 @@ void CNEncoderStream::Convert(const uint8_t *src_buffer, const size_t src_buffer
 
 void CNEncoderStream::PacketCallback(const edk::CnPacket &packet) {
   if (packet.length == 0 || packet.data == 0) return;
+#if IGNORE_HEAD
+  static bool head_frame = true;
+  if (!head_frame) {
+    RecordEndTime(packet.pts);
+  }
+  head_frame = false;
+#else
+    RecordEndTime(packet.pts);
+#endif
+
   try {
     edk::MluContext context;
     context.SetDeviceId(device_id_);
@@ -470,4 +481,10 @@ void CNEncoderStream::EosCallback() {
     return;
   }
   LOG(INFO) << " EosCallback ... ";
+}
+
+void CNEncoderStream::RecordEndTime(int64_t pts) {
+  if (perf_manager_ != nullptr) {
+    perf_manager_->Record(true, cnstream::PerfManager::GetDefaultType(), module_name_, pts);
+  }
 }
