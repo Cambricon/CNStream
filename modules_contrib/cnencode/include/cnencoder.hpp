@@ -115,6 +115,15 @@ class CNEncoder : public Module, public ModuleCreator<CNEncoder> {
    * @return Returns true if this API run successfully. Otherwise, returns false.
    */
   bool CheckParamSet(const ModuleParamSet& paramSet) const override;
+  /**
+   * @brief Records the start time and the end time of the module
+   *
+   * @param data A pointer to the information of the frame.
+   * @param is_finished If it is false, records start time, otherwise records end time.
+   *
+   * @return void
+   */
+  void RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished) override;
 
  private:
   CNEncoderContext* GetCNEncoderContext(CNFrameInfoPtr data);

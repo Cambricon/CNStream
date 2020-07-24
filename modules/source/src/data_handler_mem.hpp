@@ -41,7 +41,6 @@ extern "C" {
 #include "easyinfer/mlu_context.h"
 #include "ffmpeg_decoder.hpp"
 #include "glog/logging.h"
-#include "perf_manager.hpp"
 #include "ffmpeg_parser.hpp"
 #include "data_handler_util.hpp"
 
@@ -80,7 +79,6 @@ class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
 
  private:
   DataSource *module_ = nullptr;
-  std::shared_ptr<PerfManager> perf_manager_;
   ESMemHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;

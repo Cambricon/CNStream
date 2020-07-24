@@ -11,6 +11,7 @@
 - 编程指南详细介绍，参考 :ref:`programmingguide`。
 - 创建应用的操作指南，参考 :ref:`application`。
 
+.. _install:
 
 安装和配置环境依赖和依赖库
 ----------------------------
@@ -175,7 +176,7 @@ CNStream提供以下Dockerfile，其中``${CNSTREAM_DIR}`` 代表CNStream源码�
      
       ::
  
-         cmake -Dbuild_sample=ON${CNSTREAM_DIR}
+         cmake -Dbuild_sample=ON ${CNSTREAM_DIR}
     
     2. 如果需要交叉编译，运行下面命令：
 
@@ -202,7 +203,7 @@ CNStream开发样例
 
 CNStream开发样例主要包括.json文件和.sh文件，其中.json文件为样例的配置文件，用于声明pipeline中各个模块的上下游关系以及配置模块的参数。用户可以根据自己的需求修改配置文件参数，完成应用开发。.sh文件为样例的运行脚本，通过运行该脚本来运行样例。
 
-开发样例中的模型在运行样例时被加载，并且会保存在 ``${CNSTREAM_DIR}/data/models`` 目录下。
+开发样例中的模型在运行样例时被自动加载，并且会保存在 ``${CNSTREAM_DIR}/data/models`` 目录下。
 
 下面重点介绍CNStream提供的样例。样例支持在MLU270和MLU220 M.2平台上使用。
 
@@ -224,7 +225,7 @@ SSD目标检测。
 - Osd
 - Displayer
 
-YOLO v3网络目标检测样例
+YOLO V3网络目标检测样例
 **************************
 
 使用YOLO v3网络对目标物体进行检。
@@ -250,12 +251,13 @@ YOLO v3网络目标检测样例
 **样例文件**
 
 - MLU270配置文件：``${CNSTREAM_DIR}/samples/demo/classification/mlu270/classification_resnet50_mlu270_config.json``                                                                  
-- MLU270运行脚本：``${CNSTREAM_DIR}/samples/demo/classification/mlu270/run_resnet50_mlu270.sh``                                                                 
+- MLU270运行脚本：``${CNSTREAM_DIR}/samples/demo/classification/mlu270/run_resnet50_mlu270.sh``                                                          
+- MLU270后处理源码：``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_yolov3.cpp``   
+                             
 - MLU220配置文件：``${CNSTREAM_DIR}/samples/demo/classification/mlu220/classification_resnet18_mlu220_config.json``                                                                        
 - MLU220运行脚本：``${CNSTREAM_DIR}/samples/demo/classification/mlu220/run_resnet18_mlu220.sh``                                                            
 - 预处理源码：``${CNSTREAM_DIR}/samples/demo/preprocess/preprocess_standard.cpp``                                                                
-- MLU220后处理源码：``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_classification.cpp``                                                               
-- MLU270后处理源码：``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_yolov3.cpp``   
+- MLU220后处理源码：``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_classification.cpp``                                         
 
 **使用模块**
 
@@ -307,7 +309,7 @@ YOLO v3网络目标检测样例
 RTSP视频流样例
 ********************
 
-在多窗口多通道模式（single）模式和单窗口多通道（mosaic）模式下处理数据流。   
+在多窗口多通道模式（single模式）和单窗口多通道（mosaic模式）下处理数据流。   
    
 **样例文件** 
 
@@ -352,7 +354,7 @@ RTSP视频流样例
   
 提供CPU常规的标准预处理和YOLO v3视频预处理源码。被其他样例调用。
 
-样例文件：
+**样例文件**
 
 - CPU常规的标准预处理源码：``${CNSTREAM_DIR}/samples/demo/preprocess/preprocess_standard.cpp``           
 - YOLO v3预处理源码：``${CNSTREAM_DIR}/samples/demo/preprocess/preprocess_yolov3.cpp`` 
@@ -364,10 +366,10 @@ RTSP视频流样例
 
 提供分类后处理、SSD后处理和YOLO v3后处理的源码。被其他样例调用。     
 
-样例文件：
+**样例文件**
 
 - 分类后处理源码：``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_classification.cpp``    
-- SSD后处理：``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_ssd.cpp``               
+- SSD后处理源码：``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_ssd.cpp``               
 - 标准YOLO v3后处理源码，按等比例缩放：``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_yolov3.cpp``   
 - YOLO v3后处理源码，采用拉伸模式：``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_fake_yolov3.cpp``
                                           
@@ -378,7 +380,7 @@ RTSP视频流样例
 
 二级结构化，筛选车的策略源码。被其他样例调用。
 
-样例文件：
+**样例文件**
 
 车辆筛选源码：``${CNSTREAM_DIR}/samples/demo/obj_filter/car_filter.cpp``   
                                          

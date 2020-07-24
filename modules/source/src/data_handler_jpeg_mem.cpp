@@ -95,7 +95,10 @@ bool ESJpegMemHandlerImpl::Open() {
   }
 
   this->interval_ = param_.interval_;
-  perf_manager_ = source->GetPerfManager(stream_id_);
+
+  SetPerfManager(source->GetPerfManager(stream_id_));
+  SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
+
   size_t MaxSize = 60;  // FIXME
   queue_ = new (std::nothrow) cnstream::BoundedQueue<std::shared_ptr<EsPacket>>(MaxSize);
   if (!queue_) {
@@ -206,13 +209,6 @@ bool ESJpegMemHandlerImpl::Process() {
     return true;
   }
 
-  if (perf_manager_ != nullptr) {
-    std::string thread_name = "cn-" + module_->GetName() + stream_id_;
-    perf_manager_->Record(false, PerfManager::GetDefaultType(), module_->GetName(), in->pkt_.pts);
-    perf_manager_->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(in->pkt_.pts),
-                          module_->GetName() + "_th", "'" + thread_name + "'");
-  }
-
   if (in->pkt_.flags & ESPacket::FLAG_EOS) {
     LOG(INFO) << "Eos reached";
     ESPacket pkt;
@@ -229,6 +225,9 @@ bool ESJpegMemHandlerImpl::Process() {
   pkt.size = in->pkt_.size;
   pkt.pts = in->pkt_.pts;
   pkt.flags &= ~ESPacket::FLAG_EOS;
+
+  RecordStartTime(module_->GetName(), pkt.pts);
+
   if (!decoder_->Process(&pkt)) {
     return false;
   }

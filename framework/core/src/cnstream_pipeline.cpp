@@ -466,17 +466,6 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
       msg.module_name = moduleName;
       UpdateByStreamMsg(msg);
     }
-  } else {
-    std::shared_ptr<PerfManager> manager = nullptr;
-    {
-      RwLockReadGuard lg(perf_managers_lock_);
-      if (perf_managers_.find(data->stream_id) != perf_managers_.end()) {
-        manager = perf_managers_[data->stream_id];
-      }
-    }
-    if (manager) {
-      manager->Record(true, PerfManager::GetDefaultType(), moduleName, data->timestamp);
-    }
   }
 
   Module* module = modules_map_[moduleName].get();
@@ -540,22 +529,6 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
     has_data = true;
     assert(data->GetModulesMask(instance.get()) == instance->GetModulesMask());
     data->ClearModuleMask(instance.get());
-
-
-    if (!data->IsEos()) {
-      std::shared_ptr<PerfManager> manager = nullptr;
-      {
-        RwLockReadGuard lg(perf_managers_lock_);
-        if (perf_managers_.find(data->stream_id) != perf_managers_.end()) {
-          manager = perf_managers_[data->stream_id];
-        }
-      }
-      if (manager) {
-        manager->Record(false, PerfManager::GetDefaultType(), node_name, data->timestamp);
-        manager->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(),
-            std::to_string(data->timestamp), node_name + PerfManager::GetThreadSuffix(), "'" + thread_name + "'");
-      }
-    }
 
     int ret = instance->DoProcess(data);
 
@@ -622,7 +595,9 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
   }
   for (auto& v : connections_config_) {
     for (auto& name : v.second) {
-      if (this->LinkModules(modules_map_[v.first], modules_map_[name]).empty()) {
+      if (modules_map_.find(v.first) == modules_map_.end() ||
+          modules_map_.find(name) == modules_map_.end() ||
+          this->LinkModules(modules_map_[v.first], modules_map_[name]).empty()) {
         LOG(ERROR) << "Link [" << v.first << "] with [" << name << "] failed.";
         return -1;
       }

@@ -43,6 +43,7 @@
 #include "cnstream_common.hpp"
 #include "cnstream_config.hpp"
 #include "cnstream_frame.hpp"
+#include "perf_manager.hpp"
 #include "util/cnstream_queue.hpp"
 #include "util/cnstream_rwlock.hpp"
 
@@ -50,13 +51,15 @@ namespace cnstream {
 /**
  * @brief IModuleObserver virtual base class.
  *
- * IModuleObserver is an interfacae class. User need to implement an observer
- * based on this, and regist it to one module.
+ * IModuleObserver is an interface class. User need to implement an observer
+ * based on this, and register it to one module.
  *
  */
 class IModuleObserver {
  public:
-  /*notify "data" after processed by this module*/
+  /**
+   * @brief Notify "data" after processed by this module.
+   */
   virtual void notify(std::shared_ptr<CNFrameInfo> data) = 0;
   virtual ~IModuleObserver() {}
 };
@@ -84,9 +87,9 @@ class Module {
   explicit Module(const std::string &name) : name_(name) {}
   virtual ~Module();
   /**
-   * Regist an observer to the module.
+   * Registers an observer to the module.
    *
-   * @param observer An observer user defined.
+   * @param observer An observer you defined.
    *
    * @return Void.
    */
@@ -145,7 +148,7 @@ class Module {
    * @param msg The event message string.
    *
    * @return Returns true if this function has run successfully. Returns false if this
-   *         module is not added to the pipeline.
+   *         module has not been added to the pipeline.
    */
   bool PostEvent(EventType type, const std::string &msg);
 
@@ -169,6 +172,15 @@ class Module {
    */
   virtual bool CheckParamSet(const ModuleParamSet &paramSet) const { return true; }
 
+  /**
+   * @brief Records the start time and the end time of the module
+   *
+   * @param data A pointer to the information of the frame.
+   * @param is_finished If it is false, records start time, otherwise records end time.
+   *
+   * @return void
+   */
+  virtual void RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished);
   /**
    * @brief Gets PerfManager by stream ID.
    *
@@ -257,8 +269,8 @@ class Module {
   /**
    * @brief Enables or disables to display performance information.
    *
-   * @param enable If it is true, enable to display performance information, otherwise, disable to display the
-   * performance information.
+   * @param enable If this parameter is set to true, the performance information is enabled to display.  
+   *               Otherwise, the performance information is disabled to display.
    *
    * @return Void.
    */
@@ -384,9 +396,9 @@ class ModuleFactory {
   }
 
   /**
-   * Gets all registed modules.
+   * Gets all registered modules.
    *
-   * @return All registed module class names.
+   * @return All registered module class names.
    */
   std::vector<std::string> GetRegisted() {
     std::vector<std::string> registed_modules;
@@ -432,7 +444,7 @@ class ModuleCreator {
   ModuleCreator() { register_.do_nothing(); }
   virtual ~ModuleCreator() { register_.do_nothing(); }
   /**
-   * @brief Creates an instance of template (T) with sepcified instance name.
+   * @brief Creates an instance of template (T) with specified instance name.
    *
    * This is a template function.
    *

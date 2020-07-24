@@ -78,7 +78,7 @@ enum StreamMsgType {
  */
 struct StreamMsg {
   StreamMsgType type;       ///< The type of a message.
-  std::string stream_id;    ///< Stream id, set by user in CNFrameINfo::stream_id
+  std::string stream_id;    ///< Stream id, set by user in CNFrameINfo::stream_id.
   std::string module_name;  ///< The module that posts this event.
 };
 
@@ -88,7 +88,7 @@ struct StreamMsg {
  * Receives stream messages from a pipeline.
  * To receive stream messages from the pipeline, you can define a class to inherit the
  * StreamMsgObserver class and call the ``Update`` function. The
- * observer instance are bounded to the pipeline using the
+ * observer instance is bounded to the pipeline using the
  * Pipeline::SetStreamMsgObserver function .
  *
  * @see Pipeline::SetStreamMsgObserver StreamMsg StreamMsgType.
@@ -190,7 +190,7 @@ class Pipeline {
    */
   bool Stop();
   /**
-   * Returns the running status of a pipeline.
+   * The running status of a pipeline.
    *
    * @return Returns true if the pipeline is running. Returns false if the pipeline is
    *         not running.
@@ -359,7 +359,7 @@ class Pipeline {
    *
    * This function creates database for each stream.
    * One thread is for committing sqlite events to increase the speed of inserting data to the database.
-   * Another is for calculating perfomance of modules and pipepline, and printing performance statistics afterwards.
+   * Another is for calculating performance of modules and pipeline, and printing performance statistics afterward.
    *
    * @param stream_ids The stream IDs.
    * @param db_dir The directory where database files to be saved.
@@ -381,7 +381,7 @@ class Pipeline {
    * @brief Adds PerfManager of the stream.
    *
    * @note Calls this function after calling ``CreatePerfManager``.
-   * @note Calls this function before calling ``AddSource`` which will add the stream to source.
+   * @note Calls this function before calling ``AddSource``, which will add the stream to source.
    *
    * @param stream_id The stream ID.
    * @param db_dir The directory where database files to be saved.
@@ -408,7 +408,7 @@ class Pipeline {
   void CalculatePerfStats();
 
   /**
-   * @brief Calculates the perfomance of modules and prints the performance statistics.
+   * @brief Calculates the performance of modules and prints the performance statistics.
    *
    * This is called by thread function CalculatePerfStats.
    *
@@ -416,7 +416,7 @@ class Pipeline {
    */
   void CalculateModulePerfStats(bool final_print = false);
   /**
-   * @brief Calculates the perfomance of pipeline and prints the performance statistics.
+   * @brief Calculates the performance of pipeline and prints the performance statistics.
    *
    * This is called by thread function CalculatePerfStats.
    *
@@ -505,7 +505,7 @@ class Pipeline {
   const std::string& GetName() const { return name_; }
 
   /**
-   * The module associated informations
+   * The module associated information.
    */
   struct ModuleAssociatedInfo {
     uint32_t parallelism = 0;

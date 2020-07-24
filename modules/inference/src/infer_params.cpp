@@ -237,7 +237,7 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
   param.name = "keep_aspect_ratio";
   param.desc_str = "Optional. As the mlu is used for image preprocessing, the scale remains constant. "
                    "1/true/TRUE/True/0/false/FALSE/False these values are accepted.";
-  param.default_value = "true";
+  param.default_value = "false";
   param.type = "bool";
   param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
     return STR2BOOL(value, &param_set->keep_aspect_ratio);

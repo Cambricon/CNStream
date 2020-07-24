@@ -42,7 +42,7 @@ namespace cnstream {
 class SourceHandler;
 class SourceModule : public Module {
  public:
-  explicit SourceModule(const std::string &name) : Module(name) {}
+  explicit SourceModule(const std::string &name) : Module(name) { hasTransmit_.store(1); }
   virtual ~SourceModule() { RemoveSources(); }
   /**
    * @brief Add one stream to DataSource module, should be called after pipeline starts.
@@ -81,14 +81,6 @@ class SourceModule : public Module {
 
   uint32_t GetStreamIndex(const std::string &stream_id);
   void ReturnStreamIndex(const std::string &stream_id);
-  /**
-   * @brief Transmit data to next stage(s) of the pipeline
-   * @param
-   *   data[in]: data to be transmitted.
-   * @return
-   *   true if data is transmitted successfully,othersize false
-   */
-  bool SendData(std::shared_ptr<CNFrameInfo> data);
   /**
    * @hidebrief Remove all streams from DataSource module
    * @param
@@ -133,7 +125,7 @@ class SourceHandler {
   }
   bool SendData(std::shared_ptr<CNFrameInfo> data) {
     if (this->module_) {
-      return this->module_->SendData(data);
+      return this->module_->TransmitData(data);
     }
     return false;
   }

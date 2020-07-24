@@ -21,7 +21,7 @@ CNStream提供性能统计机制，帮助用户统计各模块及整条pipeline�
        
        性能统计实现机制
 
-性能统计需要先将信息记录到数据库中，再从数据库中读取数据，计算模块和Pipeline的性能。每个数据流都通过创建一个PerfManager来记录性能统计的相关数据。初始化PerfManager后，数据库文件将被创建。每一帧数据将会被记录下来，并保存到创建的数据库中。基于数据库中的数据，CNStream计算相应各模块和pipeline的性能。
+性能统计需要先将信息记录到数据库中，再从数据库中读取数据来计算模块和Pipeline的性能。每个数据流都通过创建一个PerfManager来记录性能统计的相关数据。初始化PerfManager后，数据库文件被创建。每一帧数据将会被记录下来，并保存到创建的数据库中。基于数据库中的数据，CNStream计算相应各模块和pipeline的性能。
 
 统计模块及Pipleline的性能
 ----------------------------
@@ -100,7 +100,7 @@ CNStream使用SQLite3数据库保存计算性能所需的数据。性能统计�
 记录相关数据
 ^^^^^^^^^^^^^^^^^^
 
-通过调用 ``Record`` 函数，并基于数据库中的表和索引字段，将相关数据记录到数据库中。每帧数据在流过每个模块时相关数据都会分别被记录下来，并储存到数据库中。
+通过调用 ``Record`` 函数，并基于数据库中的表和索引字段，将相关数据记录到数据库中。每帧数据在流过每个模块时，相关数据都会分别被记录下来，并储存到数据库中。
 
 数据记录有以下几种方式：
 
@@ -331,14 +331,18 @@ CNStream使用SQLite3数据库保存计算性能所需的数据。性能统计�
 
 将性能统计的延时信息和吞吐信息返回到屏幕，命令如下：
 
+打印时延信息：
+
 ::
 
   PerfStats stats;
-
-  // 打印时延信息。
   PrintLatency(stats);
 
-  // 打印吞吐信息。
+打印吞吐信息：
+
+::
+
+  PerfStats stats; 
   PrintThroughput(stats);
 
 获得历史统计信息
@@ -348,54 +352,61 @@ CNStream支持查看历史计算结果等信息。
 
 **获取历史时延信息**
 
-调用下面接口，获得时延：
+调用下面接口，获得时延。
+
+例如，获得ModuleA，stream_0的时延：
 
 ::
 
-  // 获得ModuleA，stream_0的时延。
   PerfStats stats = module_a_perf_calculator.GetLatency("stream_0", "PROCESS");
 
+例如，获得pipeline，stream_0的时延：
+
 ::
 
-  // 获得pipeline，stream_0的时延。
   PerfStats stats = pipeline_perf_calculator.GetLatency("stream_0", "PROCESS");
 
 **获取历史吞吐信息**
 
 调用下面接口，获得每次计算的吞吐：
 
-::
+例如，获得ModuleA的吞吐：
 
-  // 获得ModuleA的吞吐。
+::
+  
   std::vector<PerfStats> stats_vec = module_a_perf_calculator.GetThroughput("", "PROCESS");
 
-::
+例如，获得pipeline，stream_0的吞吐：
 
-  // 获得pipeline，stream_0的吞吐。
+::
+  
   std::vector<PerfStats> stats_vec = pipeline_perf_calculator.GetThroughput("stream_0", "PROCESS");
 
-::
+例如，获得pipeline的吞吐：
 
-  // 获得pipeline的吞吐。
+::
+ 
   std::vector<PerfStats> stats_vec = pipeline_perf_calculator.GetThroughput("", "PROCESS");
 
 **获取历史平均吞吐信息**
 
-调用下面接口获得平均吞吐：
+调用下面接口获得平均吞吐。
 
+例如，计算ModuleA模块的平均吞吐：
 ::
 
-  // 计算ModuleA模块的平均吞吐。
   PerfStats stats = module_a_perf_calculator.GetAvgThroughput("", "PROCESS");
 
+例如，计算pipeline处理数据流stream_0的平均吞吐：
+
 ::
 
-  // 计算pipeline处理数据流stream_0的平均吞吐。
   PerfStats stats = pipeline_perf_calculator.GetAvgThroughput("stream_0", "PROCESS");
 
+例如，计算pipeline的平均吞吐：
+
 ::
 
-  // 计算pipeline的平均吞吐。
   PerfStats stats = pipeline_perf_calculator.GetAvgThroughput("", "PROCESS");
 
 开发样例介绍
@@ -408,7 +419,7 @@ CNStream支持查看历史计算结果等信息。
 
 用户通过运行 ``run.sh`` 示例脚本来运行示例。示例位于 ``${CNSTREAM_PATH}/samples/demo`` 目录下，其中 ``${CNSTREAM_DIR}`` 是指CNStream源码目录。
 
-数据库文件默认保存到 ``perf_database`` 文件夹下。如果希望更改生成的数据库文件的储存路径，只需设置示例脚本中的参数 ``perf_db_dir`` 即可。此外，CNStream提供的示例默认开启性能统计功能。如需关闭，可在脚本中设置 ``perf`` 参数为 **false**。
+数据库文件默认保存到 ``perf_database`` 文件夹下。如果希望更改生成的数据库文件的储存路径，只需设置示例脚本 ``run.sh`` 中的参数 ``perf_db_dir`` 即可。此外，CNStream提供的示例默认开启性能统计功能。如需关闭，可在脚本中设置 ``perf`` 参数为 **false**。
 
 ::
 

@@ -100,6 +100,16 @@ inline void SetThreadName(const std::string& name, pthread_t thread = invalid_pt
   pthread_setname_np(thread, name.c_str());
 }
 
+inline std::string GetThreadName(pthread_t thread = invalid_pthread_tid) {
+  char name[80];
+  if (thread == invalid_pthread_tid) {
+    prctl(PR_GET_NAME, name);
+    return name;
+  }
+  pthread_getname_np(thread, name, 80);
+  return name;
+}
+
 /*pipeline capacities*/
 const size_t INVALID_MODULE_ID = (size_t)(-1);
 uint32_t GetMaxModuleNumber();

@@ -37,8 +37,8 @@
 
 #include "data_handler_util.hpp"
 #include "data_source.hpp"
+#include "ffmpeg_decoder.hpp"
 #include "glog/logging.h"
-#include "perf_manager.hpp"
 
 namespace cnstream {
 
@@ -57,7 +57,7 @@ typedef struct {
   };
 } ImagePacket;
 
-class RawImgMemHandlerImpl {
+class RawImgMemHandlerImpl : public IHandler {
  public:
   explicit RawImgMemHandlerImpl(DataSource *module, RawImgMemHandler &handler)  // NOLINT
       : module_(module), handler_(handler) {
@@ -93,7 +93,6 @@ class RawImgMemHandlerImpl {
 
  private:
   DataSource *module_ = nullptr;
-  std::shared_ptr<PerfManager> perf_manager_;
   RawImgMemHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;

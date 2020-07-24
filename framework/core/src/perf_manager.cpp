@@ -204,7 +204,7 @@ bool PerfManager::PrepareDbFileDir(std::string file_path) {
 
   int fd = open(file_path.c_str(), O_RDONLY);
   if (fd < 0) {
-    LOG(INFO) << "File [" << file_path << "] not exist";
+    // LOG(INFO) << "File [" << file_path << "] not exist";
     return CreateDir(file_path);
   }
   if (fcntl(fd, F_SETLEASE, F_WRLCK) && EAGAIN == errno) {
@@ -214,7 +214,7 @@ bool PerfManager::PrepareDbFileDir(std::string file_path) {
   } else {
     fcntl(fd, F_SETLEASE, F_UNLCK);
     close(fd);
-    LOG(INFO) << "File [" << file_path << "] exist, but not opened. Remove file.";
+    // LOG(INFO) << "File [" << file_path << "] exist, but not opened. Remove file.";
     if (remove(file_path.c_str()) != 0) {
       return false;
     }

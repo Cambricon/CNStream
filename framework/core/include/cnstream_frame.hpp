@@ -34,7 +34,7 @@
 /**
  *  @file cnstream_frame.hpp
  *
- *  This file contains a declaration of the CNFrameInfo struct and its subtructure.
+ *  This file contains a declaration of the CNFrameInfo struct and its substructure.
  */
 namespace cnstream {
 
@@ -56,27 +56,30 @@ struct CNFrameInfo {
    * Creates a CNFrameInfo instance.
    *
    * @param stream_id The data stream alias. Identifies which data stream the frame data comes from.
-   * @param eos If true, CNDataFrame::flags will be set to ``CN_FRAME_FLAG_EOS``. Then, the modules
-   *            do not have permission to process this frame. This frame should be handed over to the pipeline
-   *            for processing.
+   * @param eos  Whether this is the end of the stream. This parameter is set to false by default to 
+   *             create a CNFrameInfo instance. If you set this parameter to true, 
+   *             CNDataFrame::flags will be set to ``CN_FRAME_FLAG_EOS``. Then, the modules
+   *            do not have permission to process this frame. This frame should be handed over to 
+   *            the pipeline for processing.
    *
    * @return Returns ``shared_ptr`` of ``CNFrameInfo`` if this function has run successfully. Otherwise, returns NULL.
    */
   static std::shared_ptr<CNFrameInfo> Create(const std::string& stream_id, bool eos = false);
   ~CNFrameInfo();
   /**
-   * DataFrame is end of stream or not 
+   * Whether DataFrame is end of stream (EOS) or not. 
    *
-   * @return true: frame is EOS, false: frame isn't EOS
+   * @return Returns true if the frame is EOS. Returns false if the frame is not EOS.
    */
   bool IsEos() { return (flags & cnstream::CN_FRAME_FLAG_EOS) ? true : false; }
   /**
-   * set index(usually is number) to identify stream. This is only for distributing each stream data to appropriate thread.
-   * we don't recommand SDK users to use this API since it will be removed later.
+   * Sets index (usually the index is a number) to identify stream. This is only used for distributing each stream 
+   * data to the appropriate thread.
+   * We do not recommend SDK users to use this API because it will be removed later.
    *
-   * @param index Number to identify stream
+   * @param index Number to identify stream.
    *
-   * @return true: frame is EOS, false: frame isn't EOS
+   * @return Returns true if the frame is EOS. Returns false if the frame is not EOS.
    */
   void SetStreamIndex(uint32_t index) { channel_idx = index; }
   // GetStreamIndex() will be removed later
