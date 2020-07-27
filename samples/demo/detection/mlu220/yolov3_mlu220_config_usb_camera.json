@@ -1,0 +1,58 @@
+{
+  "source" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "next_modules" : ["detector"],
+    "custom_params" : {
+      "output_type" : "mlu",
+      "decoder_type" : "cpu",
+      "device_id" : 0
+    }
+  },
+
+  "detector" : {
+    "class_name" : "cnstream::Inferencer",
+    "next_modules" : ["osd"],
+    "parallelism" : 4,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path" : "../../../../data/models/MLU220/Primary_Detector/YOLOv3/yolov3_argb_bs4core4.cambricon",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocYolov3",
+      "use_scaler" : "true",
+      "batching_timeout" : 100,
+      "device_id" : 0
+    }
+  },
+    "osd" : {
+    "class_name" : "cnstream::Osd",
+    "parallelism" : 4,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["rtsp_sink"],
+    "show_perf_info" : true,
+    "custom_params" : {
+      "chinese_label_flag" : "false",
+      "label_path" : "../../../../data/models/MLU220/Primary_Detector/YOLOv3/label_map_coco.txt"
+    }
+  },
+
+  "rtsp_sink" : {
+    "class_name" : "cnstream::RtspSink",
+    "parallelism" : 4,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "http_port" : 8080,
+      "udp_port" : 9554,
+      "frame_rate" :25,
+      "gop_size" : 30,
+      "kbit_rate" : 3000,
+      "view_mode" : "single",
+      "dst_width" : 1920,
+      "dst_height": 1080,
+      "color_mode" : "bgr",
+      "encoder_type" : "ffmpeg",
+      "device_id": 0
+    }
+  }
+
+}

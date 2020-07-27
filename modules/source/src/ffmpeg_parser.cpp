@@ -20,6 +20,9 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#ifdef HAVE_FFMPEG_AVDEVICE
+#include <libavdevice/avdevice.h>
+#endif  // HAVE_FFMPEG_AVDEVICE
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
 #include <libavutil/log.h>
@@ -115,6 +118,9 @@ struct local_ffmpeg_init {
     avcodec_register_all();
     av_register_all();
     avformat_network_init();
+#ifdef HAVE_FFMPEG_AVDEVICE
+    avdevice_register_all();
+#endif
   }
 };
 static local_ffmpeg_init init_ffmpeg;
