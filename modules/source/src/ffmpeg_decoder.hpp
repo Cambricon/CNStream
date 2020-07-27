@@ -29,6 +29,8 @@ extern "C" {
 #include <libavutil/avutil.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/pixfmt.h>
+#include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
 #ifdef __cplusplus
 }
 #endif
@@ -118,6 +120,7 @@ class MluDecoder : public Decoder {
   void DestroyVideoDecoder();
   void SequenceCallback(cnvideoDecSequenceInfo *pFormat);
   void VideoFrameCallback(cnvideoDecOutput *dec_output);
+  void CorruptCallback(const cnvideoDecStreamCorruptInfo& streamcorruptinfo);
   void VideoEosCallback();
   void VideoResetCallback();
 

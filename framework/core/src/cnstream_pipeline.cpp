@@ -469,6 +469,11 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
   }
 
   Module* module = modules_map_[moduleName].get();
+  // If data is not valuable
+  if (!data->IsValuable()) {
+    LOG(ERROR) << module->name_ << " error, pts: " << data->timestamp;
+    return;
+  }
   for (auto& down_node_name : module_info.down_nodes) {
     ModuleAssociatedInfo& down_node_info = modules_.find(down_node_name)->second;
     assert(down_node_info.connector);
@@ -634,8 +639,8 @@ Module* Pipeline::GetModule(const std::string& moduleName) {
 
 bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir) {
   if (perf_running_) return false;
-  if (db_dir.empty()) db_dir = "perf_database/";
-  PerfManager::PrepareDbFileDir(db_dir);
+  if (db_dir.empty()) db_dir = "perf_database";
+  PerfManager::PrepareDbFileDir(db_dir + "/");
 
   SetStartAndEndNodeNames();
   std::vector<std::string> module_names = GetModuleNames();

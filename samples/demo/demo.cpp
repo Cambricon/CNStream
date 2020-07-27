@@ -180,6 +180,7 @@ int main(int argc, char** argv) {
       pipeline.AddPerfManager(stream_id, FLAGS_perf_db_dir);
     }
     int ret = 0;
+
     if (filename.find("rtsp://") != std::string::npos) {
       auto handler = cnstream::RtspHandler::Create(source, stream_id, filename);
       ret = source->AddSource(handler);
@@ -212,6 +213,12 @@ int main(int argc, char** argv) {
           }
         }));
       }
+    } else if (filename.find("/dev/video") != std::string::npos) {  // only support linux
+#ifdef HAVE_FFMPEG_AVDEVICE
+      auto handler =
+          cnstream::UsbHandler::Create(source, stream_id, filename, FLAGS_src_frame_rate, FLAGS_loop);
+      source->AddSource(handler);
+#endif  // HAVE_FFMPEG_AVDEVICE
     } else if (filename.find(".jpg") != std::string::npos && FLAGS_jpeg_from_mem) {
       // Jpeg decoder maximum resolution 8K
       int max_width = 7680;  // FIXME

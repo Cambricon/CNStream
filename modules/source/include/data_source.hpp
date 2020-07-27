@@ -446,6 +446,27 @@ class RawImgMemHandler : public SourceHandler {
   RawImgMemHandlerImpl *impl_ = nullptr;
 };  // class RawImgMemHandler
 
+class UsbHandlerImpl;
+class UsbHandler : public SourceHandler {
+ public:
+  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
+                                               const std::string &filename, int framerate, bool loop = false);
+  ~UsbHandler();
+  /**/
+  bool Open() override;
+  void Close() override;
+
+ private:
+  explicit UsbHandler(DataSource *module, const std::string &stream_id, const std::string &filename, int framerate,
+                      bool loop);
+
+ private:
+#ifdef UNIT_TEST
+ public:
+#endif
+  UsbHandlerImpl *impl_ = nullptr;
+};  // class UsbHandler
+
 }  // namespace cnstream
 
 #endif  // MODULES_DATA_SOURCE_HPP_
