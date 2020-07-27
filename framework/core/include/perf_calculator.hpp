@@ -123,28 +123,28 @@ void PrintTitleForTotal();
 class PerfUtils {
  public:
   /**
-   * @brief Adds SQL handler.
+   * @brief Adds Sqlite database handler.
    *
    * @param name sql The handler name.
-   * @param sql The SQL handler.
+   * @param sql The Sqlite database handler.
    *
-   * @return Returns true if SQL has been added successfully, otherwise returns false.
+   * @return Returns true if Sqlite database has been added successfully, otherwise returns false.
    */
   bool AddSql(const std::string &name, std::shared_ptr<Sqlite> sql);
   /**
-   * @brief Removes SQL handler.
+   * @brief Removes Sqlite database handler.
    *
    * @param name sql The handler name.
    *
-   * @return Returns true if SQL has been removed successfully, otherwise returns false.
+   * @return Returns true if Sqlite database has been removed successfully, otherwise returns false.
    */
   bool RemoveSql(const std::string &name);
 
   /**
    * @brief Searches data from database.
    *
-   * @param sql The SQL handler.
-   * @param sql_statement The SQL statement.
+   * @param sql The Sqlite database handler.
+   * @param sql_statement The Sqlite statement.
    *
    * @return Returns database items.
    */
@@ -152,7 +152,7 @@ class PerfUtils {
   /**
    * @brief Gets thread id.
    *
-   * @param name The SQL handler name.
+   * @param name The name of Sqlite database handler.
    * @param perf_type The perf type, namely, the table name of the database.
    * @param th_key The thread key.
    *
@@ -172,7 +172,7 @@ class PerfUtils {
   /**
    * @brief Gets items.
    *
-   * @param name The SQL handler name.
+   * @param name The name of Sqlite database handler.
    * @param perf_type The perf type, namely, the table name of the database.
    * @param keys The item keys.
    * @param condition The condition statement.
@@ -205,7 +205,7 @@ class PerfUtils {
   /**
    * @brief Finds the maximum value.
    *
-   * @param name The SQL handler name.
+   * @param name The name of Sqlite database handler.
    * @param perf_type The perf type, namely, the table name of the database.
    * @param key The database key.
    * @param condition The condition statement.
@@ -227,7 +227,7 @@ class PerfUtils {
   /**
    * @brief Finds the minimum value.
    *
-   * @param name The SQL handler name.
+   * @param name The name of Sqlite database handler. 
    * @param perf_type The perf type, namely, the table name of the database.
    * @param key The database key.
    * @param condition The condition statement.
@@ -249,7 +249,7 @@ class PerfUtils {
   /**
    * @brief Gets count from a database.
    *
-   * @param name The SQL handler name.
+   * @param name The name of Sqlite database handler.
    * @param perf_type The perf type, namely, the table name of the database.
    * @param key The database key.
    * @param condition The condition statement.
@@ -271,24 +271,24 @@ class PerfUtils {
   /**
    * @brief Gets table names.
    *
-   * @param name The SQL handler name.
+   * @param name The name of Sqlite database handler.
    *
    * @return Returns table names.
    */
   std::vector<std::string> GetTableNames(std::string name);
 
   /**
-   * @brief Checks if the SQL handler exists.
+   * @brief Checks if the Sqlite database handler exists.
    *
-   * @param name The SQL handler name.
+   * @param name The name of Sqlite database handler.
    *
-   * @return Returns true if the SQL handler exists, otherwise returns false.
+   * @return Returns true if the Sqlite database handler exists, otherwise returns false.
    */
   bool SqlIsExisted(std::string name);
   /**
    * @brief Records data to database.
    *
-   * @param sql_name The SQL handler name.
+   * @param sql_name The name of Sqlite database handler.
    * @param perf_type The perf type, namely, the table name of the database.
    * @param keys The database keys.
    * @param values The database values.
@@ -308,7 +308,7 @@ class PerfUtils {
   /**
    * @brief Creates a table in a database.
    *
-   * @param sql The SQL handler.
+   * @param sql The Sqlite database handler.
    * @param perf_type The perf type, namely, the table name of the database.
    * @param primary_key The primary key.
    * @param keys The database keys.
@@ -478,7 +478,7 @@ class PerfCalculator {
   /**
    * @brief Gets latency.
    *
-   * @param sql_name The SQL name.
+   * @param sql_name The Sqlite database name.
    * @param perf_type The perf type.
    *
    * @return Returns performance statistics.
@@ -487,7 +487,7 @@ class PerfCalculator {
   /**
    * @brief Gets throughput.
    *
-   * @param sql_name The SQL name.
+   * @param sql_name The Sqlite database name.
    * @param perf_type The perf type.
    *
    * @return Returns performance statistics vector.
@@ -504,7 +504,7 @@ class PerfCalculator {
   /**
    * @brief Gets the average throughput.
    *
-   * @param sql_name The SQL name.
+   * @param sql_name The Sqlite database name.
    * @param perf_type The perf type.
    *
    * @return Returns performance statistics.
@@ -513,7 +513,7 @@ class PerfCalculator {
   /**
    * @brief Calculates the final throughput.
    *
-   * @param sql_name The SQL name.
+   * @param sql_name The Sqlite database name.
    * @param perf_type The perf type.
    * @param keys Keys used for calculating throughput.
    *
@@ -526,7 +526,7 @@ class PerfCalculator {
    *
    * This function could be overridden by the child class.
    *
-   * @param sql_name The SQL name.
+   * @param sql_name The Sqlite database name.
    * @param perf_type The perf type.
    * @param keys Keys used for calculating latency.
    *
@@ -539,7 +539,7 @@ class PerfCalculator {
    *
    * This function could be overridden by the child class.
    *
-   * @param sql_name The SQL name.
+   * @param sql_name The Sqlite database name.
    * @param perf_type The perf type.
    * @param keys Keys used for calculating throughput.
    *
@@ -596,7 +596,7 @@ class PerfCalculatorForModule : public PerfCalculator {
   /**
    * @brief Calculates throughput for a module.
    *
-   * @param sql_name The SQL name.
+   * @param sql_name The Sqlite database name.
    * @param perf_type The perf type.
    * @param keys Keys used for calculating throughput.
    *
@@ -632,7 +632,7 @@ class PerfCalculatorForPipeline : public PerfCalculator {
   /**
    * @brief Calculates throughput for pipeline.
    *
-   * @param sql_name The SQL name.
+   * @param sql_name The Sqlite database name.
    * @param perf_type The perf type.
    * @param keys Keys used for calculating throughput.
    *
@@ -658,7 +658,7 @@ class PerfCalculatorForInfer : public PerfCalculator {
   /**
    * @brief Calculates throughput for inferencer module.
    *
-   * @param sql_name The SQL name.
+   * @param sql_name The Sqlite database name.
    * @param perf_type The perf type.
    * @param keys Keys used for calculating throughput.
    *

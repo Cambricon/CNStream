@@ -279,11 +279,13 @@ void StreamParserImpl::FindInfo() {
   io_buffer = (unsigned char*)av_malloc(io_buffer_size_ + FF_INPUT_BUFFER_PADDING_SIZE);
   avio = avio_alloc_context(io_buffer, io_buffer_size_, 0, this->queue_, &read_packet, nullptr, nullptr);
   if (!avio) {
+    av_free(io_buffer);
     return;
   }
   ic = avformat_alloc_context();
   if (!ic) {
-    av_freep(&avio);
+    av_freep(&avio->buffer);
+    av_free(avio);
     return;
   }
   ic->pb = avio;
@@ -298,11 +300,17 @@ void StreamParserImpl::FindInfo() {
   }
   int ret_code = avformat_open_input(&ic, "mem", ifmt, NULL);
   if (0 != ret_code) {
+    av_freep(&avio->buffer);
+    av_free(avio);
+    ic->pb = nullptr;
     avformat_close_input(&ic);
     return;
   }
 
   if (avformat_find_stream_info(ic, NULL) < 0) {
+    av_freep(&avio->buffer);
+    av_free(avio);
+    ic->pb = nullptr;
     avformat_close_input(&ic);
     return;
   }
@@ -310,6 +318,9 @@ void StreamParserImpl::FindInfo() {
   VideoStreamInfo info;
   int video_index;
   if (!GetVideoStreamInfo(ic, video_index, info)) {
+    av_freep(&avio->buffer);
+    av_free(avio);
+    ic->pb = nullptr;
     avformat_close_input(&ic);
     return;
   }
@@ -319,6 +330,10 @@ void StreamParserImpl::FindInfo() {
 
   LOG(INFO) << this << " codec_id = " << info.codec_id;
   LOG(INFO) << this << " framerate = " << info.framerate.num << "/" << info.framerate.den;
+  // free avio explicitly
+  av_freep(&avio->buffer);
+  av_free(avio);
+  ic->pb = nullptr;
   avformat_close_input(&ic);
   return;
 }
