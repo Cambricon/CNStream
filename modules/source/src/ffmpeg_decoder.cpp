@@ -475,15 +475,19 @@ void MluDecoder::DestroyVideoDecoder() {
     if (handler_ && !eos_sent_.load()) {
       this->Process(nullptr, true);
     }
-    /*make sure all cndec buffers released before destorying cndecoder
+    /**
+     * make sure got eos before, than check release cndec buffers
      */
-    while (cndec_buf_ref_count_.load()) {
+    while (!eos_got_.load()) {
       std::this_thread::yield();
       if (cndec_abort_flag_.load()) {
         break;
       }
     }
-    while (!eos_got_.load()) {
+    /**
+     * make sure all cndec buffers released before destorying cndecoder
+     */
+    while (cndec_buf_ref_count_.load()) {
       std::this_thread::yield();
       if (cndec_abort_flag_.load()) {
         break;
@@ -690,15 +694,19 @@ void MluDecoder::DestroyJpegDecoder() {
     if (handler_ && !eos_sent_.load()) {
       this->Process(nullptr, true);
     }
-    /*make sure all cndec buffers released before destorying cndecoder
+    /**
+     * make sure got eos before, than check release cndec buffers
      */
-    while (cndec_buf_ref_count_.load()) {
+    while (!eos_got_.load()) {
       std::this_thread::yield();
       if (cndec_abort_flag_.load()) {
         break;
       }
     }
-    while (!eos_got_.load()) {
+    /**
+     * make sure all cndec buffers released before destorying cndecoder
+     */
+    while (cndec_buf_ref_count_.load()) {
       std::this_thread::yield();
       if (cndec_abort_flag_.load()) {
         break;

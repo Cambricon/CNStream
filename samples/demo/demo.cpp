@@ -22,7 +22,8 @@
 #include <glog/logging.h>
 
 #include <atomic>
-#include <future>
+#include <mutex>
+#include <condition_variable>
 #include <iostream>
 #include <list>
 #include <memory>
@@ -69,6 +70,7 @@ class MsgObserver : cnstream::StreamMsgObserver {
   MsgObserver(int stream_cnt, cnstream::Pipeline* pipeline) : stream_cnt_(stream_cnt), pipeline_(pipeline) {}
 
   void Update(const cnstream::StreamMsg& smsg) override {
+    std::lock_guard<std::mutex> lg(mutex_);
     if (stop_) return;
     if (smsg.type == cnstream::StreamMsgType::EOS_MSG) {
       eos_stream_.push_back(smsg.stream_id);
@@ -76,17 +78,18 @@ class MsgObserver : cnstream::StreamMsgObserver {
       if (static_cast<int>(eos_stream_.size()) == stream_cnt_) {
         LOG(INFO) << "[Observer] received all EOS";
         stop_ = true;
-        wakener_.set_value(0);
       }
     } else if (smsg.type == cnstream::StreamMsgType::ERROR_MSG) {
       LOG(ERROR) << "[Observer] received ERROR_MSG";
       stop_ = true;
-      wakener_.set_value(1);
     }
+    wakener_.notify_one();
   }
 
   void WaitForStop() {
-    wakener_.get_future().get();
+    std::unique_lock<std::mutex> lk(mutex_);
+    stop_ = false;
+    wakener_.wait(lk, [this]() {return stop_; });
     pipeline_->Stop();
   }
 
@@ -98,7 +101,8 @@ class MsgObserver : cnstream::StreamMsgObserver {
   cnstream::Pipeline* pipeline_ = nullptr;
   bool stop_ = false;
   std::vector<std::string> eos_stream_;
-  std::promise<int> wakener_;
+  std::condition_variable wakener_;
+  mutable std::mutex mutex_;
 };
 
 int main(int argc, char** argv) {
@@ -319,12 +323,12 @@ int main(int argc, char** argv) {
             }
           }
           memHandler->Write(nullptr);
-#else
-          LOG(ERROR) << "OPENCV is not linked, can not support cv::mat or raw image data with bgr24/rgb24 "
-                        "format." return EXIT_FAILURE;
-#endif
         }));
       }
+#else
+      LOG(ERROR) << "OPENCV is not linked, can not support cv::mat or raw image data with bgr24/rgb24 "
+        "format." return EXIT_FAILURE;
+#endif
     } else {
       auto handler = cnstream::FileHandler::Create(source, stream_id, filename, FLAGS_src_frame_rate, FLAGS_loop);
       ret = source->AddSource(handler);
