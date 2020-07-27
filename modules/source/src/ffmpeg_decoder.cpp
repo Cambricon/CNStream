@@ -17,7 +17,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include "ffmpeg_decoder.hpp"
 #include <cnrt.h>
 #include <glog/logging.h>
 #include <future>
@@ -27,6 +26,7 @@
 #include <utility>
 
 #include "cnstream_frame_va.hpp"
+#include "ffmpeg_decoder.hpp"
 
 #define YUV420SP_STRIDE_ALIGN_FOR_SCALER 128
 
@@ -851,8 +851,9 @@ bool FFmpegCpuDecoder::Process(AVPacket *pkt, bool eos) {
 }
 
 bool FFmpegCpuDecoder::FrameCvt2Yuv420sp(AVFrame *frame, uint8_t *sp, int dst_stride, bool nv21) {
-  if (frame->format != AV_PIX_FMT_YUV420P && frame->format != AV_PIX_FMT_YUVJ420P) {
-    LOG(ERROR) << "FFmpegCpuDecoder only supports AV_PIX_FMT_YUV420P at this moment";
+  if (frame->format != AV_PIX_FMT_YUV420P && frame->format != AV_PIX_FMT_YUVJ420P &&
+      frame->format != AV_PIX_FMT_YUYV422) {
+    LOG(ERROR) << "FFmpegCpuDecoder only supports AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUVJ420P and AV_PIX_FMT_YUYV422";
     return false;
   }
 
@@ -904,9 +905,9 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     }
     std::this_thread::sleep_for(std::chrono::microseconds(5));
   }
-
-  if (instance_->pix_fmt != AV_PIX_FMT_YUV420P && instance_->pix_fmt != AV_PIX_FMT_YUVJ420P) {
-    LOG(ERROR) << "FFmpegCpuDecoder only supports AV_PIX_FMT_YUV420P at this moment";
+  if (instance_->pix_fmt != AV_PIX_FMT_YUV420P && instance_->pix_fmt != AV_PIX_FMT_YUVJ420P &&
+      instance_->pix_fmt != AV_PIX_FMT_YUYV422) {
+    LOG(ERROR) << "FFmpegCpuDecoder only supports AV_PIX_FMT_YUV420P , AV_PIX_FMT_YUVJ420P and AV_PIX_FMT_YUYV422";
     return false;
   }
   std::shared_ptr<CNDataFrame> dataframe(new (std::nothrow) CNDataFrame());
@@ -944,8 +945,34 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
   dataframe->height = frame->height;
   dataframe->stride[0] = dst_stride;
   dataframe->stride[1] = dst_stride;
-
+  // for usb camera
   if (param_.output_type_ == OUTPUT_MLU) {
+    if (instance_->pix_fmt == AV_PIX_FMT_YUYV422) {  // YUV422 to NV21
+      auto yuv420_frame = av_frame_alloc();
+      yuv420_frame->width = frame->width;
+      yuv420_frame->height = frame->height;
+      auto yuv420_buffer = av_malloc(av_image_get_buffer_size(AV_PIX_FMT_YUV420P, frame->width, frame->height, 1));
+      av_image_fill_arrays(yuv420_frame->data, yuv420_frame->linesize, reinterpret_cast<uint8_t *>(yuv420_buffer),
+                           AV_PIX_FMT_YUV420P, frame->width, frame->height, 1);
+      SwsContext *sws_ctx =
+          sws_getContext(frame->width, frame->height, static_cast<AVPixelFormat>(frame->format), frame->width,
+                         frame->height, AVPixelFormat::AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
+      sws_scale(sws_ctx, frame->data, frame->linesize, 0, frame->height, yuv420_frame->data, yuv420_frame->linesize);
+      sws_freeContext(sws_ctx);
+      memcpy(sp_data, yuv420_frame->data[0], yuv420_frame->linesize[0] * yuv420_frame->height);
+      uint8_t *u = yuv420_frame->data[1];
+      uint8_t *v = yuv420_frame->data[2];
+      uint8_t *vu = reinterpret_cast<uint8_t *>(sp_data) + yuv420_frame->linesize[0] * frame->height;
+      for (int i = 0; i < yuv420_frame->linesize[1] * frame->height / 2; i++) {
+        *vu++ = *v++;
+        *vu++ = *u++;
+      }
+      dataframe->stride[0] = yuv420_frame->linesize[0];
+      dataframe->stride[1] = yuv420_frame->linesize[0];
+      av_frame_free(&yuv420_frame);
+      av_free(yuv420_buffer);
+    }
+
     CALL_CNRT_BY_CONTEXT(cnrtMalloc(&dataframe->mlu_data, frame_size), dataframe->ctx.dev_id,
                          dataframe->ctx.ddr_channel);
     if (nullptr == dataframe->mlu_data) {
@@ -968,6 +995,33 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
   } else if (param_.output_type_ == OUTPUT_CPU) {
     dataframe->cpu_data = sp_data;
     sp_data = nullptr;
+    // for usb camera
+    if (instance_->pix_fmt == AV_PIX_FMT_YUYV422) {  // YUV422 to NV21
+      auto yuv420_frame = av_frame_alloc();
+      yuv420_frame->width = frame->width;
+      yuv420_frame->height = frame->height;
+      auto yuv420_buffer = av_malloc(av_image_get_buffer_size(AV_PIX_FMT_YUV420P, frame->width, frame->height, 1));
+      av_image_fill_arrays(yuv420_frame->data, yuv420_frame->linesize, reinterpret_cast<uint8_t *>(yuv420_buffer),
+                           AV_PIX_FMT_YUV420P, frame->width, frame->height, 1);
+      SwsContext *sws_ctx =
+          sws_getContext(frame->width, frame->height, static_cast<AVPixelFormat>(frame->format), frame->width,
+                         frame->height, AVPixelFormat::AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
+      sws_scale(sws_ctx, frame->data, frame->linesize, 0, frame->height, yuv420_frame->data, yuv420_frame->linesize);
+      sws_freeContext(sws_ctx);
+      memcpy(dataframe->cpu_data, yuv420_frame->data[0], yuv420_frame->linesize[0] * yuv420_frame->height);
+      uint8_t *u = yuv420_frame->data[1];
+      uint8_t *v = yuv420_frame->data[2];
+      uint8_t *vu = reinterpret_cast<uint8_t *>(dataframe->cpu_data) + yuv420_frame->linesize[0] * frame->height;
+      for (int i = 0; i < yuv420_frame->linesize[1] * frame->height / 2; i++) {
+        *vu++ = *v++;
+        *vu++ = *u++;
+      }
+      dataframe->stride[0] = yuv420_frame->linesize[0];
+      dataframe->stride[1] = yuv420_frame->linesize[0];
+      av_frame_free(&yuv420_frame);
+      av_free(yuv420_buffer);
+    }
+
     auto t = reinterpret_cast<uint8_t *>(dataframe->cpu_data);
     for (int i = 0; i < dataframe->GetPlanes(); ++i) {
       size_t plane_size = dataframe->GetPlaneBytes(i);

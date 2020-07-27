@@ -80,9 +80,17 @@ else (FFMPEG_LIBRARIES AND FFMPEG_INCLUDE_DIR)
             /usr/local/lib
 	    /usr/lib/x86_64-linux-gnu
     )
+    find_library(
+            FFMPEG_LIBAVDEVICE
+            NAMES avdevice
+            PATHS ${_FFMPEG_AVDEVICE_LIBRARY_DIRS}
+            /usr/lib64
+            /usr/local/lib
+            /usr/lib/x86_64-linux-gnu
+    )
 
 
-    if (FFMPEG_LIBAVCODEC AND FFMPEG_LIBAVFORMAT AND FFMPEG_LIBAVUTIL AND FFMPEG_LIBSWSCALE AND FFMPEG_LIBSWRESAMPLE)
+  if (FFMPEG_LIBAVCODEC AND FFMPEG_LIBAVFORMAT AND FFMPEG_LIBAVUTIL AND FFMPEG_LIBSWSCALE AND FFMPEG_LIBSWRESAMPLE AND FFMPEG_LIBAVDEVICE)
         set(FFMPEG_FOUND TRUE)
     endif ()
 
@@ -93,7 +101,9 @@ else (FFMPEG_LIBRARIES AND FFMPEG_INCLUDE_DIR)
                 ${FFMPEG_LIBAVFORMAT}
                 ${FFMPEG_LIBAVUTIL}
                 ${FFMPEG_LIBSWSCALE}
-                ${FFMPEG_LIBSWRESAMPLE})
+                ${FFMPEG_LIBSWRESAMPLE}
+                ${FFMPEG_LIBAVFILTER}
+                ${FFMPEG_LIBAVDEVICE})
     else (FFMPEG_FOUND)
         message(FATAL_ERROR "Could not find FFmpeg libraries!")
     endif (FFMPEG_FOUND)

@@ -168,7 +168,7 @@ TEST(Inferencer, infer_param_manager) {
 
     InferParams ret;
     EXPECT_TRUE(manager.ParseBy(raw_params, &ret));
-    EXPECT_TRUE(InferParamsEQ(default_value, ret));
+    EXPECT_FALSE(InferParamsEQ(default_value, ret));
   }
 
   // check value type

@@ -13,6 +13,10 @@ cd $CURRENT_DIR
     echo "generate files.list_image in $CURRENT_DIR"
     echo "$CURRENT_DIR/../../data/images/%d.jpg" >> files.list_image
   fi
+  if [ ! -f $CURRENT_DIR/files.list_camera ]; then
+    echo "generate files.list_camera in $CURRENT_DIR"
+    echo "/dev/video0" >> files.list_camera
+  fi
   if [ $? -ne 0 ]; then
       exit 1
   fi

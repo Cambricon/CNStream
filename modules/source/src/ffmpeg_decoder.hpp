@@ -29,6 +29,8 @@ extern "C" {
 #include <libavutil/avutil.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/pixfmt.h>
+#include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
 #ifdef __cplusplus
 }
 #endif
