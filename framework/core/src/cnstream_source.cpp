@@ -122,6 +122,7 @@ int SourceModule::RemoveSource(std::shared_ptr<SourceHandler> handler) {
 }
 
 std::shared_ptr<SourceHandler> SourceModule::GetSourceHandler(const std::string &stream_id) {
+  std::unique_lock<std::mutex> lock(mutex_);
   if (source_map_.find(stream_id) == source_map_.cend()) {
     return nullptr;
   }
