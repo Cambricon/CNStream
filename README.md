@@ -18,7 +18,7 @@ CNStream provides the following plug-in modules:
 
 CNStream depends on the CNCodec library and the CNRT library which are packed in Cambricon neuware package.
 Therefore, the lastest Cambricon neuware package is required. If you do not have one, please feel free to contact with us.
-Our mailbox: service@cambricon.com or solution-sdk@cambricon.com
+Our mailbox: service@cambricon.com
 
 ### Install Cambricon neuware package ###
 

@@ -26,7 +26,6 @@
 #include <string>
 
 #include "infer_params.hpp"
-
 #define ASSERT(value) {                                 \
   bool __attribute__((unused)) ret = (value);           \
   assert(ret);                                          \
@@ -84,7 +83,6 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
   param.default_value = "";
   param.type = "string";
   param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
-    if (value.empty()) return false;
     param_set->model_path = value;
     return true;
   };
@@ -275,15 +273,19 @@ bool InferParamManager::ParseBy(const ModuleParamSet &raw_params, InferParams *p
     auto it = raws.find(desc.name);
     if (it != raws.end()) {
       value = it->second;
-      if (!desc.parser(value, pout)) {
-        LOG(ERROR) << "Parse parameter [" << it->first << "] failed. value is [" << value << "]";
-        return false;
-      }
       raws.erase(it);
     }
+    if (!desc.parser(value, pout)) {
+      LOG(ERROR) << "Parse parameter [" << desc.name << "] failed. value is [" << value << "]";
+      return false;
+    }
   }
-  for (const auto &it : raws)
-    LOG_IF(WARNING, it.first != CNS_JSON_DIR_PARAM_NAME) << "Parameter named [" << it.first << "] did not registered.";
+  for (const auto &it : raws) {
+    if (it.first != CNS_JSON_DIR_PARAM_NAME) {
+      LOG(ERROR) << "Parameter named [" << it.first << "] did not registered.";
+      return false;
+    }
+  }
   return true;
 }
 
