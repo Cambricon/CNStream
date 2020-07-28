@@ -24,7 +24,6 @@
 #include <thread>
 #include <unordered_map>
 
-#include "cnstream_eventbus.hpp"
 #include "cnstream_pipeline.hpp"
 
 namespace cnstream {
@@ -99,6 +98,16 @@ bool Module::PostEvent(EventType type, const std::string& msg) {
   RwLockReadGuard guard(container_lock_);
   if (container_) {
     return container_->GetEventBus()->PostEvent(event);
+  } else {
+    LOG(WARNING) << "[" << GetName() << "] module's container is not set";
+    return false;
+  }
+}
+
+bool Module::PostEvent(Event e) {
+  RwLockReadGuard guard(container_lock_);
+  if (container_) {
+    return container_->GetEventBus()->PostEvent(e);
   } else {
     LOG(WARNING) << "[" << GetName() << "] module's container is not set";
     return false;

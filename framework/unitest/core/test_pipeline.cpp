@@ -585,7 +585,7 @@ TEST(CorePipeline, DefaultBusWatch) {
   Pipeline pipeline("test pipeline");
   TestModule module("test_moudle");
   std::thread::id thread_id = std::this_thread::get_id();
-  Event event = {EVENT_ERROR, "test event", "test_module", thread_id};
+  Event event = {EVENT_ERROR, "test_stream", "test event", "test_module", thread_id};
   EventHandleFlag e_handle_flag;
   e_handle_flag = pipeline.DefaultBusWatch(event);
   EXPECT_EQ(e_handle_flag, EVENT_HANDLE_STOP);

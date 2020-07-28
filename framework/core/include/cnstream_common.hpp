@@ -68,6 +68,7 @@ enum EventType {
   EVENT_WARNING,  ///< A warning event.
   EVENT_EOS,      ///< An EOS event.
   EVENT_STOP,     ///< Stops an event that is called by application layer usually.
+  EVENT_STREAM_ERROR,  ///< A stream error event.
   EVENT_TYPE_END  ///< Reserved for your custom events.
 };
 

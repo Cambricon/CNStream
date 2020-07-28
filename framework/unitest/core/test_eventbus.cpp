@@ -60,6 +60,7 @@ TEST(CoreEventBus, PostEvent) {
   Event event;
   event.type = g_type;
   event.message = g_message;
+  event.stream_id = "test_stream";
   event.module_name = "pipe";
   event.thread_id = std::this_thread::get_id();
   g_thread_id = event.thread_id;
@@ -76,6 +77,7 @@ TEST(CoreEventBus, PollEvent) {
   Event event;
   event.type = EVENT_WARNING;
   event.message = "test poll";
+  event.stream_id = "test_stream";
   event.module_name = "pipe";
   EXPECT_EQ(bus->PollEvent().type, EVENT_STOP);
   bus->ClearAllWatchers();

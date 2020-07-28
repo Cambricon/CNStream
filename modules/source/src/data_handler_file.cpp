@@ -114,8 +114,16 @@ void FileHandlerImpl::Loop() {
   }
 
   if (!PrepareResources()) {
-    if (nullptr != module_)
-      module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " prepare codec resources failed.");
+    ClearResources();
+    if (nullptr != module_) {
+      Event e;
+      e.type = EventType::EVENT_STREAM_ERROR;
+      e.module_name = module_->GetName();
+      e.message = "Prepare codec resources failed.";
+      e.stream_id = stream_id_;
+      e.thread_id = std::this_thread::get_id();
+      module_->PostEvent(e);
+    }
     return;
   }
 
@@ -211,11 +219,7 @@ bool FileHandlerImpl::PrepareResources(bool demux_only) {
     return false;
   }
   if (decoder_.get()) {
-    bool ret = decoder_->Create(vstream, interval_);
-    if (ret) {
-      return true;
-    }
-    return false;
+    return decoder_->Create(vstream, interval_);
   }
   return false;
 }
@@ -291,7 +295,16 @@ bool FileHandlerImpl::Process() {
       LOG(INFO) << "Clear resources and restart";
       ClearResources(true);
       if (!PrepareResources(true)) {
-        if (nullptr != module_) module_->PostEvent(EVENT_ERROR, "Prepare codec resources failed");
+        ClearResources();
+        if (nullptr != module_) {
+          Event e;
+          e.type = EventType::EVENT_STREAM_ERROR;
+          e.module_name = module_->GetName();
+          e.message = "Prepare codec resources failed.";
+          e.stream_id = stream_id_;
+          e.thread_id = std::this_thread::get_id();
+          module_->PostEvent(e);
+        }
         return false;
       }
       LOG(INFO) << "Loop...";

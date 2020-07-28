@@ -181,7 +181,7 @@ bool MluDecoder::Process(ESPacket *pkt) {
       LOG(ERROR) << "cnvideoDecFeedData timeout happened";
       cndec_abort_flag_ = 1;
       return false;
-    } else if (ret < 0) {
+    } else if (CNCODEC_SUCCESS != ret) {
       LOG(ERROR) << "Call cnvideoDecFeedData failed, ret = " <<  ret;
       cndec_error_flag_ = 1;
       return false;
@@ -215,7 +215,7 @@ bool MluDecoder::Process(ESPacket *pkt) {
       LOG(ERROR) << "cnjpegDecFeedData timeout happened";
       cndec_abort_flag_ = 1;
       return false;
-    } else if (ret < 0) {
+    } else if (CNCODEC_SUCCESS != ret) {
       LOG(ERROR) << "Call cnjpegDecFeedData failed, ret = " <<  ret;
       cndec_error_flag_ = 1;
       return false;
@@ -291,7 +291,7 @@ void MluDecoder::SequenceCallback(cnvideoDecSequenceInfo *pFormat) {
   }
   /*start decode*/
   int ret = cnvideoDecStart(instance_, &create_info_);
-  if (ret < 0) {
+  if (CNCODEC_SUCCESS != ret) {
     LOG(ERROR) << "Call cnvideoDecStart failed, ret = " << ret;
     return;
   }
@@ -450,7 +450,7 @@ bool MluDecoder::CreateVideoDecoder(VideoStreamInfo *info) {
   cndec_error_flag_.store(0);
   cndec_start_flag_.store(0);
   int ret = cnvideoDecCreate(&this->instance_, VideoDecodeCallback, &create_info_);
-  if (ret < 0) {
+  if (CNCODEC_SUCCESS != ret) {
     LOG(ERROR) << "Call cnvideoDecCreate failed, ret = " << ret;
     return false;
   }
@@ -459,7 +459,7 @@ bool MluDecoder::CreateVideoDecoder(VideoStreamInfo *info) {
     stride_align = YUV420SP_STRIDE_ALIGN_FOR_SCALER;
 
   ret = cnvideoDecSetAttributes(this->instance_, CNVIDEO_DEC_ATTR_OUT_BUF_ALIGNMENT, &stride_align);
-  if (0 != ret) {
+  if (CNCODEC_SUCCESS != ret) {
     LOG(ERROR) << "Failed to set output buffer stride alignment,error code: " << ret;
     return false;
   }
@@ -508,11 +508,11 @@ void MluDecoder::DestroyVideoDecoder() {
       instance_ = nullptr;
       handler_->SendFlowEos();
       return;
-    } else if (ret < 0) {
+    } else if (CNCODEC_SUCCESS != ret) {
       LOG(ERROR) << "Call cnvideoDecStop failed, ret = " << ret;
     }
     ret = cnvideoDecDestroy(instance_);
-    if (ret < 0) {
+    if (CNCODEC_SUCCESS != ret) {
       LOG(ERROR) << "Call cnvideoDecDestroy failed, ret = " << ret;
     }
     instance_ = nullptr;
@@ -684,7 +684,7 @@ bool MluDecoder::CreateJpegDecoder(VideoStreamInfo *info) {
   cndec_abort_flag_.store(0);
   cndec_error_flag_.store(0);
   int ret = cnjpegDecCreate(&this->jpg_instance_, CNJPEGDEC_RUN_MODE_ASYNC, JpegEventCallback, &create_jpg_info_);
-  if (ret < 0) {
+  if (CNCODEC_SUCCESS != ret) {
     LOG(ERROR) << "Call cnjpegDecCreate failed, ret = " << ret;
     return false;
   }
@@ -721,7 +721,7 @@ void MluDecoder::DestroyJpegDecoder() {
       return;
     }
     int ret = cnjpegDecDestroy(jpg_instance_);
-    if (ret < 0) {
+    if (CNCODEC_SUCCESS != ret) {
       LOG(ERROR) << "Call cnjpegDecDestroy failed, ret = " << ret;
     }
     jpg_instance_ = nullptr;

@@ -57,6 +57,7 @@ enum EventHandleFlag {
  */
 struct Event {
   EventType type;             ///< The event type.
+  std::string stream_id;      ///< The stream that posts this event.
   std::string message;        ///< Additional event messages.
   std::string module_name;    ///< The module that posts this event.
   std::thread::id thread_id;  ///< The thread id from which the event is posted.
