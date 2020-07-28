@@ -17,6 +17,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
+#include "ffmpeg_decoder.hpp"
+
 #include <cnrt.h>
 #include <glog/logging.h>
 #include <future>
@@ -26,7 +29,6 @@
 #include <utility>
 
 #include "cnstream_frame_va.hpp"
-#include "ffmpeg_decoder.hpp"
 
 #define YUV420SP_STRIDE_ALIGN_FOR_SCALER 128
 
@@ -533,7 +535,7 @@ void MluDecoder::JpegFrameCallback(cnjpegDecOutput *output) {
   if (output->result != 0) {
     /*
      If JPU decode failed, create a empty FrameInfo which only including
-     a Error Flag(or valid information);
+     an Error Flag(or valid information);
      Now olny support pts
     */
     std::shared_ptr<CNFrameInfo> data;

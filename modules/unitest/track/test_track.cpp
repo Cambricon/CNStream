@@ -232,7 +232,8 @@ TEST(Tracker, ProcessMluFeature) {
     EXPECT_EQ(track->Process(data), 0);
 
     CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
-    for (auto &obj : objs) {
+    for (size_t idx = 0; idx < objs.size(); ++idx) {
+      auto& obj = objs[idx];
       EXPECT_FALSE(obj->track_id.empty());
     }
   }
@@ -251,7 +252,8 @@ TEST(Tracker, ProcessCpuFeature) {
     EXPECT_EQ(track->Process(data), 0);
 
     CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
-    for (auto &obj : objs) {
+    for (size_t idx = 0; idx < objs.size(); ++idx) {
+      auto& obj = objs[idx];
       EXPECT_FALSE(obj->track_id.empty());
     }
   }
@@ -352,7 +354,8 @@ TEST(Tracker, ProcessFeatureMatchCPU4) {
     auto data = GenTestData(n, obj_num);
     EXPECT_EQ(track->Process(data), 0);
     CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
-    for (auto &obj : objs) {
+    for (size_t idx = 0; idx < objs.size(); ++idx) {
+      auto& obj = objs[idx];
       EXPECT_FALSE(obj->track_id.empty());
     }
   }
@@ -446,7 +449,8 @@ TEST(Tracker, ProcessFeatureMatchMLU4) {
     auto data = GenTestData(n, obj_num);
     EXPECT_EQ(track->Process(data), 0);
     CNObjsVec objs = cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]);
-    for (auto &obj : objs) {
+    for (size_t idx = 0; idx < objs.size(); ++idx) {
+      auto& obj = objs[idx];
       EXPECT_FALSE(obj->track_id.empty());
     }
   }

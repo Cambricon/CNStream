@@ -407,9 +407,9 @@ void RtspHandlerImpl::DemuxLoop() {
   LOG(INFO) << "DemuxLoop Start...";
   std::shared_ptr<IDemuxer> demuxer;
   if (use_ffmpeg_) {
-    demuxer.reset(new (std::nothrow) FFmpegDemuxer(queue_, url_name_));
+    demuxer = std::make_shared<FFmpegDemuxer>(queue_, url_name_);
   } else {
-    demuxer.reset(new (std::nothrow) Live555Demuxer(queue_, url_name_, reconnect_));
+    demuxer = std::make_shared<Live555Demuxer>(queue_, url_name_, reconnect_);
   }
   if (!demuxer) {
     LOG(ERROR) << "Failed to create demuxer";
@@ -418,7 +418,7 @@ void RtspHandlerImpl::DemuxLoop() {
   if (!demuxer->PrepareResources(demux_exit_flag_)) {
     if (nullptr != module_)
       module_->PostEvent(
-          EVENT_ERROR, "stream_id " + stream_id_ + "Prepare codec resources failed.");
+          EVENT_ERROR, "stream_id " + stream_id_ + " prepare codec resources failed.");
     return;
   }
   {

@@ -33,7 +33,8 @@ mkdir -p output
     --loop=false \
     --raw_img_input=false \
     --config_fname "detection_config.json" \
-    --alsologtostderr
+    --alsologtostderr=true \
+    --colorlogtostderr=true
     # uncomment to stop measuring performance
     #--perf=false \
     # uncomment to change directory of database file
