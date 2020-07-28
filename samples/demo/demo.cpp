@@ -61,9 +61,12 @@ DEFINE_bool(perf, false, "measure performance");
 #endif
 DEFINE_string(perf_db_dir, "", "directory of performance database");
 DEFINE_bool(jpeg_from_mem, false, "Jpeg bitstream from mem.");
-DEFINE_bool(raw_img_input, false, "feed raw image to source");
+DEFINE_bool(raw_img_input, false, "feed decompressed image to source");
+DEFINE_bool(use_cv_mat, true, "feed cv mat to source. It is valid only if ``raw_img_input`` is set to true");
 
 cnstream::Displayer* gdisplayer = nullptr;
+
+std::atomic<bool> thread_running{true};
 
 class MsgObserver : cnstream::StreamMsgObserver {
  public:
@@ -104,6 +107,158 @@ class MsgObserver : cnstream::StreamMsgObserver {
   std::condition_variable wakener_;
   mutable std::mutex mutex_;
 };
+
+int AddSourceForRtspStream(cnstream::DataSource* source, const std::string &stream_id, const std::string &filename) {
+  auto handler = cnstream::RtspHandler::Create(source, stream_id, filename);
+  return source->AddSource(handler);
+}
+
+int AddSourceForUsbCam(cnstream::DataSource* source, const std::string &stream_id, const std::string &filename,
+                       const int &frame_rate, const bool &loop) {
+  int ret = -1;
+#ifdef HAVE_FFMPEG_AVDEVICE
+  auto handler = cnstream::UsbHandler::Create(source, stream_id, filename, frame_rate, loop);
+  ret = source->AddSource(handler);
+#endif  // HAVE_FFMPEG_AVDEVICE
+  return ret;
+}
+
+int AddSourceForVideoInMem(cnstream::DataSource* source, const std::string &stream_id, const std::string &filename,
+                           const bool &loop, std::vector<std::thread>* thread_vec) {
+  auto handler = cnstream::ESMemHandler::Create(source, stream_id);
+  int ret = source->AddSource(handler);
+  if (ret != 0) return ret;
+  // Start another thread to read data from file to memory and feed data to pipeline.
+  thread_vec->push_back(std::thread([=]() {
+    FILE* fp = fopen(filename.c_str(), "rb");
+    if (!fp) return;
+    auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+    memHandler->SetDataType(cnstream::ESMemHandler::H264);
+    unsigned char buf[4096];
+    while (thread_running.load()) {
+      if (!feof(fp)) {
+        int size = fread(buf, 1, 4096, fp);
+        memHandler->Write(buf, size);
+      } else if (loop) {
+        fseek(fp, 0, SEEK_SET);
+      } else {
+        break;
+      }
+    }
+    memHandler->Write(nullptr, 0);
+  }));
+  return 0;
+}
+
+int AddSourceForImageInMem(cnstream::DataSource* source, const std::string &stream_id, const std::string &filename,
+                           const bool &loop, std::vector<std::thread>* thread_vec) {
+  // Jpeg decoder maximum resolution 8K
+  int max_width = 7680;  // FIXME
+  int max_height = 4320;  // FIXME
+
+  auto handler = cnstream::ESJpegMemHandler::Create(source, stream_id, max_width, max_height);
+  int ret = source->AddSource(handler);
+  if (ret != 0) return ret;
+  // Start another thread to read data from files to memory and feed data to pipeline.
+  thread_vec->push_back(std::thread([=]() {
+    int index = filename.find_last_of("/");
+    std::string dir_path = filename.substr(0, index);
+    std::list<std::string> files = GetFileNameFromDir(dir_path, "*.jpg");
+
+    auto memHandler = std::dynamic_pointer_cast<cnstream::ESJpegMemHandler>(handler);
+    size_t jpeg_buffer_size_ = 4 * 1024 * 1024;  // FIXME
+    unsigned char *buf = new(std::nothrow) unsigned char[jpeg_buffer_size_];
+
+    if (!buf) {
+      LOG(FATAL) << "malloc buf failed, size: " << jpeg_buffer_size_;
+    }
+
+    cnstream::ESPacket pkt;
+    uint64_t pts_ = 0;
+    auto itor = files.begin();
+    while (thread_running.load() && itor != files.end()) {
+      size_t file_size = GetFileSize(*itor);
+      if (file_size > jpeg_buffer_size_) {
+        delete [] buf;
+        buf = new(std::nothrow) unsigned char[file_size];
+        if (!buf) {
+          LOG(FATAL) << "malloc buf failed, size: " << file_size;
+        }
+        jpeg_buffer_size_ = file_size;
+      }
+      FILE *fp = fopen((*itor).c_str(), "rb");
+      if (fp) {
+        int size = fread(buf, 1, jpeg_buffer_size_, fp);
+        pkt.data = buf;
+        pkt.size = size;
+        pkt.pts = pts_++;
+        memHandler->Write(&pkt);
+        fclose(fp);
+      }
+      itor++;
+      if (itor == files.end() && loop) {
+        itor = files.begin();
+      }
+    }
+    pkt.data = nullptr;
+    pkt.size = 0;
+    pkt.flags = cnstream::ESPacket::FLAG_EOS;
+    memHandler->Write(&pkt);
+    delete [] buf, buf = nullptr;
+  }));
+  return 0;
+}
+
+int AddSourceForDecompressedImage(cnstream::DataSource* source, const std::string &stream_id,
+                                  const std::string &filename, const bool &loop,
+                                  const bool &use_cv_mat, std::vector<std::thread>* thread_vec) {
+  // The following code is only for image input. For video input, you could use opencv VideoCapture.
+  int ret = -1;
+#ifdef HAVE_OPENCV
+  auto handler = cnstream::RawImgMemHandler::Create(source, stream_id);
+  ret = source->AddSource(handler);
+  if (ret != 0) return ret;
+  // Start another thread to read data from files to cv mat and feed data to pipeline.
+  thread_vec->push_back(std::thread([=]() {
+    int index = filename.find_last_of("/");
+    std::string dir_path = filename.substr(0, index);
+    std::list<std::string> files = GetFileNameFromDir(dir_path, "*.jpg");
+    auto memHandler = std::dynamic_pointer_cast<cnstream::RawImgMemHandler>(handler);
+    auto itor = files.begin();
+
+    while (thread_running.load() && itor != files.end()) {
+      cv::Mat bgr_frame = cv::imread(*itor);
+      if (!bgr_frame.empty()) {
+        if (use_cv_mat) {
+          // feed bgr24 image mat, with api-Write(cv::Mat)
+          memHandler->Write(&bgr_frame);
+        } else {
+          // feed rgb24 image data, with api-Write(unsigned char* data, int size, int w, int h, cnstream::CNDataFormat)
+          cv::Mat rgb_frame(bgr_frame.rows, bgr_frame.cols, CV_8UC3);
+          cv::cvtColor(bgr_frame, rgb_frame, cv::COLOR_BGR2RGB);
+          memHandler->Write(rgb_frame.data, rgb_frame.cols * rgb_frame.rows * 3, rgb_frame.cols, rgb_frame.rows,
+                            cnstream::CN_PIXEL_FORMAT_RGB24);
+        }
+      }
+      itor++;
+      if (itor == files.end() && loop) {
+        itor = files.begin();
+      }
+    }
+    memHandler->Write(nullptr);
+  }));
+#else
+  LOG(ERROR) << "OPENCV is not linked, can not support cv::mat or raw image data with bgr24/rgb24 "
+    "format.";
+#endif
+  return ret;
+}
+
+int AddSourceForFile(cnstream::DataSource* source, const std::string &stream_id, const std::string &filename,
+                     const int &frame_rate, const bool &loop) {
+  auto handler = cnstream::FileHandler::Create(source, stream_id, filename, frame_rate, loop);
+  return source->AddSource(handler);
+}
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
@@ -173,7 +328,6 @@ int main(int argc, char** argv) {
     add stream sources...
   */
   std::vector<std::thread> vec_threads_mem;
-  std::atomic<bool> thread_running{true};
   int streams = static_cast<int>(video_urls.size());
   auto url_iter = video_urls.begin();
   for (int i = 0; i < streams; i++, url_iter++) {
@@ -185,152 +339,17 @@ int main(int argc, char** argv) {
     int ret = 0;
 
     if (filename.find("rtsp://") != std::string::npos) {
-      auto handler = cnstream::RtspHandler::Create(source, stream_id, filename);
-      ret = source->AddSource(handler);
-    } else if (filename.find(".h264") != std::string::npos) {
-      // es-mem handler
-      auto handler = cnstream::ESMemHandler::Create(source, stream_id);
-      ret = source->AddSource(handler);
-      if (ret == 0) {
-        // use a separate thread to read data from memory and feed pipeline
-        vec_threads_mem.push_back(std::thread([=, &thread_running]() {
-          FILE* fp = fopen(filename.c_str(), "rb");
-          if (fp) {
-            auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
-            memHandler->SetDataType(cnstream::ESMemHandler::H264);
-            unsigned char buf[4096];
-            while (thread_running.load()) {
-              if (!feof(fp)) {
-                int size = fread(buf, 1, 4096, fp);
-                memHandler->Write(buf, size);
-              } else {
-                if (FLAGS_loop) {
-                  fseek(fp, 0, SEEK_SET);
-                } else {
-                  break;
-                }
-              }
-            }
-            memHandler->Write(nullptr, 0);
-            fclose(fp);
-          }
-        }));
-      }
+      ret = AddSourceForRtspStream(source, stream_id, filename);
     } else if (filename.find("/dev/video") != std::string::npos) {  // only support linux
-#ifdef HAVE_FFMPEG_AVDEVICE
-      auto handler =
-          cnstream::UsbHandler::Create(source, stream_id, filename, FLAGS_src_frame_rate, FLAGS_loop);
-      source->AddSource(handler);
-#endif  // HAVE_FFMPEG_AVDEVICE
+      ret = AddSourceForUsbCam(source, stream_id, filename,  FLAGS_src_frame_rate, FLAGS_loop);
     } else if (filename.find(".jpg") != std::string::npos && FLAGS_jpeg_from_mem) {
-      // Jpeg decoder maximum resolution 8K
-      int max_width = 7680;  // FIXME
-      int max_height = 4320;  // FIXME
-      // es-jpeg-mem handler
-      auto handler = cnstream::ESJpegMemHandler::Create(source, stream_id, max_width, max_height);
-      ret = source->AddSource(handler);
-      if (ret == 0) {
-        // use a separate thread to read data from memory and feed pipeline
-        vec_threads_mem.push_back(std::thread([=, &thread_running]() {
-          int index = filename.find_last_of("/");
-          std::string dir_path = filename.substr(0, index);
-          std::list<std::string> files = GetFileNameFromDir(dir_path, "*.jpg");
-
-          auto memHandler = std::dynamic_pointer_cast<cnstream::ESJpegMemHandler>(handler);
-          size_t jpeg_buffer_size_ = 4 * 1024 * 1024;  // FIXME
-          unsigned char *buf = new(std::nothrow) unsigned char[jpeg_buffer_size_];
-
-          if (!buf) {
-            LOG(FATAL) << "malloc buf failed, size: " << jpeg_buffer_size_;
-          }
-
-          cnstream::ESPacket pkt;
-          uint64_t pts_ = 0;
-          auto itor = files.begin();
-          while (thread_running.load() && itor != files.end()) {
-            size_t file_size = GetFileSize(*itor);
-            if (file_size > jpeg_buffer_size_) {
-              delete [] buf;
-              buf = new(std::nothrow) unsigned char[file_size];
-              if (!buf) {
-                LOG(FATAL) << "malloc buf failed, size: " << file_size;
-              }
-              jpeg_buffer_size_ = file_size;
-            }
-            FILE *fp = fopen((*itor).c_str(), "rb");
-            if (fp) {
-              int size = fread(buf, 1, jpeg_buffer_size_, fp);
-              pkt.data = buf;
-              pkt.size = size;
-              pkt.pts = pts_++;
-              memHandler->Write(&pkt);
-              fclose(fp);
-            }
-            itor++;
-            if (itor == files.end() && FLAGS_loop) {
-              itor = files.begin();
-            }
-          }
-          pkt.data = nullptr;
-          pkt.size = 0;
-          pkt.flags = cnstream::ESPacket::FLAG_EOS;
-          memHandler->Write(&pkt);
-          delete [] buf, buf = nullptr;
-        }));
-      }
+      ret = AddSourceForImageInMem(source, stream_id, filename, FLAGS_loop, &vec_threads_mem);
     } else if (filename.find(".jpg") != std::string::npos && FLAGS_raw_img_input) {
-      LOG(INFO) << "feed source with raw image mem(image input sample).";
-      /* this is a sample for image process(when implement for video, can use opencv VideoCapture instead).
-       */
-#ifdef HAVE_OPENCV
-      auto handler = cnstream::RawImgMemHandler::Create(source, stream_id);
-      ret = source->AddSource(handler);
-      if (ret == 0) {
-        // use a separate thread to read data from memory and feed pipeline
-        vec_threads_mem.push_back(std::thread([=, &thread_running]() {
-          int index = filename.find_last_of("/");
-          std::string dir_path = filename.substr(0, index);
-          std::list<std::string> files = GetFileNameFromDir(dir_path, "*.jpg");
-          auto memHandler = std::dynamic_pointer_cast<cnstream::RawImgMemHandler>(handler);
-          auto itor = files.begin();
-
-          while (thread_running.load() && itor != files.end()) {
-            cv::Mat bgr_frame = cv::imread(*itor);
-#if 1
-            // feed bgr24 image mat, with api-Write(cv::Mat)
-            if (!bgr_frame.empty()) {
-              memHandler->Write(&bgr_frame);
-            } else {
-              continue;
-            }
-#else
-              // feed rgb24 image data, with api-Write(unsigned char* data, int size, int w, int h,
-              // cnstream::CNDataFormat)
-              if (bgr_frame.empty()) {
-                continue;
-              }
-
-              cv::Mat rgb_frame(bgr_frame.rows, bgr_frame.cols, CV_8UC3);
-              cv::cvtColor(bgr_frame, rgb_frame, cv::COLOR_BGR2RGB);
-              memHandler->Write(rgb_frame.data, rgb_frame.cols * rgb_frame.rows * 3, rgb_frame.cols, rgb_frame.rows,
-                                cnstream::CN_PIXEL_FORMAT_RGB24);
-#endif
-
-            itor++;
-            if (itor == files.end() && FLAGS_loop) {
-              itor = files.begin();
-            }
-          }
-          memHandler->Write(nullptr);
-        }));
-      }
-#else
-      LOG(ERROR) << "OPENCV is not linked, can not support cv::mat or raw image data with bgr24/rgb24 "
-        "format." return EXIT_FAILURE;
-#endif
+      ret = AddSourceForDecompressedImage(source, stream_id, filename, FLAGS_loop, FLAGS_use_cv_mat, &vec_threads_mem);
+    } else if (filename.find(".h264") != std::string::npos) {
+      ret = AddSourceForVideoInMem(source, stream_id, filename, FLAGS_loop, &vec_threads_mem);
     } else {
-      auto handler = cnstream::FileHandler::Create(source, stream_id, filename, FLAGS_src_frame_rate, FLAGS_loop);
-      ret = source->AddSource(handler);
+      ret = AddSourceForFile(source, stream_id, filename, FLAGS_src_frame_rate, FLAGS_loop);
     }
     if (ret != 0) {
       msg_observer.DecreaseStreamCnt();
@@ -338,7 +357,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  auto quit_callback = [&pipeline, streams, &source, &thread_running]() {
+  auto quit_callback = [&pipeline, streams, &source]() {
     // stop feed-data threads before remove-sources...
     thread_running.store(false);
     for (int i = 0; i < streams; i++) {
