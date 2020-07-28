@@ -115,7 +115,7 @@ void FileHandlerImpl::Loop() {
 
   if (!PrepareResources()) {
     if (nullptr != module_)
-      module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + "Prepare codec resources failed.");
+      module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " prepare codec resources failed.");
     return;
   }
 

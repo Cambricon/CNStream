@@ -18,33 +18,34 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+#include "data_handler_jpeg_mem.hpp"
 
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <utility>
-#include <memory>
 
-#include "data_handler_jpeg_mem.hpp"
 #include "perf_manager.hpp"
 
 namespace cnstream {
 
-std::shared_ptr<SourceHandler>
-  ESJpegMemHandler::Create(DataSource *module, const std::string &stream_id, int max_width, int max_height) {
+std::shared_ptr<SourceHandler> ESJpegMemHandler::Create(DataSource *module, const std::string &stream_id, int max_width,
+                                                        int max_height) {
   if (!module || stream_id.empty()) {
+    LOG(ERROR) << "source module or stream id must not be empty";
     return nullptr;
   }
-  std::shared_ptr<ESJpegMemHandler>
-    handler(new (std::nothrow) ESJpegMemHandler(module, stream_id, max_width, max_height));
+  std::shared_ptr<ESJpegMemHandler> handler(new (std::nothrow)
+                                                ESJpegMemHandler(module, stream_id, max_width, max_height));
   return handler;
 }
 
 ESJpegMemHandler::ESJpegMemHandler(DataSource *module, const std::string &stream_id, int max_width, int max_height)
-  : SourceHandler(module, stream_id) {
+    : SourceHandler(module, stream_id) {
   impl_ = new (std::nothrow) ESJpegMemHandlerImpl(module, *this, max_width, max_height);
 }
 
@@ -88,7 +89,12 @@ int ESJpegMemHandler::Write(ESPacket *pkt) {
 bool ESJpegMemHandlerImpl::Open() {
   // updated with paramSet
   DataSource *source = dynamic_cast<DataSource *>(module_);
-  param_ = source->GetSourceParam();
+  if (nullptr != source) {
+    param_ = source->GetSourceParam();
+  } else {
+    LOG(ERROR) << "source module is null";
+    return false;
+  }
 
   parser_.Init("mjpeg");
   this->interval_ = param_.interval_;
@@ -150,15 +156,14 @@ void ESJpegMemHandlerImpl::DecodeLoop() {
       // mlu_ctx.SetChannelId(dev_ctx_.ddr_channel);
       mlu_ctx.ConfigureForThisThread();
     } catch (edk::Exception &e) {
-      if (nullptr != module_)
-        module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup dev/channel.");
+      if (nullptr != module_) module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup mlu dev.");
       return;
     }
   }
 
   if (!PrepareResources()) {
     if (nullptr != module_)
-      module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + "Prepare codec resources failed.");
+      module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " prepare codec resources failed.");
     return;
   }
 
@@ -171,7 +176,6 @@ void ESJpegMemHandlerImpl::DecodeLoop() {
   ClearResources();
   LOG(INFO) << "DecodeLoop Exit";
 }
-
 
 bool ESJpegMemHandlerImpl::PrepareResources() {
   VideoStreamInfo info;
@@ -204,7 +208,7 @@ bool ESJpegMemHandlerImpl::PrepareResources() {
 
   bool ret = decoder_->Create(&info, interval_);
   if (!ret) {
-      return false;
+    return false;
   }
 
   return true;
@@ -220,7 +224,7 @@ bool ESJpegMemHandlerImpl::Process() {
   using EsPacketPtr = std::shared_ptr<EsPacket>;
 
   EsPacketPtr in;
-  int timeoutMs  = 1000;
+  int timeoutMs = 1000;
   bool ret = this->queue_->Pop(timeoutMs, in);
 
   if (!ret) {

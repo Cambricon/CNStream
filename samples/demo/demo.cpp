@@ -109,8 +109,7 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, false);
 
-  std::cout << "\033[01;31m"
-            << "CNSTREAM VERSION:" << cnstream::VersionString() << "\033[0m" << std::endl;
+  LOG(INFO) << "CNSTREAM VERSION:" << cnstream::VersionString();
 
   /*
     flags to variables

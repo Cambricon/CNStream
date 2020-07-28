@@ -146,11 +146,23 @@ After finished prerequisites, you can build instructions with the following step
      make
      make install
      ```
+
+
+
+
 ## Samples ##
 
-### **Demo Overview** ###
+|                        Classification                        |               Object Detection                |
+| :----------------------------------------------------------: | :-------------------------------------------: |
+| <img src="./docs/images/classification.gif" alt="Classification" style="height=350px" /> | <img src="./docs/images/yolov3.gif" alt="Object Detection" style="height=350px" /> |
 
-![demo](./data/images/demo.gif)
+|               Object Tracking               |                 Secondary Classification                 |
+| :-----------------------------------------: | :------------------------------------------------------: |
+| <img src="./docs/images/track.gif" alt="Object Tracking" style="height=350px" /> | <img src="./docs/images/secondary.gif" alt="Secondary Classification" style="height=350px" /> |
+
+
+
+### **Demo Overview** ###
 
 This demo shows how to detect objects using CNStream. It includes the following plug-in modules: 
 

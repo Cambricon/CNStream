@@ -139,7 +139,8 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       return card;
     }
     CNObjsVec objs = cnstream::any_cast<CNObjsVec>(finfo->datas[CNObjsVecKey]);
-    for (const auto& obj : objs) {
+    for (size_t idx = 0; idx < objs.size(); ++idx) {
+      auto& obj = objs[idx];
       if (obj_filter_) {
         if (!obj_filter_->Filter(finfo, obj)) continue;
       }

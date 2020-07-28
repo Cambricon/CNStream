@@ -485,7 +485,7 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     // case 2: down_node has >1 input nodes, current node has brother nodes
     // the processing data frame will not be pushed into down_node Connector
     // until processed by all brother nodes, the last node responds to transmit
-    bool processed_by_all_modules = frame_mask == down_node->GetModulesMask();
+    bool processed_by_all_modules = (frame_mask == down_node->GetModulesMask());
 
     if (processed_by_all_modules) {
       down_node->NotifyObserver(data);
