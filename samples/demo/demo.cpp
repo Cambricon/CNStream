@@ -86,7 +86,9 @@ class MsgObserver : cnstream::StreamMsgObserver {
       LOG(ERROR) << "[Observer] received ERROR_MSG";
       stop_ = true;
     }
-    wakener_.notify_one();
+    if (stop_) {
+      wakener_.notify_one();
+    }
   }
 
   void WaitForStop() {
@@ -98,6 +100,7 @@ class MsgObserver : cnstream::StreamMsgObserver {
 
   void IncreaseStreamCnt() { stream_cnt_++; }
   void DecreaseStreamCnt() { stream_cnt_--; }
+  int GetStreamCnt() { return stream_cnt_.load(); }
 
  private:
   std::atomic<int> stream_cnt_;
@@ -294,9 +297,6 @@ int main(int argc, char** argv) {
   cnstream::DataSource* source = dynamic_cast<cnstream::DataSource*>(pipeline.GetModule("source"));
 #ifdef BUILD_IPC
   cnstream::ModuleIPC* ipc = dynamic_cast<cnstream::ModuleIPC*>(pipeline.GetModule("ipc"));
-  if (ipc != nullptr) {
-    ipc->SetChannelCount(video_urls.size());
-  }
   if (nullptr == source && (nullptr == ipc)) {
     LOG(ERROR) << "DataSource && ModuleIPC module both not found.";
 #else
@@ -356,6 +356,12 @@ int main(int argc, char** argv) {
       if (FLAGS_perf) pipeline.RemovePerfManager(stream_id);
     }
   }
+
+#ifdef BUILD_IPC
+  if (nullptr != ipc) {
+    ipc->SetChannelCount(msg_observer.GetStreamCnt());
+  }
+#endif
 
   auto quit_callback = [&pipeline, streams, &source]() {
     // stop feed-data threads before remove-sources...
