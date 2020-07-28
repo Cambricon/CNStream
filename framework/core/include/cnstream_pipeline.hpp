@@ -532,7 +532,6 @@ class Pipeline {
   std::unordered_map<std::string, ModuleAssociatedInfo> modules_;
   std::unordered_map<std::string, CNModuleConfig> modules_config_;
   std::unordered_map<std::string, std::vector<std::string>> connections_config_;
-  std::mutex stop_mtx_;
   uint64_t eos_mask_ = 0;
 
   std::vector<std::string> stream_ids_;

@@ -324,6 +324,8 @@ bool Pipeline::QueryLinkStatus(LinkStatus* status, const std::string& link_id) {
 }
 
 bool Pipeline::Start() {
+  if (IsRunning()) return true;
+
   // set eos mask
   SetEOSMask();
   // open modules
@@ -391,7 +393,6 @@ bool Pipeline::Start() {
 }
 
 bool Pipeline::Stop() {
-  std::lock_guard<std::mutex> lk(stop_mtx_);
   if (!IsRunning()) return true;
 
   // stop data transmit

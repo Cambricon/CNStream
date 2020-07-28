@@ -363,10 +363,6 @@ bool RtspHandlerImpl::Open() {
   // updated with paramSet
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
-  if (param_.output_type_ != OUTPUT_MLU) {
-    LOG(ERROR) << "output_type not supported:" << param_.output_type_;
-    return false;
-  }
   this->interval_ = param_.interval_;
 
   SetPerfManager(source->GetPerfManager(stream_id_));
