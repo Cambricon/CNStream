@@ -70,7 +70,10 @@ std::atomic<bool> thread_running{true};
 
 class MsgObserver : cnstream::StreamMsgObserver {
  public:
-  MsgObserver(int stream_cnt, cnstream::Pipeline* pipeline) : stream_cnt_(stream_cnt), pipeline_(pipeline) {}
+  MsgObserver(int stream_cnt, cnstream::Pipeline* pipeline, std::string source_name) :
+    stream_cnt_(stream_cnt),
+    pipeline_(pipeline),
+    source_name_(source_name) {}
 
   void Update(const cnstream::StreamMsg& smsg) override {
     std::lock_guard<std::mutex> lg(mutex_);
@@ -82,6 +85,13 @@ class MsgObserver : cnstream::StreamMsgObserver {
         LOG(INFO) << "[Observer] received all EOS";
         stop_ = true;
       }
+    } else if (smsg.type == cnstream::StreamMsgType::STREAM_ERR_MSG) {
+      LOG(WARNING) << "[Observer] received stream error from stream: " << smsg.stream_id
+        << ", remove it from pipeline.";
+      cnstream::DataSource* source = dynamic_cast<cnstream::DataSource*>(pipeline_->GetModule(source_name_));
+      if (source) source->RemoveSource(smsg.stream_id);
+      pipeline_->RemovePerfManager(smsg.stream_id);
+      stream_cnt_--;
     } else if (smsg.type == cnstream::StreamMsgType::ERROR_MSG) {
       LOG(ERROR) << "[Observer] received ERROR_MSG";
       stop_ = true;
@@ -105,6 +115,7 @@ class MsgObserver : cnstream::StreamMsgObserver {
  private:
   std::atomic<int> stream_cnt_;
   cnstream::Pipeline* pipeline_ = nullptr;
+  std::string source_name_;
   bool stop_ = false;
   std::vector<std::string> eos_stream_;
   std::condition_variable wakener_;
@@ -273,6 +284,7 @@ int main(int argc, char** argv) {
     flags to variables
   */
   std::list<std::string> video_urls = ::ReadFileList(FLAGS_data_path);
+  std::string source_name = "source";  // source module name, which is defined in pipeline json config
 
   /*
     build pipeline
@@ -288,13 +300,13 @@ int main(int argc, char** argv) {
   /*
     message observer
    */
-  MsgObserver msg_observer(static_cast<int>(video_urls.size()), &pipeline);
+  MsgObserver msg_observer(static_cast<int>(video_urls.size()), &pipeline, source_name);
   pipeline.SetStreamMsgObserver(reinterpret_cast<cnstream::StreamMsgObserver*>(&msg_observer));
 
   /*
     find data source
    */
-  cnstream::DataSource* source = dynamic_cast<cnstream::DataSource*>(pipeline.GetModule("source"));
+  cnstream::DataSource* source = dynamic_cast<cnstream::DataSource*>(pipeline.GetModule(source_name));
 #ifdef BUILD_IPC
   cnstream::ModuleIPC* ipc = dynamic_cast<cnstream::ModuleIPC*>(pipeline.GetModule("ipc"));
   if (nullptr == source && (nullptr == ipc)) {

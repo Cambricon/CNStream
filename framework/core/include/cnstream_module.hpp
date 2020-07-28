@@ -41,6 +41,7 @@
 #include <vector>
 
 #include "cnstream_common.hpp"
+#include "cnstream_eventbus.hpp"
 #include "cnstream_config.hpp"
 #include "cnstream_frame.hpp"
 #include "perf_manager.hpp"
@@ -151,6 +152,16 @@ class Module {
    *         module has not been added to the pipeline.
    */
   bool PostEvent(EventType type, const std::string &msg);
+
+  /**
+   * Posts an event to the pipeline.
+   *
+   * @param Event with event type, stream_id, message, module name and thread_id.
+   *
+   * @return Returns true if this function has run successfully. Returns false if this
+   *         module has not been added to the pipeline.
+   */
+  bool PostEvent(Event e);
 
   /**
    * @brief Transmits data to the following stages.

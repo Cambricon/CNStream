@@ -127,6 +127,7 @@ void Pipeline::StreamMsgHandleFunc() {
     switch (msg.type) {
       case StreamMsgType::EOS_MSG:
       case StreamMsgType::ERROR_MSG:
+      case StreamMsgType::STREAM_ERR_MSG:
       case StreamMsgType::USER_MSG0:
       case StreamMsgType::USER_MSG1:
       case StreamMsgType::USER_MSG2:
@@ -207,6 +208,16 @@ EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
       break;
     case EventType::EVENT_EOS: {
       LOG(INFO) << "Pipeline received eos from module " + event.module_name << " of stream " << event.message;
+      ret = EVENT_HANDLE_SYNCED;
+      break;
+    }
+    case EventType::EVENT_STREAM_ERROR: {
+      smsg.type = STREAM_ERR_MSG;
+      smsg.module_name = event.module_name;
+      smsg.stream_id = event.stream_id;
+      UpdateByStreamMsg(smsg);
+      LOG(INFO) << "Pipeline received stream error from module " + event.module_name
+        << " of stream " << event.stream_id;
       ret = EVENT_HANDLE_SYNCED;
       break;
     }
