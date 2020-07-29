@@ -132,7 +132,7 @@ class StreamParserImpl {
   StreamParserImpl() {}
   ~StreamParserImpl() {}
   int Open(std::string fmt) {
-    queue_ = new (std::nothrow) RingBuffer(256 * 1024);
+    queue_ = new (std::nothrow) RingBuffer(4 * 1024 * 1024);
     if (!queue_) return -1;
     fmt_ = fmt;
     thread_ = std::thread(&StreamParserImpl::FindInfo, this);

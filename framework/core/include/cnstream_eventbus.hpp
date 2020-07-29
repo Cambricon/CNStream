@@ -106,6 +106,7 @@ class EventBus {
 #ifdef UNIT_TEST
 
  public:
+  Event PollEventToTest();
 #endif
   EventBus() = default;
 
@@ -144,6 +145,10 @@ class EventBus {
 
   std::mutex watcher_mtx_;
   ThreadSafeQueue<Event> queue_;
+#ifdef UNIT_TEST
+  ThreadSafeQueue<Event> test_eventq_;
+  bool unit_test = true;
+#endif
   std::list<BusWatcher> bus_watchers_;
   std::thread event_thread_;
   std::atomic<bool> running_{false};

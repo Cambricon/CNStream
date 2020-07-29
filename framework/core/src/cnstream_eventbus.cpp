@@ -75,6 +75,12 @@ bool EventBus::PostEvent(Event event) {
   }
   // LOG(INFO) << "Recieve Event from [" << event.module->GetName() << "] :" << event.message;
   queue_.Push(event);
+#ifdef UNIT_TEST
+  if (unit_test) {
+    test_eventq_.Push(event);
+    unit_test = false;
+  }
+#endif
   return true;
 }
 
@@ -118,5 +124,19 @@ void EventBus::EventLoop() {
   }
   LOG(INFO) << "Event bus exit.";
 }
+
+#ifdef UNIT_TEST
+Event EventBus::PollEventToTest() {
+  Event event;
+  event.type = EVENT_INVALID;
+  while (running_.load()) {
+    if (test_eventq_.WaitAndTryPop(event, std::chrono::milliseconds(100))) {
+      break;
+    }
+  }
+  if (!running_.load()) event.type = EVENT_STOP;
+  return event;
+}
+#endif
 
 }  // namespace cnstream
