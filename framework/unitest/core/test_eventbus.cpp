@@ -84,8 +84,9 @@ TEST(CoreEventBus, PollEvent) {
   pipe.Start();
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_TRUE(bus->PostEvent(event));
-  Event poll_e = bus->PollEvent();
+  Event poll_e = bus->PollEventToTest();
   EXPECT_EQ(poll_e.type, event.type);
+  EXPECT_EQ(poll_e.stream_id, event.stream_id);
   EXPECT_EQ(poll_e.message, event.message);
   EXPECT_EQ(poll_e.module_name, event.module_name);
   pipe.Stop();

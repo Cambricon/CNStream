@@ -96,9 +96,7 @@ bool ESJpegMemHandlerImpl::Open() {
     return false;
   }
 
-  parser_.Init("mjpeg");
   this->interval_ = param_.interval_;
-
   SetPerfManager(source->GetPerfManager(stream_id_));
   SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
 
@@ -128,12 +126,16 @@ void ESJpegMemHandlerImpl::Close() {
     queue_ = nullptr;
   }
 
-  parser_.Free();
+  if (parser_) {
+    parser_->Free();
+    delete parser_;
+    parser_ = nullptr;
+  }
 }
 
 int ESJpegMemHandlerImpl::Write(ESPacket *pkt) {
-  if (pkt && pkt->data && pkt->size) {
-    if (parser_.Parse(pkt->data, pkt->size) < 0) {
+  if (pkt && pkt->data && pkt->size && parser_) {
+    if (parser_->Parse(pkt->data, pkt->size) < 0) {
       return -1;
     }
   }
@@ -197,8 +199,16 @@ bool ESJpegMemHandlerImpl::PrepareResources() {
     info.codec_height = max_height_;
     decoder_ = std::make_shared<MluDecoder>(this);
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
+    if (parser_) {
+      parser_->Free();
+      delete parser_;
+      parser_ = nullptr;
+    }
+    parser_ = new (std::nothrow) ParserHelper;
+    parser_->Init("mjpeg");
+
     while (running_.load()) {
-      if (parser_.GetInfo(info) > 0) {
+      if (parser_->GetInfo(info) > 0) {
         break;
       }
       usleep(1000 * 10);

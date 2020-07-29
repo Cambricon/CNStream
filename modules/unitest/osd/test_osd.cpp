@@ -58,6 +58,15 @@ TEST(Osd, OpenClose) {
   std::string label_path = GetExePath() + glabel_path;
   param["label_path"] = label_path;
   EXPECT_TRUE(osd->Open(param));
+  param["text_scale_coef"] = "0.002";
+  EXPECT_TRUE(osd->Open(param));
+  param["text_thickness_coef"] = "0.008";
+  EXPECT_TRUE(osd->Open(param));
+  param["secondary_label_path"] = label_path;
+  param["attr_keys"] = "test_key";
+  EXPECT_TRUE(osd->Open(param));
+  param["logo"] = "Cambricon-test";
+  EXPECT_TRUE(osd->Open(param));
   osd->Close();
 }
 
@@ -67,6 +76,8 @@ TEST(Osd, Process) {
   ModuleParamSet param;
   std::string label_path = GetExePath() + glabel_path;
   param["label_path"] = label_path;
+  param["chinese_label_flag"] = "true";
+  param["logo"] = "Cambricon-test";
   ASSERT_TRUE(osd->Open(param));
 
   // prepare data
@@ -111,6 +122,17 @@ TEST(Osd, Process) {
 
   data->datas[cnstream::CNObjsVecKey] = objs;
   EXPECT_EQ(osd->Process(data), 0);
+  EXPECT_EQ(osd->Process(data), 0);
+  frame->width = -1;
+  data->datas[CNDataFramePtrKey] = frame;
+  EXPECT_EQ(osd->Process(data), -1);
+  frame->width = 1920;
+  frame->ptr_cpu[0] = nullptr;
+  frame->ptr_mlu[0] = nullptr;
+  frame->cpu_data = nullptr;
+  frame->mlu_data = nullptr;
+  data->datas[CNDataFramePtrKey] = frame;
+  EXPECT_EQ(osd->Process(data), -1);
 }
 
 TEST(Osd, ProcessSecondary) {
@@ -141,8 +163,6 @@ TEST(Osd, ProcessSecondary) {
   frame->CopyToSyncMem();
   data->datas[CNDataFramePtrKey] = frame;
 
-
-
   CNObjsVec objs;
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(11);
@@ -154,8 +174,6 @@ TEST(Osd, ProcessSecondary) {
   attr.score = -1;
   obj->AddAttribute("classifaction", attr);
   objs.push_back(obj);
-
-
 
   auto obj2 = std::make_shared<CNInferObject>();
   obj2->id = std::to_string(12);
@@ -186,14 +204,37 @@ TEST(Osd, CheckParamSet) {
   ModuleParamSet param;
   param.clear();
   EXPECT_TRUE(osd->CheckParamSet(param));
-  param.insert(std::make_pair("label_path", "a"));
-  EXPECT_FALSE(osd->CheckParamSet(param));
-  param.clear();
+
   std::string label_path = GetExePath() + glabel_path;
   param["label_path"] = label_path;
-  param.insert(std::make_pair("chinese_label_flag", "a"));
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param["label_path"] = "wrong_path";
   EXPECT_FALSE(osd->CheckParamSet(param));
+  param.clear();
+
   param["chinese_label_flag"] = "true";
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param["chinese_label_flag"] = "false";
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param["chinese_label_flag"] = "wrong_flag";
+  EXPECT_FALSE(osd->CheckParamSet(param));
+  param.clear();
+
+  param["secondary_label_path"] = label_path;
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param["secondary_label_path"] = "wrong_path";
+  EXPECT_FALSE(osd->CheckParamSet(param));
+  param.clear();
+
+  param["text_scale_coef"] = "0.001";
+  param["text_thickness_coef"] = "0.004";
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param["text_scale_coef"] = "wrong_num";
+  param["text_thickness_coef"] = "wrong_num";
+  EXPECT_FALSE(osd->CheckParamSet(param));
+  param.clear();
+
+  param["test_param"] = "test";
   EXPECT_TRUE(osd->CheckParamSet(param));
 }
 
