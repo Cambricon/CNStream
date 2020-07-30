@@ -654,7 +654,6 @@ PerfStats PerfCalculationMethod::CalcLatency(const std::vector<DbIntegerItem> &i
 
 // --- PerfUtils  --- //
 static int Callback(void *data, int argc, char **argv, char **azColName) {
-#ifdef HAVE_SQLITE
   std::vector<DbItem> *item_vec = reinterpret_cast<std::vector<DbItem> *>(data);
   DbItem item;
   for (int i = 0; i < argc; i++) {
@@ -666,7 +665,6 @@ static int Callback(void *data, int argc, char **argv, char **azColName) {
   }
   item.first = argc;
   item_vec->push_back(item);
-#endif
   return 0;
 }
 
@@ -907,4 +905,5 @@ bool PerfUtils::Record(std::string sql_name, std::string perf_type, std::vector<
     return sql_map_[sql_name]->Insert(perf_type, key_str, value_str);
   }
 }
+
 }  // namespace cnstream

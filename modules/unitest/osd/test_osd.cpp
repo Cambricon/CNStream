@@ -58,10 +58,29 @@ TEST(Osd, OpenClose) {
   std::string label_path = GetExePath() + glabel_path;
   param["label_path"] = label_path;
   EXPECT_TRUE(osd->Open(param));
-  param["text_scale_coef"] = "0.002";
+  param.clear();
+
+  param["label_size"] = "large";
   EXPECT_TRUE(osd->Open(param));
-  param["text_thickness_coef"] = "0.008";
+  param["label_size"] = "normal";
   EXPECT_TRUE(osd->Open(param));
+  param["label_size"] = "large";
+  EXPECT_TRUE(osd->Open(param));
+  param["label_size"] = "larger";
+  EXPECT_TRUE(osd->Open(param));
+  param["label_size"] = "small";
+  EXPECT_TRUE(osd->Open(param));
+  param["label_size"] = "smaller";
+  EXPECT_TRUE(osd->Open(param));
+  param["label_size"] = "0.9";
+  EXPECT_TRUE(osd->Open(param));
+  param.clear();
+
+  param["text_scale"] = "1.2";
+  param["text_thickness"] = "1.5";
+  param["box_thickness"] = "2";
+  EXPECT_TRUE(osd->Open(param));
+
   param["secondary_label_path"] = label_path;
   param["attr_keys"] = "test_key";
   EXPECT_TRUE(osd->Open(param));
@@ -76,7 +95,6 @@ TEST(Osd, Process) {
   ModuleParamSet param;
   std::string label_path = GetExePath() + glabel_path;
   param["label_path"] = label_path;
-  param["chinese_label_flag"] = "true";
   param["logo"] = "Cambricon-test";
   ASSERT_TRUE(osd->Open(param));
 
@@ -141,8 +159,8 @@ TEST(Osd, ProcessSecondary) {
   ModuleParamSet param;
   std::string label_path = GetExePath() + glabel_path;
   param["label_path"] = label_path;
-  param["secodary_labtel_path"] = label_path;
-  param["attr_key"] = "classifaction";
+  param["secondary_label_path"] = label_path;
+  param["attr_keys"] = "classification";
   ASSERT_TRUE(osd->Open(param));
 
   // prepare data
@@ -172,7 +190,7 @@ TEST(Osd, ProcessSecondary) {
   attr.id = 0;
   attr.value = -1;
   attr.score = -1;
-  obj->AddAttribute("classifaction", attr);
+  obj->AddAttribute("classification", attr);
   objs.push_back(obj);
 
   auto obj2 = std::make_shared<CNInferObject>();
@@ -183,7 +201,7 @@ TEST(Osd, ProcessSecondary) {
   attr2.id = 0;
   attr2.value = 2;
   attr2.score = 0.6;
-  obj2->AddAttribute("classifaction", attr2);
+  obj2->AddAttribute("classification", attr2);
   objs.push_back(obj2);
 
   for (int i = 0; i < 5; ++i) {
@@ -226,11 +244,29 @@ TEST(Osd, CheckParamSet) {
   EXPECT_FALSE(osd->CheckParamSet(param));
   param.clear();
 
-  param["text_scale_coef"] = "0.001";
-  param["text_thickness_coef"] = "0.004";
+  param["label_size"] = "normal";
   EXPECT_TRUE(osd->CheckParamSet(param));
-  param["text_scale_coef"] = "wrong_num";
-  param["text_thickness_coef"] = "wrong_num";
+  param["label_size"] = "large";
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param["label_size"] = "larger";
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param["label_size"] = "small";
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param["label_size"] = "smaller";
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param["label_size"] = "0.9";
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param["label_size"] = "wrong_size";
+  EXPECT_FALSE(osd->CheckParamSet(param));
+  param.clear();
+
+  param["text_scale"] = "1.2";
+  param["text_thickness"] = "1.5";
+  param["box_thickness"] = "1.5";
+  EXPECT_TRUE(osd->CheckParamSet(param));
+  param["text_scale"] = "wrong_num";
+  param["text_thickness"] = "wrong_num";
+  param["box_thickness"] = "wrong_num";
   EXPECT_FALSE(osd->CheckParamSet(param));
   param.clear();
 

@@ -48,7 +48,11 @@ bool IPCServerHandler::Open() {
   LOG(INFO) << "open server handler succeed, socket address: " << socket_address_;
   is_running_.store(true);
   listen_thread_ = std::thread(&IPCServerHandler::ListenConnections, this);
-  PostSemphore();
+  if (!PostSemphore()) {
+    LOG(WARNING) << "post semphore failed.";
+    return false;
+  }
+
   return true;
 }
 
@@ -114,7 +118,7 @@ void IPCServerHandler::RecvPackageLoop() {
         vec_recv_dataq_[recv_pkg.stream_idx % SEND_THREAD_NUM]->Push(recv_pkg);
         if (recv_pkg.flags & CN_FRAME_FLAG_EOS) {
           eos_chn_cnt++;
-          if (eos_chn_cnt == ipc_module_->GetChannelCount()) {
+          if (eos_chn_cnt == ipc_module_->GetStreamCount()) {
             LOG(INFO) << "Server received all eos.";
             return;
           }

@@ -98,14 +98,18 @@ class ModuleIPC : public Module, public ModuleCreator<ModuleIPC> {
    * @param chn_cnt, channel count.
    * @return void.
    */
-  inline void SetChannelCount(size_t chn_cnt) { chn_cnt_ = chn_cnt; }
+  inline void SetStreamCount(size_t chn_cnt) {
+    chn_cnt_.store(chn_cnt);
+  }
 
   /**
    * @brief Get channel count, when ModuleIPC act as server.
    * @param void.
    * @return channel count.
    */
-  inline size_t GetChannelCount() { return chn_cnt_; }
+  inline size_t GetStreamCount() {
+    return chn_cnt_.load();
+  }
 
 #ifdef UNIT_TEST
  public:  // NOLINT
@@ -129,7 +133,7 @@ class ModuleIPC : public Module, public ModuleCreator<ModuleIPC> {
    * @return void.
    */
   void PostFrameToReleaseMem(std::shared_ptr<CNFrameInfo> data);
-  size_t chn_cnt_ = 0;  // channel counts
+  std::atomic<size_t> chn_cnt_{0};  // channel counts
 };                      // class ModuleIPC
 
 }  // namespace cnstream

@@ -29,7 +29,6 @@
 
 namespace cnstream {
 
-#ifdef HAVE_SQLITE
 bool Sqlite::Connect() {
   if (sqlite3_open_v2(db_name_.c_str(), &db_, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX,
                       NULL) != SQLITE_OK) {
@@ -194,47 +193,5 @@ bool Sqlite::SetDbName(const std::string& db_name) {
 }
 
 std::string Sqlite::GetDbName() { return db_name_; }
-
-#else
-bool Sqlite::Connect() { return true; }
-
-bool Sqlite::Close() { return true; }
-
-bool Sqlite::Execution(std::string sql) { return true; }
-
-bool Sqlite::CreateTable(std::string table_name, std::string primary_key, std::vector<std::string> key_names) {
-  return true;
-}
-
-bool Sqlite::Insert(std::string table_name, std::string key_names, std::string values) { return true; }
-
-bool Sqlite::Update(std::string table_name, std::string condition_key, std::string condition_value,
-                    std::string update_key, std::string update_value) {
-  return true;
-}
-
-bool Sqlite::Delete(std::string table_name, std::string key_names, std::string values) { return true; }
-
-bool Sqlite::Select(std::string table_name, std::string key_name, std::string condition,
-                    int (*callback)(void*, int, char**, char**), void* data) {
-  return true;
-}
-
-bool Sqlite::Select(std::string condition, int (*callback)(void*, int, char**, char**), void* data) { return true; }
-
-size_t Sqlite::FindMin(std::string table_name, std::string key_name, std::string condition) { return 0; }
-
-size_t Sqlite::FindMax(std::string table_name, std::string key_name, std::string condition) { return 0; }
-
-size_t Sqlite::Count(std::string table_name, std::string key_name, std::string condition) { return 0; }
-
-void Sqlite::Begin() {}
-
-void Sqlite::Commit() {}
-
-bool Sqlite::SetDbName(const std::string& db_name) { return true; }
-
-std::string Sqlite::GetDbName() { return ""; }
-#endif
 
 }  // namespace cnstream

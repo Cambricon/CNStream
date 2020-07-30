@@ -18,6 +18,7 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include <unistd.h>
 #include <memory>
 #include <string>
 
@@ -28,7 +29,10 @@ namespace cnstream {
 
 void CNSocket::Close() {
   close(socket_fd_);
-  if (!socket_addr_.empty()) unlink(socket_addr_.c_str());
+
+  if (access(socket_addr_.c_str(), F_OK) == 0) {
+    unlink(socket_addr_.c_str());
+  }
 }
 
 void CNSocket::Shutdown() { shutdown(socket_fd_, SHUT_RDWR); }
@@ -56,13 +60,16 @@ bool CNServer::Open(const std::string& socket_address) {
     return false;
   }
 
-  unlink(socket_address.c_str());
   socket_addr_ = socket_address;
+  if (access(socket_addr_.c_str(), F_OK) == 0) {
+    LOG(INFO) << socket_addr_ << " exists, unlink it.";
+    unlink(socket_addr_.c_str());
+  }
 
   sockaddr_un un;
   memset(&un, 0, sizeof(un));
   un.sun_family = AF_UNIX;
-  memcpy(un.sun_path, socket_address.c_str(), socket_address.length());
+  memcpy(un.sun_path, socket_addr_.c_str(), socket_addr_.length());
   unsigned int length = strlen(un.sun_path) + sizeof(un.sun_family);
   if (bind(listen_fd_, reinterpret_cast<sockaddr*>(&un), length) < 0) {
     LOG(ERROR) << "bind server listen_fd failed, errno: " << errno;
@@ -84,7 +91,7 @@ int CNServer::Accept() {
   }
 
   sockaddr_un un;
-  unsigned int length = 0;
+  unsigned int length = sizeof(un);
   socket_fd_ = accept(listen_fd_, reinterpret_cast<sockaddr*>(&un), &length);
   if (-1 == socket_fd_) {
     LOG(ERROR) << "server accept failed, errno: " << errno;
@@ -107,10 +114,15 @@ bool CNClient::Open(const std::string& socket_address) {
   }
 
   socket_addr_ = socket_address;
+  if (access(socket_addr_.c_str(), F_OK) < 0) {
+    LOG(WARNING) << socket_addr_ << " not exists, can not create connection.";
+    return false;
+  }
+
   sockaddr_un un;
   memset(&un, 0, sizeof(un));
   un.sun_family = AF_UNIX;
-  memcpy(un.sun_path, socket_address.c_str(), socket_address.length());
+  memcpy(un.sun_path, socket_addr_.c_str(), socket_addr_.length());
   unsigned length = strlen(un.sun_path) + sizeof(un.sun_family);
 
   if (connect(socket_fd_, reinterpret_cast<sockaddr*>(&un), length) < 0) {

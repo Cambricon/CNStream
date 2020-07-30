@@ -100,13 +100,12 @@ TEST(PerfManager, Record) {
                                module_names[i] + PerfManager::GetStartTimeSuffix()));
   }
   manager.Stop();
-#ifdef HAVE_SQLITE
+
   for (uint32_t i = 0; i < module_names.size(); i++) {
     EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + PerfManager::GetStartTimeSuffix()), (unsigned)2);
     EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + PerfManager::GetEndTimeSuffix()), (unsigned)1);
     EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + PerfManager::GetThreadSuffix()), (unsigned)1);
   }
-#endif
 }
 
 TEST(PerfManager, RecordFailedCase) {
@@ -115,7 +114,6 @@ TEST(PerfManager, RecordFailedCase) {
 
   // Record before init
   EXPECT_FALSE(manager.Record(false, table_name, module_names[0], 0));
-
   EXPECT_TRUE(manager.Init(gTestPerfDir + kDbName));
   Register(&manager);
 
@@ -124,12 +122,11 @@ TEST(PerfManager, RecordFailedCase) {
     EXPECT_TRUE(manager.Record(true, table_name, module_names[i], 0));
   }
   manager.Stop();
-#ifdef HAVE_SQLITE
+
   for (uint32_t i = 0; i < module_names.size(); i++) {
     EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + PerfManager::GetStartTimeSuffix()), (unsigned)1);
     EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + PerfManager::GetEndTimeSuffix()), (unsigned)1);
   }
-#endif
   // Record after stop
   EXPECT_FALSE(manager.Record(true, table_name, module_names[0], 0));
 }
@@ -163,12 +160,11 @@ TEST(PerfManager, MultiThreadRecordInfo) {
   }
   manager.Stop();
   manager.SqlCommitTrans();
-#ifdef HAVE_SQLITE
+
   for (uint32_t i = 0; i < module_names.size(); i++) {
     EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + PerfManager::GetStartTimeSuffix()), (unsigned)data_num);
     EXPECT_EQ(manager.sql_->Count(table_name, module_names[i] + PerfManager::GetEndTimeSuffix()), (unsigned)data_num);
   }
-#endif
 }
 
 TEST(PerfManager, InsertInfoToDb) {
@@ -183,38 +179,33 @@ TEST(PerfManager, InsertInfoToDb) {
   PerfManager::PerfInfo info{table_name, PerfManager::GetPrimaryKey(), std::to_string(pts),
                              module_names[0] + PerfManager::GetStartTimeSuffix(), TimeStamp::CurrentToString()};
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
-#ifdef HAVE_SQLITE
+
   EXPECT_EQ(manager.sql_->Count(table_name, PerfManager::GetPrimaryKey(),
                                 PerfManager::GetPrimaryKey() + "=" + std::to_string(pts)),
             unsigned(1));
   EXPECT_EQ(manager.sql_->Count(table_name, module_names[0] + PerfManager::GetStartTimeSuffix(),
                                 PerfManager::GetPrimaryKey() + "=" + std::to_string(pts)),
             unsigned(1));
-#endif
 
   info.key = module_names[0] + PerfManager::GetEndTimeSuffix();
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
-#ifdef HAVE_SQLITE
+
   EXPECT_EQ(manager.sql_->Count(table_name, module_names[0] + PerfManager::GetEndTimeSuffix(),
                                 PerfManager::GetPrimaryKey() + "=" + std::to_string(pts)),
             unsigned(1));
-#endif
 
   info.key = module_names[1] + PerfManager::GetStartTimeSuffix();
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
-#ifdef HAVE_SQLITE
+
   EXPECT_EQ(manager.sql_->Count(table_name, module_names[1] + PerfManager::GetStartTimeSuffix(),
                                 PerfManager::GetPrimaryKey() + "=" + std::to_string(pts)),
             unsigned(1));
-#endif
 
   info.key = module_names[1] + PerfManager::GetEndTimeSuffix();
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
-#ifdef HAVE_SQLITE
   EXPECT_EQ(manager.sql_->Count(table_name, module_names[1] + PerfManager::GetEndTimeSuffix(),
                                 PerfManager::GetPrimaryKey() + "=" + std::to_string(pts)),
             unsigned(1));
-#endif
 }
 
 TEST(PerfManager, InsertInfoToDbFailedCase) {
@@ -247,15 +238,11 @@ TEST(PerfManager, RegisterPerfType) {
   PerfManager::PerfInfo info{type1, PerfManager::GetPrimaryKey(), "0",
                              module_names[0] + PerfManager::GetStartTimeSuffix(), TimeStamp::CurrentToString()};
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
-#ifdef HAVE_SQLITE
   EXPECT_EQ(manager.sql_->Count(type1, PerfManager::GetPrimaryKey(), PerfManager::GetPrimaryKey() + "=0"), unsigned(1));
-#endif
 
   info.perf_type = type2;
   EXPECT_NO_THROW(manager.InsertInfoToDb(info));
-#ifdef HAVE_SQLITE
   EXPECT_EQ(manager.sql_->Count(type2, PerfManager::GetPrimaryKey(), PerfManager::GetPrimaryKey() + "=0"), unsigned(1));
-#endif
 }
 
 TEST(PerfManager, RegisterPerfTypeFailedCase) {
@@ -316,12 +303,8 @@ TEST(PerfManager, SqlBeginAndCommit) {
     end = TimeStamp::Current();
     duration2 = end - start;
   }
-#ifdef HAVE_SQLITE
+
   EXPECT_GT(duration2, duration1);
-#else
-  EXPECT_NE(duration1, (unsigned)0);
-  EXPECT_NE(duration2, (unsigned)0);
-#endif
 }
 
 TEST(PerfManager, PrepareDbFileDir) {
@@ -337,14 +320,8 @@ TEST(PerfManager, PrepareDbFileDir) {
     // path not exist, create path
     EXPECT_TRUE(manager.PrepareDbFileDir(db_path));
     EXPECT_EQ(access(path.c_str(), 0), 0);
-
     EXPECT_TRUE(manager.Init(db_path));
-
-#ifdef HAVE_SQLITE
     EXPECT_EQ(access(db_path.c_str(), 0), 0);
-#else
-    EXPECT_NE(access(db_path.c_str(), 0), 0);
-#endif
   }
 
   {
@@ -353,7 +330,6 @@ TEST(PerfManager, PrepareDbFileDir) {
     EXPECT_TRUE(manager.PrepareDbFileDir(db_path));
     EXPECT_NE(access(db_path.c_str(), 0), 0);
     EXPECT_EQ(access(path.c_str(), 0), 0);
-
     rmdir(path.c_str());
     rmdir(outer_path.c_str());
   }
@@ -363,19 +339,12 @@ TEST(PerfManager, PrepareDbFileDirFailedCase) {
   PerfManager manager;
   std::string db_path = gTestPerfDir + kDbName;
   remove(db_path.c_str());
-
   EXPECT_FALSE(manager.PrepareDbFileDir(""));
-
   manager.sql_ = std::make_shared<Sqlite>(db_path);
   auto sql = manager.sql_;
-
   EXPECT_TRUE(manager.PrepareDbFileDir(db_path));
   sql->Connect();
-#ifdef HAVE_SQLITE
   EXPECT_FALSE(manager.PrepareDbFileDir(db_path));
-#else
-  EXPECT_TRUE(manager.PrepareDbFileDir(db_path));
-#endif
   sql->Close();
   EXPECT_TRUE(manager.PrepareDbFileDir(db_path));
 }

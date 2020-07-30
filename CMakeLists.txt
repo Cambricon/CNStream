@@ -37,7 +37,6 @@ option(build_tests "build all of modules' unit test" ON)
 option(build_samples "build sample programs" ON)
 option(build_modules_contrib "build extra modules" ON)
 option(build_test_coverage  "Test code coverage" OFF)
-option(build_perf  "Record performance" ON)
 option(ENABLE_KCF "Build with KCF track" OFF)
 
 option(RELEASE "build type" ON)
@@ -220,10 +219,7 @@ if(build_display)
   endif()
 endif()
 
-## perf
-if(build_perf)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_SQLITE")
-endif()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_SQLITE")
 
 ##Chinses label
 if(WITH_CHINESE)
