@@ -64,7 +64,6 @@ TEST(PerfCalculator, SetAndGetPerfUtils) {
 }
 
 TEST(PerfCalculator, CalcLatency) {
-#ifdef HAVE_SQLITE
   CreateDir(gTestPerfDir);
   remove(gTestPerfFile.c_str());
 
@@ -126,11 +125,9 @@ TEST(PerfCalculator, CalcLatency) {
   EXPECT_EQ(perf_cal.GetLatency(sql_name, table_name).frame_cnt, data_num);
   sql->Close();
   remove(gTestPerfFile.c_str());
-#endif
 }
 
 TEST(PerfCalculatorForModule, CalcThroughput) {
-#ifdef HAVE_SQLITE
   CreateDir(gTestPerfDir);
   remove(gTestPerfFile.c_str());
 
@@ -177,7 +174,6 @@ TEST(PerfCalculatorForModule, CalcThroughput) {
 
   sql->Close();
   remove(gTestPerfFile.c_str());
-#endif
 }
 
 TEST(PerfCalculatorForPipeline, CalcThroughput) {
@@ -202,12 +198,9 @@ TEST(PerfCalculatorForPipeline, CalcThroughput) {
   }
   PerfStats stats = perf_cal.CalcThroughput(sql_name, table_name, {key});
 
-#ifdef HAVE_SQLITE
   double fps = ceil(data_num_1 * 1e7 / (end[2] - end[0])) / 10;
   EXPECT_EQ(stats.fps, fps);
   EXPECT_EQ(stats.frame_cnt, data_num_1);
-#endif
-
   uint32_t data_num_2 = 7;
   size_t end_ts = 0;
   for (uint32_t i = data_num_1; i < data_num_1 + data_num_2; i++) {
@@ -218,7 +211,6 @@ TEST(PerfCalculatorForPipeline, CalcThroughput) {
 
   stats = perf_cal.CalcThroughput(sql_name, table_name, {key});
 
-#ifdef HAVE_SQLITE
   fps = ceil((data_num_2)*1e7 / (end_ts - end[data_num_1 - 1])) / 10;
   std::cout << "fps " << fps << " stats fps " << stats.fps << std::endl;
   EXPECT_EQ(stats.fps, fps);
@@ -227,14 +219,12 @@ TEST(PerfCalculatorForPipeline, CalcThroughput) {
   stats = perf_cal.GetAvgThroughput(sql_name, table_name);
   EXPECT_EQ(stats.fps, fps);
   EXPECT_EQ(stats.frame_cnt, data_num_1 + data_num_2);
-#endif
 
   sql->Close();
   remove(gTestPerfFile.c_str());
 }
 
 TEST(PerfCalculatorForPipeline, CalcTotalThroughput) {
-#ifdef HAVE_SQLITE
   CreateDir(gTestPerfDir);
   std::vector<std::string> sql_name = {"sql0", "sql1"};
   remove((gTestPerfDir + sql_name[0]).c_str());
@@ -299,11 +289,9 @@ TEST(PerfCalculatorForPipeline, CalcTotalThroughput) {
     sql_vec[i]->Close();
     remove((gTestPerfDir + sql_name[i]).c_str());
   }
-#endif
 }
 
 TEST(PerfCalculatorForInfer, CalcThroughput) {
-#ifdef HAVE_SQLITE
   CreateDir(gTestPerfDir);
   remove(gTestPerfFile.c_str());
 
@@ -361,7 +349,6 @@ TEST(PerfCalculatorForInfer, CalcThroughput) {
 
   sql->Close();
   remove(gTestPerfFile.c_str());
-#endif
 }
 
 TEST(PerfCalculationMethod, ThroughputAndLatency) {

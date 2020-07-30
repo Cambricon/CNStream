@@ -13,9 +13,7 @@ set(CNSTREAM_TARGET_VERSION "${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}"
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/googletest/include/)
 include_directories(${3RDPARTY_INCLUDE_DIRS})
 
-if(build_perf)
-  include_directories(${PROJECT_SOURCE_DIR}/3rdparty/sqlite3/)
-endif()
+include_directories(${PROJECT_SOURCE_DIR}/3rdparty/sqlite3/)
 
 set(module_list core)
 

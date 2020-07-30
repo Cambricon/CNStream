@@ -52,9 +52,9 @@ endif()
 if(HAVE_OPENCV)
 include_directories(${OpenCV_INCLUDE_DIRS})
 endif()
-if(build_perf)
-  include_directories(${PROJECT_SOURCE_DIR}/3rdparty/sqlite3/)
-endif()
+
+include_directories(${PROJECT_SOURCE_DIR}/3rdparty/sqlite3/)
+
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 #FIXME

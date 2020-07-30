@@ -54,11 +54,7 @@ DEFINE_int32(src_frame_rate, 25, "frame rate for send data");
 DEFINE_int32(wait_time, 0, "time of one test case");
 DEFINE_bool(loop, false, "display repeat");
 DEFINE_string(config_fname, "", "pipeline config filename");
-#ifdef HAVE_SQLITE
 DEFINE_bool(perf, true, "measure performance");
-#else
-DEFINE_bool(perf, false, "measure performance");
-#endif
 DEFINE_string(perf_db_dir, "", "directory of performance database");
 DEFINE_bool(jpeg_from_mem, false, "Jpeg bitstream from mem.");
 DEFINE_bool(raw_img_input, false, "feed decompressed image to source");
@@ -348,21 +344,25 @@ int main(int argc, char** argv) {
     if (FLAGS_perf) {
       pipeline.AddPerfManager(stream_id, FLAGS_perf_db_dir);
     }
-    int ret = 0;
 
-    if (filename.find("rtsp://") != std::string::npos) {
-      ret = AddSourceForRtspStream(source, stream_id, filename);
-    } else if (filename.find("/dev/video") != std::string::npos) {  // only support linux
-      ret = AddSourceForUsbCam(source, stream_id, filename,  FLAGS_src_frame_rate, FLAGS_loop);
-    } else if (filename.find(".jpg") != std::string::npos && FLAGS_jpeg_from_mem) {
-      ret = AddSourceForImageInMem(source, stream_id, filename, FLAGS_loop, &vec_threads_mem);
-    } else if (filename.find(".jpg") != std::string::npos && FLAGS_raw_img_input) {
-      ret = AddSourceForDecompressedImage(source, stream_id, filename, FLAGS_loop, FLAGS_use_cv_mat, &vec_threads_mem);
-    } else if (filename.find(".h264") != std::string::npos) {
-      ret = AddSourceForVideoInMem(source, stream_id, filename, FLAGS_loop, &vec_threads_mem);
-    } else {
-      ret = AddSourceForFile(source, stream_id, filename, FLAGS_src_frame_rate, FLAGS_loop);
+    int ret = 0;
+    if (nullptr != source) {
+      if (filename.find("rtsp://") != std::string::npos) {
+        ret = AddSourceForRtspStream(source, stream_id, filename);
+      } else if (filename.find("/dev/video") != std::string::npos) {  // only support linux
+        ret = AddSourceForUsbCam(source, stream_id, filename,  FLAGS_src_frame_rate, FLAGS_loop);
+      } else if (filename.find(".jpg") != std::string::npos && FLAGS_jpeg_from_mem) {
+        ret = AddSourceForImageInMem(source, stream_id, filename, FLAGS_loop, &vec_threads_mem);
+      } else if (filename.find(".jpg") != std::string::npos && FLAGS_raw_img_input) {
+        ret = AddSourceForDecompressedImage(source, stream_id, filename, FLAGS_loop,
+                FLAGS_use_cv_mat, &vec_threads_mem);
+      } else if (filename.find(".h264") != std::string::npos) {
+        ret = AddSourceForVideoInMem(source, stream_id, filename, FLAGS_loop, &vec_threads_mem);
+      } else {
+        ret = AddSourceForFile(source, stream_id, filename, FLAGS_src_frame_rate, FLAGS_loop);
+      }
     }
+
     if (ret != 0) {
       msg_observer.DecreaseStreamCnt();
       if (FLAGS_perf) pipeline.RemovePerfManager(stream_id);
@@ -371,7 +371,7 @@ int main(int argc, char** argv) {
 
 #ifdef BUILD_IPC
   if (nullptr != ipc) {
-    ipc->SetChannelCount(msg_observer.GetStreamCnt());
+    ipc->SetStreamCount(msg_observer.GetStreamCnt());
   }
 #endif
 

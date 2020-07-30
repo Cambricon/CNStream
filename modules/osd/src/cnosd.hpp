@@ -18,48 +18,62 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef _CNOSD_H_
-#define _CNOSD_H_
+#ifndef _CNOSD_HPP_
+#define _CNOSD_HPP_
 
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include <cstring>
 #include <fstream>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "osd.hpp"
 #include "cnstream_frame_va.hpp"
 
+namespace cnstream {
+
+class CnFont;
 
 class CnOsd {
  public:
   CnOsd() = delete;
-  CnOsd(size_t rows, size_t cols, const std::vector<std::string>& labels);
+  explicit CnOsd(const std::vector<std::string>& labels);
 
-  inline size_t rows() const { return rows_; }
-  inline size_t cols() const { return cols_; }
-  void SetTextScaleCoef(float coef)  { text_scale_coef_ = coef; }
-  inline float GetTextScaleCoef() const { return text_scale_coef_; }
-  void SetTextThicknessCoef(float coef)  { text_thickness_coef_ = coef; }
-  inline float GetTextThicknessCoef() const { return text_thickness_coef_; }
-  inline size_t chn_num() const { return rows() * cols(); }
-  inline const std::vector<std::string> labels() const { return labels_; }
-  inline void SetSecondaryLabels(std::vector<std::string>labels) { secondary_labels_ = labels; }
-  void DrawLabel(cv::Mat image, const cnstream::CNObjsVec& objects, cnstream::CnFont* cn_font = nullptr,
-                 bool tiled = false, std::vector<std::string> attr_keys = {}) const;
+  inline void SetTextScale(float scale)  { text_scale_ = scale; }
+  inline void SetTextThickness(float thickness)  { text_thickness_ = thickness; }
+  inline void SetBoxThickness(float thickness)  { box_thickness_ = thickness; }
+  inline void SetSecondaryLabels(std::vector<std::string> labels) { secondary_labels_ = labels; }
+  inline void SetCnFont(std::shared_ptr<CnFont> cn_font) { cn_font_ = cn_font; }
+
+  void DrawLabel(cv::Mat *image, const CNObjsVec& objects, std::vector<std::string> attr_keys = {}) const;
   void DrawLogo(cv::Mat *image, std::string logo) const;
 
  private:
-  size_t rows_ = 1;
-  size_t cols_ = 1;
-  float text_scale_coef_ = 0.002;
-  float text_thickness_coef_ = 0.008;
+  std::pair<cv::Point, cv::Point> GetBboxCorner(const cnstream::CNInferObject &object,
+                                                int img_width, int img_height) const;
+  bool LabelIsFound(const int &label_id) const;
+  int GetLabelId(const std::string &label_id_str) const;
+  void DrawBox(cv::Mat* image, const cv::Point &top_left, const cv::Point &bottom_right,
+               const cv::Scalar &color) const;
+  void DrawText(cv::Mat* image, const cv::Point &bottom_left, const std::string &text, const cv::Scalar &color,
+                float scale = 1, int* text_height = nullptr) const;
+  int CalcThickness(int image_width, float thickness) const;
+  double CalcScale(int image_width, float scale) const;
+
+  float text_scale_ = 1;
+  float text_thickness_ = 1;
+  float box_thickness_ = 1;
   std::vector<std::string> labels_;
   std::vector<std::string> secondary_labels_;
   std::vector<cv::Scalar> colors_;
   int font_ = cv::FONT_HERSHEY_SIMPLEX;
+  std::shared_ptr<CnFont> cn_font_;
 };  // class CnOsd
 
-#endif  // _CNOSD_H_
+}  // namespace cnstream
+
+#endif  // _CNOSD_HPP_

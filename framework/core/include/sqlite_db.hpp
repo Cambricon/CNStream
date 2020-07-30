@@ -24,9 +24,9 @@
 #include <string>
 #include <vector>
 
-#ifdef HAVE_SQLITE
+
 #include "sqlite3.h"
-#endif
+
 
 namespace cnstream {
 
@@ -60,9 +60,8 @@ class Sqlite {
   std::string GetDbName();
 
  private:
-#ifdef HAVE_SQLITE
   sqlite3* db_ = nullptr;
-#endif
+
   std::string db_name_;
   bool connected_ = false;
 };  // class Sqlite

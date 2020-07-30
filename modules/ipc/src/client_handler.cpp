@@ -40,7 +40,10 @@ bool IPCClientHandler::Open() {
   }
 
   if (!OpenSemphore()) return false;
-  WaitSemphore();
+  while (!WaitSemphore()) {
+    LOG(WARNING) << "wait semphore failed, continue.";
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
 
   if (!client_handle_.Open(socket_address_)) {
     LOG(ERROR) << "client connect to server failed, unix address: " << socket_address_;

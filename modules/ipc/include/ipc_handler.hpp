@@ -194,15 +194,15 @@ class IPCHandler {
 
   /**
    *  @brief  Post semphore to sync processors.
-   *  @return Void.
+   *  @return whether post semphore succeed.
    */
-  void PostSemphore();
+  bool PostSemphore();
 
   /**
    *  @brief Wait semphore to sync processors.
-   *  @return Void.
+   *  @return whether wait semphore succeed.
    */
-  void WaitSemphore();
+  bool WaitSemphore();
 
  protected:
 #ifdef UNIT_TEST

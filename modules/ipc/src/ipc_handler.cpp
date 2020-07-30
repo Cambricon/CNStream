@@ -60,12 +60,22 @@ void IPCHandler::CloseSemphore() {
   if (sem_created_) sem_unlink(sem_name.c_str());
 }
 
-void IPCHandler::PostSemphore() {
-  if (sem_id_) sem_post(sem_id_);
+bool IPCHandler::PostSemphore() {
+  if (sem_id_) {
+    int ret = sem_post(sem_id_);
+    return ret == 0;
+  }
+
+  return false;
 }
 
-void IPCHandler::WaitSemphore() {
-  if (sem_id_) sem_wait(sem_id_);
+bool IPCHandler::WaitSemphore() {
+  if (sem_id_) {
+    int ret = sem_wait(sem_id_);
+    return ret == 0;
+  }
+
+  return false;
 }
 
 bool IPCHandler::ParseStringToPackage(const std::string& str, FrameInfoPackage* pkg) {

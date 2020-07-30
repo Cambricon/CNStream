@@ -131,7 +131,7 @@ static void ServerProcess(ModuleParamSet param, std::string* recvd_string) {
   memset(frame_data, 0, nbytes);
 
   std::shared_ptr<ModuleIPC> server = std::make_shared<ModuleIPC>("server");
-  server->SetChannelCount(1);
+  server->SetStreamCount(1);
   server->Open(param);
   auto handler = server->GetIPCHandler();
   std::shared_ptr<IPCServerHandler> server_handler = std::dynamic_pointer_cast<IPCServerHandler>(handler);
@@ -164,6 +164,7 @@ static void ServerProcess(ModuleParamSet param, std::string* recvd_string) {
     }
   }
 
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
   server->Close();
   free(frame_data);
 }
@@ -238,6 +239,7 @@ TEST(ModuleIPC, Open) {
   } else if (0 == pid) {
     std::shared_ptr<ModuleIPC> server = std::make_shared<ModuleIPC>("server");
     EXPECT_TRUE(server->Open(server_param));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     server->Close();
     _exit(2);
   } else if (pid > 0) {
@@ -269,7 +271,7 @@ TEST(ModuleIPC, Connect) {
   } else if (0 == pid) {
     std::shared_ptr<ModuleIPC> server = std::make_shared<ModuleIPC>("server");
     EXPECT_TRUE(server->Open(server_param));
-    server->GetIPCHandler()->Shutdown();
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     server->Close();
     _exit(2);
   } else if (pid > 0) {

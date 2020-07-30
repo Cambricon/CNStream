@@ -35,7 +35,6 @@ std::string gTestPerfFile = gTestPerfDir + "test.db";           // NOLINT
 
 bool CreateDir(std::string path) { return access(path.c_str(), 0) == 0 || mkdir(path.c_str(), 00700) == 0; }
 
-#ifdef HAVE_SQLITE
 TEST(PerfSqlite, ConnectAndClose) {
   EXPECT_TRUE(CreateDir(gTestPerfDir));
   remove(gTestPerfFile.c_str());
@@ -547,32 +546,5 @@ TEST(PerfSqlite, BeginCommit) {
   EXPECT_TRUE(sql.Close());
   remove(gTestPerfFile.c_str());
 }
-
-#else
-
-static int Callback(void *data, int argc, char **argv, char **azColName) { return 0; }
-
-TEST(PerfSqlite, sqlite) {
-  EXPECT_TRUE(CreateDir(gTestPerfDir));
-  Sqlite sql(gTestPerfFile);
-  EXPECT_TRUE(sql.Connect());
-  EXPECT_TRUE(sql.Close());
-  EXPECT_TRUE(sql.Execution(""));
-  EXPECT_TRUE(sql.CreateTable("", "", {""}));
-  EXPECT_TRUE(sql.Insert("", "", ""));
-  EXPECT_TRUE(sql.Update("", "", "", "", ""));
-  EXPECT_TRUE(sql.Delete("", "", ""));
-  EXPECT_TRUE(sql.Select("", "", "", Callback, nullptr));
-  EXPECT_TRUE(sql.Select("", Callback, nullptr));
-  EXPECT_EQ(sql.FindMin("", ""), (unsigned)0);
-  EXPECT_EQ(sql.FindMax("", ""), (unsigned)0);
-  EXPECT_EQ(sql.Count("", "", ""), (unsigned)0);
-  sql.Begin();
-  sql.Commit();
-  EXPECT_TRUE(sql.SetDbName(""));
-  EXPECT_STREQ(sql.GetDbName().c_str(), "");
-}
-
-#endif
 
 }  // namespace cnstream

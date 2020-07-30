@@ -112,7 +112,6 @@ After finished prerequisites, you can build instructions with the following step
    | build_rtsp_sink      | ON / OFF                                 | ON      | build rtsp_sink module      |
    | build_source         | ON / OFF                                 | ON      | build source module         |
    | build_track          | ON / OFF                                 | ON      | build track module          |
-   | build_perf           | ON / OFF                                 | ON      | build performance statistics|
    | build_modules_contrib| ON / OFF                                 | ON      | build contributed modules   |
    | build_tests          | ON / OFF                                 | ON      | build tests                 |
    | build_samples        | ON / OFF                                 | ON      | build samples               |
@@ -172,8 +171,6 @@ This demo shows how to detect objects using CNStream. It includes the following 
 - **displayer**: Displays inference results on the screen.
 
 In the run.sh script, ``detection_config.json`` is set as the configuration file. In this configuration file, resnet34_ssd.cambricon is the offline model used for inference, which means, the data will be fed to an SSD model after decoding. And the results will be shown on the screen.
-
-If we build with build_perf on, the performance statistics of each plug-in module and the pipeline will be printed on the terminal.
 
 In addition, see the comments in ``cnstream/samples/demo/run.sh`` for details.
 

@@ -18,8 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef MODULES_OSD_H_
-#define MODULES_OSD_H_
+#ifndef MODULES_OSD_HPP_
+#define MODULES_OSD_HPP_
 /**
  *  @file osd.hpp
  *
@@ -30,15 +30,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#ifdef HAVE_FREETYPE
-#include <ctype.h>
-#include <ft2build.h>
-#include <locale.h>
-#include <wchar.h>
-#include <cmath>
-#include FT_FREETYPE_H
-#endif
 
 #ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
@@ -52,83 +43,7 @@
 
 namespace cnstream {
 
-// Pointer for frame info
-using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
-
-struct OsdContext;
-
-/**
- * @brief Show chinese label in the image
- */
-class CnFont {
-#ifdef HAVE_FREETYPE
-
- public:
-  /**
-   * @brief Initialize the display font
-   * @param
-   *   font_path: the font of path
-   */
-  explicit CnFont(const char* font_path);
-  /**
-   * @brief Release font resource
-   */
-  ~CnFont();
-  /**
-   * @brief Configure font Settings
-   */
-  void restoreFont();
-  /**
-   * @brief Displays the string on the image
-   * @param
-   *   img: source image
-   *   text: the show of message
-   *   pos: the show of position
-   *   color: the color of font
-   * @return Size of the string
-   */
-  int putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color);  // NOLINT
-
- private:
-  /**
-   * @brief Converts character to wide character
-   * @param
-   *   src: The original string
-   *   dst: The Destination wide string
-   *   locale: Coded form
-   * @return
-   *   -1: Conversion failure
-   *    0: Conversion success
-   */
-  int ToWchar(char*& src, wchar_t*& dest, const char* locale = "C.UTF-8");  // NOLINT
-
-  /**
-   * @brief Print single wide character in the image
-   * @param
-   *   img: source image
-   *   wc: single wide character
-   *   pos: the show of position
-   *   color: the color of font
-   */
-  void putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color);  // NOLINT
-  CnFont& operator=(const CnFont&);
-
-  FT_Library m_library;
-  FT_Face m_face;
-
-  // Default font output parameters
-  int m_fontType;
-  cv::Scalar m_fontSize;
-  bool m_fontUnderline;
-  float m_fontDiaphaneity;
-#else
-
- public:
-  explicit CnFont(const char* font_path) {}
-  ~CnFont() {}
-  int putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) { return 0; };  // NOLINT
-#endif
-};
+class CnOsd;
 
 /**
  * @brief Draw objects on image,output is bgr24 images
@@ -194,18 +109,20 @@ class Osd : public Module, public ModuleCreator<Osd> {
   bool CheckParamSet(const ModuleParamSet& paramSet) const override;
 
  private:
-  OsdContext* GetOsdContext(CNFrameInfoPtr data);
-  std::unordered_map<std::string, OsdContext*> osd_ctxs_;
-  std::mutex mutex_;
+  std::shared_ptr<CnOsd> GetOsdContext();
+  std::unordered_map<std::string, std::shared_ptr<CnOsd>> osd_ctxs_;
+  RwLock ctx_lock_;
   std::vector<std::string> labels_;
   std::vector<std::string> secondary_labels_;
   std::vector<std::string> attr_keys_;
   bool chinese_label_flag_ = false;
   std::string logo_ = "";
-  float text_scale_coef_ = 0.002;
-  float text_thickness_coef_ = 0.008;
-};  // class osd
+  float text_scale_ = 1;
+  float text_thickness_ = 1;
+  float box_thickness_ = 1;
+  float label_size_ = 1;
+};  // class Osd
 
 }  // namespace cnstream
 
-#endif  // MODULES_OSD_H_
+#endif  // MODULES_OSD_HPP_

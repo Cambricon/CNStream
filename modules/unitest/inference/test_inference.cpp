@@ -182,11 +182,11 @@ TEST(Inferencer, Open) {
   EXPECT_TRUE(infer->Open(param));
   param["stats_db_name"] = gTestPerfDir + "test_infer.db";
   EXPECT_TRUE(infer->Open(param));
-#ifdef HAVE_SQLITE
+
   std::shared_ptr<Module> infer_fail = std::make_shared<Inferencer>(name);
   EXPECT_FALSE(infer_fail->Open(param));
   infer_fail->Close();
-#endif
+
   infer->Close();
 }
 
