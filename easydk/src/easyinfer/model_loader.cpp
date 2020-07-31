@@ -355,7 +355,7 @@ void ModelLoader::SetCpuOutputLayout(DataLayout layout, int data_index) {
   d_ptr_->o_cpu_layouts_[data_index] = layout;
 
   VLOG(4) << "Set CPU output data layout";
-  VLOG(4) << DataTypeStr(layout.dtype) <<"\t" << DimOrderStr(layout.order);
+  VLOG(4) << DataTypeStr(layout.dtype) << "\t" << DimOrderStr(layout.order);
 }
 
 DataLayout ModelLoader::GetCpuInputLayout(int data_index) const {
@@ -378,7 +378,7 @@ bool ModelLoader::AdjustStackMemory() {
 
   error_code = cnrtGetStackMem(&current_device_size);
   CHECK_CNRT_RET(error_code, "Get current device stack size failed. error_code : " + std::to_string(error_code));
-  VLOG(3) << "Current MLU stack size is " << current_device_size <<" MB";
+  VLOG(3) << "Current MLU stack size is " << current_device_size << " MB";
 
   if (stack_size > current_device_size) {
     error_code = cnrtSetStackMem(stack_size + 50);

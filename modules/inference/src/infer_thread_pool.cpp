@@ -20,7 +20,7 @@
 
 #include "infer_thread_pool.hpp"
 
-#include <easyinfer/mlu_context.h>
+#include <device/mlu_context.h>
 #include <glog/logging.h>
 #include <cassert>
 #include <string>

@@ -22,18 +22,18 @@
 #include <memory>
 
 #include "easyinfer/easy_infer.h"
-#include "easyinfer/mlu_task_queue.h"
+#include "internal/mlu_task_queue.h"
 #include "model_loader_internal.h"
 
 namespace edk {
 
-#define CALL_CNRT_FUNC(func, msg)                                               \
-  do {                                                                          \
-    int ret = (func);                                                           \
-    if (0 != ret) {                                                             \
-      LOG(ERROR) << (msg) << " error code: " << ret;                            \
-      throw EasyInferError(msg " error code : " + std::to_string(ret));         \
-    }                                                                           \
+#define CALL_CNRT_FUNC(func, msg)                                       \
+  do {                                                                  \
+    int ret = (func);                                                   \
+    if (0 != ret) {                                                     \
+      LOG(ERROR) << (msg) << " error code: " << ret;                    \
+      throw EasyInferError(msg " error code : " + std::to_string(ret)); \
+    }                                                                   \
   } while (0)
 
 class EasyInferPrivate {
@@ -142,13 +142,5 @@ std::shared_ptr<ModelLoader> EasyInfer::Loader() const { return d_ptr_->ploader_
 int EasyInfer::BatchSize() const { return d_ptr_->batch_size_; }
 
 MluTaskQueue_t EasyInfer::GetMluQueue() const { return d_ptr_->queue_; }
-
-MluTaskQueue::~MluTaskQueue() {
-  if (queue) {
-    LOG(INFO) << "Destroy MLU task queue";
-    cnrtRet_t ret = cnrtDestroyQueue(queue);
-    if (ret != CNRT_RET_SUCCESS) LOG(ERROR) << "Destroy cnrtQueue failed";
-  }
-}
 
 }  // namespace edk

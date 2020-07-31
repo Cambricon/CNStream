@@ -28,9 +28,9 @@
 #define EASYBANG_RESIZE_COMMON_H_
 
 #include <string>
+#include "device/mlu_context.h"
 #include "cxxutil/exception.h"
 #include "easyinfer/easy_infer.h"
-#include "easyinfer/mlu_context.h"
 #include "cnrt.h"
 #include "cnml.h"
 

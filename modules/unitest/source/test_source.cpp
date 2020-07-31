@@ -32,7 +32,7 @@
 #include "data_handler_mem.hpp"
 #include "data_handler_rtsp.hpp"
 #include "data_source.hpp"
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 #include "test_base.hpp"
 
 namespace cnstream {

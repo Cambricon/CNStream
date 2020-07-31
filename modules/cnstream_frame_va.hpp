@@ -295,10 +295,7 @@ typedef struct {
 /**
  * The feature value for one object.
  */
-struct CNInferFeature {
-  std::shared_ptr<float> data;
-  size_t size;
-};
+using CNInferFeature = std::vector<float>;
 
 /**
  * A structure holding the information for an object.

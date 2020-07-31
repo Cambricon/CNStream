@@ -45,4 +45,3 @@ cncodecColorSpace ColorStdCast(ColorStd color_std);
 }  // namespace edk
 
 #endif  // FORMAT_INFO_H_
-

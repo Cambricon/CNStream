@@ -24,9 +24,9 @@
 #include <string>
 #include <utility>
 
-#include "easyinfer/mlu_task_queue.h"
+#include "device/mlu_context.h"
 #include "easybang/resize_and_colorcvt.h"
-#include "easyinfer/mlu_context.h"
+#include "internal/mlu_task_queue.h"
 
 using std::string;
 extern
@@ -171,9 +171,7 @@ bool MluResizeConvertOp::Init(const MluResizeConvertOp::Attr& attr) {
 }
 
 bool MluResizeConvertPrivate::PrepareTaskQueue() {
-  queue_.reset(new MluTaskQueue);
-  cnrtRet_t ret = cnrtCreateQueue(&queue_->queue);
-  CHECK_CNRT_RET(ret, estr_, "Create cnrt queue failed. Error code:" + std::to_string(ret), {}, false);
+  queue_ = CreateTaskQueue();
   shared_queue_ = false;
   return true;
 }
@@ -358,14 +356,6 @@ void MluResizeConvertOp::Destroy() {
     d_ptr_->src_rois_cpu_ = nullptr;
   }
   d_ptr_->input_datas_cache_.clear();
-
-  if (!d_ptr_->shared_queue_ && d_ptr_->queue_ && d_ptr_->queue_->queue) {
-    auto ret = cnrtDestroyQueue(d_ptr_->queue_->queue);
-    if (ret != CNRT_RET_SUCCESS) {
-      LOG(WARNING) << "Destroy queue failed. Error code: " << ret;
-    }
-    d_ptr_->queue_->queue = nullptr;
-  }
 }
 
 }  // namespace edk

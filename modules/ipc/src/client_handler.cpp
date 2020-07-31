@@ -24,7 +24,7 @@
 
 #include "client_handler.hpp"
 #include "cnstream_frame.hpp"
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 #include "module_ipc.hpp"
 
 namespace cnstream {

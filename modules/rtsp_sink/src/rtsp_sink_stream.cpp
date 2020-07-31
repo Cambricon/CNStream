@@ -23,7 +23,7 @@
 #include <glog/logging.h>
 #include <memory>
 
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 
 #include "rtsp_sink.hpp"
 #include "rtsp_stream_pipe.hpp"

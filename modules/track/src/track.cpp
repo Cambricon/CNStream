@@ -23,7 +23,7 @@
 #include <vector>
 
 #include "cnstream_frame_va.hpp"
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 #include "feature_extractor.hpp"
 #include "track.hpp"
 
