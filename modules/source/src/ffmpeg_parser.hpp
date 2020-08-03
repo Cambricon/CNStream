@@ -103,7 +103,7 @@ class ParserHelper {
   ParserHelper() : status_(STATUS_NONE) {}
 
   int Init(std::string fmt) {
-    std::unique_lock<std::mutex> lk(mutex_);
+    std::unique_lock<std::mutex> lk(mutex_status_);
     if (status_ == STATUS_NONE) {
       if (parser_.Open(fmt) < 0) {
         return -1;
@@ -114,22 +114,22 @@ class ParserHelper {
   }
 
   int Parse(unsigned char *bitstream, int size) {
-    std::unique_lock<std::mutex> lk(mutex_);
+    std::unique_lock<std::mutex> lk(mutex_status_);
     if (status_ == STATUS_INIT) {
-      if (parser_.Parse(bitstream, size) < 0) {
+      int ret = parser_.Parse(bitstream, size);
+      if (ret < 0) {
         return -1;
-      }
-      usleep(1000 * 30);  // FIXME
-      VideoStreamInfo info;
-      if (GetInfo(info) == true) {
+      } else if (1 == ret) {
         status_ = STATUS_DONE;
+      } else {
+        usleep(1000 * 30);
       }
     }
     return 0;
   }
 
   void Free() {
-    std::unique_lock<std::mutex> lk(mutex_);
+    std::unique_lock<std::mutex> lk(mutex_status_);
     if (status_ != STATUS_NONE && status_ != STATUS_END) {
       parser_.Close();
       status_ = STATUS_END;
@@ -137,6 +137,7 @@ class ParserHelper {
   }
 
   bool GetInfo(VideoStreamInfo &info) {  // NOLINT
+    std::unique_lock<std::mutex> lk(mutex_getinfo_);
     return parser_.GetInfo(info);
   }
 
@@ -149,7 +150,8 @@ class ParserHelper {
     STATUS_DONE,
     STATUS_END
   } status_;
-  std::mutex mutex_;
+  std::mutex mutex_status_;
+  std::mutex mutex_getinfo_;
   StreamParser parser_;
 };  // class ParserHelper
 
