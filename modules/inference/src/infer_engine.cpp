@@ -20,7 +20,7 @@
 
 #include "infer_engine.hpp"
 #include <cxxutil/exception.h>
-#include <easyinfer/mlu_context.h>
+#include <device/mlu_context.h>
 #include <easyinfer/model_loader.h>
 #include <memory>
 #include <mutex>

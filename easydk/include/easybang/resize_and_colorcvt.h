@@ -28,10 +28,10 @@
 #define EASYBANG_RESIZE_AND_CONVERT_H_
 
 #include <string>
+#include "device/mlu_context.h"
 #include "cxxutil/edk_attribute.h"
 #include "cxxutil/exception.h"
 #include "easyinfer/easy_infer.h"
-#include "easyinfer/mlu_context.h"
 
 struct KernelParam;
 
@@ -78,7 +78,7 @@ class MluResizeConvertOp {
     FP16ToUINT8 = 1,  ///< Transform data type from float16 to uint8
     UINT8ToFP16 = 2,  ///< Transform data type from uint8 to float16
     UINT8ToUINT8 = 3  ///< Transform data type from uint8 to uint8
-  };                 // enum DataMode
+  };                  // enum DataMode
 
   /**
    * @brief Params to initialize resize and color convert operator
@@ -164,8 +164,7 @@ class MluResizeConvertOp {
    * @param src_uv[in] Operator input uv plane in MLU memory
    * @return Return 0 if invoke succeeded, otherwise return -1
    */
-  attribute_deprecated
-  int InvokeOp(void* dst, void* src_y, void* src_uv);
+  attribute_deprecated int InvokeOp(void* dst, void* src_y, void* src_uv);
 
   /**
    * @brief Deinitialize resources
@@ -188,8 +187,7 @@ class MluResizeConvertOp {
    *
    * @attention image size set when Init called. support YUV420SP NV21/NV12
    */
-  attribute_deprecated
-  void BatchingUp(void* src_y, void* src_uv);
+  attribute_deprecated void BatchingUp(void* src_y, void* src_uv);
 
   /**
    * @brief Batching up one yuv image

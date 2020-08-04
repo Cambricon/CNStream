@@ -39,7 +39,7 @@ extern "C" {
 #include <thread>
 
 #include "data_source.hpp"
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 #include "ffmpeg_decoder.hpp"
 #include "glog/logging.h"
 #include "perf_manager.hpp"

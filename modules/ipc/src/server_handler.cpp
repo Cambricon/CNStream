@@ -22,7 +22,7 @@
 #include <string>
 
 #include "cnstream_frame.hpp"
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 #include "module_ipc.hpp"
 #include "perf_manager.hpp"
 #include "server_handler.hpp"

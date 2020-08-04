@@ -25,9 +25,9 @@
 
 #include "cnencoder.hpp"
 #include "cnstream_frame_va.hpp"
+#include "device/mlu_context.h"
 #include "easycodec/easy_encode.h"
 #include "easycodec/vformat.h"
-#include "easyinfer/mlu_context.h"
 
 namespace cnstream {
 

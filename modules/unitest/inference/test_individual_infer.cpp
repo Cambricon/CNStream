@@ -35,7 +35,7 @@
 #else
 #error OpenCV required
 #endif
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 #include "easyinfer/mlu_memory_op.h"
 #include "easyinfer/model_loader.h"
 

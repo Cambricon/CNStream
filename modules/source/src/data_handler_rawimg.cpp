@@ -30,7 +30,7 @@
 #include <utility>
 
 #include "cnstream_frame_va.hpp"
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 #include "perf_manager.hpp"
 
 #define STRIDE_ALIGN_FOR_SCALER_NV12 128

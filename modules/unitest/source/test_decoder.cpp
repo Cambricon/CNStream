@@ -31,7 +31,7 @@
 #include "data_handler_file.hpp"
 #include "data_handler_mem.hpp"
 #include "data_source.hpp"
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 #include "ffmpeg_decoder.hpp"
 #include "test_base.hpp"
 

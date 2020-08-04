@@ -24,9 +24,10 @@
  * This file contains a declaration of the MluContext class.
  */
 
-#ifndef EASYINFER_MLU_CONTEXT_H_
-#define EASYINFER_MLU_CONTEXT_H_
+#ifndef EDK_MLU_CONTEXT_H_
+#define EDK_MLU_CONTEXT_H_
 
+#include <memory>
 #include "cxxutil/exception.h"
 
 namespace edk {
@@ -38,6 +39,10 @@ enum class CoreVersion {
   MLU220,
   MLU270,
 };
+
+struct MluTaskQueue;
+using MluTaskQueue_t = std::shared_ptr<MluTaskQueue>;
+MluTaskQueue_t CreateTaskQueue();
 
 /**
  * @brief MLU environment helper class
@@ -56,7 +61,7 @@ class MluContext {
    *
    * @param id[in] Device id
    */
-  inline void SetDeviceId(int id) { dev_id_ = id; };
+  inline void SetDeviceId(int id) { dev_id_ = id; }
 
   /**
    * @brief Check whether device exists
@@ -78,7 +83,7 @@ class MluContext {
    *
    * @param id[in] MLU channel id
    */
-  inline void SetChannelId(int id) { channel_id_ = id; };
+  inline void SetChannelId(int id) { channel_id_ = id; }
 
   /**
    * @brief Bind MLU environment for this thread
@@ -86,9 +91,7 @@ class MluContext {
    */
   void ConfigureForThisThread();
 
-  inline CoreVersion GetCoreVersion() const {
-    return version_;
-  }
+  inline CoreVersion GetCoreVersion() const { return version_; }
 
  private:
   int dev_id_ = 0;
@@ -98,4 +101,4 @@ class MluContext {
 
 }  // namespace edk
 
-#endif  // EASYINFER_MLU_CONTEXT_H_
+#endif  // EDK_MLU_CONTEXT_H_

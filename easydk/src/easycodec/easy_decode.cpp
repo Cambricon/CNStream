@@ -18,7 +18,6 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-
 #include <cn_codec_common.h>
 #include <cn_jpeg_dec.h>
 #include <cn_video_dec.h>
@@ -36,23 +35,22 @@
 #include <utility>
 
 #include "easycodec/easy_decode.h"
-#include "easyinfer/mlu_context.h"
 #include "format_info.h"
 
+using std::mutex;
 using std::string;
 using std::to_string;
-using std::mutex;
 using std::unique_lock;
 
 #define ALIGN(size, alignment) (((u32_t)(size) + (alignment)-1) & ~((alignment)-1))
 
-#define CALL_CNRT_FUNC(func, msg)                                             \
-  do {                                                                        \
-    int ret = (func);                                                         \
-    if (0 != ret) {                                                           \
-      LOG(ERROR) << msg << " error code: " << ret;                            \
-      throw EasyDecodeError(msg " error code : " + std::to_string(ret));      \
-    }                                                                         \
+#define CALL_CNRT_FUNC(func, msg)                                        \
+  do {                                                                   \
+    int ret = (func);                                                    \
+    if (0 != ret) {                                                      \
+      LOG(ERROR) << msg << " error code: " << ret;                       \
+      throw EasyDecodeError(msg " error code : " + std::to_string(ret)); \
+    }                                                                    \
   } while (0)
 
 // cncodec add version macro since v1.6.0
@@ -104,16 +102,16 @@ class DecodeHandler {
   ~DecodeHandler();
   std::pair<bool, std::string> Init(const EasyDecode::Attr& attr);
 
-  bool SendJpegData(const CnPacket &packet, bool eos);
-  bool SendVideoData(const CnPacket &packet, bool eos, bool integral_frame);
+  bool SendJpegData(const CnPacket& packet, bool eos);
+  bool SendVideoData(const CnPacket& packet, bool eos, bool integral_frame);
 
   void AbortDecoder();
 
 #ifdef ALLOC_BUFFER
-  void AllocInputBuffer(cnvideoDecCreateInfo *params);
-  void AllocOutputBuffer(cnvideoDecCreateInfo *params);
-  void FreeInputBuffer(const cnvideoDecCreateInfo &params);
-  void FreeOutputBuffer(const cnvideoDecCreateInfo &params);
+  void AllocInputBuffer(cnvideoDecCreateInfo* params);
+  void AllocOutputBuffer(cnvideoDecCreateInfo* params);
+  void FreeInputBuffer(const cnvideoDecCreateInfo& params);
+  void FreeOutputBuffer(const cnvideoDecCreateInfo& params);
 #endif
 
   void ReceiveEvent(cncodecCbEventType type);
@@ -154,9 +152,9 @@ class DecodeHandler {
   bool send_eos_ = false;
   bool got_eos_ = false;
   bool jpeg_decode_ = false;
-};      // class DecodeHandler
+};  // class DecodeHandler
 
-static i32_t EventHandler(cncodecCbEventType type, void *user_data, void *package) {
+static i32_t EventHandler(cncodecCbEventType type, void* user_data, void* package) {
   auto handler = reinterpret_cast<DecodeHandler*>(user_data);
   // [ACQUIRED BY CNCODEC]
   // NEW_FRAME and SEQUENCE event must handled in callback thread,
@@ -177,8 +175,7 @@ static i32_t EventHandler(cncodecCbEventType type, void *user_data, void *packag
   return 0;
 }
 
-DecodeHandler::DecodeHandler(EasyDecode* decoder)
-  :decoder_(decoder) {
+DecodeHandler::DecodeHandler(EasyDecode* decoder) : decoder_(decoder) {
   event_loop_ = std::thread(&DecodeHandler::EventTaskRunner, this);
 }
 
@@ -261,8 +258,7 @@ void DecodeHandler::ReceiveEvent(cncodecCbEventType type) {
 void DecodeHandler::EventTaskRunner() {
   unique_lock<std::mutex> lock(event_mtx_);
   while (!event_queue_.empty() || !got_eos_) {
-    event_cond_.wait(lock, [this] {
-        return !event_queue_.empty() || got_eos_; });
+    event_cond_.wait(lock, [this] { return !event_queue_.empty() || got_eos_; });
 
     if (event_queue_.empty()) {
       // notified by eos
@@ -362,32 +358,33 @@ std::pair<bool, std::string> DecodeHandler::Init(const EasyDecode::Attr& attr) {
       LOG(INFO) << "VPU Turbo mode : " << turbo_env_p;
       std::unique_lock<std::mutex> lk(g_vpu_instance_mutex);
       static int _vpu_inst_cnt = 0;
-      static cnvideoDecInstance _instances[] = {  // 100 channels:20+14+15+15+14+22
-        CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
-        CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
-        CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
-        CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
-        CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
-        CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
-        CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
-        CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
-        CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
-        CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
-        CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
-        CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
-        CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
-        CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
-        CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
-        CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
-        CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
-        CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
-        CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
-        CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
-        CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0,
-        CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0,
-        CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0,
-        CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_3,
-        CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_2};
+      static cnvideoDecInstance _instances[] = {
+          // 100 channels:20+14+15+15+14+22
+          CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
+          CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
+          CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
+          CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
+          CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
+          CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
+          CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
+          CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
+          CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
+          CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
+          CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
+          CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
+          CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
+          CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
+          CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
+          CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
+          CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
+          CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5,
+          CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_3,
+          CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_1,
+          CNVIDEODEC_INSTANCE_3, CNVIDEODEC_INSTANCE_4, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0,
+          CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0,
+          CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0,
+          CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_0, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_3,
+          CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_5, CNVIDEODEC_INSTANCE_2, CNVIDEODEC_INSTANCE_2};
       vparams_.instance = _instances[_vpu_inst_cnt++ % 100];
     } else {
       vparams_.instance = CNVIDEODEC_INSTANCE_AUTO;
@@ -443,7 +440,7 @@ void DecodeHandler::ReceiveFrame(void* out) {
 
   // 2. config CnFrame for user callback.
   CnFrame finfo;
-  cncodecFrame *frame = nullptr;
+  cncodecFrame* frame = nullptr;
   if (jpeg_decode_) {
     auto o = reinterpret_cast<cnjpegDecOutput*>(out);
     finfo.pts = o->pts;
@@ -474,8 +471,8 @@ void DecodeHandler::ReceiveFrame(void* out) {
   finfo.pformat = attr_.pixel_format;
   finfo.color_std = attr_.color_std;
 
-  VLOG(5) << "Frame: width " << finfo.width << " height " << finfo.height << " planes "
-             << finfo.n_planes << " frame size " << finfo.frame_size;
+  VLOG(5) << "Frame: width " << finfo.width << " height " << finfo.height << " planes " << finfo.n_planes
+          << " frame size " << finfo.frame_size;
 
   if (NULL != attr_.frame_callback) {
     VLOG(4) << "Add decode buffer Reference " << finfo.buf_id;
@@ -503,7 +500,7 @@ int DecodeHandler::ReceiveSequence(cnvideoDecSequenceInfo* info) {
     if (attr_.buf_strategy == BufferStrategy::EDK) {
       // release output buffer
       FreeInputBuffer(vparams_);
-      delete []vparams_.inputBuf;
+      delete[] vparams_.inputBuf;
       vparams_.inputBuf = new cncodecDevMemory[info->minInputBufNum];
       AllocInputBuffer(&vparams_);
     }
@@ -514,7 +511,7 @@ int DecodeHandler::ReceiveSequence(cnvideoDecSequenceInfo* info) {
 #ifdef ALLOC_BUFFER
     if (attr_.buf_strategy == BufferStrategy::EDK) {
       FreeOutputBuffer(vparams_);
-      delete []vparams_.outputBuf;
+      delete[] vparams_.outputBuf;
       vparams_.outputBuf = new cncodecFrame[info->minOutputBufNum];
       AllocOutputBuffer(&vparams_);
     }
@@ -546,7 +543,7 @@ void DecodeHandler::ReceiveEOS() {
   eos_cond_.notify_one();
 }
 
-bool DecodeHandler::SendJpegData(const CnPacket &packet, bool eos) {
+bool DecodeHandler::SendJpegData(const CnPacket& packet, bool eos) {
   cnjpegDecInput input;
   if (packet.data != NULL && packet.length > 0) {
     memset(&input, 0, sizeof(cnjpegDecInput));
@@ -554,8 +551,8 @@ bool DecodeHandler::SendJpegData(const CnPacket &packet, bool eos) {
     input.streamLength = packet.length;
     input.pts = packet.pts;
     input.flags = CNJPEGDEC_FLAG_TIMESTAMP;
-    VLOG(5) << "Feed stream info, data: " << input.streamBuffer << " ,length: "
-               << input.streamLength << " ,pts: " << input.pts;
+    VLOG(5) << "Feed stream info, data: " << input.streamBuffer << " ,length: " << input.streamLength
+            << " ,pts: " << input.pts;
 
     auto ecode = cnjpegDecFeedData(handle_, &input, 10000);
     if (-CNCODEC_TIMEOUT == ecode) {
@@ -589,7 +586,7 @@ bool DecodeHandler::SendJpegData(const CnPacket &packet, bool eos) {
   return true;
 }
 
-bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos, bool integral_frame) {
+bool DecodeHandler::SendVideoData(const CnPacket& packet, bool eos, bool integral_frame) {
   cnvideoDecInput input;
   if (packet.data != NULL && packet.length > 0) {
     memset(&input, 0, sizeof(cnvideoDecInput));
@@ -602,8 +599,8 @@ bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos, bool integra
       input.flags |= CNVIDEODEC_FLAG_END_OF_FRAME;
     }
 #endif
-    VLOG(5) << "Feed stream info, data: " << input.streamBuf << " ,length: "
-               << input.streamLength << " ,pts: " << input.pts;
+    VLOG(5) << "Feed stream info, data: " << input.streamBuf << " ,length: " << input.streamLength
+            << " ,pts: " << input.pts;
 
     auto ecode = cnvideoDecFeedData(handle_, &input, 10000);
     if (-CNCODEC_TIMEOUT == ecode) {
@@ -638,7 +635,7 @@ bool DecodeHandler::SendVideoData(const CnPacket &packet, bool eos, bool integra
 }
 
 #ifdef ALLOC_BUFFER
-void DecodeHandler::AllocInputBuffer(cnvideoDecCreateInfo *params) {
+void DecodeHandler::AllocInputBuffer(cnvideoDecCreateInfo* params) {
   LOG(INFO) << "Alloc Input Buffer";
   for (unsigned int i = 0; i < params->inputBufNum; i++) {
     CALL_CNRT_FUNC(cnrtMalloc(reinterpret_cast<void**>(&params->inputBuf[i].addr), g_decode_input_buffer_size),
@@ -647,7 +644,7 @@ void DecodeHandler::AllocInputBuffer(cnvideoDecCreateInfo *params) {
   }
 }
 
-void DecodeHandler::AllocOutputBuffer(cnvideoDecCreateInfo *params) {
+void DecodeHandler::AllocOutputBuffer(cnvideoDecCreateInfo* params) {
   LOG(INFO) << "Alloc Output Buffer";
   uint64_t size = 0;
   const unsigned int width = params->width;
@@ -666,7 +663,7 @@ void DecodeHandler::AllocOutputBuffer(cnvideoDecCreateInfo *params) {
         params->outputBuf[i].stride[j] = stride;
       }
       CALL_CNRT_FUNC(cnrtMalloc(reinterpret_cast<void**>(&params->outputBuf[i].plane[j].addr), size),
-          "Malloc decode output buffer failed");
+                     "Malloc decode output buffer failed");
       params->outputBuf[i].plane[j].size = size;
     }
 
@@ -678,19 +675,19 @@ void DecodeHandler::AllocOutputBuffer(cnvideoDecCreateInfo *params) {
   }
 }
 
-void DecodeHandler::FreeInputBuffer(const cnvideoDecCreateInfo &params) {
+void DecodeHandler::FreeInputBuffer(const cnvideoDecCreateInfo& params) {
   LOG(INFO) << "Free Input Buffer";
   for (unsigned int i = 0; i < params.inputBufNum; ++i) {
     CALL_CNRT_FUNC(cnrtFree(reinterpret_cast<void*>(params.inputBuf[i].addr)), "Free decode input buffer failed");
   }
 }
 
-void DecodeHandler::FreeOutputBuffer(const cnvideoDecCreateInfo &params) {
+void DecodeHandler::FreeOutputBuffer(const cnvideoDecCreateInfo& params) {
   LOG(INFO) << "Free Output Buffer";
   for (unsigned int i = 0; i < params.outputBufNum; ++i) {
     for (unsigned int j = 0; j < params.outputBuf[i].planeNum; ++j) {
       CALL_CNRT_FUNC(cnrtFree(reinterpret_cast<void*>(params.outputBuf[i].plane[j].addr)),
-          "Free decode output buffer failed");
+                     "Free decode output buffer failed");
     }
   }
 }
@@ -745,9 +742,7 @@ bool EasyDecode::Resume() {
   return false;
 }
 
-void EasyDecode::AbortDecoder() {
-  handler_->AbortDecoder();
-}
+void EasyDecode::AbortDecoder() { handler_->AbortDecoder(); }
 
 EasyDecode::Status EasyDecode::GetStatus() const {
   unique_lock<mutex> lock(handler_->status_mtx_);
@@ -858,4 +853,3 @@ EasyDecode::Attr EasyDecode::GetAttr() const { return handler_->attr_; }
 int EasyDecode::GetMinimumOutputBufferCount() const { return handler_->minimum_buf_cnt_; }
 
 }  // namespace edk
-
