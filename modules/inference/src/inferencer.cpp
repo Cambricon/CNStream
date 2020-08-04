@@ -18,7 +18,7 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <easyinfer/mlu_context.h>
+#include <device/mlu_context.h>
 #include <easyinfer/model_loader.h>
 
 #include <map>

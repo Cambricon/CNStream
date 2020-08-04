@@ -41,7 +41,7 @@ namespace edk {
 
 #define ONLY_SUPPORT_FLOAT32_ON_CPU                        \
   do {                                                     \
-    int num = ploader_->InputNum();                       \
+    int num = ploader_->InputNum();                        \
     for (int i = 0; i < num; ++i) {                        \
       DataLayout layout = ploader_->GetCpuInputLayout(i);  \
       if (layout.dtype != DataType::FLOAT32) {             \
@@ -50,7 +50,7 @@ namespace edk {
             " layout with data type FLOAT32");             \
       }                                                    \
     }                                                      \
-    num = ploader_->OutputNum();                          \
+    num = ploader_->OutputNum();                           \
     for (int i = 0; i < num; ++i) {                        \
       DataLayout layout = ploader_->GetCpuOutputLayout(i); \
       if (layout.dtype != DataType::FLOAT32) {             \
@@ -144,7 +144,7 @@ void **MluMemoryOp::AllocCpuInput(uint32_t batch_size) const {
   void **ret = new void *[num];
   for (uint32_t i = 0; i < num; ++i) {
     uint64_t data_size = shapes[i].DataCount() * batch_size;
-    VLOG(4) << "Alloc CPU input memory (" << i <<") on CPU in " << data_size << " bytes";
+    VLOG(4) << "Alloc CPU input memory (" << i << ") on CPU in " << data_size << " bytes";
     ret[i] = reinterpret_cast<void *>(new float[data_size]);
   }
   return ret;
@@ -161,7 +161,8 @@ void **MluMemoryOp::AllocCpuOutput(uint32_t batch_size) const {
   void **ret = new void *[num];
   for (uint32_t i = 0; i < num; ++i) {
     uint64_t data_size = shapes[i].DataCount() * batch_size;
-    VLOG(4) << "Alloc output memory (" << i << ")" << "on CPU in " << data_size;
+    VLOG(4) << "Alloc output memory (" << i << ")"
+            << "on CPU in " << data_size;
     ret[i] = reinterpret_cast<void *>(new float[data_size]);
   }
   return ret;
@@ -309,16 +310,16 @@ void MluMemoryOp::MemcpyOutputD2H(void **cpu_dst, void **mlu_src, uint32_t batch
 
 void MluMemoryOp::MemcpyH2D(void *mlu_dst, void *cpu_src, size_t nBytes, uint32_t batch_size) const {
   cnrtRet_t error_code;
-  VLOG(5) << "copy memory from host to device in size " \
-             << nBytes * batch_size << ", dst: " << mlu_dst << ", src: " << cpu_src;
+  VLOG(5) << "copy memory from host to device in size " << nBytes * batch_size << ", dst: " << mlu_dst
+          << ", src: " << cpu_src;
   error_code = cnrtMemcpy(mlu_dst, cpu_src, nBytes * batch_size, CNRT_MEM_TRANS_DIR_HOST2DEV);
   CHECK_CNRT_RET(error_code, "Memcpy host to device failed.");
 }
 
 void MluMemoryOp::MemcpyD2H(void *cpu_dst, void *mlu_src, size_t nBytes, uint32_t batch_size) const {
   cnrtRet_t error_code;
-  VLOG(5) << "copy memory from device to host in size " \
-             << nBytes * batch_size << ", dst: " << cpu_dst << ", src: " << mlu_src;
+  VLOG(5) << "copy memory from device to host in size " << nBytes * batch_size << ", dst: " << cpu_dst
+          << ", src: " << mlu_src;
   error_code = cnrtMemcpy(cpu_dst, mlu_src, nBytes * batch_size, CNRT_MEM_TRANS_DIR_DEV2HOST);
   CHECK_CNRT_RET(error_code, "Memcpy host to device failed.");
 }

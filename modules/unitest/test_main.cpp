@@ -30,7 +30,7 @@
 #include "sys/stat.h"
 #include "sys/types.h"
 
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 #define PATH_MAX_SIZE 1024
 
 const std::vector<std::array<std::string, 3>> model_info = {

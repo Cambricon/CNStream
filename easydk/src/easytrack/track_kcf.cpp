@@ -29,8 +29,8 @@
 #include <utility>
 #include <vector>
 
+#include "device/mlu_context.h"
 #include "easyinfer/easy_infer.h"
-#include "easyinfer/mlu_context.h"
 #include "easyinfer/mlu_memory_op.h"
 #include "easyinfer/mlu_task_queue.h"
 #include "easytrack/easy_track.h"

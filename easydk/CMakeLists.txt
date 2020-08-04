@@ -5,7 +5,7 @@ option(WITH_CODEC "Build toolkit codec" ON)
 option(WITH_INFER "Build toolkit infer" ON)
 option(WITH_TRACKER "Build toolkit tracker" ON)
 option(WITH_BANG "Build Bang operator" ON)
-option(ENABLE_KCF "Build with KCF track" ON)
+option(ENABLE_KCF "Build with KCF track" OFF)
 option(WITH_CNPLUGIN "Build CNPlugin operator" OFF)
 
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
@@ -39,6 +39,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
 
 # ---[ Sources
 file(GLOB cxxutil_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/cxxutil/*.cpp)
+file(GLOB device_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/device/*.cpp)
 
 if(WITH_INFER)
   message(STATUS "Build with EasyInfer")
@@ -50,7 +51,7 @@ if(WITH_CODEC)
   file(GLOB codec_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/easycodec/*.cpp)
 endif()
 
-if(WITH_TRACKER AND WITH_INFER)
+if(WITH_TRACKER)
   message(STATUS "Build with EasyTrack")
   file(GLOB_RECURSE track_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/easytrack/*.cpp)
   if(ENABLE_KCF)
@@ -58,7 +59,7 @@ if(WITH_TRACKER AND WITH_INFER)
   endif()
 endif()
 
-if(WITH_BANG AND WITH_INFER)
+if(WITH_BANG)
   message(STATUS "Build with EasyBang")
   file(GLOB_RECURSE bang_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/kernel_*.o ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/*.cpp)
 endif()
@@ -68,7 +69,7 @@ if(WITH_CNPLUGIN)
 endif()
 
 message(STATUS "Target : easydk")
-add_library(easydk SHARED ${cxxutil_srcs} ${infer_srcs} ${codec_srcs} ${bang_srcs}
+add_library(easydk SHARED ${cxxutil_srcs} ${device_srcs} ${infer_srcs} ${codec_srcs} ${bang_srcs}
                                     ${track_srcs} ${plugin_srcs})
 
 target_link_libraries(easydk ${CNRT_LIBS} ${CNCODEC_LIBS} ${CNML_LIBS} ${CNPLUGIN_LIBS} ${KCF_LIBS} ${GlogLib})

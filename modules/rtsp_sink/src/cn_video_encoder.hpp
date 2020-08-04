@@ -23,9 +23,9 @@
 
 #include <string>
 
+#include "device/mlu_context.h"
 #include "easycodec/easy_encode.h"
 #include "easycodec/vformat.h"
-#include "easyinfer/mlu_context.h"
 
 #include "rtsp_sink.hpp"
 #include "video_encoder.hpp"

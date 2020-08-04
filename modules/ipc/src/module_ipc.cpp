@@ -24,7 +24,7 @@
 #include <string>
 
 #include "client_handler.hpp"
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 #include "server_handler.hpp"
 
 namespace cnstream {

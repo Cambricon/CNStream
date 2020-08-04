@@ -300,6 +300,9 @@ struct CNInferFeature {
   size_t size;
 };
 
+// TODO(gaoyujia): change CNInferFeature type to vector<float>
+// using CNInferFeature = std::vector<float>;
+
 /**
  * A structure holding the information for an object.
  */

@@ -39,11 +39,11 @@ extern "C" {
 #include <memory>
 #include <string>
 #include <thread>
-#include "data_source.hpp"
-#include "easyinfer/mlu_context.h"
 #include "cnstream_frame_va.hpp"
 #include "cn_video_dec.h"
 #include "cn_jpeg_dec.h"
+#include "data_source.hpp"
+#include "device/mlu_context.h"
 #include "ffmpeg_parser.hpp"
 #include "perf_manager.hpp"
 #include "cnstream_common.hpp"

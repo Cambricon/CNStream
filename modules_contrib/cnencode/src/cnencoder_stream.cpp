@@ -32,9 +32,9 @@
 #include <iostream>
 #include <string>
 #include "cnencoder_stream.hpp"
+#include "device/mlu_context.h"
 #include "easycodec/easy_encode.h"
 #include "easycodec/vformat.h"
-#include "easyinfer/mlu_context.h"
 
 #define SAVE_PACKET 1
 #define IGNORE_HEAD 1

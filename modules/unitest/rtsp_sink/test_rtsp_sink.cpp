@@ -25,7 +25,7 @@
 #include <memory>
 #include <string>
 
-#include "easyinfer/mlu_context.h"
+#include "device/mlu_context.h"
 #include "easyinfer/mlu_memory_op.h"
 
 #include "cnstream_frame_va.hpp"
