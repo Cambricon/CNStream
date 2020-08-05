@@ -963,12 +963,13 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     dst_stride = std::ceil(1.0 * dst_stride / YUV420SP_STRIDE_ALIGN_FOR_SCALER) * YUV420SP_STRIDE_ALIGN_FOR_SCALER;
 
   size_t frame_size = dst_stride * frame->height * 3 / 2;
-  uint8_t *sp_data = new (std::nothrow) uint8_t[frame_size];
+  void *sp_data = nullptr;
+  CNStreamMallocHost(&sp_data, frame_size * sizeof(uint8_t));
   if (!sp_data) {
     LOG(ERROR) << "Malloc failed, size:" << frame_size;
     return false;
   }
-  if (!FrameCvt2Yuv420sp(frame, sp_data, dst_stride, false)) {
+  if (!FrameCvt2Yuv420sp(frame, reinterpret_cast<uint8_t *>(sp_data), dst_stride, false)) {
     LOG(ERROR) << "Yuv420p cvt yuv420sp failed.";
     return false;
   }
@@ -1072,7 +1073,7 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
   dataframe->frame_id = frame_id_++;
   data->timestamp = frame->pts;
   data->datas[CNDataFramePtrKey] = dataframe;
-  if (sp_data) delete[] sp_data;
+  if (sp_data) CNStreamFreeHost(sp_data);
   handler_->SendFrameInfo(data);
   return true;
 }
