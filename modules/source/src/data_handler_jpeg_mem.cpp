@@ -136,7 +136,7 @@ void ESJpegMemHandlerImpl::Close() {
 int ESJpegMemHandlerImpl::Write(ESPacket *pkt) {
   if (pkt && pkt->data && pkt->size && parser_) {
     if (parser_->Parse(pkt->data, pkt->size) < 0) {
-      return -1;
+      return -2;
     }
   }
   std::lock_guard<std::mutex> lk(queue_mutex_);

@@ -19,7 +19,7 @@
     "max_input_queue_size" : 20,
     "custom_params" : {
       "model_path" : "../../../../data/models/MLU220/classification/resnet18/resnet18_bs4_c4.cambricon",
-      "using_scaler" : "true",
+      "use_scaler" : "true",
 //      "preproc_name" : "PreprocCpu",
       "func_name" : "subnet0",
       "postproc_name" : "PostprocClassification",
