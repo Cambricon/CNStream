@@ -5,7 +5,7 @@
     "next_modules" : ["detector"],
     "custom_params" : {
       "reuse_cndec_buf" : "true",
-      "output_type" : "mlu",
+      "output_type" : "cpu",
       "decoder_type" : "mlu",
       "device_id" : 0,
       "output_buf_number" : 8
@@ -15,13 +15,47 @@
   "detector" : {
     "class_name" : "cnstream::Inferencer",
     "parallelism" : 1,
+    "next_modules" : ["osd"],
     "max_input_queue_size" : 20,
     "custom_params" : {
       "model_path" : "../../../../data/models/MLU270/yolov3/yolov3_offline_u4_v1.3.0.cambricon",
       "func_name" : "subnet0",
       "postproc_name" : "PostprocYolov3",
+      "threshold" : 0.5,
       "batching_timeout" : 300,
       "device_id" : 0
     }
+  },
+
+  "osd" : {
+    "class_name" : "cnstream::Osd",
+    "parallelism" : 4,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["rtsp_sink"],
+    "show_perf_info" : true,
+    "custom_params" : {
+      "chinese_label_flag" : "false",
+      "label_path" : "../../../../data/models/MLU270/yolov3/label_map_coco.txt" 
+    }
+  },
+
+  "rtsp_sink" : {
+    "class_name" : "cnstream::RtspSink",
+    "parallelism" : 16,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "http_port" : 8080,
+      "udp_port" : 9554,
+      "frame_rate" :25,
+      "gop_size" : 30,
+      "kbit_rate" : 3000,
+      "view_mode" : "single",
+      "dst_width" : 1920,
+      "dst_height": 1080,
+      "color_mode" : "bgr",
+      "encoder_type" : "ffmpeg",
+      "device_id": 0
+    }
   }
+
 }
