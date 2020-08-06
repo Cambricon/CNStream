@@ -251,12 +251,13 @@ bool ESJpegMemHandlerImpl::Process() {
   }
 
   if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-    LOG(INFO) << "Eos reached";
     ESPacket pkt;
     pkt.data = in->pkt_.data;
     pkt.size = in->pkt_.size;
     pkt.pts = in->pkt_.pts;
     pkt.flags = ESPacket::FLAG_EOS;
+    LOG(INFO) << "Stream id: " << stream_id_ << " Eos reached: data ptr, size, pts: "
+              << (size_t)pkt.data << ", " << (size_t)pkt.size << ", " << (size_t)pkt.pts;
     decoder_->Process(&pkt);
     return false;
   }  // if (!ret)
