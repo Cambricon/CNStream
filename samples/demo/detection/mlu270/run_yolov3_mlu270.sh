@@ -16,7 +16,8 @@ mkdir -p $MODEL_PATH
 
 cd $MODEL_PATH
     if [ ! -f "${MODEL_NAME}" ]; then
-      wget -O ${MODEL_NAME} http://video.cambricon.com/models/MLU270/yolov3/${MODEL_NAME} 
+      wget -c http://video.cambricon.com/models/MLU270/yolov3/${MODEL_NAME}
+      wget -c http://video.cambricon.com/models/MLU270/yolov3/label_map_coco.txt
     else
       echo "${MODEL_NAME} exists."
     fi
