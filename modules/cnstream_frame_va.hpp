@@ -43,6 +43,7 @@
 
 #include "cnstream_common.hpp"
 #include "cnstream_syncmem.hpp"
+#include "util/cnstream_any.hpp"
 #include "util/cnstream_unordered_map.hpp"
 #include "util/cnstream_vector.hpp"
 
@@ -312,6 +313,7 @@ struct CNInferObject {
   std::string track_id;     ///< The tracking result.
   float score;              ///< The label score.
   CNInferBoundingBox bbox;  ///< The object normalized coordinates.
+  ThreadSafeUnorderedMap<int, any> datas;  ///< user-defined structured information.
 
   /**
    * Adds the key of an attribute to a specified object.

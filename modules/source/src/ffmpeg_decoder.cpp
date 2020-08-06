@@ -875,8 +875,8 @@ bool FFmpegCpuDecoder::Process(AVPacket *pkt, bool eos) {
   int got_frame = 0;
   int ret = avcodec_decode_video2(instance_, av_frame_, &got_frame, pkt);
   if (ret < 0) {
-    LOG(ERROR) << "avcodec_decode_video2 failed";
-    return false;
+    LOG(ERROR) << "avcodec_decode_video2 failed, data ptr, size:" << pkt->data << ", " << pkt->size;
+    return true;
   }
   if (got_frame) {
     ProcessFrame(av_frame_);
