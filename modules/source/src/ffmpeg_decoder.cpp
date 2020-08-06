@@ -163,6 +163,7 @@ bool MluDecoder::Process(ESPacket *pkt) {
       input.streamLength = pkt->size;
       input.pts = pkt->pts;
       input.flags |= CNVIDEODEC_FLAG_TIMESTAMP;
+      input.flags |= CNVIDEODEC_FLAG_END_OF_FRAME;
       if (pkt->flags & ESPacket::FLAG_EOS) {
         input.flags |= CNVIDEODEC_FLAG_EOS;
         eos_sent_.store(1);
