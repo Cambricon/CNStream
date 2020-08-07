@@ -455,11 +455,19 @@ int H2645NalSplitter::SplitterWriteFrame(unsigned char *buf, int len) {
       return -1;
     }
     for (auto &it : vec_desc) {
-      this->SplitterOnNal(it, false);
+      int ret = this->SplitterOnNal(it, false);
+      if (ret < 0) {
+        LOG(ERROR) << "Write h264/5 nalu failed.";
+        return ret;
+      }
     }
   } else {
     NalDesc desc;
-    this->SplitterOnNal(desc, true);
+    int ret = this->SplitterOnNal(desc, true);
+    if (ret < 0) {
+      LOG(ERROR) << "Write h264/5 nalu failed.";
+      return ret;
+    }
   }
   return 0;
 }
@@ -485,6 +493,7 @@ int H2645NalSplitter::SplitterWriteChunk(unsigned char *buf, int len) {
     std::vector<NalDesc> vec_desc;
     int ret = GetNaluH2645(es_buffer_, es_len_, isH264_, vec_desc);
     if (ret < 0) {
+      LOG(ERROR) << "Get h264/5 nalu failed.";
       return ret;
     }
     // remove the last one
@@ -493,7 +502,11 @@ int H2645NalSplitter::SplitterWriteChunk(unsigned char *buf, int len) {
       vec_desc.pop_back();
 
       for (auto &it : vec_desc) {
-       this->SplitterOnNal(it, false);
+        int ret = this->SplitterOnNal(it, false);
+        if (ret < 0) {
+          LOG(ERROR) << "Write h264/5 nalu failed.";
+          return ret;
+        }
       }
 
       if (desc.len != es_len_) {
@@ -517,7 +530,11 @@ int H2645NalSplitter::SplitterWriteChunk(unsigned char *buf, int len) {
         desc.type = (desc.nal[type_idx] >> 1)& 0x3F;
       }
     }
-    this->SplitterOnNal(desc, true);
+    int ret = this->SplitterOnNal(desc, true);
+    if (ret < 0) {
+      LOG(ERROR) << "Write h264/5 nalu failed.";
+      return ret;
+    }
   }
   return 0;
 }

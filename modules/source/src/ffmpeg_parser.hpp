@@ -172,7 +172,7 @@ class H2645NalSplitter {
   }
   int SplitterWriteFrame(unsigned char *buf, int len);
   int SplitterWriteChunk(unsigned char *buf, int len);
-  virtual void SplitterOnNal(NalDesc &desc, bool eos) = 0;  // NOLINT
+  virtual int SplitterOnNal(NalDesc &desc, bool eos) = 0;  // NOLINT
  private:
   bool isH264_ = true;
   unsigned char *es_buffer_ = nullptr;

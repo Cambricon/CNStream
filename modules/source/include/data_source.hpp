@@ -305,8 +305,8 @@ class ESMemHandler : public SourceHandler {
    * @param pkt The data packet
    *
    * @retval 0: The data is write successfully,
-   * @retval -1: Write timeout (1s), you can try rewriting.
-   * @retval -2: Invalid data. Can not parse image infomations from `pkt`.
+   * @retval -1: Write failed, maybe the handler is closed.
+   * @retval -2: Invalid data. Can not parse video infomations from `pkt`.
    */
   int Write(ESPacket *pkt);                // frame mode
   /**
@@ -315,7 +315,9 @@ class ESMemHandler : public SourceHandler {
    * @param buf The data buffer
    * @param len The len of the data
    *
-   * @return Returns 0 if data is sent successfully, otherwise returns -1.
+   * @retval 0: The data is write successfully,
+   * @retval -1: Write failed, maybe the handler is closed.
+   * @retval -2: Invalid data. Can not parse video infomations from `buf`.
    */
   int Write(unsigned char *buf, int len);
 
@@ -367,7 +369,9 @@ class ESJpegMemHandler : public SourceHandler {
    *
    * @param pkt The data packet.
    *
-   * @return Returns 0 if data is sent successfully, otherwise returns -1.
+   * @retval 0: The data is write successfully,
+   * @retval -1: Write failed, maybe the handler is closed.
+   * @retval -2: Invalid data. Can not parse image infomations from `pkt`.
    */
   int Write(ESPacket *pkt);
 

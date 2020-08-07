@@ -151,7 +151,7 @@ void ESMemHandlerImpl::Close() {
 int ESMemHandlerImpl::Write(ESPacket *pkt) {
   if (pkt && pkt->data && pkt->size) {
     if (parser_.Parse(pkt->data, pkt->size) < 0) {
-      return -1;
+      return -2;
     }
   }
   std::lock_guard<std::mutex> lk(queue_mutex_);
@@ -164,9 +164,11 @@ int ESMemHandlerImpl::Write(ESPacket *pkt) {
   return -1;
 }
 
-void ESMemHandlerImpl::SplitterOnNal(NalDesc &desc, bool eos) {
+int ESMemHandlerImpl::SplitterOnNal(NalDesc &desc, bool eos) {
   if (!eos) {
-    parser_.Parse(desc.nal, desc.len);
+    if (parser_.Parse(desc.nal, desc.len) < 0) {
+      return -2;
+    }
   }
   std::lock_guard<std::mutex> lk(queue_mutex_);
   if (queue_) {
@@ -180,24 +182,18 @@ void ESMemHandlerImpl::SplitterOnNal(NalDesc &desc, bool eos) {
     int timeoutMs = 1000;
     while (running_.load()) {
       if (queue_->Push(timeoutMs, std::make_shared<EsPacket>(&pkt))) {
-        return;
+        return 0;
       }
     }
   }
+  return -1;
 }
 
 int ESMemHandlerImpl::Write(unsigned char *data, int len) {
-  if (!queue_) {
-    return -1;
-  }
   if (data && len) {
-    if (this->SplitterWriteChunk(data, len) < 0) {
-      return -1;
-    }
+    return this->SplitterWriteChunk(data, len);
   } else {
-    if (this->SplitterWriteChunk(nullptr, 0) < 0) {
-      return -1;
-    }
+    return this->SplitterWriteChunk(nullptr, 0);
   }
   return 0;
 }
