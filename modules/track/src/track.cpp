@@ -244,6 +244,7 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
 }
 
 bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
+  bool ret = true;
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
@@ -254,7 +255,7 @@ bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
   if (paramSet.find("model_path") != paramSet.end()) {
     if (!checker.CheckPath(paramSet.at("model_path"), paramSet)) {
       LOG(ERROR) << "[Tracker] [model_path] : " << paramSet.at("model_path") << " non-existence.";
-      return false;
+      ret = false;
     }
   }
 
@@ -262,7 +263,7 @@ bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
     std::string track_name = paramSet.at("track_name");
     if (track_name != "FeatureMatch" && track_name != "KCF") {
       LOG(ERROR) << "[Tracker] [track_name] : Unsupported tracker type " << track_name;
-      return false;
+      ret = false;
     }
   }
 
@@ -270,17 +271,17 @@ bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
   if (paramSet.find("device_id") != paramSet.end()) {
     if (!checker.IsNum({"device_id"}, paramSet, err_msg)) {
       LOG(ERROR) << "[Tracker] " << err_msg;
-      return false;
+      ret = false;
     }
   }
 
   if (paramSet.find("max_cosine_distance") != paramSet.end()) {
     if (!checker.IsNum({"max_cosine_distance"}, paramSet, err_msg)) {
       LOG(ERROR) << "[Tracker] " << err_msg;
-      return false;
+      ret = false;
     }
   }
-  return true;
+  return ret;
 }
 
 }  // namespace cnstream

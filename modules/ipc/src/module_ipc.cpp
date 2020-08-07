@@ -136,6 +136,7 @@ int ModuleIPC::Process(std::shared_ptr<CNFrameInfo> data) {
 ModuleIPC::~ModuleIPC() {}
 
 bool ModuleIPC::CheckParamSet(const ModuleParamSet& paramSet) const {
+  bool ret = true;
   ParametersChecker checker;
   // ParametersChecker checker;
   for (auto& it : paramSet) {
@@ -145,17 +146,17 @@ bool ModuleIPC::CheckParamSet(const ModuleParamSet& paramSet) const {
   }
   if (paramSet.find("ipc_type") == paramSet.end()) {
     LOG(ERROR) << "[ModuleIPC], must set ipc_type. ";
-    return false;
+    ret = false;
   }
 
   if (paramSet.find("memmap_type") == paramSet.end()) {
     LOG(ERROR) << "[ModuleIPC], must set memmap_type for memory shared.";
-    return false;
+    ret = false;
   }
 
   if (paramSet.find("socket_address") == paramSet.end()) {
     LOG(ERROR) << "[ModuleIPC], must set socket_address.";
-    return false;
+    ret = false;
   }
 
   if (paramSet.find("device_id") == paramSet.end()) {
@@ -165,10 +166,10 @@ bool ModuleIPC::CheckParamSet(const ModuleParamSet& paramSet) const {
   std::string err_msg;
   if (!checker.IsNum({"device_id", "max_cachedframe_size"}, paramSet, err_msg)) {
     LOG(ERROR) << err_msg;
-    return false;
+    ret = false;
   }
 
-  return true;
+  return ret;
 }
 
 bool ModuleIPC::SendData(std::shared_ptr<CNFrameInfo> frame_data) {

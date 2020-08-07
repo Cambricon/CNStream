@@ -155,59 +155,51 @@ bool DataSource::Open(ModuleParamSet paramSet) {
 void DataSource::Close() { RemoveSources(); }
 
 bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
+  bool ret = true;
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
       LOG(WARNING) << "[DataSource] Unknown param: " << it.first;
     }
   }
-
-  std::string output_type;
+  int device_id = GetDeviceId(paramSet);
   if (paramSet.find("output_type") != paramSet.end()) {
     if (paramSet.at("output_type") != "cpu" && paramSet.at("output_type") != "mlu") {
       LOG(ERROR) << "[DataSource] [output_type] " << paramSet.at("output_type") << " not supported";
-      return false;
+      ret = false;
     }
-    if (paramSet.at("output_type") == "mlu") {
-      int device_id = GetDeviceId(paramSet);
-      if (device_id < 0) {
-        LOG(ERROR) << "[DataSource] [output_type] MLU : device_id must be set";
-        return false;
-      }
+    if (paramSet.at("output_type") == "mlu" && device_id < 0) {
+      LOG(ERROR) << "[DataSource] [output_type] MLU : device_id must be set";
+      ret = false;
     }
-    output_type = paramSet.at("output_type");
   }
 
   std::string err_msg;
   if (!checker.IsNum({"interval", "input_buf_number", "output_buf_number"}, paramSet, err_msg, true)) {
     LOG(ERROR) << "[DataSource] " << err_msg;
-    return false;
+    ret = false;
   }
 
   if (paramSet.find("decoder_type") != paramSet.end()) {
     std::string dec_type = paramSet.at("decoder_type");
     if (dec_type != "cpu" && dec_type != "mlu") {
-      LOG(ERROR) << "[DataSource] [decoder_type] " << paramSet.at("decoder_type") << " not supported.";
-      return false;
+      LOG(ERROR) << "[DataSource] [decoder_type] " << dec_type << " not supported.";
+      ret = false;
     }
 
-    if (dec_type == "mlu") {
-      int device_id = GetDeviceId(paramSet);
-      if (device_id < 0) {
-        LOG(ERROR) << "[DataSource] [decoder_type] MLU : device_id must be set";
-        return false;
-      }
-      if (paramSet.find("reuse_cndec_buf") != paramSet.end()) {
-        std::string reuse = paramSet.at("reuse_cndec_buf");
-        if (reuse != "true" && reuse != "false") {
-          LOG(ERROR) << "[DataSource] [reuse_cndec_buf] must be true or false";
-          return false;
-        }
+    if (dec_type == "mlu" && device_id < 0) {
+      LOG(ERROR) << "[DataSource] [decoder_type] MLU : device_id must be set";
+      ret = false;
+    }
+    if (dec_type == "mlu" && paramSet.find("reuse_cndec_buf") != paramSet.end()) {
+      if (paramSet.at("reuse_cndec_buf") != "true" && paramSet.at("reuse_cndec_buf") != "false") {
+        LOG(ERROR) << "[DataSource] [reuse_cndec_buf] should be true or false";
+        ret = false;
       }
     }
   }
 
-  return true;
+  return ret;
 }
 
 }  // namespace cnstream

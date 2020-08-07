@@ -216,6 +216,7 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
 }
 
 bool Osd::CheckParamSet(const ModuleParamSet& paramSet) const {
+  bool ret = true;
   ParametersChecker checker;
   for (auto& it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
@@ -225,25 +226,25 @@ bool Osd::CheckParamSet(const ModuleParamSet& paramSet) const {
   if (paramSet.find("label_path") != paramSet.end()) {
     if (!checker.CheckPath(paramSet.at("label_path"), paramSet)) {
       LOG(ERROR) << "[Osd] [label_path] : " << paramSet.at("label_path") << " non-existence.";
-      return false;
+      ret = false;
     }
   }
   if (paramSet.find("chinese_label_flag") != paramSet.end()) {
     if (paramSet.at("chinese_label_flag") != "true" && paramSet.at("chinese_label_flag") != "false") {
       LOG(ERROR) << "[Osd] [chinese_label_flag] must be true or false.";
-      return false;
+      ret = false;
     }
   }
   if (paramSet.find("secondary_label_path") != paramSet.end()) {
     if (!checker.CheckPath(paramSet.at("secondary_label_path"), paramSet)) {
       LOG(ERROR) << "[Osd] [secondary_label_path] : " << paramSet.at("secondary_label_path") << " non-existence.";
-      return false;
+      ret = false;
     }
   }
   std::string err_msg;
   if (!checker.IsNum({"text_scale", "text_thickness", "box_thickness"}, paramSet, err_msg)) {
     LOG(ERROR) << "[Osd] " << err_msg;
-    return false;
+    ret = false;
   }
   if (paramSet.find("label_size") != paramSet.end()) {
     std::string label_size = paramSet.at("label_size");
@@ -252,11 +253,11 @@ bool Osd::CheckParamSet(const ModuleParamSet& paramSet) const {
       if (!checker.IsNum({"label_size"}, paramSet, err_msg)) {
         LOG(ERROR) << "[Osd] " << err_msg << " Please choose from 'normal', 'large', 'larger', 'small', 'smaller'."
                    << " Or set a number to it.";
-        return false;
+        ret = false;
       }
     }
   }
-  return true;
+  return ret;
 }
 
 }  // namespace cnstream
