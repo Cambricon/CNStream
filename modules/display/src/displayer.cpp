@@ -110,13 +110,7 @@ void Displayer::GUILoop(const std::function<void()> &quit_callback) {
 }
 
 bool Displayer::CheckParamSet(const ModuleParamSet &paramSet) const {
-  if (paramSet.find("window-width") == paramSet.end() || paramSet.find("window-height") == paramSet.end() ||
-      paramSet.find("refresh-rate") == paramSet.end() || paramSet.find("max-channels") == paramSet.end() ||
-      paramSet.find("show") == paramSet.end()) {
-    LOG(ERROR) << "Displayer must specify [window-width], [window-height], [refresh-rate], [max-channels] [show].";
-    return false;
-  }
-
+  bool ret = true;
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
@@ -124,27 +118,31 @@ bool Displayer::CheckParamSet(const ModuleParamSet &paramSet) const {
     }
   }
 
-  std::string err_msg;
-  if (!checker.IsNum({"window-width", "window-height", "refresh-rate", "max-channels"}, paramSet, err_msg, true)) {
-    LOG(ERROR) << "[Displayer] " << err_msg;
-    return false;
+  if (paramSet.find("window-width") == paramSet.end() || paramSet.find("window-height") == paramSet.end() ||
+      paramSet.find("refresh-rate") == paramSet.end() || paramSet.find("max-channels") == paramSet.end() ||
+      paramSet.find("show") == paramSet.end()) {
+    LOG(ERROR) << "Displayer must specify [window-width], [window-height], [refresh-rate], [max-channels] [show].";
+    ret = false;
+  } else {
+    std::string err_msg;
+    if (!checker.IsNum({"window-width", "window-height", "refresh-rate", "max-channels"}, paramSet, err_msg, true)) {
+      LOG(ERROR) << "[Displayer] " << err_msg;
+      ret = false;
+    }
+    if (paramSet.at("show") != "true" && paramSet.at("show") != "false") {
+      LOG(ERROR) << "[Displayer] [show] should be true or false.";
+      ret = false;
+    }
   }
 
   if (paramSet.find("full-screen") != paramSet.end()) {
     if (paramSet.at("full-screen") != "true" && paramSet.at("full-screen") != "false") {
       LOG(ERROR) << "[Displayer] [full-screen] should be true or false.";
-      return false;
+      ret = false;
     }
   }
 
-  if (paramSet.find("show") != paramSet.end()) {
-    if (paramSet.at("show") != "true" && paramSet.at("show") != "false") {
-      LOG(ERROR) << "[Displayer] [show] should be true or false.";
-      return false;
-    }
-  }
-
-  return true;
+  return ret;
 }
 
 void Displayer::RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished) {

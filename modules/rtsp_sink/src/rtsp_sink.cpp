@@ -212,6 +212,7 @@ int RtspSink::Process(CNFrameInfoPtr data) {
 }
 
 bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
+  bool ret = true;
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
@@ -224,7 +225,7 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
                       "device_id", "dst_width", "dst_height"},
                      paramSet, err_msg, true)) {
     LOG(ERROR) << "[RtspSink] (ERROR) " << err_msg;
-    return false;
+    ret = false;
   }
 
   if (paramSet.find("dst_width") == paramSet.end()) {
@@ -238,7 +239,7 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
     if (paramSet.at("encoder_type") != "mlu" && paramSet.at("encoder_type") != "ffmpeg") {
       LOG(ERROR) << "[RtspSink] (ERROR) Not support encoder type: \"" << paramSet.at("encoder_type")
                  << "\". Choose from \"mlu\", \"ffmpeg\".";
-      return false;
+      ret = false;
     }
   }
 
@@ -246,7 +247,7 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
     if (paramSet.at("preproc_type") != "cpu") {
       LOG(ERROR) << "[RtspSink] (ERROR) Not support preprocess type: \"" << paramSet.at("preproc_type")
                  << "\". Choose from \"cpu\".";
-      return false;
+      ret = false;
     }
   }
 
@@ -254,7 +255,7 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
     if (paramSet.at("view_mode") != "single" && paramSet.at("view_mode") != "mosaic") {
       LOG(ERROR) << "[RtspSink] (ERROR) Not support view mode: \"" << paramSet.at("view_mode")
                  << "\". Choose from \"single\",\" mosaic\".";
-      return false;
+      ret = false;
     }
     if (paramSet.at("view_mode") == "mosaic") {
       if (paramSet.find("color_mode") != paramSet.end() && paramSet.at("color_mode") != "bgr") {
@@ -273,10 +274,10 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
     if (paramSet.at("color_mode") != "nv" && paramSet.at("color_mode") != "bgr") {
       LOG(ERROR) << "[RtspSink] (ERROR) Not support plane type: \"" << paramSet.at("color_mode")
                  << "\". Choose from \"nv\", \"bgr\".";
-      return false;
+      ret = false;
     }
   }
-  return true;
+  return ret;
 }
 
 RtspSink::RtspSink(const std::string &name) : Module(name) {

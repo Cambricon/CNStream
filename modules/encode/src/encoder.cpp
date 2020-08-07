@@ -156,8 +156,7 @@ int Encoder::Process(CNFrameInfoPtr data) {
   CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
   if (dump_as_image_) {
     cv::imwrite(output_dir_ + "/ch" + data->stream_id + "_stream" + data->stream_id + "_frame" +
-                    std::to_string(frame->frame_id) + ".jpg",
-                *frame->ImageBGR());
+                std::to_string(frame->frame_id) + ".jpg", *frame->ImageBGR());
   } else {
     EncoderContext *ctx = GetEncoderContext(data);
     if (ctx == nullptr) {
@@ -170,12 +169,19 @@ int Encoder::Process(CNFrameInfoPtr data) {
 }
 
 bool Encoder::CheckParamSet(const ModuleParamSet &paramSet) const {
+  bool ret = true;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
       LOG(WARNING) << "[Encoder] Unknown param: " << it.first;
     }
   }
-  return true;
+  if (paramSet.find("dump_type") != paramSet.end()) {
+    if (paramSet.at("dump_type") != "image" && paramSet.at("dump_type") != "video") {
+      LOG(ERROR) << "[Encoder] [dump_type] should be image or video.";
+      ret = false;
+    }
+  }
+  return ret;
 }
 
 }  // namespace cnstream
