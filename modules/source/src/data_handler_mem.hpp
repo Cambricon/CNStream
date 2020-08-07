@@ -75,7 +75,7 @@ class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
 
   int Write(ESPacket *pkt);
   int Write(unsigned char *data, int len);
-  void SplitterOnNal(NalDesc &desc, bool eos) override;
+  int SplitterOnNal(NalDesc &desc, bool eos) override;
 
  private:
   DataSource *module_ = nullptr;
