@@ -27,6 +27,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "cnrt.h"
@@ -109,10 +110,13 @@ std::vector<std::shared_ptr<InferTask>> ResizeConvertBatchingDoneStage::Batching
   return tasks;
 }
 
-InferBatchingDoneStage::InferBatchingDoneStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, int dev_id,
+InferBatchingDoneStage::InferBatchingDoneStage(std::shared_ptr<edk::ModelLoader> model,
+                                               cnstream::CNDataFormat model_input_fmt,
+                                               uint32_t batchsize, int dev_id,
                                                std::shared_ptr<MluInputResource> mlu_input_res,
                                                std::shared_ptr<MluOutputResource> mlu_output_res)
-    : BatchingDoneStage(model, batchsize, dev_id), mlu_input_res_(mlu_input_res), mlu_output_res_(mlu_output_res) {
+    : BatchingDoneStage(model, batchsize, dev_id), model_input_fmt_(model_input_fmt),
+      mlu_input_res_(mlu_input_res), mlu_output_res_(mlu_output_res) {
   easyinfer_ = std::make_shared<edk::EasyInfer>();
 #ifdef CNS_MLU100
   easyinfer_->Init(model_, batchsize_, dev_id);
@@ -161,14 +165,46 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
           char *img = reinterpret_cast<char*>(cpu_input_value.data()) + batch_offset * i;
           cv::Mat bgr(data.shape.h, data.shape.w, CV_8UC3);
           cv::Mat bgra(data.shape.h, data.shape.w, CV_8UC4, img);
-          cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
+          switch (model_input_fmt_) {
+            case CN_PIXEL_FORMAT_RGBA32:
+              cv::cvtColor(bgra, bgr, cv::COLOR_RGBA2BGR);
+              break;
+            case CN_PIXEL_FORMAT_BGRA32:
+              cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
+              break;
+            case CN_PIXEL_FORMAT_ARGB32: {
+              std::vector<cv::Mat> chns;
+              cv::split(bgra, chns);
+              std::swap(chns[1], chns[3]);
+              chns.erase(chns.begin());
+              cv::merge(chns, bgr);
+              break;
+            }
+            case CN_PIXEL_FORMAT_ABGR32: {
+              std::vector<cv::Mat> chns;
+              cv::split(bgra, chns);
+              chns.erase(chns.begin());
+              cv::merge(chns, bgr);
+              break;
+            }
+            default:
+              LOG(ERROR) << "Unsupported fmt, dump resized image failed." << "fmt :" << model_input_fmt_;
+              break;
+          }
           std::string stream_index = std::to_string(info->GetStreamIndex());
           if (0 != access(dump_resized_image_dir_.c_str(), 0)) {
             mkdir(dump_resized_image_dir_.c_str(), 0777);
           }
-          cv::imwrite(dump_resized_image_dir_ + "/ch" + stream_index + "_stream" + stream_index + "_frame" +
-                                      std::to_string(frame->frame_id) + ".jpg",
-                                                      bgr);
+          int obj_id = 0;
+          std::string dump_img_path_prefix = dump_resized_image_dir_ + "/stream" + stream_index + "_frame" +
+                                             std::to_string(frame->frame_id);
+          std::string dump_img_path = dump_img_path_prefix + "_obj" + std::to_string(obj_id) + ".jpg";
+          while (0 == access(dump_img_path.c_str(), 0)) {
+            obj_id++;
+            dump_img_path = dump_img_path_prefix + "_obj" + std::to_string(obj_id) + ".jpg";
+          }
+
+          cv::imwrite(dump_img_path, bgr);
         }
       }
     }
