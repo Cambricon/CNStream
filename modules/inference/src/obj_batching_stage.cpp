@@ -89,12 +89,8 @@ std::shared_ptr<InferTask> ResizeConvertObjBatchingStage::Batching(std::shared_p
   void* src_uv = frame->data[1]->GetMutableMluData();
   QueuingTicket ticket = rcop_res_->PickUpTicket();
   std::shared_ptr<RCOpValue> value = rcop_res_->WaitResourceByTicket(&ticket);
-  edk::MluResizeConvertOp::ColorMode cmode = edk::MluResizeConvertOp::ColorMode::YUV2ABGR_NV12;
-  if (frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12) {
-    cmode = edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV12;
-  } else if (frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) {
-    cmode = edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV21;
-  } else {
+  if (frame->fmt != CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 &&
+      frame->fmt != CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) {
     throw CnstreamError("Can not handle this frame with format :" + std::to_string(static_cast<int>(frame->fmt)));
   }
   if (!rcop_res_->Initialized()) {
@@ -104,10 +100,9 @@ std::shared_ptr<InferTask> ResizeConvertObjBatchingStage::Batching(std::shared_p
     mlu_ctx.SetDeviceId(dev_id_);
     mlu_ctx.ConfigureForThisThread();
     edk::CoreVersion core_ver = mlu_ctx.GetCoreVersion();
-    rcop_res_->Init(dst_w, dst_h, cmode, core_ver);
+    rcop_res_->Init(dst_w, dst_h, frame->fmt, core_ver);
   } else {
-    edk::MluResizeConvertOp::Attr rc_attr = value->op.GetAttr();
-    if (cmode != rc_attr.color_mode) {
+    if (frame->fmt != rcop_res_->SrcFmt()) {
       throw CnstreamError(
           "Resize convert operator should be reinitialized, but we can not do this."
           " Maybe you have different pixel format between each frame, wo can not use mlu preprocessing to deal with "

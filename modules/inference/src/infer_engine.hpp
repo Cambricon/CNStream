@@ -31,6 +31,7 @@
 
 #include "batching_done_stage.hpp"
 #include "cnstream_core.hpp"
+#include "cnstream_frame_va.hpp"
 #include "timeout_helper.hpp"
 
 namespace edk {
@@ -71,7 +72,8 @@ class InferEngine {
               bool batching_by_obj = false, const std::shared_ptr<ObjPreproc>& obj_preprocessor = nullptr,
               const std::shared_ptr<ObjPostproc>& obj_postprocessor = nullptr,
               const std::shared_ptr<ObjFilter>& obj_filter = nullptr,
-              std::string dump_resized_image_dir = "");
+              std::string dump_resized_image_dir = "",
+              CNDataFormat model_input_pixel_format = CN_PIXEL_FORMAT_RGBA32);
   ~InferEngine();
   ResultWaitingCard FeedData(std::shared_ptr<CNFrameInfo> finfo);
 

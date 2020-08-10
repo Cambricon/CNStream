@@ -251,6 +251,21 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
     return true;
   };
   ASSERT(RegisterParam(pregister, param));
+
+  param.name = "model_input_pixel_format";
+  param.desc_str = "Optional. The pixel format of the model input image. ARGB32/ABGR32/RGBA32/BGRA32 are supported.";
+  param.default_value = "RGBA32";
+  param.type = "string";
+  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+    if ("RGBA32" == value) param_set->model_input_pixel_format = CN_PIXEL_FORMAT_RGBA32;
+    else if ("BGRA32" == value) param_set->model_input_pixel_format = CN_PIXEL_FORMAT_BGRA32;
+    else if ("ARGB32" == value) param_set->model_input_pixel_format = CN_PIXEL_FORMAT_ARGB32;
+    else if ("ABGR32" == value) param_set->model_input_pixel_format = CN_PIXEL_FORMAT_ABGR32;
+    else
+      return false;
+    return true;
+  };
+  ASSERT(RegisterParam(pregister, param));
 }
 
 bool InferParamManager::RegisterParam(ParamRegister *pregister, const InferParamDesc &param_desc) {
