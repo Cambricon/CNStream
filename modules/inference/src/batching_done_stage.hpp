@@ -26,6 +26,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "cnstream_frame_va.hpp"
 
 namespace edk {
 class ModelLoader;
@@ -110,7 +111,9 @@ class ResizeConvertBatchingDoneStage : public BatchingDoneStage {
 
 class InferBatchingDoneStage : public BatchingDoneStage {
  public:
-  InferBatchingDoneStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, int dev_id,
+  InferBatchingDoneStage(std::shared_ptr<edk::ModelLoader> model,
+                         CNDataFormat model_input_fmt,
+                         uint32_t batchsize, int dev_id,
                          std::shared_ptr<MluInputResource> mlu_input_res,
                          std::shared_ptr<MluOutputResource> mlu_output_res);
   ~InferBatchingDoneStage();
@@ -120,6 +123,7 @@ class InferBatchingDoneStage : public BatchingDoneStage {
   std::shared_ptr<edk::MluTaskQueue> SharedMluQueue() const;
 
  private:
+  CNDataFormat model_input_fmt_;
   std::shared_ptr<MluInputResource> mlu_input_res_;
   std::shared_ptr<MluOutputResource> mlu_output_res_;
   std::shared_ptr<edk::EasyInfer> easyinfer_;

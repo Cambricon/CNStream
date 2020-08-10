@@ -112,6 +112,7 @@ class InferEngine {
   std::shared_ptr<PerfManager> infer_perf_manager_;
   std::string infer_thread_id_;
   std::string dump_resized_image_dir_ = "";
+  CNDataFormat model_input_fmt_ = CN_PIXEL_FORMAT_RGBA32;
 };  // class InferEngine
 
 }  // namespace cnstream

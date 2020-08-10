@@ -62,7 +62,8 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
       obj_filter_(obj_filter),
       infer_perf_manager_(perf_manager),
       infer_thread_id_(infer_thread_id),
-      dump_resized_image_dir_(dump_resized_image_dir) {
+      dump_resized_image_dir_(dump_resized_image_dir),
+      model_input_fmt_(model_input_pixel_format) {
   try {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id);
@@ -230,7 +231,8 @@ void InferEngine::StageAssemble() {
     }
   }
   std::shared_ptr<BatchingDoneStage> infer_stage =
-      std::make_shared<InferBatchingDoneStage>(model_, batchsize_, dev_id_, mlu_input_res_, mlu_output_res_);
+      std::make_shared<InferBatchingDoneStage>(model_, model_input_fmt_,
+                                               batchsize_, dev_id_, mlu_input_res_, mlu_output_res_);
   auto mlu_queue = dynamic_cast<InferBatchingDoneStage*>(infer_stage.get())->SharedMluQueue();
   if (rcop_res_.get()) rcop_res_->SetMluQueue(mlu_queue);  // multiplexing cnrtQueue from EasyInfer.
   std::shared_ptr<BatchingDoneStage> d2h_stage =
