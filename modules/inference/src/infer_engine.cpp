@@ -46,7 +46,8 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
                          bool batching_by_obj, const std::shared_ptr<ObjPreproc>& obj_preprocessor,
                          const std::shared_ptr<ObjPostproc>& obj_postprocessor,
                          const std::shared_ptr<ObjFilter>& obj_filter,
-                         std::string dump_resized_image_dir)
+                         std::string dump_resized_image_dir,
+                         CNDataFormat model_input_pixel_format)
      :model_(model),
       preprocessor_(preprocessor),
       postprocessor_(postprocessor),
@@ -76,7 +77,8 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
     if (mlu_ctx.GetCoreVersion() == edk::CoreVersion::MLU270) {
       use_scaler_ = false;
     }
-    if (!use_scaler_) rcop_res_ = std::make_shared<RCOpResource>(model, batchsize, keep_aspect_ratio);
+    if (!use_scaler_)
+      rcop_res_ = std::make_shared<RCOpResource>(model, batchsize, keep_aspect_ratio, model_input_pixel_format);
     cpu_input_res_->Init();
     cpu_output_res_->Init();
     mlu_input_res_->Init();

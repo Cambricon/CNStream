@@ -26,6 +26,7 @@
 #include <string>
 
 #include "cnstream_config.hpp"
+#include "cnstream_frame_va.hpp"
 #include "easyinfer/model_loader.h"
 
 namespace cnstream {
@@ -39,6 +40,7 @@ struct InferParams {
   uint32_t infer_interval = 1;
   uint32_t batching_timeout = 3000;  // ms
   bool keep_aspect_ratio = false;  // mlu preprocessing, keep aspect ratio
+  CNDataFormat model_input_pixel_format = CN_PIXEL_FORMAT_RGBA32;
   edk::DimOrder data_order = edk::DimOrder::NHWC;
   std::string func_name;
   std::string model_path;

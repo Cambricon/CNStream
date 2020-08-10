@@ -222,7 +222,8 @@ class InferencerPrivate {
           obj_preproc_,
           obj_postproc_,
           obj_filter_,
-          dump_resized_image_dir_);
+          dump_resized_image_dir_,
+          params_.model_input_pixel_format);
       ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_, bsize_);
       ctxs_[tid] = ctx;
       if (infer_perf_manager_) {

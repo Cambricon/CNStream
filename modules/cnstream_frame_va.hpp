@@ -65,7 +65,11 @@ typedef enum {
   CN_PIXEL_FORMAT_YUV420_NV21 = 0,  ///< This frame is in the YUV420SP(NV21) format.
   CN_PIXEL_FORMAT_YUV420_NV12,      ///< This frame is in the YUV420sp(NV12) format.
   CN_PIXEL_FORMAT_BGR24,            ///< This frame is in the BGR24 format.
-  CN_PIXEL_FORMAT_RGB24             ///< This frame is in the RGB24 format.
+  CN_PIXEL_FORMAT_RGB24,            ///< This frame is in the RGB24 format.
+  CN_PIXEL_FORMAT_ARGB32,           ///< This frame is in the ARGB32 format.
+  CN_PIXEL_FORMAT_ABGR32,           ///< This frame is in the ABGR32 format.
+  CN_PIXEL_FORMAT_RGBA32,           ///< This frame is in the RGBA32 format.
+  CN_PIXEL_FORMAT_BGRA32            ///< This frame is in the BGRA32 format.
 } CNDataFormat;
 
 /**

@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "cnstream_error.hpp"
+#include "cnstream_frame_va.hpp"
 #include "queuing_server.hpp"
 
 namespace cnstream {
@@ -130,17 +131,21 @@ struct RCOpValue {
 
 class RCOpResource : public InferResource<std::shared_ptr<RCOpValue>> {
  public:
-  RCOpResource(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, bool keep_aspect_ratio);
+  RCOpResource(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
+               bool keep_aspect_ratio, CNDataFormat dst_fmt);
   ~RCOpResource();
   bool Initialized() const { return value_->initialized; }
   void SetMluQueue(std::shared_ptr<edk::MluTaskQueue> mlu_queue) { value_->op.SetMluQueue(mlu_queue); }
   void Init() {}
-  void Init(uint32_t dst_w, uint32_t dst_h, edk::MluResizeConvertOp::ColorMode cmode, edk::CoreVersion core_ver);
+  void Init(uint32_t dst_w, uint32_t dst_h, CNDataFormat src_fmt, edk::CoreVersion core_ver);
   void Destroy();
+  CNDataFormat SrcFmt() const { return src_fmt_; }
 
  private:
   int core_number_ = 0;
   bool keep_aspect_ratio_ = false;
+  CNDataFormat src_fmt_ = CN_PIXEL_FORMAT_YUV420_NV21;
+  CNDataFormat dst_fmt_ = CN_PIXEL_FORMAT_RGBA32;
 };  // class ResizeOpResource
 
 }  // namespace cnstream
