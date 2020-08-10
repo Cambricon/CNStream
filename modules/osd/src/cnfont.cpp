@@ -30,16 +30,23 @@
 #error OpenCV required
 #endif
 
+#include <string>
+
+#include "glog/logging.h"
+
 namespace cnstream {
 
 #ifdef HAVE_FREETYPE
 
-CnFont::CnFont(const char* font_path) {
-  if (FT_Init_FreeType(&m_library)) {
+bool CnFont::Init(const std::string &font_path) {
+if (FT_Init_FreeType(&m_library)) {
     LOG(ERROR) << "FreeType init errors";
+    return false;
   }
-  if (FT_New_Face(m_library, font_path, 0, &m_face)) {
+  if (FT_New_Face(m_library, font_path.c_str(), 0, &m_face)) {
+    FT_Done_FreeType(m_library);
     LOG(ERROR) << "Can not create a font, please checkout the font path: " << m_library;
+    return false;
   }
 
   // Set font args
@@ -47,15 +54,23 @@ CnFont::CnFont(const char* font_path) {
 
   // Set font env
   setlocale(LC_ALL, "");
+  is_initialized_ = true;
+  return true;
 }
 
 CnFont::~CnFont() {
-  FT_Done_Face(m_face);
-  FT_Done_FreeType(m_library);
+  if (is_initialized_) {
+    FT_Done_Face(m_face);
+    FT_Done_FreeType(m_library);
+  }
 }
 
 // Restore the original font Settings
 void CnFont::restoreFont() {
+  if (!is_initialized_) {
+    LOG(ERROR) << " [Osd] Please init CnFont first.";
+    return;
+  }
   m_fontType = 0;
 
   m_fontSize.val[0] = 20;
@@ -103,6 +118,10 @@ int CnFont::ToWchar(char*& src, wchar_t*& dest, const char* locale) {
 int CnFont::putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) {
   if (img.data == nullptr) return -1;
   if (text == nullptr) return -1;
+  if (!is_initialized_) {
+    LOG(ERROR) << " [Osd] Please init CnFont first.";
+    return -1;
+  }
 
   wchar_t* w_str;
   ToWchar(text, w_str);
@@ -111,7 +130,7 @@ int CnFont::putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) {
     putWChar(img, w_str[i], pos, color);
   }
 
-  return i;
+  return 0;
 }
 
 // Output the current character and update the m pos position

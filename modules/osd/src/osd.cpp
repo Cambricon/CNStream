@@ -108,8 +108,12 @@ std::shared_ptr<CnOsd> Osd::GetOsdContext() {
 
 #ifdef HAVE_FREETYPE
     if (chinese_label_flag_) {
-      std::shared_ptr<CnFont> font = std::make_shared<CnFont>("/usr/include/wqy-zenhei.ttc");
-      ctx->SetCnFont(font);
+      std::shared_ptr<CnFont> font = std::make_shared<CnFont>();
+      if (font && font->Init("/usr/include/wqy_zenhei.ttf")) {
+        ctx->SetCnFont(font);
+      } else {
+        LOG(ERROR) << "Create and initialize CnFont failed.";
+      }
     }
 #endif
     RwLockWriteGuard lg(ctx_lock_);

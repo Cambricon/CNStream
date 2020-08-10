@@ -27,6 +27,7 @@
 #include <locale.h>
 #include <wchar.h>
 #include <cmath>
+#include <string>
 #include FT_FREETYPE_H
 #endif
 
@@ -47,15 +48,20 @@ class CnFont {
 
  public:
   /**
-   * @brief Initialize the display font
-   * @param
-   *   font_path: the font of path
+   * @brief Constructor of CnFont
    */
-  explicit CnFont(const char* font_path);
+  CnFont() { }
   /**
    * @brief Release font resource
    */
   ~CnFont();
+  /**
+   * @brief Initialize the display font
+   * @param
+   *   font_path: the font of path
+   */
+  bool Init(const std::string &font_path);
+
   /**
    * @brief Configure font Settings
    */
@@ -97,6 +103,7 @@ class CnFont {
 
   FT_Library m_library;
   FT_Face m_face;
+  bool is_initialized_ = false;
 
   // Default font output parameters
   int m_fontType;

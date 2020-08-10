@@ -175,8 +175,16 @@ void CnOsd::DrawText(cv::Mat* image, const cv::Point &bottom_left, const std::st
   int box_thickness = CalcThickness(image->cols, box_thickness_) * scale;
 
   int baseline = 0;
-  auto text_size = cv::getTextSize(text, font_, txt_scale, txt_thickness, &baseline);
-  int label_height = baseline + txt_thickness + text_size.height;
+  cv::Size text_size;
+  int label_height;
+  if (cn_font_ == nullptr) {
+    text_size = cv::getTextSize(text, font_, txt_scale, txt_thickness, &baseline);
+    label_height = baseline + txt_thickness + text_size.height;
+  } else {
+    // TODO(gaoyujia): Get the height and width of chinese character
+    text_size = cv::getTextSize(text, font_, 1, 1, &baseline);
+    label_height = baseline + text_size.height;
+  }
   int offset = (box_thickness == 1 ? 0 : -(box_thickness + 1) / 2);
   cv::Point label_top_left = bottom_left + cv::Point(offset, offset);
   cv::Point label_bottom_right = label_top_left + cv::Point(text_size.width + offset, label_height);
