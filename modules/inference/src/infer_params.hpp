@@ -41,6 +41,7 @@ struct InferParams {
   uint32_t batching_timeout = 3000;  // ms
   bool keep_aspect_ratio = false;  // mlu preprocessing, keep aspect ratio
   CNDataFormat model_input_pixel_format = CN_PIXEL_FORMAT_RGBA32;
+  bool mem_on_mlu_for_postproc = false;
   edk::DimOrder data_order = edk::DimOrder::NHWC;
   std::string func_name;
   std::string model_path;

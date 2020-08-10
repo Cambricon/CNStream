@@ -102,10 +102,12 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
                      inferencing. if it is set to false, the video frame is used as the input to inferencing.
                      False by default.
    *   obj_filter_name: Optional. The class name for object filter. See cnstream::ObjFilter. This parameter is valid
-   when object_infer is true. When this parameter not set, no object will be filtered.
+                        when object_infer is true. When this parameter not set, no object will be filtered.
    *   keep_aspect_ratio: Optional. As the mlu is used for image processing, the scale remains constant.
    *   model_input_pixel_format: Optional. As the mlu is used for image processing, set the pixel format of the
    *                             model input image. RGBA32 by default.
+   *   mem_on_mlu_for_postproc: Optional. Pass a batch mlu pointer directly to post-processing function without
+                                making d2h copies. see `Postproc` for details.
    *
    * @endverbatim
    *

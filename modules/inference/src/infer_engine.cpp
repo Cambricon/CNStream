@@ -47,7 +47,8 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
                          const std::shared_ptr<ObjPostproc>& obj_postprocessor,
                          const std::shared_ptr<ObjFilter>& obj_filter,
                          std::string dump_resized_image_dir,
-                         CNDataFormat model_input_pixel_format)
+                         CNDataFormat model_input_pixel_format,
+                         bool mem_on_mlu_for_postproc)
      :model_(model),
       preprocessor_(preprocessor),
       postprocessor_(postprocessor),
@@ -63,7 +64,8 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
       infer_perf_manager_(perf_manager),
       infer_thread_id_(infer_thread_id),
       dump_resized_image_dir_(dump_resized_image_dir),
-      model_input_fmt_(model_input_pixel_format) {
+      model_input_fmt_(model_input_pixel_format),
+      mem_on_mlu_for_postproc_(mem_on_mlu_for_postproc) {
   try {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id);
@@ -72,7 +74,10 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
     tp_->SetErrorHandleFunc(error_func);
     tp_->Init(dev_id, batchsize * 3 + 4);
     cpu_input_res_ = std::make_shared<CpuInputResource>(model, batchsize);
-    cpu_output_res_ = std::make_shared<CpuOutputResource>(model, batchsize);
+    if (!mem_on_mlu_for_postproc_) {
+      cpu_output_res_ = std::make_shared<CpuOutputResource>(model, batchsize);
+      cpu_output_res_->Init();
+    }
     mlu_input_res_ = std::make_shared<MluInputResource>(model, batchsize);
     mlu_output_res_ = std::make_shared<MluOutputResource>(model, batchsize);
     if (mlu_ctx.GetCoreVersion() == edk::CoreVersion::MLU270) {
@@ -81,7 +86,6 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
     if (!use_scaler_)
       rcop_res_ = std::make_shared<RCOpResource>(model, batchsize, keep_aspect_ratio, model_input_pixel_format);
     cpu_input_res_->Init();
-    cpu_output_res_->Init();
     mlu_input_res_->Init();
     mlu_output_res_->Init();
     StageAssemble();
@@ -110,11 +114,16 @@ InferEngine::~InferEngine() {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id_);
     mlu_ctx.ConfigureForThisThread();
-    tp_->Destroy();
-    cpu_input_res_->Destroy();
-    cpu_output_res_->Destroy();
-    mlu_input_res_->Destroy();
-    mlu_output_res_->Destroy();
+    if (tp_)
+      tp_->Destroy();
+    if (cpu_input_res_)
+      cpu_input_res_->Destroy();
+    if (cpu_output_res_)
+      cpu_output_res_->Destroy();
+    if (mlu_input_res_)
+      mlu_input_res_->Destroy();
+    if (mlu_output_res_)
+      mlu_output_res_->Destroy();
     if (rcop_res_.get()) rcop_res_->Destroy();
     DLOG(INFO) << "Destroied resources";
   } catch (CnstreamError& e) {
@@ -133,6 +142,8 @@ InferEngine::~InferEngine() {
 }
 
 InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo> finfo) {
+  timeout_helper_.LockOperator();
+  cached_frame_cnt_++;
   auto ret_promise = std::make_shared<std::promise<void>>();
   ResultWaitingCard card(ret_promise);
 
@@ -147,7 +158,6 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       if (obj_filter_) {
         if (!obj_filter_->Filter(finfo, obj)) continue;
       }
-      timeout_helper_.LockOperator();
       InferTaskSptr task = obj_batching_stage_->Batching(finfo, obj);
       tp_->SubmitTask(task);
       batched_finfos_.push_back(std::make_pair(finfo, auto_set_done));
@@ -159,10 +169,12 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       } else {
         timeout_helper_.Reset([this]() -> void { BatchingDone(); });
       }
-      timeout_helper_.UnlockOperator();
+    }
+    if (cached_frame_cnt_ == batchsize_) {
+      BatchingDone();
+      timeout_helper_.Reset(NULL);
     }
   } else {
-    timeout_helper_.LockOperator();
     InferTaskSptr task = batching_stage_->Batching(finfo);
     tp_->SubmitTask(task);
     batched_finfos_.push_back(std::make_pair(finfo, auto_set_done));
@@ -173,8 +185,8 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
     } else {
       timeout_helper_.Reset([this]() -> void { BatchingDone(); });
     }
-    timeout_helper_.UnlockOperator();
   }
+  timeout_helper_.UnlockOperator();
   return card;
 }
 
@@ -235,24 +247,41 @@ void InferEngine::StageAssemble() {
                                                batchsize_, dev_id_, mlu_input_res_, mlu_output_res_);
   auto mlu_queue = dynamic_cast<InferBatchingDoneStage*>(infer_stage.get())->SharedMluQueue();
   if (rcop_res_.get()) rcop_res_->SetMluQueue(mlu_queue);  // multiplexing cnrtQueue from EasyInfer.
-  std::shared_ptr<BatchingDoneStage> d2h_stage =
-      std::make_shared<D2HBatchingDoneStage>(model_, batchsize_, dev_id_, mlu_output_res_, cpu_output_res_);
+  batching_done_stages_.push_back(infer_stage);
   infer_stage->SetPerfContext(infer_perf_manager_, infer_thread_id_);
   infer_stage->SetDumpResizedImageDir(dump_resized_image_dir_);
-  batching_done_stages_.push_back(infer_stage);
-  batching_done_stages_.push_back(d2h_stage);
+
+  if (!mem_on_mlu_for_postproc_) {
+    std::shared_ptr<BatchingDoneStage> d2h_stage =
+        std::make_shared<D2HBatchingDoneStage>(model_, batchsize_, dev_id_, mlu_output_res_, cpu_output_res_);
+    batching_done_stages_.push_back(d2h_stage);
+  }
 
   if (batching_by_obj_) {
-    obj_postproc_stage_ = std::make_shared<ObjPostprocessingBatchingDoneStage>(model_, batchsize_, dev_id_,
-                                                                               obj_postprocessor_, cpu_output_res_);
+    if (mem_on_mlu_for_postproc_) {
+      obj_postproc_stage_ = std::make_shared<ObjPostprocessingBatchingDoneStage>(model_, batchsize_, dev_id_,
+                                                                                 obj_postprocessor_, mlu_output_res_);
+    } else {
+      obj_postproc_stage_ = std::make_shared<ObjPostprocessingBatchingDoneStage>(model_, batchsize_, dev_id_,
+                                                                                 obj_postprocessor_, cpu_output_res_);
+    }
   } else {
-    std::shared_ptr<BatchingDoneStage> postproc_stage =
-        std::make_shared<PostprocessingBatchingDoneStage>(model_, batchsize_, dev_id_, postprocessor_, cpu_output_res_);
-    batching_done_stages_.push_back(postproc_stage);
+    if (mem_on_mlu_for_postproc_) {
+      std::shared_ptr<BatchingDoneStage> postproc_stage =
+          std::make_shared<PostprocessingBatchingDoneStage>(model_, batchsize_, dev_id_,
+                                                            postprocessor_, mlu_output_res_);
+      batching_done_stages_.push_back(postproc_stage);
+    } else {
+      std::shared_ptr<BatchingDoneStage> postproc_stage =
+          std::make_shared<PostprocessingBatchingDoneStage>(model_, batchsize_, dev_id_,
+                                                            postprocessor_, cpu_output_res_);
+      batching_done_stages_.push_back(postproc_stage);
+    }
   }
 }
 
 void InferEngine::BatchingDone() {
+  cached_frame_cnt_ = 0;
   if (batching_by_obj_) {
     obj_batching_stage_->Reset();
   } else {

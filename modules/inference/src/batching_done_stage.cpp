@@ -247,25 +247,43 @@ std::vector<std::shared_ptr<InferTask>> D2HBatchingDoneStage::BatchingDone(const
   return tasks;
 }
 
-std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::BatchingDone(const BatchingDoneInput& finfos) {
+std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::BatchingDone(
+    const BatchingDoneInput& finfos) {
+  if (cpu_output_res_ != nullptr) {
+    return BatchingDone(finfos, cpu_output_res_);
+  } else if (mlu_output_res_ != nullptr) {
+    return BatchingDone(finfos, mlu_output_res_);
+  } else {
+    assert(false);
+  }
+  return {};
+}
+
+std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::BatchingDone(
+    const BatchingDoneInput& finfos,
+    const std::shared_ptr<CpuOutputResource> &cpu_output_res) {
   std::vector<InferTaskSptr> tasks;
   for (int bidx = 0; bidx < static_cast<int>(finfos.size()); ++bidx) {
     auto finfo = finfos[bidx];
     QueuingTicket cpu_output_res_ticket;
     if (0 == bidx) {
-      cpu_output_res_ticket = cpu_output_res_->PickUpNewTicket(true);
+      cpu_output_res_ticket = cpu_output_res->PickUpNewTicket(true);
     } else {
-      cpu_output_res_ticket = cpu_output_res_->PickUpTicket(true);
+      cpu_output_res_ticket = cpu_output_res->PickUpTicket(true);
     }
-    InferTaskSptr task = std::make_shared<InferTask>([cpu_output_res_ticket, this, finfo, bidx]() -> int {
+    InferTaskSptr task = std::make_shared<InferTask>([cpu_output_res_ticket,
+                                                      cpu_output_res,
+                                                      this,
+                                                      finfo,
+                                                      bidx]() -> int {
       QueuingTicket cor_ticket = cpu_output_res_ticket;
-      IOResValue cpu_output_value = this->cpu_output_res_->WaitResourceByTicket(&cor_ticket);
+      IOResValue cpu_output_value = cpu_output_res->WaitResourceByTicket(&cor_ticket);
       std::vector<float*> net_outputs;
       for (size_t output_idx = 0; output_idx < cpu_output_value.datas.size(); ++output_idx) {
         net_outputs.push_back(reinterpret_cast<float*>(cpu_output_value.datas[output_idx].Offset(bidx)));
       }
       this->postprocessor_->Execute(net_outputs, this->model_, finfo.first);
-      this->cpu_output_res_->DeallingDone();
+      cpu_output_res->DeallingDone();
       return 0;
     });
     tasks.push_back(task);
@@ -273,9 +291,51 @@ std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::Batchin
   return tasks;
 }
 
+std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::BatchingDone(
+    const BatchingDoneInput& finfos,
+    const std::shared_ptr<MluOutputResource> &mlu_output_res) {
+  QueuingTicket mlu_output_res_ticket = mlu_output_res->PickUpNewTicket(false);
+
+  std::vector<InferTaskSptr> tasks;
+  InferTaskSptr task = std::make_shared<InferTask>([mlu_output_res_ticket,
+                                                    mlu_output_res,
+                                                    this,
+                                                    finfos]() -> int {
+    QueuingTicket mor_ticket = mlu_output_res_ticket;
+    IOResValue mlu_output_value = mlu_output_res->WaitResourceByTicket(&mor_ticket);
+    std::vector<void*> net_outputs;
+    for (size_t output_idx = 0; output_idx < mlu_output_value.datas.size(); ++output_idx) {
+      net_outputs.push_back(mlu_output_value.datas[output_idx].ptr);
+    }
+
+    std::vector<CNFrameInfoPtr> batched_finfos;
+    for (const auto &it : finfos) batched_finfos.push_back(it.first);
+
+    this->postprocessor_->Execute(net_outputs, this->model_, batched_finfos);
+    mlu_output_res->DeallingDone();
+    return 0;
+  });
+  tasks.push_back(task);
+  return tasks;
+}
+
 std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjBatchingDone(
-    const BatchingDoneInput& finfos, const std::vector<std::shared_ptr<CNInferObject>>& objs) {
-  CHECK_EQ(finfos.size(), objs.size()) << "Internal error.";
+    const BatchingDoneInput& finfos,
+    const std::vector<std::shared_ptr<CNInferObject>>& objs) {
+  if (cpu_output_res_ != nullptr) {
+    return ObjBatchingDone(finfos, objs, cpu_output_res_);
+  } else if (mlu_output_res_ != nullptr) {
+    return ObjBatchingDone(finfos, objs, mlu_output_res_);
+  } else {
+    assert(false);
+  }
+  return {};
+}
+
+std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjBatchingDone(
+    const BatchingDoneInput& finfos,
+    const std::vector<std::shared_ptr<CNInferObject>>& objs,
+    const std::shared_ptr<CpuOutputResource> &cpu_output_res) {
   std::vector<InferTaskSptr> tasks;
   for (int bidx = 0; bidx < static_cast<int>(finfos.size()); ++bidx) {
     auto finfo = finfos[bidx];
@@ -286,19 +346,58 @@ std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjB
     } else {
       cpu_output_res_ticket = cpu_output_res_->PickUpTicket(true);
     }
-    InferTaskSptr task = std::make_shared<InferTask>([cpu_output_res_ticket, this, finfo, obj, bidx]() -> int {
+    InferTaskSptr task = std::make_shared<InferTask>([cpu_output_res_ticket,
+                                                      cpu_output_res,
+                                                      this,
+                                                      finfo,
+                                                      obj,
+                                                      bidx]() -> int {
       QueuingTicket cor_ticket = cpu_output_res_ticket;
-      IOResValue cpu_output_value = this->cpu_output_res_->WaitResourceByTicket(&cor_ticket);
+      IOResValue cpu_output_value = cpu_output_res->WaitResourceByTicket(&cor_ticket);
       std::vector<float*> net_outputs;
       for (size_t output_idx = 0; output_idx < cpu_output_value.datas.size(); ++output_idx) {
         net_outputs.push_back(reinterpret_cast<float*>(cpu_output_value.datas[output_idx].Offset(bidx)));
       }
       this->postprocessor_->Execute(net_outputs, this->model_, finfo.first, obj);
-      this->cpu_output_res_->DeallingDone();
+      cpu_output_res->DeallingDone();
       return 0;
     });
     tasks.push_back(task);
   }
+  return tasks;
+}
+
+std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjBatchingDone(
+    const BatchingDoneInput& finfos,
+    const std::vector<std::shared_ptr<CNInferObject>>& objs,
+    const std::shared_ptr<MluOutputResource> &mlu_output_res) {
+  std::vector<InferTaskSptr> tasks;
+  QueuingTicket mlu_output_res_ticket = mlu_output_res_->PickUpNewTicket(false);
+  InferTaskSptr task = std::make_shared<InferTask>([mlu_output_res_ticket,
+                                                    mlu_output_res,
+                                                    this,
+                                                    finfos,
+                                                    objs]() -> int {
+    QueuingTicket mor_ticket = mlu_output_res_ticket;
+    IOResValue mlu_output_value = mlu_output_res->WaitResourceByTicket(&mor_ticket);
+    std::vector<void*> net_outputs;
+    for (size_t output_idx = 0; output_idx < mlu_output_value.datas.size(); ++output_idx) {
+      net_outputs.push_back(mlu_output_value.datas[output_idx].ptr);
+    }
+
+    std::vector<std::pair<CNFrameInfoPtr, std::shared_ptr<CNInferObject>>> batched_objs;
+    for (int bidx = 0; bidx < static_cast<int>(finfos.size()); ++bidx) {
+      auto finfo = finfos[bidx];
+      auto obj = objs[bidx];
+      batched_objs.push_back(std::make_pair(std::move(finfo.first), std::move(obj)));
+    }
+
+    this->postprocessor_->Execute(net_outputs, this->model_, batched_objs);
+    mlu_output_res->DeallingDone();
+    return 0;
+  });
+  tasks.push_back(task);
+
   return tasks;
 }
 

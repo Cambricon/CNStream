@@ -266,6 +266,16 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
     return true;
   };
   ASSERT(RegisterParam(pregister, param));
+
+  param.name = "mem_on_mlu_for_postproc";
+  param.desc_str = "Optional. Pass a batch mlu pointer directly to post-processing function "
+                   "without making d2h copies. see Postproc for details.";
+  param.default_value = "false";
+  param.type = "bool";
+  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+    return STR2BOOL(value, &param_set->mem_on_mlu_for_postproc);
+  };
+  ASSERT(RegisterParam(pregister, param));
 }
 
 bool InferParamManager::RegisterParam(ParamRegister *pregister, const InferParamDesc &param_desc) {
