@@ -94,7 +94,7 @@ size_t IdxManager::GetModuleIdx() {
 
 void IdxManager::ReturnModuleIdx(size_t id_) {
   SpinLockGuard guard(id_lock);
-  if (id_ < 0 || id_ >= GetMaxModuleNumber()) {
+  if (id_ >= GetMaxModuleNumber()) {
     return;
   }
   module_id_mask_ &= ~(1 << id_);

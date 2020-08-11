@@ -660,7 +660,7 @@ static int JpegEventCallback(cncodecCbEventType event, void *context, void *data
 }
 
 bool MluDecoder::CreateJpegDecoder(VideoStreamInfo *info) {
-  if (instance_) {
+  if (jpg_instance_) {
     return false;
   }
   // maximum resolution 8K
@@ -952,11 +952,11 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
   if (param_.output_type_ == OUTPUT_MLU) {
     dataframe->ctx.dev_type = DevContext::MLU;
     dataframe->ctx.dev_id = param_.device_id_;
-    dataframe->ctx.ddr_channel = 0;  // FIXME
+    dataframe->ctx.ddr_channel = CNRT_CHANNEL_TYPE_DUPLICATE;
   } else {
     dataframe->ctx.dev_type = DevContext::CPU;
     dataframe->ctx.dev_id = -1;
-    dataframe->ctx.ddr_channel = 0;
+    dataframe->ctx.ddr_channel = CNRT_CHANNEL_TYPE_DUPLICATE;
   }
   int dst_stride = frame->linesize[0];
 

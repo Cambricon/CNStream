@@ -46,7 +46,8 @@
     cnrtChannelType_t ddr_chn = static_cast<cnrtChannelType_t>((__DDR_CHN__)); \
     CNS_CNRT_CHECK(cnrtGetDeviceHandle(&dev, dev_id));                         \
     CNS_CNRT_CHECK(cnrtSetCurrentDevice(dev));                                 \
-    CNS_CNRT_CHECK(cnrtSetCurrentChannel(ddr_chn));                            \
+    if (ddr_chn >= 0)                                                          \
+      CNS_CNRT_CHECK(cnrtSetCurrentChannel(ddr_chn));                          \
     CNS_CNRT_CHECK(__EXPRESSION__);                                            \
   } while (0)
 
