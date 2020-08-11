@@ -45,6 +45,10 @@ bool Sqlite::Connect() {
     LOG(ERROR) << "Set PRAGMA set cache size  to 8000 falied.";
     return false;
   }
+  if (!Execution("PRAGMA auto_vacuum = FULL;")) {
+    LOG(ERROR) << "Set PRAGMA auto_vacuum to FULL falied.";
+    return false;
+  }
   // LOG(INFO) << "Successfully connect to sqlite database (" << db_name_ << ")";
   return true;
 }
@@ -75,9 +79,11 @@ bool Sqlite::Execution(std::string sql) {
 bool Sqlite::CreateTable(std::string table_name, std::string primary_key, std::vector<std::string> key_names) {
   std::string sql;
   if (primary_key.empty()) {
-    sql = "CREATE TABLE " + table_name + "(id integer PRIMARY KEY autoincrement,";
+    sql = "CREATE TABLE " + table_name + "(id integer PRIMARY KEY autoincrement," +
+          "timestamp DATETIME DEFAULT  (STRFTIME('%Y-%m-%d %H:%M:%S', 'NOW', 'localtime')),";
   } else {
-    sql = "CREATE TABLE " + table_name + "(" + primary_key + " STRING PRIMARY KEY NOT NULL,";
+    sql = "CREATE TABLE " + table_name + "(" + primary_key + " STRING PRIMARY KEY NOT NULL," +
+          "timestamp DATETIME DEFAULT  (STRFTIME('%Y-%m-%d %H:%M:%S', 'NOW', 'localtime')),";
   }
   for (auto it : key_names) {
     sql += it + " STRING,";
@@ -102,6 +108,15 @@ bool Sqlite::Update(std::string table_name, std::string condition_key, std::stri
 
 bool Sqlite::Delete(std::string table_name, std::string key_name, std::string value) {
   std::string sql_statement = "DELETE FROM " + table_name + " WHERE " + key_name + " = " + value + "; ";
+  return Execution(sql_statement.c_str());
+}
+
+bool Sqlite::Delete(std::string table_name, std::string condition) {
+  if (condition.empty()) {
+    LOG(ERROR) << "Sqlite delete statment has no condition.";
+    return false;
+  }
+  std::string sql_statement = "DELETE FROM " + table_name + " WHERE " + condition+ "; ";
   return Execution(sql_statement.c_str());
 }
 

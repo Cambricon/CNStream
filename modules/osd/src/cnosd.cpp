@@ -119,7 +119,7 @@ void CnOsd::DrawLabel(cv::Mat* image, const cnstream::CNObjsVec& objects,
       text = "Label not found, id = " + std::to_string(label_id);
     }
     text += " " + FloatToString(object->score);
-    if (!object->track_id.empty()) {
+    if (!object->track_id.empty() && object->track_id != "-1") {
       text += " track_id: " + object->track_id;
     }
     DrawText(image, bottom_left, text, color);

@@ -366,10 +366,12 @@ class Pipeline {
    *
    * @param stream_ids The stream IDs.
    * @param db_dir The directory where database files to be saved.
+   * @param clear_data_interval The interval of clearing data in database. The default value is 10 minutes.
    *
    * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
-  bool CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir);
+  bool CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir,
+                         uint32_t clear_data_interval = 10/*in minutes*/);
   /**
    * @brief Removes PerfManager of the stream.
    *
@@ -433,7 +435,6 @@ class Pipeline {
    * @return std::unordered_map<std::string, std::shared_ptr<PerfManager>>
    */
   std::unordered_map<std::string, std::shared_ptr<PerfManager>> GetPerfManagers();
-
   /* called by pipeline */
   /**
    * Registers a callback to be called after the frame process is done.
@@ -506,7 +507,7 @@ class Pipeline {
   }
 
   const std::string& GetName() const { return name_; }
-
+  void PerfDeleteDataLoop();
   /**
    * The module associated information.
    */
@@ -543,8 +544,10 @@ class Pipeline {
   std::unordered_map<std::string, std::shared_ptr<PerfManager>> perf_managers_;
   std::unordered_map<std::string, std::shared_ptr<PerfCalculator>> perf_calculators_;
   std::thread perf_commit_thread_;
+  std::thread perf_del_data_thread_;
   std::thread calculate_perf_thread_;
   std::atomic<bool> perf_running_{false};
+  uint32_t clear_data_interval_ = 10;
   RwLock perf_managers_lock_;
   std::mutex perf_calculation_lock_;
 };  // class Pipeline

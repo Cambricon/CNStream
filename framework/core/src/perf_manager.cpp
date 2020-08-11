@@ -235,4 +235,8 @@ bool PerfManager::CreateDir(std::string dir) {
   return true;
 }
 
+bool PerfManager::DeletePreviousData(int previous_time) {
+  return sql_->Delete(GetDefaultType(), "timestamp < DATETIME('now', 'localtime', '-" +
+                      std::to_string(previous_time) + " minutes')");
+}
 }  // namespace cnstream

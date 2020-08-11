@@ -157,19 +157,25 @@ TEST(PerfCalculatorForModule, CalcThroughput) {
 
   double th_0_fps = ceil(1e7 / (end[0] - start[0])) / 10;
   double th_1_fps = ceil(2e7 / (end[2] - start[1])) / 10;
+  uint64_t total_time = data_num * 1e6 / (th_0_fps + th_1_fps);
+  double total_fps = ceil(data_num * 1e7 / total_time) / 10;
+
   EXPECT_DOUBLE_EQ(stats.fps, th_0_fps + th_1_fps);
   EXPECT_EQ(stats.frame_cnt, data_num);
-  std::vector<PerfStats> stats_th_0 = perf_cal.GetThroughput(th_ids[0], table_name);
-  ASSERT_EQ(stats_th_0.size(), 1);
-  EXPECT_EQ(stats_th_0[0].fps, th_0_fps);
-  EXPECT_EQ(stats_th_0[0].frame_cnt, 1);
-  std::vector<PerfStats> stats_th_1 = perf_cal.GetThroughput(th_ids[1], table_name);
-  ASSERT_EQ(stats_th_1.size(), 1);
-  EXPECT_EQ(stats_th_1[0].fps, th_1_fps);
-  EXPECT_EQ(stats_th_1[0].frame_cnt, 2);
+  PerfStats stats_th_0 = perf_cal.GetAvgThroughput(th_ids[0], table_name);
+  EXPECT_EQ(stats_th_0.fps, th_0_fps);
+  EXPECT_EQ(stats_th_0.frame_cnt, 1);
+  PerfStats stats_th_1 = perf_cal.GetAvgThroughput(th_ids[1], table_name);
+  EXPECT_EQ(stats_th_1.fps, th_1_fps);
+  EXPECT_EQ(stats_th_1.frame_cnt, 2);
+  PerfStats stats_total = perf_cal.GetAvgThroughput("", table_name);
+  EXPECT_EQ(stats_total.fps, total_fps);
+  EXPECT_EQ(stats_total.frame_cnt, data_num);
+
+  // TODO(gaoyujia) : deprecated interface GetThroughput
   std::vector<PerfStats> stats_vec = perf_cal.GetThroughput("", table_name);
   ASSERT_EQ(stats_vec.size(), 1);
-  EXPECT_EQ(stats_vec[0].fps, th_0_fps + th_1_fps);
+  EXPECT_EQ(stats_vec[0].fps, total_fps);
   EXPECT_EQ(stats_vec[0].frame_cnt, data_num);
 
   sql->Close();
@@ -265,21 +271,16 @@ TEST(PerfCalculatorForPipeline, CalcTotalThroughput) {
   double fps = ceil(num_1 * 1e7 / (end_e_1 - end_s)) / 10;
   EXPECT_DOUBLE_EQ(stats.fps, fps);
   EXPECT_EQ(stats.frame_cnt, num_1);
-  std::vector<PerfStats> stats_vec = perf_cal.GetThroughput("", table_name);
-  ASSERT_EQ(stats_vec.size(), 1);
-  EXPECT_EQ(stats_vec[0].fps, fps);
-  EXPECT_EQ(stats_vec[0].frame_cnt, num_1);
+  PerfStats stats_vec = perf_cal.GetAvgThroughput("", table_name);
+  EXPECT_EQ(stats_vec.fps, fps);
+  EXPECT_EQ(stats_vec.frame_cnt, num_1);
 
   stats = perf_cal.CalcThroughput("", table_name, {key});
 
   fps = ceil(num_2 * 1e7 / (end_e_2 - end_e_1)) / 10;
   EXPECT_DOUBLE_EQ(stats.fps, fps);
   EXPECT_EQ(stats.frame_cnt, num_2);
-  stats_vec = perf_cal.GetThroughput("", table_name);
-  ASSERT_EQ(stats_vec.size(), 2);
-  EXPECT_EQ(stats_vec[1].fps, fps);
-  EXPECT_EQ(stats_vec[1].frame_cnt, num_2);
-  // avg
+
   PerfStats avg = perf_cal.GetAvgThroughput("", table_name);
   fps = ceil(total_num * 1e7 / (end_e_2 - end_s)) / 10;
   EXPECT_DOUBLE_EQ(avg.fps, fps);
@@ -338,14 +339,12 @@ TEST(PerfCalculatorForInfer, CalcThroughput) {
   EXPECT_EQ(stats_0.frame_cnt, data_num);
   EXPECT_DOUBLE_EQ(stats_1.fps, th_1_fps);
   EXPECT_EQ(stats_1.frame_cnt, data_num);
-  std::vector<PerfStats> stats_th_0 = perf_cal.GetThroughput(sql_name, table_name[0]);
-  ASSERT_EQ(stats_th_0.size(), 1);
-  EXPECT_EQ(stats_th_0[0].fps, th_0_fps);
-  EXPECT_EQ(stats_th_0[0].frame_cnt, data_num);
-  std::vector<PerfStats> stats_th_1 = perf_cal.GetThroughput(sql_name, table_name[1]);
-  ASSERT_EQ(stats_th_1.size(), 1);
-  EXPECT_EQ(stats_th_1[0].fps, th_1_fps);
-  EXPECT_EQ(stats_th_1[0].frame_cnt, data_num);
+  PerfStats stats_th_0 = perf_cal.GetAvgThroughput(sql_name, table_name[0]);
+  EXPECT_EQ(stats_th_0.fps, th_0_fps);
+  EXPECT_EQ(stats_th_0.frame_cnt, data_num);
+  PerfStats stats_th_1 = perf_cal.GetAvgThroughput(sql_name, table_name[1]);
+  EXPECT_EQ(stats_th_1.fps, th_1_fps);
+  EXPECT_EQ(stats_th_1.frame_cnt, data_num);
 
   sql->Close();
   remove(gTestPerfFile.c_str());

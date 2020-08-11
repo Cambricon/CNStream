@@ -321,7 +321,7 @@ TEST(PerfSqlite, DeleteFailedCase) {
 static int Callback(void *data, int argc, char **argv, char **azColName) {
   int *cnt = reinterpret_cast<int *>(data);
   *cnt += 1;
-  EXPECT_EQ(argc, 4);
+  EXPECT_EQ(argc, 3);
   for (int i = 0; i < argc; i++) {
     EXPECT_EQ(atoi(argv[i]), *cnt);
   }
@@ -345,16 +345,16 @@ TEST(PerfSqlite, Select) {
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(3));
 
   int data = 0;
-  EXPECT_TRUE(sql.Select(table_name, "*", "", Callback, reinterpret_cast<void *>(&data)));
+  EXPECT_TRUE(sql.Select(table_name, "key1,key2,key3", "", Callback, reinterpret_cast<void *>(&data)));
   EXPECT_EQ(data, 3);
   data = 0;
-  EXPECT_TRUE(sql.Select("select * from " + table_name + ";", Callback, reinterpret_cast<void *>(&data)));
+  EXPECT_TRUE(sql.Select("select key1,key2,key3 from " + table_name + ";", Callback, reinterpret_cast<void *>(&data)));
   EXPECT_EQ(data, 3);
   data = 0;
-  EXPECT_TRUE(sql.Select(table_name, "*", "key1=1 or key2=2", Callback, reinterpret_cast<void *>(&data)));
+  EXPECT_TRUE(sql.Select(table_name, "key1,key2,key3", "key1=1 or key2=2", Callback, reinterpret_cast<void *>(&data)));
   EXPECT_EQ(data, 2);
   data = 0;
-  EXPECT_TRUE(sql.Select("select * from " + table_name + " where key1=1 or key2=2;", Callback,
+  EXPECT_TRUE(sql.Select("select key1,key2,key3 from " + table_name + " where key1=1 or key2=2;", Callback,
                          reinterpret_cast<void *>(&data)));
   EXPECT_EQ(data, 2);
 
