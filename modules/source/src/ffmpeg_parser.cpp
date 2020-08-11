@@ -444,7 +444,7 @@ static int GetNaluH2645(unsigned char *buf, int len, bool isH264, std::vector<Na
 
 H2645NalSplitter::~H2645NalSplitter() {
   if (es_buffer_) {
-    delete es_buffer_, es_buffer_ = nullptr;
+    delete[] es_buffer_, es_buffer_ = nullptr;
   }
 }
 

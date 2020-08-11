@@ -1,3 +1,24 @@
+changes for 5.1.0
+* fix memory leak in inferencer module.(both mlu memory and cpu memory)
+* inferencer module support dump resized images.
+* fix bad any cast in inferencer.
+* inferencer module support setting model input pixel format.(RGBA32/BGRA32/ARGB32/ABGR32)
+* inferencer module add parameter named mem_on_mlu_for_postproc to control the input data for post-processing on MLU or CPU.
+  When you use the bangc operator for network post-processing, please set it to true to ensure performance.
+* fix the loss of precision when use `keep_aspect_ratio` in inferencer module.
+* fix core dump in inferencer when do image preprocessing with MLU and the magnification is greater than 33 and less than 100.
+* fix core dump in inferencer when do image preprocessing with MLU and the height of the original image is an odd number.
+* source module support decoder use mlu and output to cpu.
+* source can reports error for decoding failed and continue decoding.
+* fix memory all allocated on ddr channel 0 when use cpu decoder and output on mlu.
+* add ESJpegMemHandler, support read jpeg data from memory.
+* add RawImgMemHandler, support input raw h.264/h.265 data.
+* CNDataFrame::ImageBGR change to thread safe interface.
+* perf tracker module by support batch feature extraction.
+* fix pipeline cannot stop when there are more than 64 streams.
+* fix core dump when the module specified by `next_modules` not exist.
+* fixed some minor issues about performance statistical.
+
 changes for 5.0.0
 * rename cntream-toolkit.so to easydk.so
 * add IModuleObserver support Apps observer each module's output
