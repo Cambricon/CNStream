@@ -45,8 +45,8 @@ class Pipeline;
  * An enumerated type that specifies the mask of CNDataFrame.
  */
 enum CNFrameFlag {
-  CN_FRAME_FLAG_EOS = 1 << 0,  ///< Identifies the end of data stream.
-  CN_FRAME_FLAG_ERROR = 1 << 5
+  CN_FRAME_FLAG_EOS = 1 << 0,     ///< Identifies the end of data stream.
+  CN_FRAME_FLAG_INVALID = 1 << 1  ///< Identifies the invalid of frame.
 };
 
 /**
@@ -75,11 +75,11 @@ struct CNFrameInfo {
   bool IsEos() { return (flags & cnstream::CN_FRAME_FLAG_EOS) ? true : false; }
 
    /**
-   * DataFrame is end of stream or not 
+   * Whether DataFrame is availability or not.
    *
-   * @return true: frame is EOS, false: frame isn't EOS
+   * @return true: frame is invalid, false: frame is valid.
    */
-  bool IsValuable() { return (flags & cnstream::CN_FRAME_FLAG_ERROR) ? false : true; }
+  bool IsInvalid() { return (flags & cnstream::CN_FRAME_FLAG_INVALID) ? true : false; }
   /**
    * Sets index (usually the index is a number) to identify stream. This is only used for distributing each stream 
    * data to the appropriate thread.

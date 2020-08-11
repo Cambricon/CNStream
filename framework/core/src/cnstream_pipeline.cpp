@@ -128,6 +128,7 @@ void Pipeline::StreamMsgHandleFunc() {
       case StreamMsgType::EOS_MSG:
       case StreamMsgType::ERROR_MSG:
       case StreamMsgType::STREAM_ERR_MSG:
+      case StreamMsgType::FRAME_ERR_MSG:
       case StreamMsgType::USER_MSG0:
       case StreamMsgType::USER_MSG1:
       case StreamMsgType::USER_MSG2:
@@ -452,7 +453,7 @@ bool Pipeline::Stop() {
     end_nodes_.clear();
   }
   ClearEOSMask();
-  LOG(INFO) << "Pipeline Stop";
+  LOG(INFO) << "[" << GetName() << "] " << "Stop";
   return true;
 }
 
@@ -481,11 +482,18 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
   }
 
   Module* module = modules_map_[moduleName].get();
-  // If data is not valuable
-  if (!data->IsValuable()) {
-    LOG(ERROR) << module->name_ << " error, pts: " << data->timestamp;
+  // If data is invalid
+  if (data->IsInvalid()) {
+    StreamMsg msg;
+    msg.type = StreamMsgType::FRAME_ERR_MSG;
+    msg.stream_id = data->stream_id;
+    msg.module_name = moduleName;
+    msg.pts = data->timestamp;
+    UpdateByStreamMsg(msg);
+    LOG(WARNING) << module->name_ << " frame error, stream_id, pts: " << data->stream_id, data->timestamp;
     return;
   }
+  module->NotifyObserver(data);
   for (auto& down_node_name : module_info.down_nodes) {
     ModuleAssociatedInfo& down_node_info = modules_.find(down_node_name)->second;
     assert(down_node_info.connector);
@@ -500,7 +508,6 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     bool processed_by_all_modules = (frame_mask == down_node->GetModulesMask());
 
     if (processed_by_all_modules) {
-      down_node->NotifyObserver(data);
       std::shared_ptr<Connector> connector = down_node_info.connector;
       const uint32_t chn_idx = data->channel_idx;
       int conveyor_idx = chn_idx % connector->GetConveyorCount();

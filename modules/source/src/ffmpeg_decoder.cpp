@@ -550,7 +550,7 @@ void MluDecoder::JpegFrameCallback(cnjpegDecOutput *output) {
       }
     }
     data->timestamp = output->pts;
-    data->flags = cnstream::CN_FRAME_FLAG_ERROR;
+    data->flags = cnstream::CN_FRAME_FLAG_INVALID;
     handler_->SendFrameInfo(data);
     return;
   }
