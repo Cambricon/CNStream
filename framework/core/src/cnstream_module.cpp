@@ -43,7 +43,7 @@ static size_t _GetId() {
 }
 static void _ReturnId(size_t id_) {
   SpinLockGuard guard(module_id_spinlock_);
-  if (id_ < 0 || id_ >= sizeof(module_id_mask_) * 8) {
+  if (id_ >= sizeof(module_id_mask_) * 8) {
     return;
   }
   module_id_mask_ &= ~(1 << id_);

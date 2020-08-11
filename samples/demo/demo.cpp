@@ -64,6 +64,17 @@ cnstream::Displayer* gdisplayer = nullptr;
 
 std::atomic<bool> thread_running{true};
 
+class LogHelper {
+ public:
+  explicit LogHelper(char *program) {
+    google::InitGoogleLogging(program);
+    FLAGS_colorlogtostderr = true;
+    FLAGS_alsologtostderr = true;
+    google::InstallFailureSignalHandler();
+  }
+  ~LogHelper() { google::ShutdownGoogleLogging(); }
+};
+
 class MsgObserver : cnstream::StreamMsgObserver {
  public:
   MsgObserver(int stream_cnt, cnstream::Pipeline* pipeline, std::string source_name) :
@@ -133,13 +144,13 @@ int AddSourceForUsbCam(cnstream::DataSource* source, const std::string &stream_i
   return ret;
 }
 
-int AddSourceForVideoInMem(cnstream::DataSource* source, const std::string &stream_id, const std::string &filename,
-                           const bool &loop, std::vector<std::thread>* thread_vec) {
+int AddSourceForVideoInMem(cnstream::DataSource *source, const std::string &stream_id, const std::string &filename,
+                           const bool &loop) {
   auto handler = cnstream::ESMemHandler::Create(source, stream_id);
   int ret = source->AddSource(handler);
   if (ret != 0) return ret;
   // Start another thread to read data from file to memory and feed data to pipeline.
-  thread_vec->push_back(std::thread([=]() {
+  std::thread thread_source([=]() {
     FILE* fp = fopen(filename.c_str(), "rb");
     if (!fp) return;
     auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
@@ -156,12 +167,13 @@ int AddSourceForVideoInMem(cnstream::DataSource* source, const std::string &stre
       }
     }
     memHandler->Write(nullptr, 0);
-  }));
+  });
+  thread_source.detach();
   return 0;
 }
 
-int AddSourceForImageInMem(cnstream::DataSource* source, const std::string &stream_id, const std::string &filename,
-                           const bool &loop, std::vector<std::thread>* thread_vec) {
+int AddSourceForImageInMem(cnstream::DataSource *source, const std::string &stream_id, const std::string &filename,
+                           const bool &loop) {
   // Jpeg decoder maximum resolution 8K
   int max_width = 7680;  // FIXME
   int max_height = 4320;  // FIXME
@@ -170,7 +182,7 @@ int AddSourceForImageInMem(cnstream::DataSource* source, const std::string &stre
   int ret = source->AddSource(handler);
   if (ret != 0) return ret;
   // Start another thread to read data from files to memory and feed data to pipeline.
-  thread_vec->push_back(std::thread([=]() {
+  std::thread thread_source([=]() {
     int index = filename.find_last_of("/");
     std::string dir_path = filename.substr(0, index);
     std::list<std::string> files = GetFileNameFromDir(dir_path, "*.jpg");
@@ -215,13 +227,13 @@ int AddSourceForImageInMem(cnstream::DataSource* source, const std::string &stre
     pkt.flags = cnstream::ESPacket::FLAG_EOS;
     memHandler->Write(&pkt);
     delete [] buf, buf = nullptr;
-  }));
+  });
+  thread_source.detach();
   return 0;
 }
 
-int AddSourceForDecompressedImage(cnstream::DataSource* source, const std::string &stream_id,
-                                  const std::string &filename, const bool &loop,
-                                  const bool &use_cv_mat, std::vector<std::thread>* thread_vec) {
+int AddSourceForDecompressedImage(cnstream::DataSource *source, const std::string &stream_id,
+                                  const std::string &filename, const bool &loop, const bool &use_cv_mat) {
   // The following code is only for image input. For video input, you could use opencv VideoCapture.
   int ret = -1;
 #ifdef HAVE_OPENCV
@@ -229,7 +241,7 @@ int AddSourceForDecompressedImage(cnstream::DataSource* source, const std::strin
   ret = source->AddSource(handler);
   if (ret != 0) return ret;
   // Start another thread to read data from files to cv mat and feed data to pipeline.
-  thread_vec->push_back(std::thread([=]() {
+  std::thread thread_source([=]() {
     int index = filename.find_last_of("/");
     std::string dir_path = filename.substr(0, index);
     std::list<std::string> files = GetFileNameFromDir(dir_path, "*.jpg");
@@ -256,7 +268,8 @@ int AddSourceForDecompressedImage(cnstream::DataSource* source, const std::strin
       }
     }
     memHandler->Write(nullptr);
-  }));
+  });
+  thread_source.detach();
 #else
   LOG(ERROR) << "OPENCV is not linked, can not support cv::mat or raw image data with bgr24/rgb24 "
     "format.";
@@ -271,8 +284,8 @@ int AddSourceForFile(cnstream::DataSource* source, const std::string &stream_id,
 }
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, false);
+  LogHelper log_helper(argv[0]);
 
   LOG(INFO) << "CNSTREAM VERSION:" << cnstream::VersionString();
 
@@ -335,7 +348,6 @@ int main(int argc, char** argv) {
   /*
     add stream sources...
   */
-  std::vector<std::thread> vec_threads_mem;
   int streams = static_cast<int>(video_urls.size());
   auto url_iter = video_urls.begin();
   for (int i = 0; i < streams; i++, url_iter++) {
@@ -352,12 +364,11 @@ int main(int argc, char** argv) {
       } else if (filename.find("/dev/video") != std::string::npos) {  // only support linux
         ret = AddSourceForUsbCam(source, stream_id, filename,  FLAGS_src_frame_rate, FLAGS_loop);
       } else if (filename.find(".jpg") != std::string::npos && FLAGS_jpeg_from_mem) {
-        ret = AddSourceForImageInMem(source, stream_id, filename, FLAGS_loop, &vec_threads_mem);
+        ret = AddSourceForImageInMem(source, stream_id, filename, FLAGS_loop);
       } else if (filename.find(".jpg") != std::string::npos && FLAGS_raw_img_input) {
-        ret = AddSourceForDecompressedImage(source, stream_id, filename, FLAGS_loop,
-                FLAGS_use_cv_mat, &vec_threads_mem);
+        ret = AddSourceForDecompressedImage(source, stream_id, filename, FLAGS_loop, FLAGS_use_cv_mat);
       } else if (filename.find(".h264") != std::string::npos) {
-        ret = AddSourceForVideoInMem(source, stream_id, filename, FLAGS_loop, &vec_threads_mem);
+        ret = AddSourceForVideoInMem(source, stream_id, filename, FLAGS_loop);
       } else {
         ret = AddSourceForFile(source, stream_id, filename, FLAGS_src_frame_rate, FLAGS_loop);
       }
@@ -426,14 +437,5 @@ int main(int argc, char** argv) {
       }
     }
   }
-
-  for (auto& thread_id : vec_threads_mem) {
-    if (thread_id.joinable()) {
-      thread_id.join();
-    }
-  }
-  vec_threads_mem.clear();
-
-  google::ShutdownGoogleLogging();
   return EXIT_SUCCESS;
 }

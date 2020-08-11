@@ -1,4 +1,5 @@
 #!/bin/bash
+ulimit -c unlimited
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CURRENT_DIR/../../lib
 cd $CURRENT_DIR

@@ -85,7 +85,7 @@ static uint32_t GetLastSpacePos(std::string desc, uint32_t end, uint32_t length)
   if (end > desc.length()) {
     end = desc.length();
   }
-  if (end - length < 0) {
+  if (end < length) {
     length = end;
   }
   for (uint32_t i = 0; i < length; i++) {

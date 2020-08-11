@@ -51,6 +51,7 @@ void PrintThroughput(const PerfStats &stats, uint32_t width) {
   std::cout << std::right << "  -- [fps]: " << std::setw(6) << std::setfill(' ')
             << std::fixed << std::setprecision(1) << stats.fps << ", [frame count]: "
             << std::setw(width) << std::setfill(' ') << stats.frame_cnt << std::endl;
+  std::cout.unsetf(std::ios::fixed);
 }
 
 void PrintStreamId(std::string stream_id) {
