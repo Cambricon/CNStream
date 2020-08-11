@@ -85,23 +85,39 @@ class MsgObserver : cnstream::StreamMsgObserver {
   void Update(const cnstream::StreamMsg& smsg) override {
     std::lock_guard<std::mutex> lg(mutex_);
     if (stop_) return;
-    if (smsg.type == cnstream::StreamMsgType::EOS_MSG) {
-      eos_stream_.push_back(smsg.stream_id);
-      LOG(INFO) << "[Observer] received EOS from stream:" << smsg.stream_id;
-      if (static_cast<int>(eos_stream_.size()) == stream_cnt_) {
-        LOG(INFO) << "[Observer] received all EOS";
+    cnstream::DataSource* source = nullptr;
+    switch (smsg.type) {
+      case cnstream::StreamMsgType::EOS_MSG:
+        eos_stream_.push_back(smsg.stream_id);
+        LOG(INFO) << "[Observer] received EOS from stream:" << smsg.stream_id;
+        if (static_cast<int>(eos_stream_.size()) == stream_cnt_) {
+          LOG(INFO) << "[Observer] received all EOS";
+          stop_ = true;
+        }
+        break;
+
+      case cnstream::StreamMsgType::STREAM_ERR_MSG:
+        LOG(WARNING) << "[Observer] received stream error from stream: " << smsg.stream_id
+          << ", remove it from pipeline.";
+        source = dynamic_cast<cnstream::DataSource*>(pipeline_->GetModule(source_name_));
+        if (source) source->RemoveSource(smsg.stream_id);
+        pipeline_->RemovePerfManager(smsg.stream_id);
+        stream_cnt_--;
+        break;
+
+      case cnstream::StreamMsgType::ERROR_MSG:
+        LOG(ERROR) << "[Observer] received ERROR_MSG";
         stop_ = true;
-      }
-    } else if (smsg.type == cnstream::StreamMsgType::STREAM_ERR_MSG) {
-      LOG(WARNING) << "[Observer] received stream error from stream: " << smsg.stream_id
-        << ", remove it from pipeline.";
-      cnstream::DataSource* source = dynamic_cast<cnstream::DataSource*>(pipeline_->GetModule(source_name_));
-      if (source) source->RemoveSource(smsg.stream_id);
-      pipeline_->RemovePerfManager(smsg.stream_id);
-      stream_cnt_--;
-    } else if (smsg.type == cnstream::StreamMsgType::ERROR_MSG) {
-      LOG(ERROR) << "[Observer] received ERROR_MSG";
-      stop_ = true;
+        break;
+
+      case cnstream::StreamMsgType::FRAME_ERR_MSG:
+        LOG(WARNING) << "[Observer] received frame error from stream: " << smsg.stream_id
+          << ", pts: " << smsg.pts << ".";
+        break;
+
+      default:
+        LOG(ERROR) << "[Observer] unkonw message type.";
+        break;
     }
     if (stop_) {
       wakener_.notify_one();
