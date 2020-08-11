@@ -19,10 +19,13 @@
  *************************************************************************/
 #include <glog/logging.h>
 
+#include <algorithm>
 #include <deque>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "device/mlu_context.h"
 #include "easybang/resize_and_colorcvt.h"
@@ -44,6 +47,19 @@ float ResizeAndConvert(void* dst, void** y_plane_addrs, void** uv_plane_addrs,
                        KernelParam* kparam, cnrtFunctionType_t func_type,
                        cnrtDim3_t dim, cnrtQueue_t queue, int dev_type,
                        string* estr);
+
+std::ostream& operator<<(std::ostream& os, const edk::MluResizeConvertOp::InputData& data) {
+  os << "y plane attr: " << data.planes[0] << "\n"
+     << "uv plane attr: " << data.planes[1] << "\n"
+     << "src w: " << data.src_w << "\n"
+     << "src h: " << data.src_h << "\n"
+     << "src stride: " << data.src_stride << "\n"
+     << "crop x: " << data.crop_x << "\n"
+     << "crop y: " << data.crop_y << "\n"
+     << "crop w: " << data.crop_w << "\n"
+     << "crop h: " << data.crop_h;
+  return os;
+}
 
 namespace edk {
 
@@ -222,21 +238,17 @@ void MluResizeConvertOp::BatchingUp(void* src_y, void* src_uv) {
 void MluResizeConvertOp::BatchingUp(const InputData& input_data) {
   VLOG(5) << "Store resize and convert operator input for batching, "
              << input_data.planes[0] << ", " << input_data.planes[1];
-  uint32_t src_stride = input_data.src_w > input_data.src_stride ? input_data.src_w : input_data.src_stride;
-  uint32_t crop_x = input_data.crop_x >= input_data.src_w ? 0 : input_data.crop_x;
-  uint32_t crop_y = input_data.crop_y >= input_data.src_h ? 0 : input_data.crop_y;
-  uint32_t crop_w = input_data.crop_w == 0 ? input_data.src_w : input_data.crop_w;
-  crop_w = (crop_w + crop_x) > input_data.src_w ? (input_data.src_w - crop_x) : crop_w;
-  uint32_t crop_h = input_data.crop_h == 0 ? input_data.src_h : input_data.crop_h;
-  crop_h = (crop_h + crop_y) > input_data.src_h ? (input_data.src_h - crop_y) : crop_h;
   InputData t;
   t.src_w = input_data.src_w;
   t.src_h = input_data.src_h;
-  t.src_stride = src_stride;
-  t.crop_x = crop_x;
-  t.crop_y = crop_y;
-  t.crop_w = crop_w;
-  t.crop_h = crop_h;
+  if (t.src_h % 2) t.src_h--;
+  t.src_stride = input_data.src_w > input_data.src_stride ? input_data.src_w : input_data.src_stride;
+  t.crop_x = input_data.crop_x;
+  t.crop_y = input_data.crop_y;
+  t.crop_w = input_data.crop_w == 0 ? t.src_w : input_data.crop_w;
+  t.crop_w = std::min(t.src_w - t.crop_x, t.crop_w);
+  t.crop_h = input_data.crop_h == 0 ? t.src_h : input_data.crop_h;
+  t.crop_h = std::min(t.src_h - t.crop_y, t.crop_h);
   t.planes[0] = input_data.planes[0];
   t.planes[1] = input_data.planes[1];
   d_ptr_->input_datas_cache_.push_back(t);
@@ -303,11 +315,38 @@ bool MluResizeConvertOp::SyncOneOutput(void* dst) {
                                d_ptr_->queue_->queue,
                                static_cast<int>(d_ptr_->attr_.core_version),
                                &d_ptr_->estr_);
+
+  if (!ret) {
+    LOG(ERROR) << "Resize convert failed. Info: ";
+    LOG(ERROR) << "dst w, dst h: " << d_ptr_->attr_.dst_w << d_ptr_->attr_.dst_h;
+    LOG(ERROR) << "keep aspect ratio: " << d_ptr_->attr_.keep_aspect_ratio;
+    LOG(ERROR) << "batchsize: " << d_ptr_->attr_.batch_size;
+    auto inputs = GetLastBatchInput();
+    for (const auto & it : inputs) LOG(ERROR) << it;
+  }
   /* if (!d_ptr_->shared_queue_ && ret) { */
   /*   cnrtRet_t cnrt_ret = cnrtSyncQueue(d_ptr_->queue_->queue); */
   /*   CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Sync queue failed. Error code:" + std::to_string(cnret), {}, false); */
   /* } */
   return ret;
+}
+
+std::vector<MluResizeConvertOp::InputData> MluResizeConvertOp::GetLastBatchInput() const {
+  std::vector<MluResizeConvertOp::InputData> datas;
+  for (int bi = 0; bi < d_ptr_->attr_.batch_size; ++bi) {
+    InputData t;
+    t.planes[0] = d_ptr_->y_ptrs_cpu_[bi];
+    t.planes[1] = d_ptr_->uv_ptrs_cpu_[bi];
+    t.src_w = d_ptr_->src_whs_cpu_[bi * 2 + 0];
+    t.src_stride = t.src_w;
+    t.src_h = d_ptr_->src_whs_cpu_[bi * 2 + 1];
+    t.crop_x = d_ptr_->src_rois_cpu_[bi * 4 + 0];
+    t.crop_y = d_ptr_->src_rois_cpu_[bi * 4 + 1];
+    t.crop_w = d_ptr_->src_rois_cpu_[bi * 4 + 2];
+    t.crop_h = d_ptr_->src_rois_cpu_[bi * 4 + 3];
+    datas.push_back(std::move(t));
+  }
+  return datas;
 }
 
 void MluResizeConvertOp::Destroy() {
