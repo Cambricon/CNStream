@@ -115,8 +115,10 @@ std::shared_ptr<InferTask> ResizeConvertObjBatchingStage::Batching(std::shared_p
   input_data.src_stride = frame->stride[0];
   input_data.planes[0] = src_y;
   input_data.planes[1] = src_uv;
-  input_data.crop_x = obj->bbox.x * frame->width;
-  input_data.crop_y = obj->bbox.y * frame->height;
+  int32_t crop_x = obj->bbox.x * frame->width;
+  int32_t crop_y = obj->bbox.y * frame->height;
+  input_data.crop_x = crop_x > 0 ? crop_x : 0;
+  input_data.crop_y = crop_y > 0 ? crop_y : 0;
   input_data.crop_w = obj->bbox.w * frame->width;
   input_data.crop_h = obj->bbox.h * frame->height;
   value->op.BatchingUp(input_data);

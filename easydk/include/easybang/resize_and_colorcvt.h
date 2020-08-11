@@ -27,7 +27,9 @@
 #ifndef EASYBANG_RESIZE_AND_CONVERT_H_
 #define EASYBANG_RESIZE_AND_CONVERT_H_
 
+#include <ostream>
 #include <string>
+#include <vector>
 #include "device/mlu_context.h"
 #include "cxxutil/edk_attribute.h"
 #include "cxxutil/exception.h"
@@ -204,6 +206,13 @@ class MluResizeConvertOp {
    */
   bool SyncOneOutput(void* dst);
 
+  /**
+   * @brief Get informations about last batch of input data
+   *
+   * @return Return last batch of input data
+   **/
+  std::vector<InputData> GetLastBatchInput() const;
+
  private:
   MluResizeConvertPrivate* d_ptr_ = nullptr;
 
@@ -212,5 +221,7 @@ class MluResizeConvertOp {
 };  // class MluResizeAndConvertOp
 
 }  // namespace edk
+
+std::ostream& operator<<(std::ostream& os, const edk::MluResizeConvertOp::InputData& data);
 
 #endif  // EASYBANG_RESIZE_AND_CONVERT_H_
