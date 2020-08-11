@@ -55,7 +55,7 @@ void PrintThroughput(const PerfStats &stats, uint32_t width) {
 }
 
 void PrintStreamId(std::string stream_id) {
-  std::cout << "[stream id] " << std::right << std::setw(3) << std::setfill(' ') << stream_id;
+  std::cout << "[stream id] " << std::left << std::setw(9) << std::setfill(' ') << stream_id;
 }
 
 void PrintStr(const std::string str, uint32_t width, const char fill_charater) {
@@ -108,7 +108,7 @@ std::vector<PerfStats> PerfCalculator::GetThroughput(const std::string &sql_name
   if (throughput_.find(map_key) == throughput_.end()) {
     LOG(ERROR) << "Can not find throughput for " << map_key;
   } else {
-    throughput = throughput_.at(map_key);
+    throughput = {throughput_.at(map_key)};
   }
 
   return throughput;
@@ -127,8 +127,17 @@ PerfStats PerfCalculator::CalcAvgThroughput(const std::vector<PerfStats> &stats_
 }
 
 PerfStats PerfCalculator::GetAvgThroughput(const std::string &sql_name, const std::string &perf_type) {
-  std::vector<PerfStats> throughput_vec = GetThroughput(sql_name, perf_type);
-  return CalcAvgThroughput(throughput_vec);
+  PerfStats throughput;
+  std::string map_key = sql_name + "_" + perf_type + "_throughput";
+
+  std::lock_guard<std::mutex> lg(fps_mutex_);
+  if (throughput_.find(map_key) == throughput_.end()) {
+    LOG(ERROR) << "Can not find throughput for " << map_key;
+  } else {
+    throughput = throughput_.at(map_key);
+  }
+
+  return throughput;
 }
 
 
@@ -316,10 +325,7 @@ PerfStats PerfCalculatorForModule::CalcThroughput(const std::string &sql_name, c
 
     {
       std::lock_guard<std::mutex> lg(fps_mutex_);
-      if (throughput_.find(map_key) == throughput_.end()) {
-        throughput_[map_key] = {};
-      }
-      throughput_[map_key].push_back(stats);
+      throughput_[map_key] = CalcAvgThroughput({throughput_[map_key], stats});
     }
 
     module_fps_vec.push_back(stats.fps);
@@ -347,10 +353,7 @@ PerfStats PerfCalculatorForModule::CalcThroughput(const std::string &sql_name, c
   std::string total_map_key = "_" + perf_type + "_throughput";
   {
     std::lock_guard<std::mutex> lg(fps_mutex_);
-    if (throughput_.find(total_map_key) == throughput_.end()) {
-      throughput_[total_map_key] = {};
-    }
-    throughput_[total_map_key].push_back(total_stats);
+    throughput_[total_map_key] = CalcAvgThroughput({throughput_[total_map_key], total_stats});
   }
 
   return total_stats;
@@ -472,10 +475,7 @@ PerfStats PerfCalculatorForPipeline::CalcThroughput(const std::string &sql_name,
 
   {
     std::lock_guard<std::mutex> lg(fps_mutex_);
-    if (throughput_.find(map_key) == throughput_.end()) {
-      throughput_[map_key] = {};
-    }
-    throughput_[map_key].push_back(stats);
+    throughput_[map_key] = CalcAvgThroughput({throughput_[map_key], stats});
   }
 
   if (end_time > 0) {
@@ -557,10 +557,7 @@ PerfStats PerfCalculatorForInfer::CalcThroughput(const std::string &sql_name, co
 
   {
     std::lock_guard<std::mutex> lg(fps_mutex_);
-    if (throughput_.find(map_key) == throughput_.end()) {
-      throughput_[map_key] = {};
-    }
-    throughput_[map_key].push_back(stats);
+    throughput_[map_key] = CalcAvgThroughput({throughput_[map_key], stats});
   }
 
   pre_time = now;

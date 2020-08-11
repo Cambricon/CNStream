@@ -366,6 +366,7 @@ bool Pipeline::Start() {
     }
     perf_commit_thread_ = std::thread(&Pipeline::PerfSqlCommitLoop, this);
     calculate_perf_thread_ = std::thread(&Pipeline::CalculatePerfStats, this);
+    perf_del_data_thread_ = std::thread(&Pipeline::PerfDeleteDataLoop, this);
   }
 
   // start data transmit
@@ -435,6 +436,9 @@ bool Pipeline::Stop() {
   }
 
   perf_running_.store(false);
+  if (perf_del_data_thread_.joinable()) {
+    perf_del_data_thread_.join();
+  }
   if (perf_commit_thread_.joinable()) {
     perf_commit_thread_.join();
   }
@@ -656,7 +660,8 @@ Module* Pipeline::GetModule(const std::string& moduleName) {
   return nullptr;
 }
 
-bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir) {
+bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir,
+                                 uint32_t clear_data_interval_in_minutes) {
   if (perf_running_) return false;
   if (db_dir.empty()) db_dir = "perf_database";
   PerfManager::PrepareDbFileDir(db_dir + "/");
@@ -689,17 +694,26 @@ bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::strin
   }
 
   stream_ids_ = stream_ids;
+  if (clear_data_interval_in_minutes > 0) {
+    clear_data_interval_ = clear_data_interval_in_minutes;
+  }
   perf_running_.store(true);
   return true;
 }
 
 void Pipeline::CalculatePerfStats() {
+  uint64_t start, end;
+  uint32_t interval = 2000000;  // 2s
   while (perf_running_) {
+    start = TimeStamp::Current();
     std::cout << "\033[1;33m" << "\n\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
               << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << "\033[0m" << std::endl;
     CalculateModulePerfStats();
     CalculatePipelinePerfStats();
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    end = TimeStamp::Current();
+    if (end > start && end - start < interval) {
+      std::this_thread::sleep_for(std::chrono::microseconds(interval - (end - start)));
+    }
   }
   std::cout << "\033[1;33m" << "\n\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
             << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%" << "\033[0m" << std::endl;
@@ -721,6 +735,25 @@ void Pipeline::PerfSqlCommitLoop() {
   RwLockReadGuard lg(perf_managers_lock_);
   for (auto& it : perf_managers_) {
     it.second->SqlCommitTrans();
+  }
+}
+
+void Pipeline::PerfDeleteDataLoop() {
+  uint64_t start, end;
+  while (perf_running_) {
+    start = TimeStampBase<std::chrono::seconds>::Current();
+    {
+      RwLockReadGuard lg(perf_managers_lock_);
+      for (auto& it : perf_managers_) {
+        it.second->DeletePreviousData(clear_data_interval_);
+      }
+    }
+    end = TimeStampBase<std::chrono::seconds>::Current();
+    int64_t sleep_time = clear_data_interval_ * 60 - (end - start);
+    while (perf_running_ && sleep_time > 0) {
+      sleep_time--;
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
   }
 }
 

@@ -200,9 +200,17 @@ class PerfManager {
    *
    * @param file_dir The file directory
    *
-   * @return Returns true is the file directory is prepared successfully, otherwise returns false.
+   * @return Returns true if the file directory is prepared successfully, otherwise returns false.
    */
   static bool PrepareDbFileDir(std::string file_dir);
+  /**
+   * @brief Delete the data in the database.
+   *
+   * @param previous_time Delete the data ``previous_time`` ago in the database. (in minutes)
+   *
+   * @return Returns true if the data is deleted successfully, otherwise returns false.
+   */
+  bool DeletePreviousData(int previous_time);
 
  private:
 #ifdef UNIT_TEST

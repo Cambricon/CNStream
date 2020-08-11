@@ -486,7 +486,7 @@ class PerfCalculator {
   PerfStats GetLatency(const std::string &sql_name, const std::string &perf_type);
   /**
    * @brief Gets throughput.
-   *
+   * @deprecated
    * @param sql_name The Sqlite database name.
    * @param perf_type The perf type.
    *
@@ -566,7 +566,7 @@ class PerfCalculator {
 
   std::unordered_map<std::string, size_t> pre_time_map_;
   std::unordered_map<std::string, PerfStats> stats_latency_map_;
-  std::unordered_map<std::string, std::vector<PerfStats>> throughput_;
+  std::unordered_map<std::string, PerfStats> throughput_;
 
   bool print_throughput_ = true;
 

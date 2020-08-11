@@ -44,6 +44,7 @@ class Sqlite {
   bool Update(std::string table_name, std::string condition_key, std::string condition_value, std::string update_key,
               std::string update_value);
   bool Delete(std::string table_name, std::string key_names, std::string values);
+  bool Delete(std::string table_name, std::string condition);
 
   bool Select(std::string table_name, std::string key_name, std::string condition,
               int (*callback)(void*, int, char**, char**), void* data);
