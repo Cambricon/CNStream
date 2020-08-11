@@ -51,7 +51,7 @@ class Postproc : virtual public ReflexObjectEx<Postproc> {
   /**
    * @brief do nothong
    */
-  virtual ~Postproc() {}
+  virtual ~Postproc() = 0;
   /**
    * @brief create relative postprocess
    *
@@ -70,16 +70,36 @@ class Postproc : virtual public ReflexObjectEx<Postproc> {
   void SetThreshold(const float threshold);
 
   /**
-   * @brief Execute postproc on neural network outputs
+   * @brief Execute postproc on neural network outputs.
    *
-   * @param net_outputs: neural network outputs
+   * @param net_outputs: neural network outputs, the data is stored on the host.
    * @param model: model information(you can get input shape and output shape from model)
-   * @param package: smart pointer of struct to store processed result
+   * @param package: smart pointer of struct to store processed result.
    *
-   * @return return 0 if succeed
+   * @return return 0 if succeed.
+   *
+   * @note this function is called by the inferencer module when the parameter
+           `mem_on_mlu_for_postproc` is set to false and `obj_infer` is set to false.
+           see the inferencer parameter description for details.
    */
   virtual int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
-                      const CNFrameInfoPtr& package) = 0;
+                      const CNFrameInfoPtr& package) { return 0; }
+
+  /**
+   * @brief Execute postproc on neural network outputs.
+   *
+   * @param net_outputs: neural network outputs, the data is stored on the mlu.
+   * @param model: model information(you can get input shape and output shape from model)
+   * @param packages: vector of batched frame infomations packages.
+   *
+   * @return return 0 if succeed.
+   *
+   * @note this function is called by the inferencer module when the parameter
+           `mem_on_mlu_for_postproc` is set to true and `obj_infer` is set to false.
+           see the inferencer parameter description for details.
+   */
+  virtual int Execute(const std::vector<void*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
+                      const std::vector<CNFrameInfoPtr> &packages) { return 0; }
 
  protected:
   float threshold_ = 0;
@@ -93,7 +113,7 @@ class ObjPostproc : virtual public ReflexObjectEx<ObjPostproc> {
   /**
    * @brief do nothing
    */
-  virtual ~ObjPostproc() {}
+  virtual ~ObjPostproc() = 0;
   /**
    * @brief create relative postprocess
    *
@@ -114,15 +134,37 @@ class ObjPostproc : virtual public ReflexObjectEx<ObjPostproc> {
   /**
    * @brief Execute postproc on neural network outputs
    *
-   * @param net_outputs: neural network outputs
+   * @param net_outputs: neural network outputs, the data is stored on the host.
    * @param model: model information(you can get input shape and output shape from model)
    * @param finfo: smart pointer of struct to store processed result
    * @param obj: object infomations
    *
    * @return return 0 if succeed
+   *
+   * @note this function is called by the inferencer module when the parameter
+           `mem_on_mlu_for_postproc` is set to false and `obj_infer` is set to true.
+           see the inferencer parameter description for detail.
    */
   virtual int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
-                      const CNFrameInfoPtr& finfo, const std::shared_ptr<CNInferObject>& pobj) = 0;
+                      const CNFrameInfoPtr& finfo, const std::shared_ptr<CNInferObject>& pobj) { return 0; }
+
+  /**
+   * @brief Execute postproc on neural network outputs
+   *
+   * @param net_outputs: neural network outputs, the data is stored on the mlu.
+   * @param model: model information(you can get input shape and output shape from model)
+   * @param obj_infos: batched object's infomations.
+   *
+   * @return return 0 if succeed
+   *
+   * @note this function is called by the inferencer module when the parameter
+           `mem_on_mlu_for_postproc` is set to true and `obj_infer` is set to true.
+           see the inferencer parameter description for detail.
+   */
+  virtual int Execute(const std::vector<void*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
+                      const std::vector<std::pair<CNFrameInfoPtr, std::shared_ptr<CNInferObject>>> &obj_infos) {
+    return 0;
+  }
 
  protected:
   float threshold_ = 0;
@@ -130,4 +172,4 @@ class ObjPostproc : virtual public ReflexObjectEx<ObjPostproc> {
 
 }  // namespace cnstream
 
-#endif  // ifndef MODULES_INFERENCE_INCLUDE_POSTPROC_HPP_
+#endif  // MODULES_INFERENCE_INCLUDE_POSTPROC_HPP_

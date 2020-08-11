@@ -24,6 +24,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef HAVE_OPENCV
@@ -47,12 +48,31 @@
 
 namespace cnstream {
 
+static bool gcalled_execute_v1 = false;
+static bool gcalled_execute_v2 = false;
+static std::atomic<bool> gpostproc_done {false};
+
+static void ResetGlobal() {
+  gcalled_execute_v1 = false;
+  gcalled_execute_v2 = false;
+  gpostproc_done.store(false);
+}
+
 std::string gTestPerfDir = GetExePath() + "../test_perf_tmp/";  // NOLINT
 
 class FakePostproc : public Postproc, virtual public ReflexObjectEx<Postproc> {
  public:
   int Execute(const std::vector<float *> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
               const CNFrameInfoPtr &package) override {
+    gcalled_execute_v1 = true;
+    gpostproc_done.store(true);
+    return 0;
+  }
+
+  int Execute(const std::vector<void*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
+              const std::vector<CNFrameInfoPtr> &packages) override {
+    gcalled_execute_v2 = true;
+    gpostproc_done.store(true);
     return 0;
   }
 
@@ -77,6 +97,15 @@ class FakeObjPostproc : public ObjPostproc {
  public:
   int Execute(const std::vector<float *> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
               const CNFrameInfoPtr &package, const CNInferObjectPtr &obj) override {
+    gcalled_execute_v1 = true;
+    gpostproc_done.store(true);
+    return 0;
+  }
+
+  int Execute(const std::vector<void*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
+              const std::vector<std::pair<CNFrameInfoPtr, std::shared_ptr<CNInferObject>>> &obj_infos) override {
+    gcalled_execute_v2 = true;
+    gpostproc_done.store(true);
     return 0;
   }
 
@@ -337,6 +366,69 @@ TEST(Inferencer, ProcessFrame) {
     cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
     ASSERT_NO_THROW(infer->Close());
   }
+
+  // test mem_on_mlu_for_postproc
+  {
+    std::shared_ptr<Module> infer = std::make_shared<Inferencer>(name);
+    ModuleParamSet param;
+    param["model_path"] = model_path;
+    param["func_name"] = g_func_name;
+    param["preproc_name"] = "FakePreproc";
+    param["postproc_name"] = g_postproc_name;
+    param["mem_on_mlu_for_postproc"] = "true";
+    param["device_id"] = std::to_string(g_dev_id);
+    param["batching_timeout"] = "30";
+    ASSERT_TRUE(infer->Open(param));
+
+    const int width = 1920, height = 1080;
+    size_t nbytes = width * height * sizeof(uint8_t) * 3 / 2;
+    uint8_t *frame_data = new uint8_t[nbytes];
+
+    auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
+    std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+    frame->frame_id = 1;
+    data->timestamp = 1000;
+    frame->width = width;
+    frame->height = height;
+    frame->ptr_cpu[0] = frame_data;
+    frame->ptr_cpu[1] = frame_data + nbytes * 2 / 3;
+    frame->stride[0] = frame->stride[1] = width;
+    frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+    frame->ctx.dev_type = DevContext::DevType::CPU;
+    frame->CopyToSyncMem();
+    data->datas[CNDataFramePtrKey] = frame;
+
+    ResetGlobal();
+
+    int ret = infer->Process(data);
+    EXPECT_EQ(ret, 1);
+
+    while (!gpostproc_done.load()) usleep(20 * 1000);
+
+    EXPECT_TRUE(gcalled_execute_v2);
+
+    // create eos frame for clearing stream idx
+    cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
+    ASSERT_NO_THROW(infer->Close());
+
+    param["mem_on_mlu_for_postproc"] = "false";
+    ASSERT_TRUE(infer->Open(param));
+
+    ResetGlobal();
+
+    ret = infer->Process(data);
+    EXPECT_EQ(ret, 1);
+
+    while (!gpostproc_done.load()) usleep(20 * 1000);
+
+    EXPECT_TRUE(gcalled_execute_v1);
+
+    // create eos frame for clearing stream idx
+    cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
+    ASSERT_NO_THROW(infer->Close());
+
+    delete[] frame_data;
+  }
 }
 
 TEST(Inferencer, ProcessObject) {
@@ -430,6 +522,78 @@ TEST(Inferencer, ProcessObject) {
       data->datas[cnstream::CNObjsVecKey] = objs;
       int ret = infer->Process(data);
       EXPECT_EQ(ret, 1);
+      // create eos frame for clearing stream idx
+      cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
+    }
+
+    ASSERT_NO_THROW(infer->Close());
+    param["mem_on_mlu_for_postproc"] = "true";
+    ASSERT_TRUE(infer->Open(param));
+    ResetGlobal();
+
+    // test mem_on_mlu_for_postproc (true)
+    {
+      auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
+      std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+      frame->frame_id = 1;
+      data->timestamp = 1000;
+      frame->width = width;
+      frame->height = height;
+      frame->ptr_mlu[0] = planes[0];
+      frame->ptr_mlu[1] = planes[1];
+      frame->stride[0] = frame->stride[1] = width;
+      frame->ctx.ddr_channel = g_channel_id;
+      frame->ctx.dev_id = g_dev_id;
+      frame->ctx.dev_type = DevContext::DevType::MLU;
+      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+      frame->CopyToSyncMem();
+      data->datas[CNDataFramePtrKey] = frame;
+      CNObjsVec objs;
+      objs.push_back(obj);
+      data->datas[cnstream::CNObjsVecKey] = objs;
+      int ret = infer->Process(data);
+      EXPECT_EQ(ret, 1);
+
+      while (!gpostproc_done.load()) usleep(20 * 1000);
+
+      EXPECT_TRUE(gcalled_execute_v2);
+
+      // create eos frame for clearing stream idx
+      cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
+    }
+
+    ASSERT_NO_THROW(infer->Close());
+    param["mem_on_mlu_for_postproc"] = "false";
+    ASSERT_TRUE(infer->Open(param));
+    ResetGlobal();
+
+    // test mem_on_mlu_for_postproc (false)
+    {
+      auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
+      std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+      frame->frame_id = 1;
+      data->timestamp = 1000;
+      frame->width = width;
+      frame->height = height;
+      frame->ptr_mlu[0] = planes[0];
+      frame->ptr_mlu[1] = planes[1];
+      frame->stride[0] = frame->stride[1] = width;
+      frame->ctx.ddr_channel = g_channel_id;
+      frame->ctx.dev_id = g_dev_id;
+      frame->ctx.dev_type = DevContext::DevType::MLU;
+      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+      frame->CopyToSyncMem();
+      data->datas[CNDataFramePtrKey] = frame;
+      CNObjsVec objs;
+      objs.push_back(obj);
+      data->datas[cnstream::CNObjsVecKey] = objs;
+      int ret = infer->Process(data);
+      EXPECT_EQ(ret, 1);
+
+      while (!gpostproc_done.load()) usleep(20 * 1000);
+
+      EXPECT_TRUE(gcalled_execute_v1);
+
       // create eos frame for clearing stream idx
       cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
     }

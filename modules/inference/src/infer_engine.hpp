@@ -73,7 +73,8 @@ class InferEngine {
               const std::shared_ptr<ObjPostproc>& obj_postprocessor = nullptr,
               const std::shared_ptr<ObjFilter>& obj_filter = nullptr,
               std::string dump_resized_image_dir = "",
-              CNDataFormat model_input_pixel_format = CN_PIXEL_FORMAT_RGBA32);
+              CNDataFormat model_input_pixel_format = CN_PIXEL_FORMAT_RGBA32,
+              bool mem_on_mlu_for_postproc = false);
   ~InferEngine();
   ResultWaitingCard FeedData(std::shared_ptr<CNFrameInfo> finfo);
 
@@ -113,6 +114,8 @@ class InferEngine {
   std::string infer_thread_id_;
   std::string dump_resized_image_dir_ = "";
   CNDataFormat model_input_fmt_ = CN_PIXEL_FORMAT_RGBA32;
+  uint32_t cached_frame_cnt_ = 0;
+  bool mem_on_mlu_for_postproc_ = false;
 };  // class InferEngine
 
 }  // namespace cnstream

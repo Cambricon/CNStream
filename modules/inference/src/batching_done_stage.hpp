@@ -150,11 +150,21 @@ class PostprocessingBatchingDoneStage : public BatchingDoneStage {
                                   std::shared_ptr<CpuOutputResource> cpu_output_res)
       : BatchingDoneStage(model, batchsize, dev_id), postprocessor_(postprocessor), cpu_output_res_(cpu_output_res) {}
 
-  std::vector<std::shared_ptr<InferTask>> BatchingDone(const BatchingDoneInput& finfos);
+  PostprocessingBatchingDoneStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, int dev_id,
+                                  std::shared_ptr<Postproc> postprocessor,
+                                  std::shared_ptr<MluOutputResource> mlu_output_res)
+      : BatchingDoneStage(model, batchsize, dev_id), postprocessor_(postprocessor), mlu_output_res_(mlu_output_res) {}
+
+  std::vector<std::shared_ptr<InferTask>> BatchingDone(const BatchingDoneInput& finfos) override;
+  std::vector<std::shared_ptr<InferTask>> BatchingDone(const BatchingDoneInput& finfos,
+                                                       const std::shared_ptr<CpuOutputResource> &cpu_output_res);
+  std::vector<std::shared_ptr<InferTask>> BatchingDone(const BatchingDoneInput& finfos,
+                                                       const std::shared_ptr<MluOutputResource> &mlu_output_res);
 
  private:
   std::shared_ptr<Postproc> postprocessor_;
-  std::shared_ptr<CpuOutputResource> cpu_output_res_;
+  std::shared_ptr<CpuOutputResource> cpu_output_res_ = nullptr;
+  std::shared_ptr<MluOutputResource> mlu_output_res_ = nullptr;
 };  // class PostprocessingBatchingDoneStage
 
 class ObjPostprocessingBatchingDoneStage : public BatchingDoneStage {
@@ -164,13 +174,26 @@ class ObjPostprocessingBatchingDoneStage : public BatchingDoneStage {
                                      std::shared_ptr<CpuOutputResource> cpu_output_res)
       : BatchingDoneStage(model, batchsize, dev_id), postprocessor_(postprocessor), cpu_output_res_(cpu_output_res) {}
 
-  std::vector<std::shared_ptr<InferTask>> BatchingDone(const BatchingDoneInput& finfos) { return {}; }
+  ObjPostprocessingBatchingDoneStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, int dev_id,
+                                     std::shared_ptr<ObjPostproc> postprocessor,
+                                     std::shared_ptr<MluOutputResource> mlu_output_res)
+      : BatchingDoneStage(model, batchsize, dev_id), postprocessor_(postprocessor), mlu_output_res_(mlu_output_res) {}
+
+  std::vector<std::shared_ptr<InferTask>> BatchingDone(const BatchingDoneInput& finfos) override { return {}; }
+
   std::vector<std::shared_ptr<InferTask>> ObjBatchingDone(const BatchingDoneInput& finfos,
                                                           const std::vector<std::shared_ptr<CNInferObject>>& objs);
+  std::vector<std::shared_ptr<InferTask>> ObjBatchingDone(const BatchingDoneInput& finfos,
+                                                          const std::vector<std::shared_ptr<CNInferObject>>& objs,
+                                                          const std::shared_ptr<CpuOutputResource> &cpu_output_res);
+  std::vector<std::shared_ptr<InferTask>> ObjBatchingDone(const BatchingDoneInput& finfos,
+                                                          const std::vector<std::shared_ptr<CNInferObject>>& objs,
+                                                          const std::shared_ptr<MluOutputResource> &mlu_output_res);
 
  private:
   std::shared_ptr<ObjPostproc> postprocessor_;
-  std::shared_ptr<CpuOutputResource> cpu_output_res_;
+  std::shared_ptr<CpuOutputResource> cpu_output_res_ = nullptr;
+  std::shared_ptr<MluOutputResource> mlu_output_res_ = nullptr;
 };  // class PostprocessingBatchingDoneStage
 
 }  // namespace cnstream
