@@ -245,10 +245,20 @@ void RawImgMemHandlerImpl::Close() {
 
 #ifdef HAVE_OPENCV
 int RawImgMemHandlerImpl::Write(cv::Mat *mat_data) {
+  if (eos_got_.load()) {
+    LOG(WARNING) << "eos got, can not feed data any more.";
+    return -1;
+  }
+
   std::lock_guard<std::mutex> lk(img_pktq_mutex_);
   if (img_pktq_) {
     ImagePacket img_pkt;
-    if (mat_data && mat_data->data) {
+    if (nullptr == mat_data) {
+      img_pkt.flags = ImagePacket::FLAG_EOS;
+      img_pkt.data = nullptr;
+      img_pkt.pts = pts_++;
+    } else if (mat_data && mat_data->data && (3 == mat_data->channels())
+        && (CV_8UC3 == mat_data->type()) && mat_data->isContinuous()) {
       img_pkt.pixel_fmt = CN_PIXEL_FORMAT_BGR24;
       img_pkt.width = mat_data->cols;
       img_pkt.height = mat_data->rows;
@@ -257,10 +267,9 @@ int RawImgMemHandlerImpl::Write(cv::Mat *mat_data) {
       memcpy(img_pkt.data, mat_data->data, img_pkt.size);
       img_pkt.pts = pts_++;
     } else {
-      img_pkt.flags = ImagePacket::FLAG_EOS;
-      img_pkt.data = nullptr;
-      img_pkt.pts = pts_++;
+      return -2;
     }
+
     int timeoutMs = 1000;
     while (running_.load()) {
       if (img_pktq_->Push(timeoutMs, img_pkt)) {
@@ -274,10 +283,19 @@ int RawImgMemHandlerImpl::Write(cv::Mat *mat_data) {
 #endif
 
 int RawImgMemHandlerImpl::Write(unsigned char *img_data, int size, int w, int h, CNDataFormat pixel_fmt) {
+  if (eos_got_.load()) {
+    LOG(WARNING) << "eos got, can not feed data any more.";
+    return -1;
+  }
+
   std::lock_guard<std::mutex> lk(img_pktq_mutex_);
   if (img_pktq_) {
     ImagePacket img_pkt;
-    if (CheckRawImageParams(img_data, size, w, h, pixel_fmt)) {
+    if (nullptr == img_data && 0 == size) {
+      img_pkt.flags = ImagePacket::FLAG_EOS;
+      img_pkt.data = nullptr;
+      img_pkt.pts = pts_++;
+    } else if (CheckRawImageParams(img_data, size, w, h, pixel_fmt)) {
       img_pkt.pixel_fmt = pixel_fmt;
       img_pkt.width = w;
       img_pkt.height = h;
@@ -286,10 +304,9 @@ int RawImgMemHandlerImpl::Write(unsigned char *img_data, int size, int w, int h,
       memcpy(img_pkt.data, img_data, img_pkt.size);
       img_pkt.pts = pts_++;
     } else {
-      img_pkt.flags = ImagePacket::FLAG_EOS;
-      img_pkt.data = nullptr;
-      img_pkt.pts = pts_++;
+      return -2;
     }
+
     int timeoutMs = 1000;
     while (running_.load()) {
       if (img_pktq_->Push(timeoutMs, img_pkt)) {

@@ -417,18 +417,20 @@ class RawImgMemHandler : public SourceHandler {
 
 #ifdef HAVE_OPENCV
   /**
-   * @brief Sends raw image with cv::Mat. Only bgr24 format is supported.
+   * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
    *
    * @param mat_data The bgr24 format image data.
    *
-   * @return Returns 0 if the data is sent successfully, otherwise returns -1.
+   * @retval 0: The data is write successfully,
+   * @retval -1: Write failed, maybe eos got or handler is closed.
+   * @retval -2: Invalid data.
    *
    * @note Sends nullptr after all data are sent.
    */
   int Write(cv::Mat *mat_data);
 #endif
   /**
-   * @brief Sends raw image with image data and image infomation, only support format, bgr24, rgb24, nv21 and nv12.
+   * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
    *
    * @param data The data of the image, which is a continuous buffer.
    * @param size The size of the data.
@@ -436,7 +438,9 @@ class RawImgMemHandler : public SourceHandler {
    * @param height The height of the image.
    * @param pixel_fmt The pixel format of the image. These formats are supported, bgr24, rgb24, nv21 and nv12.
    *
-   * @return Returns 0 if the data is sent successfully, otherwise returns -1.
+   * @retval 0: The data is write successfully,
+   * @retval -1: Write failed, maybe eos got or handler is closed.
+   * @retval -2: Invalid data.
    *
    * @note Sends nullptr as data and passes 0 as size after all data are sent.
    */
