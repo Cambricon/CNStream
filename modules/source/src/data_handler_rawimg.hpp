@@ -71,15 +71,17 @@ class RawImgMemHandlerImpl : public IHandler {
 
 #ifdef HAVE_OPENCV
   /**
-   * @brief Write raw image with cv::Mat(only support bgr24 format).
+   * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
    * @param
    - mat_data: cv::Mat pointer with bgr24 format image data, feed mat_data as nullptr when feed data end.
-   * @return return 0 when write successfully, othersize return -1.
+   * @retval 0: The data is write successfully,
+   * @retval -1: Write failed, maybe eos got or handler is closed.
+   * @retval -2: Invalid data.
    */
   int Write(cv::Mat *mat_data);
 #endif
   /**
-   * @brief Write raw image with image data and image infomation (data buffer is continuous, only support
+   * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
    bgr24/rgb24/nv21/nv12 format).
    * @param
           - data: image data pointer(one continuous buffer), feed data as nullptr and size as 0 when feed data end
@@ -87,7 +89,9 @@ class RawImgMemHandlerImpl : public IHandler {
           - w: image width
           - h: image height
           - pixel_fmt: image pixel format, support bgr24/rgb24/nv21/nv12 format.
-   * @return return 0 when write successfully, othersize return -1.
+   * @retval 0: The data is write successfully,
+   * @retval -1: Write failed, maybe eos got or handler is closed.
+   * @retval -2: Invalid data.
    */
   int Write(unsigned char *data, int size, int w = 0, int h = 0, CNDataFormat pixel_fmt = CN_INVALID);
 
