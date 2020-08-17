@@ -455,6 +455,7 @@ void CNDataFrame::ReleaseSharedMem(MemMapType type, std::string stream_id) {
 }
 
 bool CNInferObject::AddAttribute(const std::string& key, const CNInferAttr& value) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
   if (attributes_.find(key) != attributes_.end()) return false;
 
   attributes_.insert(std::make_pair(key, value));
@@ -462,6 +463,7 @@ bool CNInferObject::AddAttribute(const std::string& key, const CNInferAttr& valu
 }
 
 bool CNInferObject::AddAttribute(const std::pair<std::string, CNInferAttr>& attribute) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
   if (attributes_.find(attribute.first) != attributes_.end()) return false;
 
   attributes_.insert(attribute);
@@ -469,12 +471,14 @@ bool CNInferObject::AddAttribute(const std::pair<std::string, CNInferAttr>& attr
 }
 
 CNInferAttr CNInferObject::GetAttribute(const std::string& key) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
   if (attributes_.find(key) != attributes_.end()) return attributes_[key];
 
   return CNInferAttr();
 }
 
 bool CNInferObject::AddExtraAttribute(const std::string& key, const std::string& value) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
   if (extra_attributes_.find(key) != extra_attributes_.end()) return false;
 
   extra_attributes_.insert(std::make_pair(key, value));
@@ -482,6 +486,7 @@ bool CNInferObject::AddExtraAttribute(const std::string& key, const std::string&
 }
 
 bool CNInferObject::AddExtraAttribute(const std::vector<std::pair<std::string, std::string>>& attributes) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
   bool ret = true;
 
   for (auto& attribute : attributes) {
@@ -491,13 +496,20 @@ bool CNInferObject::AddExtraAttribute(const std::vector<std::pair<std::string, s
 }
 
 std::string CNInferObject::GetExtraAttribute(const std::string& key) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
   if (extra_attributes_.find(key) != extra_attributes_.end()) return extra_attributes_[key];
 
   return "";
 }
 
-void CNInferObject::AddFeature(const CNInferFeature& feature) { features_.push_back(feature); }
+void CNInferObject::AddFeature(const CNInferFeature& feature) {
+  std::lock_guard<std::mutex> lk(feature_mutex_);
+  features_.push_back(feature);
+}
 
-ThreadSafeVector<CNInferFeature> CNInferObject::GetFeatures() { return features_; }
+std::vector<CNInferFeature> CNInferObject::GetFeatures() {
+  std::lock_guard<std::mutex> lk(feature_mutex_);
+  return features_;
+}
 
 }  // namespace cnstream

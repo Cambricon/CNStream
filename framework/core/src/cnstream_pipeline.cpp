@@ -846,8 +846,6 @@ void Pipeline::CalculatePipelinePerfStats(bool final_print) {
       std::cout << "\n(* Note: Performance info of pipeline is slightly delayed compared to that of each stream.)\n";
       PrintStr("Pipeline : ");
       PrintThroughput(avg_fps);
-      double running_seconds = static_cast<double>(avg_fps.latency_max) / 1e6;
-      std::cout << "\nRunning time (s):" << running_seconds << std::endl;
       if (final_print) { std::cout << "\nTotal : " << avg_fps.fps << std::endl; }
     }
   }

@@ -44,8 +44,6 @@
 #include "cnstream_common.hpp"
 #include "cnstream_syncmem.hpp"
 #include "util/cnstream_any.hpp"
-#include "util/cnstream_unordered_map.hpp"
-#include "util/cnstream_vector.hpp"
 
 #ifndef CN_MAX_PLANES
 #define CN_MAX_PLANES 6
@@ -317,7 +315,7 @@ struct CNInferObject {
   std::string track_id;     ///< The tracking result.
   float score;              ///< The label score.
   CNInferBoundingBox bbox;  ///< The object normalized coordinates.
-  ThreadSafeUnorderedMap<int, any> datas;  ///< user-defined structured information.
+  std::unordered_map<int, any> datas;  ///< user-defined structured information.
 
   /**
    * Adds the key of an attribute to a specified object.
@@ -410,14 +408,16 @@ struct CNInferObject {
    *
    * @note This is a thread-safe function.
    */
-  ThreadSafeVector<CNInferFeature> GetFeatures();
+  std::vector<CNInferFeature> GetFeatures();
 
   void* user_data_ = nullptr;  ///< User data. You can store your own data in this parameter.
 
  private:
-  ThreadSafeUnorderedMap<std::string, CNInferAttr> attributes_;
-  ThreadSafeUnorderedMap<std::string, std::string> extra_attributes_;
-  ThreadSafeVector<CNInferFeature> features_;
+  std::unordered_map<std::string, CNInferAttr> attributes_;
+  std::unordered_map<std::string, std::string> extra_attributes_;
+  std::vector<CNInferFeature> features_;
+  std::mutex attribute_mutex_;
+  std::mutex feature_mutex_;
 };
 
 /*
@@ -429,7 +429,7 @@ static constexpr int CNDataFramePtrKey = 0;
 using CNDataFramePtr = std::shared_ptr<CNDataFrame>;
 
 static constexpr int CNObjsVecKey = 1;
-using CNObjsVec = ThreadSafeVector<std::shared_ptr<CNInferObject>>;
+using CNObjsVec = std::vector<std::shared_ptr<CNInferObject>>;
 
 }  // namespace cnstream
 

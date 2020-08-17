@@ -32,6 +32,8 @@
 
 namespace cnstream {
 
+RtspSinkJoinStream::~RtspSinkJoinStream() { Close();}
+
 bool RtspSinkJoinStream::Open(const RtspParam& rtsp_params) {
   if (rtsp_params.src_width < 1 || rtsp_params.src_height < 1 || rtsp_params.udp_port < 1 ||
       rtsp_params.http_port < 1) {

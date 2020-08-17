@@ -115,7 +115,9 @@ bool PullRtspStreamFFmpeg() {
   AVFormatContext *format_ctx = avformat_alloc_context();
   std::string url = "rtsp://" + GetIp() + ":9554/rtsp_live";
   int ret = -1;
+
   ret = avformat_open_input(&format_ctx, url.c_str(), nullptr, nullptr);
+
   if (ret != 0) {
     fprintf(stderr, "fail to open url: %s, return value: %d\n", url.c_str(), ret);
     return -1;
@@ -186,8 +188,8 @@ std::shared_ptr<CNFrameInfo> GenTestData(ColorFormat cmode, int width, int heigh
   edk::MluMemoryOp mem_op;
   frame_data = mem_op.AllocMlu(nbytes, 1);
   planes[0] = frame_data;                                                                            // 0 plane
-  planes[1] = reinterpret_cast<void *>(reinterpret_cast<int64_t>(frame_data) + width * height);      // 1 plane
-  planes[2] = reinterpret_cast<void *>(reinterpret_cast<int64_t>(frame_data) + 2 * width * height);  // 2 plane
+  planes[1] = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(frame_data) + width * height);      // 1 plane
+  planes[2] = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(frame_data) + 2 * width * height);  // 2 plane
 
   if (g_channel_id > 3) g_channel_id = 0;
   auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
