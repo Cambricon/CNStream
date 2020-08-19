@@ -190,12 +190,14 @@ int CNSyncedMemory::GetMluDdrChnId() const {
 void* CNSyncedMemory::GetMutableCpuData() {
   std::lock_guard<std::mutex> lock(mutex_);
   ToCpu();
+  head_ = HEAD_AT_CPU;
   return cpu_ptr_;
 }
 
 void* CNSyncedMemory::GetMutableMluData() {
   std::lock_guard<std::mutex> lock(mutex_);
   ToMlu();
+  head_ = HEAD_AT_MLU;
   return mlu_ptr_;
 }
 
