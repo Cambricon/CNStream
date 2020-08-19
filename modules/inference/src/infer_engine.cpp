@@ -158,8 +158,13 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       if (obj_filter_) {
         if (!obj_filter_->Filter(finfo, obj)) continue;
       }
-      InferTaskSptr task = obj_batching_stage_->Batching(finfo, obj);
-      tp_->SubmitTask(task);
+      try {
+        InferTaskSptr task = obj_batching_stage_->Batching(finfo, obj);
+        tp_->SubmitTask(task);
+      } catch (edk::MluResizeConvertOpError e) {
+        LOG(ERROR) << std::string(e.what());
+        continue;
+      }
       batched_finfos_.push_back(std::make_pair(finfo, auto_set_done));
       batched_objs_.push_back(obj);
 
@@ -175,8 +180,14 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       timeout_helper_.Reset(NULL);
     }
   } else {
-    InferTaskSptr task = batching_stage_->Batching(finfo);
-    tp_->SubmitTask(task);
+    try {
+      InferTaskSptr task = batching_stage_->Batching(finfo);
+      tp_->SubmitTask(task);
+    } catch (edk::MluResizeConvertOpError e) {
+      LOG(ERROR) << std::string(e.what());
+      timeout_helper_.UnlockOperator();
+      return card;
+    }
     batched_finfos_.push_back(std::make_pair(finfo, auto_set_done));
 
     if (batched_finfos_.size() == batchsize_) {

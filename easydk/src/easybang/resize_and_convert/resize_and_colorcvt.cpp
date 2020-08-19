@@ -202,7 +202,8 @@ int MluResizeConvertOp::InvokeOp(void* dst, void* srcY, void* srcUV) {
   if (d_ptr_->attr_.batch_size != 1) {
     throw MluResizeConvertOpError(
         "InvokeOp is vaild only if the batchsize is 1. Please Use BatchingUp "
-        "and SyncOneOutput to replase InvokeOp.");
+        "and SyncOneOutput to replase InvokeOp.",
+        GetAttr(), {});
   }
   InputData input_data;
   input_data.src_w = d_ptr_->attr_.src_w;
@@ -232,6 +233,7 @@ void MluResizeConvertOp::BatchingUp(void* src_y, void* src_uv) {
   input_data.crop_h = d_ptr_->attr_.crop_h;
   input_data.planes[0] = src_y;
   input_data.planes[1] = src_uv;
+
   BatchingUp(input_data);
 }
 
@@ -251,6 +253,23 @@ void MluResizeConvertOp::BatchingUp(const InputData& input_data) {
   t.crop_h = std::min(t.src_h - t.crop_y, t.crop_h);
   t.planes[0] = input_data.planes[0];
   t.planes[1] = input_data.planes[1];
+
+  /**
+   * check unsupported situations
+   * case 1: width is greater than MAXIMUM_WIDTH
+   * case 2: scale-up factor is greater than MAXIMUM_SCALE_UP_FACTOR
+   **/
+  if (t.crop_w > MAXIMUM_WIDTH) {
+    throw RCOpWidthOverLimitError(GetAttr(), t);
+  }
+
+  float scale_factor = GetAttr().keep_aspect_ratio ?
+                       std::min(1.0f * GetAttr().dst_w / t.crop_w, 1.0f * GetAttr().dst_h / t.crop_h) :
+                       1.0f * GetAttr().dst_w / t.crop_w;
+  if (scale_factor > MAXIMUM_SCALE_UP_FACTOR) {
+    throw RCOpScaleUpError(GetAttr(), t);
+  }
+
   d_ptr_->input_datas_cache_.push_back(t);
 }
 

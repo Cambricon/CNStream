@@ -76,8 +76,7 @@ class InferencerPrivate {
   std::mutex ctx_mtx_;
 
   void InferEngineErrorHnadleFunc(const std::string& err_msg) {
-    LOG(FATAL) << err_msg;
-    q_ptr_->PostEvent(EVENT_ERROR, err_msg);
+    LOG(ERROR) << err_msg;
   }
 
   bool InitByParams(const InferParams &params, const ModuleParamSet &param_set) {

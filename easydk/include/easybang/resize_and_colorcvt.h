@@ -27,6 +27,7 @@
 #ifndef EASYBANG_RESIZE_AND_CONVERT_H_
 #define EASYBANG_RESIZE_AND_CONVERT_H_
 
+#include <algorithm>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -39,8 +40,6 @@ struct KernelParam;
 
 namespace edk {
 
-TOOLKIT_REGISTER_EXCEPTION(MluResizeConvertOp);
-
 class MluResizeConvertPrivate;
 
 /**
@@ -48,6 +47,8 @@ class MluResizeConvertPrivate;
  */
 class MluResizeConvertOp {
  public:
+  static constexpr float MAXIMUM_SCALE_UP_FACTOR = 100.0f;  ///<  Maximum magnification supported by operator
+  static constexpr uint32_t MAXIMUM_WIDTH = 7680;  ///< Maximum input width supported by operator
   /**
    * @brief Construct a new Mlu Resize Convert Operator object
    */
@@ -195,6 +196,11 @@ class MluResizeConvertOp {
    * @brief Batching up one yuv image
    *
    * @param input_data[in] yuv data (YUV420SP NV21/NV12)
+   *
+   * @attention input_data.crop_w will be set to input_data.src_w when input_data.crop_w is zero.
+   *            input_data.crop_h will be sett to input_data.src_h when input_data.crop_h is zero.
+   *            RCOpScaleUpError will be thrown when scale-up factor is greater than `MAXIMUM_SCALE_UP_FACTOR`.
+   *            RCOpWidthOverLimitError will be thrown when input_data.crop_w is greater than `MAXIMUM_INPUT_WIDTH`.
    **/
   void BatchingUp(const InputData& input_data);
 
@@ -218,7 +224,99 @@ class MluResizeConvertOp {
 
   MluResizeConvertOp(const MluResizeConvertOp&) = delete;
   MluResizeConvertOp& operator=(const MluResizeConvertOp&) = delete;
-};  // class MluResizeAndConvertOp
+};  // class MluResizeConvertOp
+
+/**
+ * @brief Exception throwed by MluResizeConvertOp
+ *
+ * @see MluResizeConvertOp
+ **/
+class MluResizeConvertOpError : public Exception {
+ public:
+  using Attr = MluResizeConvertOp::Attr;
+  using InputData = MluResizeConvertOp::InputData;
+
+  MluResizeConvertOpError(const Attr& attr,
+                                   const InputData& input_data)
+      : Exception("Mlu resize convert error."), attr_(attr), data_(input_data) {}
+
+  MluResizeConvertOpError(const std::string& err_str, const Attr& attr,
+                          const InputData& input_data)
+      : Exception(err_str), err_str_(err_str), attr_(attr), data_(input_data) {}
+
+  /**
+   * @brief Get operator attribute
+   *
+   * @return attribute
+   **/
+  const Attr& GetRCOpAttr() const { return attr_; }
+
+  /**
+   * @brief Get input data
+   *
+   * @return input data which caused scale-up error
+   **/
+  const InputData& GetInputData() const { return data_; }
+
+  /**
+   * @brief Returns the explanatory string
+   *
+   * @return Returns the explanatory string
+   **/
+  const char* what() const noexcept override { return err_str_.c_str(); }
+
+ protected:
+  std::string err_str_ = "";
+
+ private:
+  Attr attr_;
+  InputData data_;
+};  // class MluResizeConvertOpError
+
+/**
+ * @brief Exception class for scale-up
+ *
+ * @see MluResizeConvertOp::BatchingUp(const InputData&)
+ **/
+class RCOpScaleUpError : public MluResizeConvertOpError {
+ public:
+  explicit RCOpScaleUpError(const Attr& attr, const InputData& input_data) :
+      MluResizeConvertOpError(attr, input_data) {
+    err_str_ = "Maximum magnification limit exceeded. Maximum magnification: "
+               + std::to_string(MluResizeConvertOp::MAXIMUM_SCALE_UP_FACTOR) + ". Current magnification: "
+               + std::to_string(ScaleUpFactor()) + ".";
+  }
+
+  /**
+   * @brief Get scale-up factor
+   **/
+  inline float ScaleUpFactor() const {
+    float scale_w = 1.0f * GetRCOpAttr().dst_w / GetInputData().crop_w;
+    float scale_h = 1.0f * GetRCOpAttr().dst_h / GetInputData().crop_h;
+    if (GetRCOpAttr().keep_aspect_ratio) {
+      return std::min(scale_w, scale_h);
+    }
+    return scale_w;
+  }
+};  // class ScaleUpError
+
+/**
+ * @brief Exception class for the width of the input image
+ *        exceeds the maximum width supported by the operator
+ *
+ * @see MluResizeConvertOp::BatchingUp(const InputData&)
+ **/
+class RCOpWidthOverLimitError : public MluResizeConvertOpError {
+ public:
+  explicit RCOpWidthOverLimitError(const Attr& attr, const InputData& input_data) :
+      MluResizeConvertOpError(attr, input_data) {
+    err_str_ = "Maximum input width limit exceeded. Maximum input width: "
+               + std::to_string(MluResizeConvertOp::MAXIMUM_WIDTH) + ". Current input width: "
+               + std::to_string(GetWidth()) + ".";
+  }
+
+  inline uint32_t GetWidth() const { return GetInputData().crop_w; }
+};  // class WidthOverLimitError
 
 }  // namespace edk
 

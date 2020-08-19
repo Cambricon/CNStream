@@ -121,7 +121,12 @@ std::shared_ptr<InferTask> ResizeConvertObjBatchingStage::Batching(std::shared_p
   input_data.crop_y = crop_y > 0 ? crop_y : 0;
   input_data.crop_w = obj->bbox.w * frame->width;
   input_data.crop_h = obj->bbox.h * frame->height;
-  value->op.BatchingUp(input_data);
+  try {
+    value->op.BatchingUp(input_data);
+  } catch (edk::MluResizeConvertOpError e) {
+    rcop_res_->DeallingDone();
+    throw e;
+  }
   rcop_res_->DeallingDone();
   return NULL;
 }
