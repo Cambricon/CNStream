@@ -48,6 +48,7 @@ struct StreamPipeCtx;
 class RtspSinkJoinStream {
  public:
   bool Open(const RtspParam &rtsp_param);
+  ~RtspSinkJoinStream();
   void Close();
   bool UpdateYUV(uint8_t *image, int64_t timestamp);
   // bool UpdateYUVs(void *y, void *yu, int64_t timestamp);

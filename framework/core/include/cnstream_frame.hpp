@@ -29,7 +29,6 @@
 #include "cnstream_common.hpp"
 #include "util/cnstream_any.hpp"
 #include "util/cnstream_spinlock.hpp"
-#include "util/cnstream_unordered_map.hpp"
 
 /**
  *  @file cnstream_frame.hpp
@@ -98,7 +97,7 @@ struct CNFrameInfo {
   size_t flags = 0;        ///< The mask for this frame, ``CNFrameFlag``.
 
   // user-defined DataFrame，InferResult etc...
-  ThreadSafeUnorderedMap<int, any> datas;
+  std::unordered_map<int, any> datas;
 
  private:
   /**

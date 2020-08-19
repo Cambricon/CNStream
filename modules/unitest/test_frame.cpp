@@ -269,7 +269,7 @@ TEST(CoreFrame, InferObjAddAndGetfeature) {
   EXPECT_NO_THROW(infer_obj.AddFeature(infer_feature2));
 
   // get features
-  ThreadSafeVector<CNInferFeature> features = infer_obj.GetFeatures();
+  std::vector<CNInferFeature> features = infer_obj.GetFeatures();
   EXPECT_EQ(features.size(), (uint32_t)2);
   EXPECT_EQ(features[0].size, infer_feature1.size);
   EXPECT_EQ(*(features[0].data.get()), *(infer_feature1.data.get()));
