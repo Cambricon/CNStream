@@ -66,6 +66,14 @@ class SourceModule : public Module {
   int RemoveSource(std::shared_ptr<SourceHandler> handler);
   int RemoveSource(const std::string &stream_id);
 
+  /**
+   * @hidebrief Remove all streams from DataSource module
+   * @param
+   * @return
+   *    0: success (always success by now)
+   */
+  int RemoveSources();
+
   int Process(std::shared_ptr<CNFrameInfo> data) override {
     (void)data;
     LOG(ERROR) << "As a source module, Process() should not be invoked\n";
@@ -81,13 +89,6 @@ class SourceModule : public Module {
 
   uint32_t GetStreamIndex(const std::string &stream_id);
   void ReturnStreamIndex(const std::string &stream_id);
-  /**
-   * @hidebrief Remove all streams from DataSource module
-   * @param
-   * @return
-   *    0: success (always success by now)
-   */
-  int RemoveSources();
 
  private:
   uint64_t source_idx_ = 0;
