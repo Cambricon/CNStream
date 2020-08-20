@@ -298,13 +298,17 @@ typedef struct {
 /**
  * The feature value for one object.
  */
-struct CNInferFeature {
-  std::shared_ptr<float> data;
-  size_t size;
-};
+using CNInferFeature = std::vector<float>;
 
-// TODO(gaoyujia): change CNInferFeature type to vector<float>
-// using CNInferFeature = std::vector<float>;
+/**
+ * All kinds of features for one object.
+ */
+using CNInferFeatures = std::vector<std::pair<std::string, CNInferFeature>>;
+
+/**
+ * String pairs for extra attributes.
+ */
+using StringPairs = std::vector<std::pair<std::string, std::string>>;
 
 /**
  * A structure holding the information for an object.
@@ -376,10 +380,10 @@ struct CNInferObject {
    *         has already existed.
    * @note This is a thread-safe function.
    */
-  bool AddExtraAttribute(const std::vector<std::pair<std::string, std::string>>& attributes);
+  bool AddExtraAttributes(const std::vector<std::pair<std::string, std::string>>& attributes);
 
   /**
-   * Gets the extended attribute by key.
+   * Gets an extended attribute by key.
    *
    * @param key The key of an identified attribute. See AddExtraAttribute().
    *
@@ -391,15 +395,49 @@ struct CNInferObject {
   std::string GetExtraAttribute(const std::string& key);
 
   /**
-   * Adds the feature value to a specified object.
+   * Removes an attribute by key.
    *
-   * @param features The feature value to be added to.
+   * @param key The key of an attribute you want to remove. See AddAttribute.
    *
-   * @return Void.
+   * @return Return true.
    *
    * @note This is a thread-safe function.
    */
-  void AddFeature(const CNInferFeature& features);
+  bool RemoveExtraAttribute(const std::string& key);
+
+  /**
+   * Gets all extended attributes of an object.
+   *
+   * @return Returns all extended attributes.
+   *
+   * @note This is a thread-safe function.
+   */
+  StringPairs GetExtraAttributes();
+
+  /**
+   * Adds the key of feature to a specified object.
+   *
+   * @param key The Key of feature you want to add the feature to. See GetFeature.
+   * @param value The value of the feature.
+   *
+   * @return Returns true if the feature is added successfully. Returns false if the feature
+   *         identified by the key already exists.
+   *
+   * @note This is a thread-safe function.
+   */
+  bool AddFeature(const std::string &key, const CNInferFeature &feature);
+
+  /**
+   * Gets an feature by key.
+   *
+   * @param key The key of an feature you want to query. See AddFeature.
+   *
+   * @return Return the feature of the key. If the feature identified by the key
+   *         is not exists, CNInferFeature will be empty.
+   *
+   * @note This is a thread-safe function.
+   */
+  CNInferFeature GetFeature(const std::string &key);
 
   /**
    * Gets the features of an object.
@@ -408,14 +446,14 @@ struct CNInferObject {
    *
    * @note This is a thread-safe function.
    */
-  std::vector<CNInferFeature> GetFeatures();
+  CNInferFeatures GetFeatures();
 
   void* user_data_ = nullptr;  ///< User data. You can store your own data in this parameter.
 
  private:
   std::unordered_map<std::string, CNInferAttr> attributes_;
   std::unordered_map<std::string, std::string> extra_attributes_;
-  std::vector<CNInferFeature> features_;
+  std::unordered_map<std::string, CNInferFeature> features_;
   std::mutex attribute_mutex_;
   std::mutex feature_mutex_;
 };

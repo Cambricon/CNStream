@@ -55,6 +55,7 @@ struct PerfStats {
   size_t latency_min = 0;  ///< Minimum latency.
   size_t latency_max = 0;  ///< Maximum latency.
   size_t frame_cnt = 0;    ///< Frame count.
+  size_t total_time = 0;   ///< Total time.
   double fps = 0.f;        ///< Throughput.
 };                         // struct PerfStats.
 
