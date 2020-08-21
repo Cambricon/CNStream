@@ -48,7 +48,7 @@ void PrintLatency(const PerfStats &stats, uint32_t width) {
 }
 
 void PrintThroughput(const PerfStats &stats, uint32_t width) {
-  double running_seconds = static_cast<double>(stats.latency_max) / 1e6;
+  double running_seconds = static_cast<double>(stats.total_time) / 1e6;
   std::streamsize ss = std::cout.precision();
   std::cout << std::right << std::fixed << " -- [frame count]: " << std::setw(width) << std::setfill(' ')
             << stats.frame_cnt << ", [processing time(s)]: " << std::setw(10) << std::setfill(' ')
@@ -121,10 +121,10 @@ PerfStats PerfCalculator::CalcAvgThroughput(const std::vector<PerfStats> &stats_
   PerfStats stats;
   for (auto& it : stats_vec) {
     stats.frame_cnt += it.frame_cnt;
-    stats.latency_max += it.latency_max;
+    stats.total_time += it.total_time;
   }
-  if (stats.latency_max != 0) {
-    stats.fps = ceil(stats.frame_cnt * 1e7 / stats.latency_max) / 10;
+  if (stats.total_time != 0) {
+    stats.fps = ceil(stats.frame_cnt * 1e7 / stats.total_time) / 10;
   }
   return stats;
 }
@@ -351,7 +351,7 @@ PerfStats PerfCalculatorForModule::CalcThroughput(const std::string &sql_name, c
   total_stats.frame_cnt = frame_cnts;
   total_stats.fps = PerfUtils::Sum(module_fps_vec);
   if (total_stats.fps > 1e-6) {
-    total_stats.latency_max = frame_cnts * 1e6 / total_stats.fps;
+    total_stats.total_time = frame_cnts * 1e6 / total_stats.fps;
   }
   std::string total_map_key = "_" + perf_type + "_throughput";
   {
@@ -473,7 +473,7 @@ PerfStats PerfCalculatorForPipeline::CalcThroughput(const std::string &sql_name,
   // Calculate throughput
   PerfStats stats = method_->CalcThroughput(pre_time, end_time, frame_cnt);
   if (end_time > pre_time) {
-    stats.latency_max = end_time - pre_time;
+    stats.total_time = end_time - pre_time;
   }
 
   {
@@ -597,7 +597,7 @@ PerfStats PerfCalculationMethod::CalcThroughput(size_t start_time, const std::ve
       } else {
         stats.fps = 0;
       }
-      stats.latency_max = total_time;
+      stats.total_time = total_time;
     }
   }
   return stats;
