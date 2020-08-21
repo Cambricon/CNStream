@@ -342,6 +342,11 @@ bool MluResizeConvertOp::SyncOneOutput(void* dst) {
     LOG(ERROR) << "batchsize: " << d_ptr_->attr_.batch_size;
     auto inputs = GetLastBatchInput();
     for (const auto & it : inputs) LOG(ERROR) << it;
+    cnrtMemset(dst, 0, size_t(1) * d_ptr_->attr_.batch_size * d_ptr_->attr_.dst_w * d_ptr_->attr_.dst_h * 4);
+    if (!IsSharedQueue()) {
+      // queue becomes invalid when an error occurs.
+      d_ptr_->queue_ = std::make_shared<MluTaskQueue>();
+    }
   }
   /* if (!d_ptr_->shared_queue_ && ret) { */
   /*   cnrtRet_t cnrt_ret = cnrtSyncQueue(d_ptr_->queue_->queue); */
