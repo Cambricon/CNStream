@@ -110,7 +110,12 @@ std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<
   input_data.src_stride = frame->stride[0];
   input_data.planes[0] = src_y;
   input_data.planes[1] = src_uv;
-  value->op.BatchingUp(input_data);
+  try {
+    value->op.BatchingUp(input_data);
+  } catch (edk::MluResizeConvertOpError e) {
+    rcop_res_->DeallingDone();
+    throw e;
+  }
   rcop_res_->DeallingDone();
   return NULL;
 }

@@ -58,6 +58,11 @@ using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
  * set, MLU is used for image preprocessing. The image preprocessing includes
  * data shape resizing and color space convertion.
  * Afterwards, you can infer with offline model loading from the model path.
+ *
+ * @attention
+ * The error log will be reported when the following two situations occur as mlu is used to do preprocessing.
+ *   case 1: scale-up factor is greater than 100.
+ *   case 2: the image width before resize is greater than 7680.
  */
 class Inferencer : public Module, public ModuleCreator<Inferencer> {
  public:
