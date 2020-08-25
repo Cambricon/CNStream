@@ -54,6 +54,7 @@ Before building instructions, you need to install the following software:
 - GLog0.3.4
 - Cmake2.8.7+
 - SDL22.0.4+ &emsp;&emsp;  // If build_display=ON
+- FFmpeg2.8 3.4 4.2
 
 #### Ubuntu or Debian ####
 

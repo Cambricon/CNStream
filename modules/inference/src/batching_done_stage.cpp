@@ -94,9 +94,7 @@ std::vector<std::shared_ptr<InferTask>> ResizeConvertBatchingDoneStage::Batching
 
     cnrtMemset(mlu_value.datas[0].ptr, 0, mlu_value.datas[0].batch_offset * finfos.size());
 
-    if (!rcop_value->op.SyncOneOutput(mlu_value.datas[0].ptr)) {
-      throw CnstreamError("resize convert failed.");
-    }
+    bool ret = rcop_value->op.SyncOneOutput(mlu_value.datas[0].ptr);
 
     if (perf_manager_) {
       perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_end_time");
@@ -104,6 +102,10 @@ std::vector<std::shared_ptr<InferTask>> ResizeConvertBatchingDoneStage::Batching
 
     this->rcop_res_->DeallingDone();
     this->mlu_input_res_->DeallingDone();
+
+    if (!ret) {
+      throw CnstreamError("resize convert failed.");
+    }
     return 0;
   });
   tasks.push_back(task);

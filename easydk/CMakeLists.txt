@@ -61,7 +61,11 @@ endif()
 
 if(WITH_BANG)
   message(STATUS "Build with EasyBang")
-  file(GLOB_RECURSE bang_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/kernel_*.o ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/*.cpp)
+  if ((CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64) OR (CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64))
+    file(GLOB_RECURSE bang_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/kernel_${CMAKE_SYSTEM_PROCESSOR}_*.o ${CMAKE_CURRENT_SOURCE_DIR}/src/easybang/resize_and_convert/*.cpp)
+  else()
+    message("error system processor !!!")
+  endif()
 endif()
 
 if(WITH_CNPLUGIN)
