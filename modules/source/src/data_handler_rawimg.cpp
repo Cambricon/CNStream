@@ -182,11 +182,25 @@ int RawImgMemHandler::Write(cv::Mat *mat) {
   }
   return -1;
 }
+
+int RawImgMemHandler::Write(cv::Mat *mat, uint64_t pts) {
+  if (impl_) {
+    return impl_->Write(mat, pts);
+  }
+  return -1;
+}
 #endif
 
 int RawImgMemHandler::Write(unsigned char *data, int size, int w, int h, CNDataFormat pixel_fmt) {
   if (impl_) {
     return impl_->Write(data, size, w, h, pixel_fmt);
+  }
+  return -1;
+}
+
+int RawImgMemHandler::Write(unsigned char *data, int size, uint64_t pts, int w, int h, CNDataFormat pixel_fmt) {
+  if (impl_) {
+    return impl_->Write(data, size, pts, w, h, pixel_fmt);
   }
   return -1;
 }
@@ -280,6 +294,43 @@ int RawImgMemHandlerImpl::Write(cv::Mat *mat_data) {
 
   return -1;
 }
+
+int RawImgMemHandlerImpl::Write(cv::Mat *mat_data, uint64_t pts) {
+  if (eos_got_.load()) {
+    LOG(WARNING) << "eos got, can not feed data any more.";
+    return -1;
+  }
+
+  std::lock_guard<std::mutex> lk(img_pktq_mutex_);
+  if (img_pktq_) {
+    ImagePacket img_pkt;
+    if (nullptr == mat_data) {
+      img_pkt.flags = ImagePacket::FLAG_EOS;
+      img_pkt.data = nullptr;
+      img_pkt.pts = pts;
+    } else if (mat_data && mat_data->data && (3 == mat_data->channels())
+        && (CV_8UC3 == mat_data->type()) && mat_data->isContinuous()) {
+      img_pkt.pixel_fmt = CN_PIXEL_FORMAT_BGR24;
+      img_pkt.width = mat_data->cols;
+      img_pkt.height = mat_data->rows;
+      img_pkt.size = mat_data->step * img_pkt.height;
+      img_pkt.data = new (std::nothrow) uint8_t[img_pkt.size];
+      memcpy(img_pkt.data, mat_data->data, img_pkt.size);
+      img_pkt.pts = pts;
+    } else {
+      return -2;
+    }
+
+    int timeoutMs = 1000;
+    while (running_.load()) {
+      if (img_pktq_->Push(timeoutMs, img_pkt)) {
+        return 0;
+      }
+    }
+  }
+
+  return -1;
+}
 #endif
 
 int RawImgMemHandlerImpl::Write(unsigned char *img_data, int size, int w, int h, CNDataFormat pixel_fmt) {
@@ -303,6 +354,43 @@ int RawImgMemHandlerImpl::Write(unsigned char *img_data, int size, int w, int h,
       img_pkt.data = new (std::nothrow) uint8_t[img_pkt.size];
       memcpy(img_pkt.data, img_data, img_pkt.size);
       img_pkt.pts = pts_++;
+    } else {
+      return -2;
+    }
+
+    int timeoutMs = 1000;
+    while (running_.load()) {
+      if (img_pktq_->Push(timeoutMs, img_pkt)) {
+        return 0;
+      }
+    }
+  }
+
+  return -1;
+}
+
+int RawImgMemHandlerImpl::Write(unsigned char *img_data, int size, uint64_t pts,
+    int w, int h, CNDataFormat pixel_fmt) {
+  if (eos_got_.load()) {
+    LOG(WARNING) << "eos got, can not feed data any more.";
+    return -1;
+  }
+
+  std::lock_guard<std::mutex> lk(img_pktq_mutex_);
+  if (img_pktq_) {
+    ImagePacket img_pkt;
+    if (nullptr == img_data && 0 == size) {
+      img_pkt.flags = ImagePacket::FLAG_EOS;
+      img_pkt.data = nullptr;
+      img_pkt.pts = pts;
+    } else if (CheckRawImageParams(img_data, size, w, h, pixel_fmt)) {
+      img_pkt.pixel_fmt = pixel_fmt;
+      img_pkt.width = w;
+      img_pkt.height = h;
+      img_pkt.size = size;
+      img_pkt.data = new (std::nothrow) uint8_t[img_pkt.size];
+      memcpy(img_pkt.data, img_data, img_pkt.size);
+      img_pkt.pts = pts;
     } else {
       return -2;
     }
