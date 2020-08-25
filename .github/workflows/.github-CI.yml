@@ -3,7 +3,7 @@ name: C/C++ CI
 on:
   pull_request:
     branches:
-      - master
+      - v5.1.0
 
 jobs:
   job_lintgit_check:
