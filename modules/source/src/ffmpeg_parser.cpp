@@ -107,6 +107,14 @@ size_t RingBuffer::Read(void *data, const size_t bytes) {
 #endif
 
 /**
+ * FFMPEG use FF_AV_INPUT_BUFFER_PADDING_SIZE instead of 
+ * FF_INPUT_BUFFER_PADDING_SIZE since from version 2.8
+ * (avcodec.h/version:56.56.100)
+ * */
+
+#define FFMPEG_VERSION_2_8 AV_VERSION_INT(56, 56, 100)
+
+/**
  * FFMPEG use AVCodecParameters instead of AVCodecContext 
  * since from version 3.1(libavformat/version:57.40.100)
  **/
@@ -277,12 +285,18 @@ bool GetVideoStreamInfo(const AVFormatContext *ic, int &video_index, VideoStream
   return true;
 }
 
+#if LIBAVCODEC_VERSION_INT >= FFMPEG_VERSION_2_8
+  #define CN_INPUT_BUFFER_PADDING_SIZE AV_INPUT_BUFFER_PADDING_SIZE
+#else
+  #define CN_INPUT_BUFFER_PADDING_SIZE FF_INPUT_BUFFER_PADDING_SIZE
+#endif
+
 void StreamParserImpl::FindInfo() {
   AVFormatContext *ic = nullptr;
   AVIOContext *avio = nullptr;
   unsigned char *io_buffer = nullptr;
 
-  io_buffer = (unsigned char*)av_malloc(io_buffer_size_ + FF_INPUT_BUFFER_PADDING_SIZE);
+  io_buffer = (unsigned char*)av_malloc(io_buffer_size_ + CN_INPUT_BUFFER_PADDING_SIZE);
   avio = avio_alloc_context(io_buffer, io_buffer_size_, 0, this->queue_, &read_packet, nullptr, nullptr);
   if (!avio) {
     av_free(io_buffer);
