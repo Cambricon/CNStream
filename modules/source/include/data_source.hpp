@@ -417,6 +417,7 @@ class RawImgMemHandler : public SourceHandler {
 
 #ifdef HAVE_OPENCV
   /**
+   * @Note This function will deprecate, use Write(cv::Mat *mat_data, uint64_t pts) instead.
    * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
    *
    * @param mat_data The bgr24 format image data.
@@ -428,8 +429,23 @@ class RawImgMemHandler : public SourceHandler {
    * @note Sends nullptr after all data are sent.
    */
   int Write(cv::Mat *mat_data);
+  /**
+   * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
+   *
+   * @param mat_data The bgr24 format image data.
+   * @param pts The pts for mat_data, should be different for each image.
+   *
+   * @retval 0: The data is write successfully,
+   * @retval -1: Write failed, maybe eos got or handler is closed.
+   * @retval -2: Invalid data.
+   *
+   * @note Sends nullptr after all data are sent.
+   */
+  int Write(cv::Mat *mat_data, uint64_t pts);
 #endif
   /**
+   * @Note This function will deprecate, use Write(unsigned char *data, int size, uint64_t pts,
+   int width, int height, CNDataFormat pixel_fmt) instead.
    * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
    *
    * @param data The data of the image, which is a continuous buffer.
@@ -445,6 +461,24 @@ class RawImgMemHandler : public SourceHandler {
    * @note Sends nullptr as data and passes 0 as size after all data are sent.
    */
   int Write(unsigned char *data, int size, int width = 0, int height = 0, CNDataFormat pixel_fmt = CN_INVALID);
+  /**
+   * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
+   *
+   * @param data The data of the image, which is a continuous buffer.
+   * @param size The size of the data.
+   * @param pts The pts for raw image, should be different for each image.
+   * @param width The width of the image.
+   * @param height The height of the image.
+   * @param pixel_fmt The pixel format of the image. These formats are supported, bgr24, rgb24, nv21 and nv12.
+   *
+   * @retval 0: The data is write successfully,
+   * @retval -1: Write failed, maybe eos got or handler is closed.
+   * @retval -2: Invalid data.
+   *
+   * @note Sends nullptr as data and passes 0 as size after all data are sent.
+   */
+  int Write(unsigned char *data, int size, uint64_t pts, int width = 0,
+          int height = 0, CNDataFormat pixel_fmt = CN_INVALID);
 
  private:
   explicit RawImgMemHandler(DataSource *module, const std::string &stream_id);

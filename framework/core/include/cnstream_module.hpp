@@ -287,16 +287,6 @@ class Module {
    */
   void ShowPerfInfo(bool enable) { showPerfInfo_.store(enable); }
 
-#ifdef UNIT_TEST
-  /**
-   * @brief Get output frame data.
-   * This function should be used only when the module is not contained by any containers (pipelines).
-   *
-   * @return The output data.
-   */
-  std::shared_ptr<CNFrameInfo> GetOutputFrame();
-#endif
-
  protected:
   Pipeline *container_ = nullptr;  ///< The container.
   RwLock container_lock_;
@@ -321,10 +311,6 @@ class Module {
       observer_->notify(data);
     }
   }
-
-#ifdef UNIT_TEST
-  ThreadSafeQueue<std::shared_ptr<CNFrameInfo>> output_frame_queue_;
-#endif
 
  protected:
   std::atomic<bool> showPerfInfo_{false};

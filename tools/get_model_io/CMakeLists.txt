@@ -12,5 +12,11 @@ set(SRC get_model_io.cpp)
 get_filename_component(name "${SRC}" NAME_WE)
 message("target :  ${name}")
 add_executable(${name} ${SRC})
-target_link_libraries(${name} cnrt cndrv easydk pthread ${GLOG_LIBRARIES} ${GFLAGS_LIBRARIES} dl)
+
+set(LINK_LIBS cnrt cndrv easydk)
+if(MLU STREQUAL MLU220_SOC)
+    list(APPEND LINK_LIBS ion)
+endif()
+
+target_link_libraries(${name} ${LINK_LIBS} pthread ${GLOG_LIBRARIES} ${GFLAGS_LIBRARIES} dl)
 

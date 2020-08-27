@@ -204,6 +204,14 @@ class PerfManager {
    */
   static bool PrepareDbFileDir(std::string file_dir);
   /**
+   * @brief Creates directory.
+   *
+   * @param dir The directory
+   *
+   * @return Returns true if the directory is existed or created successfully, otherwise returns false.
+   */
+  static bool CreateDir(std::string dir);
+  /**
    * @brief Delete the data in the database.
    *
    * @param previous_time Delete the data ``previous_time`` ago in the database. (in minutes)
@@ -226,7 +234,6 @@ class PerfManager {
 
   void PopInfoFromQueue();
   void InsertInfoToDb(const PerfInfo& info);
-  static bool CreateDir(std::string dir);
 
   bool is_initialized_ = false;
   std::unordered_set<std::string> perf_type_;

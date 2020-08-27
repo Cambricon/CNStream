@@ -150,6 +150,7 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
   auto auto_set_done = std::make_shared<AutoSetDone>(ret_promise);
   if (batching_by_obj_) {
     if (finfo->datas.find(CNObjsVecKey) == finfo->datas.end()) {
+      timeout_helper_.UnlockOperator();
       return card;
     }
     CNObjsVec objs = cnstream::any_cast<CNObjsVec>(finfo->datas[CNObjsVecKey]);
@@ -175,7 +176,7 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
         timeout_helper_.Reset([this]() -> void { BatchingDone(); });
       }
     }
-    if (cached_frame_cnt_ == batchsize_) {
+    if (cached_frame_cnt_ >= batchsize_) {
       BatchingDone();
       timeout_helper_.Reset(NULL);
     }
@@ -256,8 +257,6 @@ void InferEngine::StageAssemble() {
   std::shared_ptr<BatchingDoneStage> infer_stage =
       std::make_shared<InferBatchingDoneStage>(model_, model_input_fmt_,
                                                batchsize_, dev_id_, mlu_input_res_, mlu_output_res_);
-  auto mlu_queue = dynamic_cast<InferBatchingDoneStage*>(infer_stage.get())->SharedMluQueue();
-  if (rcop_res_.get()) rcop_res_->SetMluQueue(mlu_queue);  // multiplexing cnrtQueue from EasyInfer.
   batching_done_stages_.push_back(infer_stage);
   infer_stage->SetPerfContext(infer_perf_manager_, infer_thread_id_);
   infer_stage->SetDumpResizedImageDir(dump_resized_image_dir_);

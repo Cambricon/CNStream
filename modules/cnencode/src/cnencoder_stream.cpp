@@ -40,8 +40,11 @@
 #define IGNORE_HEAD 1
 #define ALIGN(size, alignment) (((uint32_t)(size) + (alignment)-1) & ~((alignment)-1))
 
+namespace cnstream {
+
 CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, int dst_height, float frame_rate,
-                                 PictureFormat format, int bit_rate, int gop_size, CodecType type, uint8_t channelIdx,
+                                 CNEncoder::PictureFormat format, int bit_rate, int gop_size,
+                                 CNEncoder::CodecType type, uint8_t channelIdx,
                                  uint32_t device_id, std::string pre_type) {
   type_ = type;
   format_ = format;
@@ -77,11 +80,11 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
   if ("ffmpeg" == pre_type_) {
     src_pix_fmt_ = AV_PIX_FMT_BGR24;
     switch (format_) {
-      case NV21:
+      case CNEncoder::NV21:
         LOG(INFO) << "AV_PIX_FMT_NV21";
         dst_pix_fmt_ = AV_PIX_FMT_NV21;
         break;
-      case NV12:
+      case CNEncoder::NV12:
         LOG(INFO) << "AV_PIX_FMT_NV12";
         dst_pix_fmt_ = AV_PIX_FMT_NV12;
         break;
@@ -105,11 +108,11 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
   }
 
   switch (format_) {
-    case NV21:
+    case CNEncoder::NV21:
       LOG(INFO) << "PixelFmt::NV21";
       picture_format_ = edk::PixelFmt::NV21;
       break;
-    case NV12:
+    case CNEncoder::NV12:
       LOG(INFO) << "PixelFmt::NV12";
       picture_format_ = edk::PixelFmt::NV12;
       break;
@@ -119,19 +122,19 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
       break;
   }
   switch (type_) {
-    case H264:
+    case CNEncoder::H264:
       LOG(INFO) << "CodecType::H264";
       codec_type_ = edk::CodecType::H264;
       break;
-    case HEVC:
+    case CNEncoder::HEVC:
       LOG(INFO) << "CodecType::HEVC";
       codec_type_ = edk::CodecType::H265;
       break;
-    case MPEG4:
+    case CNEncoder::MPEG4:
       LOG(INFO) << "CodecType::MPEG4";
       codec_type_ = edk::CodecType::MPEG4;
       break;
-    case JPEG:
+    case CNEncoder::JPEG:
       LOG(INFO) << "CodecType::JPEG";
       codec_type_ = edk::CodecType::JPEG;
       break;
@@ -159,7 +162,7 @@ CNEncoderStream::CNEncoderStream(int src_width, int src_height, int dst_width, i
   attr.input_buffer_num = 6;
   attr.output_buffer_num = 6;
   attr.gop_type = edk::GopType::BIDIRECTIONAL;
-  if (type_ == H264) {
+  if (type_ == CNEncoder::H264) {
     attr.insertSpsPpsWhenIDR = 1;
     attr.level = edk::VideoLevel::H264_41;
     attr.profile = edk::VideoProfile::H264_MAIN;
@@ -351,7 +354,7 @@ void CNEncoderStream::ResizeYuvNearest(uint8_t *src, uint8_t *dst) {
   }
 }
 
-void CNEncoderStream::Bgr2YUV420NV(const cv::Mat &bgr, PictureFormat ToFormat, uint8_t *nv_data) {
+void CNEncoderStream::Bgr2YUV420NV(const cv::Mat &bgr, CNEncoder::PictureFormat ToFormat, uint8_t *nv_data) {
   uint32_t width, height, stride;
   width = bgr.cols;
   height = bgr.rows;
@@ -374,7 +377,7 @@ void CNEncoderStream::Bgr2YUV420NV(const cv::Mat &bgr, PictureFormat ToFormat, u
     // uv data
     if (i % 2 == 0) {
       for (uint32_t j = 0; j < width / 2; j++) {
-        if (ToFormat == NV21) {
+        if (ToFormat == CNEncoder::NV21) {
           *(dst_uv + i * stride / 2 + 2 * j) = *(src_v + i * width / 4 + j);
           *(dst_uv + i * stride / 2 + 2 * j + 1) = *(src_u + i * width / 4 + j);
         } else {
@@ -488,3 +491,5 @@ void CNEncoderStream::RecordEndTime(int64_t pts) {
     perf_manager_->Record(true, cnstream::PerfManager::GetDefaultType(), module_name_, pts);
   }
 }
+
+}  // namespace cnstream

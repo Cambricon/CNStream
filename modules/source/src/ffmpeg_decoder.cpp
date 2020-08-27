@@ -29,6 +29,7 @@
 #include <utility>
 
 #include "cnstream_frame_va.hpp"
+#include "util/cnstream_time_utility.hpp"
 
 #define YUV420SP_STRIDE_ALIGN_FOR_SCALER 128
 
@@ -112,6 +113,7 @@ bool MluDecoder::Create(VideoStreamInfo *info, int interval) {
   interval_ = interval;
   frame_id_ = 0;
   frame_count_ = 0;
+  info_ = *info;
   return true;
 }
 
@@ -120,6 +122,11 @@ void MluDecoder::Destroy() {
     if (!cndec_abort_flag_.load()) {
       DestroyVideoDecoder();
     } else {
+      // make sure all cndec buffers released before abort
+      while (this->cndec_buf_ref_count_.load()) {
+        std::this_thread::yield();
+      }
+      std::lock_guard<std::mutex> lk(instance_mutex_);
       cnvideoDecAbort(instance_);
       instance_ = nullptr;
       handler_->SendFlowEos();
@@ -130,6 +137,11 @@ void MluDecoder::Destroy() {
     if (!cndec_abort_flag_.load()) {
       DestroyJpegDecoder();
     } else {
+      // make sure all cndec buffers released before abort
+      while (this->cndec_buf_ref_count_.load()) {
+        std::this_thread::yield();
+      }
+      std::lock_guard<std::mutex> lk(instance_mutex_);
       cnjpegDecAbort(jpg_instance_);
       jpg_instance_ = nullptr;
       handler_->SendFlowEos();
@@ -154,7 +166,6 @@ bool MluDecoder::Process(ESPacket *pkt) {
   if (cndec_abort_flag_.load() || cndec_error_flag_.load()) {
     return false;
   }
-
   if (instance_) {
     cnvideoDecInput input;
     memset(&input, 0, sizeof(cnvideoDecInput));
@@ -177,17 +188,59 @@ bool MluDecoder::Process(ESPacket *pkt) {
       input.flags |= CNVIDEODEC_FLAG_EOS;
       eos_sent_.store(1);
     }
-    int ret = cnvideoDecFeedData(instance_, &input, 10000);  // FIXME
-    if (ret == -CNCODEC_TIMEOUT) {
-      LOG(ERROR) << "cnvideoDecFeedData timeout happened";
-      cndec_abort_flag_ = 1;
-      return false;
-    } else if (CNCODEC_SUCCESS != ret) {
-      LOG(ERROR) << "Call cnvideoDecFeedData failed, ret = " <<  ret;
-      cndec_error_flag_ = 1;
-      return false;
+
+    /*
+     * eos frame don't retry if feed timeout
+     */
+    if (input.flags & CNVIDEODEC_FLAG_EOS) {
+      int ret = cnvideoDecFeedData(instance_, &input, 10000);  // FIXME
+      if (-CNCODEC_TIMEOUT == ret) {
+        LOG(ERROR) << "cnvideoDecFeedData(eos) timeout happened";
+        cndec_abort_flag_ = 1;
+        return false;
+      } else if (CNCODEC_SUCCESS != ret) {
+        LOG(ERROR) << "Call cnvideoDecFeedData failed, ret = " <<  ret;
+        cndec_error_flag_ = 1;
+        return false;
+      } else {
+        return true;
+      }
+    } else {
+      int retry_time = 3;  // FIXME
+      while (retry_time) {
+        int ret = cnvideoDecFeedData(instance_, &input, 10000);  // FIXME
+        if (-CNCODEC_TIMEOUT == ret) {
+          retry_time--;
+          LOG(ERROR) << "cnvideoDecFeedData(data) timeout happened, retry feed data, time: " << 3 - retry_time;
+          continue;
+        } else if (CNCODEC_SUCCESS != ret) {
+          LOG(ERROR) << "Call cnvideoDecFeedData(data) failed, ret = " <<  ret;
+          cndec_error_flag_ = 1;
+          return false;
+        } else {
+          return true;
+        }
+      }
+      if (0 == retry_time) {
+        LOG(ERROR) << "cnvideoDecFeedData(data) timeout 3 times, prepare abort decoder.";
+        // don't processframe
+        cndec_abort_flag_ = 1;
+        // make sure all cndec buffers released before abort
+        while (this->cndec_buf_ref_count_.load()) {
+          std::this_thread::yield();
+        }
+        std::lock_guard<std::mutex> lk(instance_mutex_);
+        cnvideoDecAbort(instance_);
+        instance_ = nullptr;
+        if (!Create(&info_, interval_)) {
+          LOG(ERROR) << "cnvideoDecFeedData(data) timeout 3 times, restart failed.";
+          handler_->SendFlowEos();
+          return false;
+        }
+        LOG(ERROR) << "cnvideoDecFeedData(data) timeout 3 times, restart success.";
+        return true;
+      }
     }
-    return true;
   }
 
   if (jpg_instance_) {
@@ -199,7 +252,7 @@ bool MluDecoder::Process(ESPacket *pkt) {
       input.pts = pkt->pts;
       input.flags |= CNJPEGDEC_FLAG_TIMESTAMP;
       if (pkt->flags & ESPacket::FLAG_EOS) {
-        input.flags |= CNVIDEODEC_FLAG_EOS;
+        input.flags |= CNJPEGDEC_FLAG_EOS;
         eos_sent_.store(1);
       }
       if (input.streamLength > create_jpg_info_.suggestedLibAllocBitStrmBufSize) {
@@ -211,17 +264,59 @@ bool MluDecoder::Process(ESPacket *pkt) {
       input.flags |= CNJPEGDEC_FLAG_EOS;
       eos_sent_.store(1);
     }
-    int ret = cnjpegDecFeedData(jpg_instance_, &input, 10000);  // FIXME
-    if (ret == -CNCODEC_TIMEOUT) {
-      LOG(ERROR) << "cnjpegDecFeedData timeout happened";
-      cndec_abort_flag_ = 1;
-      return false;
-    } else if (CNCODEC_SUCCESS != ret) {
-      LOG(ERROR) << "Call cnjpegDecFeedData failed, ret = " <<  ret;
-      cndec_error_flag_ = 1;
-      return false;
+
+    /*
+     * eos frame don't retry if feed timeout
+     */
+    if (input.flags & CNJPEGDEC_FLAG_EOS) {
+      int ret = cnjpegDecFeedData(jpg_instance_, &input, 10000);  // FIXME
+      if (CNCODEC_TIMEOUT == ret) {
+        LOG(ERROR) << "cnjpegDecFeedData(eos) timeout happened";
+        cndec_abort_flag_ = 1;
+        return false;
+      } else if (CNCODEC_SUCCESS != ret) {
+        LOG(ERROR) << "Call cnjpegDecFeedData(eos) failed, ret = " <<  ret;
+        cndec_error_flag_ = 1;
+        return false;
+      } else {
+        return true;
+      }
+    } else {
+      int retry_time = 3;  // FIXME
+      while (retry_time) {
+        int ret = cnjpegDecFeedData(jpg_instance_, &input, 10000);  // FIXME
+        if (CNCODEC_TIMEOUT == ret) {
+          retry_time--;
+          LOG(ERROR) << "cnjpegDecFeedData(data) timeout happened, retry feed data, time: " << 3 - retry_time;
+          continue;
+        } else if (CNCODEC_SUCCESS != ret) {
+          LOG(ERROR) << "Call cnjpegDecFeedData(data) failed, ret = " <<  ret;
+          cndec_error_flag_ = 1;
+          return false;
+        } else {
+          return true;
+        }
+      }
+      if (0 == retry_time) {
+        LOG(ERROR) << "cnjpegDecFeedData(data) timeout 3 times, prepare abort decoder.";
+        // don't processframe
+        cndec_abort_flag_ = 1;
+        // make sure all cndec buffers released before abort
+        while (this->cndec_buf_ref_count_.load()) {
+          std::this_thread::yield();
+        }
+        std::lock_guard<std::mutex> lk(instance_mutex_);
+        cnjpegDecAbort(jpg_instance_);
+        jpg_instance_ = nullptr;
+        if (!Create(&info_, interval_)) {
+          LOG(ERROR) << "cnjpegDecFeedData(data) timeout 3 times, restart failed.";
+          handler_->SendFlowEos();
+          return false;
+        }
+        LOG(ERROR) << "cnjpegDecFeedData(data) timeout 3 times, restart success.";
+        return true;
+      }
     }
-    return true;
   }
 
   // should not come here...
@@ -312,8 +407,12 @@ void MluDecoder::VideoFrameCallback(cnvideoDecOutput *output) {
   }
   bool reused = false;
   if (frame_count_++ % interval_ == 0) {
+    std::lock_guard<std::mutex> lk(instance_mutex_);
     cnvideoDecAddReference(instance_, &output->frame);
+    double start = TimeStamp::Current();
     ProcessFrame(output, &reused);
+    double end = TimeStamp::Current();
+    LOG_IF(INFO, end - start > 5000000) << "processvideoFrame takes: " << end - start << "us.";
     if (!reused) {
       cnvideoDecReleaseReference(instance_, &output->frame);
     }
@@ -333,6 +432,11 @@ int MluDecoder::ProcessFrame(cnvideoDecOutput *output, bool *reused) {
       return -1;
     }
   }
+
+  if (cndec_abort_flag_.load() || cndec_error_flag_.load()) {
+    return -1;
+  }
+
   std::shared_ptr<CNDataFrame> dataframe(new (std::nothrow) CNDataFrame());
   if (!dataframe) {
     return -1;
@@ -556,8 +660,12 @@ void MluDecoder::JpegFrameCallback(cnjpegDecOutput *output) {
   }
   bool reused = false;
   if (frame_count_++ % interval_ == 0) {
+    std::lock_guard<std::mutex> lk(instance_mutex_);
     cnjpegDecAddReference(jpg_instance_, &output->frame);
+    double start = TimeStamp::Current();
     ProcessJpegFrame(output, &reused);
+    double end = TimeStamp::Current();
+    LOG_IF(INFO, end - start > 5000000) << "processJpegFrame takes: " << end - start << "us.";
     if (!reused) {
       cnjpegDecReleaseReference(jpg_instance_, &output->frame);
     }
@@ -577,6 +685,11 @@ int MluDecoder::ProcessJpegFrame(cnjpegDecOutput *output, bool *reused) {
       return -1;
     }
   }
+
+  if (cndec_abort_flag_.load() || cndec_error_flag_.load()) {
+    return -1;
+  }
+
   std::shared_ptr<CNDataFrame> dataframe(new (std::nothrow) CNDataFrame());
   if (!dataframe) {
     return -1;

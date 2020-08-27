@@ -105,9 +105,7 @@ class ParserHelper {
   int Init(std::string fmt) {
     std::unique_lock<std::mutex> lk(mutex_status_);
     if (status_ == STATUS_NONE) {
-      if (parser_.Open(fmt) < 0) {
-        return -1;
-      }
+      fmt_ = fmt;
       status_ = STATUS_INIT;
     }
     return 0;
@@ -116,6 +114,13 @@ class ParserHelper {
   int Parse(unsigned char *bitstream, int size) {
     std::unique_lock<std::mutex> lk(mutex_status_);
     if (status_ == STATUS_INIT) {
+      if (parser_.Open(fmt_) < 0) {
+        return -1;
+      }
+      status_ = STATUS_START;
+    }
+
+    if (status_ == STATUS_START) {
       int ret = parser_.Parse(bitstream, size);
       if (ret < 0) {
         return -1;
@@ -130,7 +135,7 @@ class ParserHelper {
 
   void Free() {
     std::unique_lock<std::mutex> lk(mutex_status_);
-    if (status_ != STATUS_NONE && status_ != STATUS_END) {
+    if (status_ != STATUS_NONE && status_ != STATUS_INIT && status_ != STATUS_END) {
       parser_.Close();
       status_ = STATUS_END;
     }
@@ -147,12 +152,14 @@ class ParserHelper {
   enum {
     STATUS_NONE,
     STATUS_INIT,
+    STATUS_START,
     STATUS_DONE,
     STATUS_END
   } status_;
   std::mutex mutex_status_;
   std::mutex mutex_getinfo_;
   StreamParser parser_;
+  std::string fmt_;
 };  // class ParserHelper
 
 bool GetVideoStreamInfo (const AVFormatContext *ic, int &video_index, VideoStreamInfo &info);  // NOLINT

@@ -18,18 +18,27 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include "cnencoder.hpp"
+
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
 
-#include "cnencoder.hpp"
+#include "cnencoder_stream.hpp"
 #include "cnstream_frame_va.hpp"
 #include "device/mlu_context.h"
 #include "easycodec/easy_encode.h"
 #include "easycodec/vformat.h"
 
 namespace cnstream {
+
+/**
+ * @brief CNEncoder context structer
+ */
+struct CNEncoderContext {
+  CNEncoderStream* stream_;
+};
 
 CNEncoder::CNEncoder(const std::string &name) : Module(name) {
   param_register_.SetModuleDesc("CNEncoder is a module to encode use cnencode.");
@@ -59,13 +68,13 @@ CNEncoderContext *CNEncoder::GetCNEncoderContext(CNFrameInfoPtr data) {
     ctx = new CNEncoderContext;
     switch (frame->fmt) {
       case cnstream::CNDataFormat::CN_PIXEL_FORMAT_BGR24:
-        cn_format_ = CNEncoderStream::BGR24;
+        cn_format_ = BGR24;
         break;
       case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
-        cn_format_ = CNEncoderStream::NV12;
+        cn_format_ = NV12;
         break;
       case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
-        cn_format_ = CNEncoderStream::NV21;
+        cn_format_ = NV21;
         break;
       default:
         LOG(WARNING) << "[CNEncoder] unsuport pixel format.";
@@ -131,11 +140,11 @@ bool CNEncoder::Open(ModuleParamSet paramSet) {
   }
 
   if ("h264" == enc_type_) {
-    cn_type_ = CNEncoderStream::H264;
+    cn_type_ = H264;
   } else if ("hevc" == enc_type_) {
-    cn_type_ = CNEncoderStream::HEVC;
+    cn_type_ = HEVC;
   } else if ("jpeg" == enc_type_) {
-    cn_type_ = CNEncoderStream::JPEG;
+    cn_type_ = JPEG;
   }
 
   edk::MluContext tx;

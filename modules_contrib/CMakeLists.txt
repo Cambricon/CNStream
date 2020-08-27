@@ -1,6 +1,6 @@
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib/)
 
-set(contrib_modules_list cnencode fakesink)
+set(contrib_modules_list fakesink)
 
 include_directories(${PROJECT_SOURCE_DIR}/modules)
 

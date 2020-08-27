@@ -28,61 +28,66 @@
  */
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
-#include <mutex>
+
 #include "cnstream_eventbus.hpp"
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
-
-#include "cnencoder_stream.hpp"
-#include "cnrt.h"
 
 namespace cnstream {
 
 /// Pointer for frame info
 using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
 
+struct CNEncoderContext;
 /**
- * @brief CNEncoder context structer
- */
-struct CNEncoderContext {
-  CNEncoderStream* stream_;
-};
-
-/**
- * @brief CNEncoder is a module for encode the video or image on MLU.
+ * @brief CNEncoder is a module for encoding the video or image on MLU.
  */
 class CNEncoder : public Module, public ModuleCreator<CNEncoder> {
  public:
   /**
-   *  @brief  Generate CNEncoder
+   * @brief The enum of picture format
+   */
+  enum PictureFormat {
+    YUV420P = 0,  /// Planar Y4-U1-V1
+    RGB24,        /// Packed R8G8B8
+    BGR24,        /// Packed B8G8R8
+    NV21,         /// Semi-Planar Y4-V1U1
+    NV12,         /// Semi-Planar Y4-U1V1
+  };
+  /**
+   * @brief The enum of codec type
+   */
+  enum CodecType {
+    H264 = 0,   /// H264
+    HEVC,       /// HEVC
+    MPEG4,      /// MPEG4
+    JPEG        /// JPEG
+  };
+  /**
+   * @brief CNEncoder constructor
    *
-   *  @param  Name : module name
-   *
-   *  @return None
+   * @param name : module name
    */
   explicit CNEncoder(const std::string& name);
   /**
-   *  @brief  Release Encoder
-   *
-   *  @param  None
-   *
-   *  @return None
+   * @brief CNEncoder destructor
    */
   ~CNEncoder();
 
   /**
-  * @brief Called by pipeline when pipeline start.
-  *
-  * @param paramSet :
-  @verbatim
-     frame_rate_: frame rate
-     bit_rate_: bit rate
-     gop_size_: gop size
-     cn_type_: cnencoder type
-     cn_fomate_: cnencoder formate
-  @endverbatim
+   * @brief Called by pipeline when pipeline start.
+   *
+   * @param paramSet :
+   * @verbatim
+   *   frame_rate_: frame rate
+   *   bit_rate_: bit rate
+   *   gop_size_: gop size
+   *   cn_type_: cnencoder type
+   *   cn_fomate_: cnencoder formate
+   * @endverbatim
    *
    * @return if module open succeed
    */
@@ -104,6 +109,7 @@ class CNEncoder : public Module, public ModuleCreator<CNEncoder> {
    *
    * @return whether process succeed
    * @retval 0: succeed and do no intercept data
+   * @retval <0: failed
    */
   int Process(CNFrameInfoPtr data) override;
 
@@ -135,8 +141,8 @@ class CNEncoder : public Module, public ModuleCreator<CNEncoder> {
   uint32_t frame_rate_ = 0;
   uint32_t dst_width_ = 0;
   uint32_t dst_height_ = 0;
-  CNEncoderStream::CodecType cn_type_;
-  CNEncoderStream::PictureFormat cn_format_;
+  CodecType cn_type_;
+  PictureFormat cn_format_;
   std::unordered_map<std::string, CNEncoderContext*> ctxs_;
   std::mutex mutex_;
 };  // class CNEncoder

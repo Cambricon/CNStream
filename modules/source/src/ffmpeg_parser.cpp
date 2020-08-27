@@ -48,6 +48,9 @@ size_t RingBuffer::Write(const void *data, const size_t bytes) {
 
   std::unique_lock<std::mutex> lk(mutex_);
   const auto capacity = capacity_;
+  if (capacity < bytes) {
+    return -1;
+  }
   while ((capacity - size_) < bytes) {
     if (cond_w_.wait_for(lk, std::chrono::seconds(2)) == std::cv_status::timeout) {
       return -1;
@@ -296,7 +299,11 @@ void StreamParserImpl::FindInfo() {
   AVIOContext *avio = nullptr;
   unsigned char *io_buffer = nullptr;
 
-  io_buffer = (unsigned char*)av_malloc(io_buffer_size_ + CN_INPUT_BUFFER_PADDING_SIZE);
+#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(56, 56, 100)
+  io_buffer = (unsigned char*)av_malloc(io_buffer_size_ + AV_INPUT_BUFFER_PADDING_SIZE);
+#else
+  io_buffer = (unsigned char*)av_malloc(io_buffer_size_ + FF_INPUT_BUFFER_PADDING_SIZE);
+#endif
   avio = avio_alloc_context(io_buffer, io_buffer_size_, 0, this->queue_, &read_packet, nullptr, nullptr);
   if (!avio) {
     av_free(io_buffer);
