@@ -48,6 +48,9 @@ size_t RingBuffer::Write(const void *data, const size_t bytes) {
 
   std::unique_lock<std::mutex> lk(mutex_);
   const auto capacity = capacity_;
+  if (capacity < bytes) {
+    return -1;
+  }
   while ((capacity - size_) < bytes) {
     if (cond_w_.wait_for(lk, std::chrono::seconds(2)) == std::cv_status::timeout) {
       return -1;

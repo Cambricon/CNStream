@@ -81,7 +81,6 @@ class ESJpegMemHandlerImpl : public IHandler {
   std::mutex queue_mutex_;
 
   std::shared_ptr<Decoder> decoder_ = nullptr;
-  uint64_t pts_ = 0;
   // maximum resolution 8K
   int max_width_ = 7680;
   int max_height_ = 4320;
