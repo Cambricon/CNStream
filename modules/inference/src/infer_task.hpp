@@ -28,6 +28,8 @@
 #include <string>
 #include <vector>
 
+#include "cnstream_error.hpp"
+
 namespace cnstream {
 
 class InferTask;
@@ -55,8 +57,18 @@ class InferTask {
   }
 
   int Execute() {
-    promise_.set_value(func_());
+    int ret = 0;
+    try {
+      ret = func_();
+    } catch (CnstreamError& e) {
+      ret = -1;
+      func_ = NULL;  // unbind resources.
+      promise_.set_value(ret);
+      statem_.get();
+      throw e;
+    }
     func_ = NULL;  // unbind resources.
+    promise_.set_value(ret);
     return statem_.get();
   }
 

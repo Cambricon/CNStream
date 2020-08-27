@@ -71,16 +71,29 @@ class RawImgMemHandlerImpl : public IHandler {
 
 #ifdef HAVE_OPENCV
   /**
+   * @Note This function will deprecate, use Write(cv::Mat *mat_data, uint64_t pts) instead.
    * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
    * @param
-   - mat_data: cv::Mat pointer with bgr24 format image data, feed mat_data as nullptr when feed data end.
+         - mat_data: cv::Mat pointer with bgr24 format image data, feed mat_data as nullptr when feed data end.
    * @retval 0: The data is write successfully,
    * @retval -1: Write failed, maybe eos got or handler is closed.
    * @retval -2: Invalid data.
    */
   int Write(cv::Mat *mat_data);
+  /**
+   * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
+   * @param
+         - mat_data: cv::Mat pointer with bgr24 format image data, feed mat_data as nullptr when feed data end.
+         - pts: pts for image, should be different for each image
+   * @retval 0: The data is write successfully,
+   * @retval -1: Write failed, maybe eos got or handler is closed.
+   * @retval -2: Invalid data.
+   */
+  int Write(cv::Mat *mat_data, uint64_t pts);
 #endif
   /**
+   * @Note This function will deprecate, use Write(unsigned char *data, int size, uint64_t pts,
+   int width, int height, CNDataFormat pixel_fmt) instead.
    * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
    bgr24/rgb24/nv21/nv12 format).
    * @param
@@ -94,6 +107,21 @@ class RawImgMemHandlerImpl : public IHandler {
    * @retval -2: Invalid data.
    */
   int Write(unsigned char *data, int size, int w = 0, int h = 0, CNDataFormat pixel_fmt = CN_INVALID);
+  /**
+   * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
+   bgr24/rgb24/nv21/nv12 format).
+   * @param
+          - data: image data pointer(one continuous buffer), feed data as nullptr and size as 0 when feed data end
+          - size: image data size
+          - pts: pts for image, should be different for each image
+          - w: image width
+          - h: image height
+          - pixel_fmt: image pixel format, support bgr24/rgb24/nv21/nv12 format.
+   * @retval 0: The data is write successfully,
+   * @retval -1: Write failed, maybe eos got or handler is closed.
+   * @retval -2: Invalid data.
+   */
+  int Write(unsigned char *data, int size, uint64_t pts, int w = 0, int h = 0, CNDataFormat pixel_fmt = CN_INVALID);
 
  private:
   DataSource *module_ = nullptr;

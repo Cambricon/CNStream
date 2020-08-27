@@ -264,19 +264,20 @@ int AddSourceForDecompressedImage(cnstream::DataSource *source, const std::strin
     auto memHandler = std::dynamic_pointer_cast<cnstream::RawImgMemHandler>(handler);
     auto itor = files.begin();
     int ret_code = -1;
+    uint64_t pts_ = 0;
 
     while (thread_running.load() && itor != files.end()) {
       cv::Mat bgr_frame = cv::imread(*itor);
       if (!bgr_frame.empty()) {
         if (use_cv_mat) {
           // feed bgr24 image mat, with api-Write(cv::Mat)
-          ret_code = memHandler->Write(&bgr_frame);
+          ret_code = memHandler->Write(&bgr_frame, pts_++);
         } else {
           // feed rgb24 image data, with api-Write(unsigned char* data, int size, int w, int h, cnstream::CNDataFormat)
           cv::Mat rgb_frame(bgr_frame.rows, bgr_frame.cols, CV_8UC3);
           cv::cvtColor(bgr_frame, rgb_frame, cv::COLOR_BGR2RGB);
 
-          ret_code = memHandler->Write(rgb_frame.data, rgb_frame.cols * rgb_frame.rows * 3,
+          ret_code = memHandler->Write(rgb_frame.data, rgb_frame.cols * rgb_frame.rows * 3, pts_++,
                       rgb_frame.cols, rgb_frame.rows, cnstream::CN_PIXEL_FORMAT_RGB24);
         }
 
@@ -289,7 +290,7 @@ int AddSourceForDecompressedImage(cnstream::DataSource *source, const std::strin
         itor = files.begin();
       }
     }
-    memHandler->Write(nullptr);
+    memHandler->Write(nullptr, 0);
   });
   thread_source.detach();
 #else

@@ -232,7 +232,7 @@ void ESMemHandlerImpl::DecodeLoop() {
 bool ESMemHandlerImpl::PrepareResources() {
   VideoStreamInfo info;
   while (running_.load()) {
-    if (parser_.GetInfo(info) > 0) {
+    if (parser_.GetInfo(info)) {
       break;
     }
     usleep(1000 * 10);

@@ -494,7 +494,8 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     msg.module_name = moduleName;
     msg.pts = data->timestamp;
     UpdateByStreamMsg(msg);
-    LOG(WARNING) << module->name_ << " frame error, stream_id, pts: " << data->stream_id, data->timestamp;
+    LOG(WARNING) << "[" << GetName() << "]" << " got frame error from " << module->name_ <<
+      " stream_id: " << data->stream_id << ", pts: " << data->timestamp;
     return;
   }
   module->NotifyObserver(data);
@@ -664,7 +665,7 @@ bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::strin
                                  uint32_t clear_data_interval_in_minutes) {
   if (perf_running_) return false;
   if (db_dir.empty()) db_dir = "perf_database";
-  PerfManager::PrepareDbFileDir(db_dir + "/");
+  PerfManager::CreateDir(db_dir + "/");
 
   SetStartAndEndNodeNames();
   std::vector<std::string> module_names = GetModuleNames();

@@ -50,30 +50,24 @@ extern "C" {
 #include <string>
 #include <thread>
 
+#include "cnencoder.hpp"
 #include "easycodec/easy_encode.h"
 #include "easycodec/vformat.h"
 #include "perf_manager.hpp"
 
+namespace cnstream {
+
 class CNEncoderStream {
  public:
-  enum PictureFormat {
-    YUV420P = 0,
-    RGB24,
-    BGR24,
-    NV21,
-    NV12,
-  };
-  enum CodecType { H264 = 0, HEVC, MPEG4, JPEG };
-
-  CNEncoderStream(int src_width, int src_height, int width, int height, float frame_rate, PictureFormat format,
-                  int bit_rate, int gop_size, CodecType type, uint8_t channelIdx, uint32_t device_id,
-                  std::string pre_type);
+  CNEncoderStream(int src_width, int src_height, int width, int height, float frame_rate,
+                  CNEncoder::PictureFormat format, int bit_rate, int gop_size, CNEncoder::CodecType type,
+                  uint8_t channelIdx, uint32_t device_id, std::string pre_type);
   virtual ~CNEncoderStream();
 
   bool Update(const cv::Mat &image, int64_t timestamp, bool eos);
   bool Update(uint8_t *image, int64_t timestamp, bool eos);
   void ResizeYuvNearest(uint8_t *src, uint8_t *dst);
-  void Bgr2YUV420NV(const cv::Mat &bgr, PictureFormat ToFormat, uint8_t *nv_data);
+  void Bgr2YUV420NV(const cv::Mat &bgr, CNEncoder::PictureFormat ToFormat, uint8_t *nv_data);
   void Convert(const uint8_t *src_buffer, const size_t src_buffer_size, uint8_t *dst_buffer,
                const size_t dst_buffer_size);
 
@@ -107,8 +101,8 @@ class CNEncoderStream {
   size_t written;
   FILE *p_file = nullptr;
 
-  CodecType type_;
-  PictureFormat format_;
+  CNEncoder::CodecType type_;
+  CNEncoder::PictureFormat format_;
 
   cv::Mat canvas_;
   edk::PixelFmt picture_format_;
@@ -124,4 +118,5 @@ class CNEncoderStream {
   std::string module_name_ = "";
 };
 
+}  // namespace cnstream
 #endif  // CNEncoder_STREAM_HPP_

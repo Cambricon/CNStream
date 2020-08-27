@@ -107,6 +107,7 @@ After finished prerequisites, you can build instructions with the following step
    | -------------------- | ---------------------------------------- | ------- | --------------------------- |
    | build_display        | ON / OFF                                 | ON      | build display module        |
    | build_ipc            | ON / OFF                                 | ON      | build ipc module            |
+   | build_cnencode       | ON / OFF                                 | ON      | build cnencode module       |
    | build_encode         | ON / OFF                                 | ON      | build encode module         |
    | build_inference      | ON / OFF                                 | ON      | build inference module      |
    | build_osd            | ON / OFF                                 | ON      | build osd module            |
@@ -134,7 +135,14 @@ After finished prerequisites, you can build instructions with the following step
       ```bash
       cmake -DCMAKE_TOOLCHAIN_FILE=${CNSTREAM_DIR}/cmake/cross-compile.cmake ${CNSTREAM_DIR}
       ```
-      Note: you need to configure toolchain by yourself in cross-compile.cmake
+      Note: you need to configure toolchain by yourself in cross-compile.cmake and cross-compile gflags, glog, opencv, ffmpeg and install them into ${CNSTREAM_DIR}
+
+      take MLU220_SOC as example:
+
+      ```bash
+      cmake ${CNSTREAM_DIR} -DCMAKE_TOOLCHAIN_FILE=${CNSTREAM_DIR}/cmake/cross-compile.cmake -Dbuild_tests=OFF -Dbuild_track=OFF -DWITH_TRACKER=OFF -DENABLE_KCF=OFF -DMLU=MLU220_SOC
+      ```
+
 4. Run the following command to build instructions:
 
       ```bash
@@ -146,9 +154,6 @@ After finished prerequisites, you can build instructions with the following step
      make
      make install
      ```
-
-
-
 
 ## Samples ##
 

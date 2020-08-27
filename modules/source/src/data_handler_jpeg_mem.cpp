@@ -208,7 +208,7 @@ bool ESJpegMemHandlerImpl::PrepareResources() {
     parser_->Init("mjpeg");
 
     while (running_.load()) {
-      if (parser_->GetInfo(info) > 0) {
+      if (parser_->GetInfo(info)) {
         break;
       }
       usleep(1000 * 10);

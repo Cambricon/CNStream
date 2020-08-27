@@ -122,7 +122,7 @@ InferBatchingDoneStage::InferBatchingDoneStage(std::shared_ptr<edk::ModelLoader>
   easyinfer_ = std::make_shared<edk::EasyInfer>();
 #ifdef CNS_MLU100
   easyinfer_->Init(model_, batchsize_, dev_id);
-#elif CNS_MLU270
+#elif defined(CNS_MLU270) || defined(CNS_MLU220_SOC)
   easyinfer_->Init(model_, 1, dev_id);
 #endif
 }
@@ -238,7 +238,7 @@ std::vector<std::shared_ptr<InferTask>> D2HBatchingDoneStage::BatchingDone(const
     mem_op.SetLoader(this->model_);
 #ifdef CNS_MLU100
     mem_op.MemcpyOutputD2H(cpu_output_value.ptrs, mlu_output_value.ptrs, this->batchsize_);
-#elif CNS_MLU270
+#elif defined(CNS_MLU270) || defined(CNS_MLU220_SOC)
     mem_op.MemcpyOutputD2H(cpu_output_value.ptrs, mlu_output_value.ptrs, 1);
 #endif
     this->mlu_output_res_->DeallingDone();

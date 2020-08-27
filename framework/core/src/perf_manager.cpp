@@ -223,6 +223,10 @@ bool PerfManager::PrepareDbFileDir(std::string file_path) {
 }
 
 bool PerfManager::CreateDir(std::string dir) {
+  if (!access(dir.c_str(), 0)) {
+    // LOG(INFO) << "Directory [" << dir << "] exists.";
+    return true;
+  }
   std::string path;
   int success = 0;
   for (uint32_t i = 0; i < dir.size(); i++) {
