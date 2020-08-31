@@ -183,6 +183,8 @@ class MluDecoder : public Decoder {
     MluDecoder *decoder_;
     cncodecFrame *frame_;
   };
+  std::mutex instance_mutex_;
+  VideoStreamInfo info_;
 };
 
 class FFmpegCpuDecoder : public Decoder {

@@ -208,12 +208,19 @@ bool ESJpegMemHandlerImpl::PrepareResources() {
     parser_->Init("mjpeg");
 
     while (running_.load()) {
-      if (parser_->GetInfo(info)) {
+      int ret = parser_->GetInfo(info);
+      if (-1 == ret) {
+        return false;
+      } else if (0 == ret) {
+        usleep(1000 * 10);
+      } else {
         break;
       }
-      usleep(1000 * 10);
     }
 
+    if (!running_.load()) {
+      return false;
+    }
     decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
   } else {
     LOG(ERROR) << "unsupported decoder_type";

@@ -244,7 +244,10 @@ class Live555Demuxer : public IDemuxer, public IRtspCB {
     // waiting for stream info...
     VideoStreamInfo info;
     while (1) {
-      if (parser_.GetInfo(info)) {
+      int ret = parser_.GetInfo(info);
+      if (-1 == ret) {
+        return false;
+      } else if (1 == ret) {
         break;
       }
       if (exit_flag) {
@@ -412,9 +415,15 @@ void RtspHandlerImpl::DemuxLoop() {
     return;
   }
   if (!demuxer->PrepareResources(demux_exit_flag_)) {
-    if (nullptr != module_)
-      module_->PostEvent(
-          EVENT_ERROR, "stream_id " + stream_id_ + " prepare codec resources failed.");
+    if (nullptr != module_) {
+      Event e;
+      e.type = EventType::EVENT_STREAM_ERROR;
+      e.module_name = module_->GetName();
+      e.message = "Prepare codec resources failed.";
+      e.stream_id = stream_id_;
+      e.thread_id = std::this_thread::get_id();
+      module_->PostEvent(e);
+    }
     return;
   }
   {

@@ -103,6 +103,10 @@ class MsgObserver : cnstream::StreamMsgObserver {
         if (source) source->RemoveSource(smsg.stream_id);
         pipeline_->RemovePerfManager(smsg.stream_id);
         stream_cnt_--;
+        if (stream_cnt_ == 0) {
+          LOG(INFO) << "[Observer] all streams is removed from pipeline, pipeline will stop.";
+          stop_ = true;
+        }
         break;
 
       case cnstream::StreamMsgType::ERROR_MSG:
@@ -175,13 +179,16 @@ int AddSourceForVideoInMem(cnstream::DataSource *source, const std::string &stre
     while (thread_running.load()) {
       if (!feof(fp)) {
         int size = fread(buf, 1, 4096, fp);
-        memHandler->Write(buf, size);
+        if (memHandler->Write(buf, size) != 0) {
+          break;
+        }
       } else if (loop) {
         fseek(fp, 0, SEEK_SET);
       } else {
         break;
       }
     }
+    fclose(fp);
     memHandler->Write(nullptr, 0);
   });
   thread_source.detach();
@@ -230,7 +237,10 @@ int AddSourceForImageInMem(cnstream::DataSource *source, const std::string &stre
         pkt.data = buf;
         pkt.size = size;
         pkt.pts = pts_++;
-        memHandler->Write(&pkt);
+        if (memHandler->Write(&pkt) != 0) {
+          fclose(fp);
+          break;
+        }
         fclose(fp);
       }
       itor++;

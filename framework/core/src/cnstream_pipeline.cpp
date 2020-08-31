@@ -494,7 +494,8 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     msg.module_name = moduleName;
     msg.pts = data->timestamp;
     UpdateByStreamMsg(msg);
-    LOG(WARNING) << module->name_ << " frame error, stream_id, pts: " << data->stream_id, data->timestamp;
+    LOG(WARNING) << "[" << GetName() << "]" << " got frame error from " << module->name_ <<
+      " stream_id: " << data->stream_id << ", pts: " << data->timestamp;
     return;
   }
   module->NotifyObserver(data);

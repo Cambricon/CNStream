@@ -143,12 +143,10 @@ bool Module::TransmitData(std::shared_ptr<CNFrameInfo> data) {
   RwLockReadGuard guard(container_lock_);
   if (container_) {
     return container_->ProvideData(this, data);
+  } else {
+    NotifyObserver(data);
   }
-#ifdef UNIT_TEST
-  else {  // NOLINT
-    output_frame_queue_.Push(data);
-  }
-#endif
+
   return false;
 }
 
@@ -174,14 +172,6 @@ std::shared_ptr<PerfManager> Module::GetPerfManager(const std::string& stream_id
   }
   return nullptr;
 }
-
-#ifdef UNIT_TEST
-std::shared_ptr<CNFrameInfo> Module::GetOutputFrame() {
-  std::shared_ptr<CNFrameInfo> output_frame = nullptr;
-  output_frame_queue_.WaitAndTryPop(output_frame, std::chrono::milliseconds(100));
-  return output_frame;
-}
-#endif
 
 ModuleFactory* ModuleFactory::factory_ = nullptr;
 
