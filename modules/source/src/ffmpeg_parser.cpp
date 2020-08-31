@@ -160,7 +160,7 @@ class StreamParserImpl {
   }
 
   int Parse(unsigned char *bitstream, int size);
-  bool GetInfo(VideoStreamInfo &info);  // NOLINT
+  int GetInfo(VideoStreamInfo &info);  // NOLINT
 
  private:
   void FindInfo();
@@ -202,11 +202,11 @@ int StreamParser::Parse(unsigned char *bitstream, int size) {
   return -1;
 }
 
-bool StreamParser::GetInfo(VideoStreamInfo &info) {
+int StreamParser::GetInfo(VideoStreamInfo &info) {
   if (impl_) {
     return impl_->GetInfo(info);
   }
-  return false;
+  return -1;
 }
 
 static int read_packet(void *opaque, uint8_t *buf, int buf_size) {
@@ -255,6 +255,10 @@ bool GetVideoStreamInfo(const AVFormatContext *ic, int &video_index, VideoStream
   info.color_space = st->codec->colorspace;
   info.bitrate = st->codec->bit_rate / 1000;
 #endif
+  if (!info.codec_width || !info.codec_height) {
+    LOG(ERROR) << "Parse video stream info failed.";
+    return false;
+  }
   /*At this moment, if the demuxer does not set this value (avctx->field_order == UNKNOWN),
   *   the input stream will be assumed as progressive one.
   */
@@ -303,12 +307,14 @@ void StreamParserImpl::FindInfo() {
   avio = avio_alloc_context(io_buffer, io_buffer_size_, 0, this->queue_, &read_packet, nullptr, nullptr);
   if (!avio) {
     av_free(io_buffer);
+    info_got_.store(-1);
     return;
   }
   ic = avformat_alloc_context();
   if (!ic) {
     av_freep(&avio->buffer);
     av_free(avio);
+    info_got_.store(-1);
     return;
   }
   ic->pb = avio;
@@ -327,6 +333,7 @@ void StreamParserImpl::FindInfo() {
     av_free(avio);
     ic->pb = nullptr;
     avformat_close_input(&ic);
+    info_got_.store(-1);
     return;
   }
 
@@ -335,6 +342,7 @@ void StreamParserImpl::FindInfo() {
     av_free(avio);
     ic->pb = nullptr;
     avformat_close_input(&ic);
+    info_got_.store(-1);
     return;
   }
 
@@ -345,6 +353,7 @@ void StreamParserImpl::FindInfo() {
     av_free(avio);
     ic->pb = nullptr;
     avformat_close_input(&ic);
+    info_got_.store(-1);
     return;
   }
 
@@ -362,9 +371,15 @@ void StreamParserImpl::FindInfo() {
 }
 
 int StreamParserImpl::Parse(unsigned char *buf, int size) {
-  if (info_got_.load()) {
+  if (info_got_.load() == -1) {
+    LOG(ERROR) << this << " Parse info failed.";
+    return -1;
+  }
+
+  if (info_got_.load() == 1) {
     return 1;
   }
+
   if (!buf || !size || !queue_) {
     return 0;
   }
@@ -384,19 +399,22 @@ int StreamParserImpl::Parse(unsigned char *buf, int size) {
   return 0;
 }
 
-bool StreamParserImpl::GetInfo(VideoStreamInfo &info) {
+int StreamParserImpl::GetInfo(VideoStreamInfo &info) {
+  if (info_got_.load() == -1) {
+    return -1;
+  }
   if (info_ready_.load()) {
     info = info_;
-    return true;
+    return 1;
   }
-  if (info_got_.load()) {
+  if (info_got_.load() == 1) {
     std::future<VideoStreamInfo> future_ = promise_.get_future();
     info_ = future_.get();
     info = info_;
     info_ready_.store(1);
-    return true;
+    return 1;
   }
-  return false;
+  return 0;
 }
 
 static int FindStartCode(unsigned char *buf) {

@@ -43,6 +43,7 @@
 #include "inferencer.hpp"
 #include "postproc.hpp"
 #include "preproc.hpp"
+#include "util/cnstream_queue.hpp"
 #include "test_base.hpp"
 
 namespace cnstream {
@@ -54,10 +55,26 @@ static const char *g_postproc_name = "PostprocClassification";
 static constexpr int g_dev_id = 0;
 static constexpr int g_channel_id = 0;
 
-void GetResult(std::shared_ptr<Module> infer) {
+class InferObserver : public IModuleObserver {
+ public:
+  void notify(std::shared_ptr<CNFrameInfo> data) override {
+    output_frame_queue_.Push(data);
+  }
+
+  std::shared_ptr<CNFrameInfo> GetOutputFrame() {
+    std::shared_ptr<CNFrameInfo> output_frame = nullptr;
+    output_frame_queue_.WaitAndTryPop(output_frame, std::chrono::milliseconds(100));
+    return output_frame;
+  }
+
+ private:
+  ThreadSafeQueue<std::shared_ptr<CNFrameInfo>> output_frame_queue_;
+};
+
+void GetResult(std::shared_ptr<InferObserver> observer) {
   uint32_t i = 0;
   while (1) {
-    auto data = infer->GetOutputFrame();
+    auto data = observer->GetOutputFrame();
     if (data != nullptr) {
       if (!data->IsEos()) {
         CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
@@ -76,7 +93,9 @@ TEST(Inferencer, Demo) {
   std::string model_path = GetExePath() + g_model_path;
 
   std::shared_ptr<Module> infer = std::make_shared<Inferencer>("test_infer");
-  std::thread th = std::thread(&GetResult, infer);
+  std::shared_ptr<InferObserver> observer = std::make_shared<InferObserver>();
+  infer->SetObserver(reinterpret_cast<IModuleObserver *>(observer.get()));
+  std::thread th = std::thread(&GetResult, observer);
   ModuleParamSet param;
   param["model_path"] = model_path;
   param["func_name"] = g_func_name;

@@ -267,7 +267,7 @@ void CNVideoEncoder::PacketCallback(const edk::CnPacket &packet) {
   uint8_t *packet_data = reinterpret_cast<uint8_t *>(packet.data);
   uint32_t offset = GetOffset(packet_data);
   PushOutputBuffer(packet_data + offset, length - offset, frame_count_, packet.pts);
-
+  encoder_->ReleaseBuffer(packet.buf_id);
   frame_count_++;
   Callback(NEW_FRAME);
 }
