@@ -389,11 +389,13 @@ bool Pipeline::Start() {
       LOG(ERROR) << "The parallelism of the first module should be 0, and the parallelism of other modules should be "
                     "larger than 0. "
                  << "Please check the config of " << node_name << " module.";
+      Stop();
       return false;
     }
     if ((!parallelism && module_info.connector) || (parallelism && !module_info.connector) ||
         (parallelism && module_info.connector && parallelism != module_info.connector->GetConveyorCount())) {
       LOG(ERROR) << "Module parallelism do not equal input Connector's Conveyor number, in module " << node_name;
+      Stop();
       return false;
     }
     for (uint32_t conveyor_idx = 0; conveyor_idx < parallelism; ++conveyor_idx) {

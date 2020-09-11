@@ -100,7 +100,7 @@ TEST(CoreModule, postevent) {
   TestModuleBase module;
   ModuleParamSet parames;
   ASSERT_TRUE(ptr->Open(parames));
-  ASSERT_TRUE(pipe.AddModule(ptr));
+  ptr->SetContainer(&pipe);
   pipe.Start();
   EXPECT_TRUE(ptr->PostEvent(T_type, T_messgge));
   pipe.Stop();
