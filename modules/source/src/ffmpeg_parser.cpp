@@ -565,11 +565,19 @@ int H2645NalSplitter::SplitterWriteChunk(unsigned char *buf, int len) {
         desc.type = (desc.nal[type_idx] >> 1)& 0x3F;
       }
     }
-    int ret = this->SplitterOnNal(desc, true);
+    int ret = this->SplitterOnNal(desc, false);
     if (ret < 0) {
       LOG(ERROR) << "Write h264/5 nalu failed.";
       return ret;
     }
+  }
+
+  // send eos
+  NalDesc desc;
+  int ret = this->SplitterOnNal(desc, true);
+  if (ret < 0) {
+    LOG(ERROR) << "Write eos failed. nalu mode.";
+    return ret;
   }
   return 0;
 }
