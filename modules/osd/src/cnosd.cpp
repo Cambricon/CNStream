@@ -129,7 +129,7 @@ void CnOsd::DrawLabel(cv::Mat* image, const cnstream::CNObjsVec& objects,
     int text_height = 0;
     for (auto& key : attr_keys) {
       cnstream::CNInferAttr infer_attr = object->GetAttribute(key);
-      if (infer_attr.value < 0) continue;
+      if (infer_attr.value < 0 || infer_attr.value > static_cast<int>(secondary_labels_.size()) - 1) continue;
       std::string secondary_lable = secondary_labels_[infer_attr.value];
       std::string secondary_score = std::to_string(infer_attr.score);
       std::string secondary_text = secondary_lable + " : " + secondary_score;

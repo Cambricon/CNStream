@@ -50,6 +50,17 @@ class ComplexModule : public cnstream::ModuleEx,
       std::cout << "\t" << v.first << " : " << v.second << std::endl;
     }
 
+    cnstream::CNModuleConfig s_config = {"InnerFakeSource", /*name*/
+                                         {
+                                             {"param", "fakeSource"},
+                                         },
+                                         0,                     /*parallelism*/
+                                         0,                     /*maxInputQueueSize*/
+                                         "ExampleModuleSource", /*className*/
+                                         {
+                                             /* next,*/
+                                             "ModuleInnerA",
+                                         }};
     cnstream::CNModuleConfig a_config = {"ModuleInnerA", /*name*/
                                          {
                                              {"param", "innerA"},
@@ -75,12 +86,16 @@ class ComplexModule : public cnstream::ModuleEx,
     if (!pipeline_) {
       return false;
     }
-    pipeline_->BuildPipeline({a_config, b_config});
+    pipeline_->BuildPipeline({s_config, a_config, b_config});
 
-    source_ = pipeline_->GetModule(a_config.name);
+    source_ = pipeline_->GetModule(s_config.name);
     sink_ = pipeline_->GetModule(b_config.name);
     sink_->SetObserver(this);
-    pipeline_->Start();
+
+    if (!pipeline_->Start()) {
+      LOG(ERROR) << "Complex module " << this->GetName() << " starts nested pipeline failed.";
+      return false;
+  }
     return true;
   }
   void Close() override {
