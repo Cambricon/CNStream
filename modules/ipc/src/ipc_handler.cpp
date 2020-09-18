@@ -208,7 +208,7 @@ bool IPCHandler::ParseStringToPackage(const std::string& str, FrameInfoPackage* 
       try {
         intptr_t tmp = std::stoll(doc["mlu_mem_handle"].GetString());
         pkg->mlu_mem_handle = reinterpret_cast<void*>(tmp);
-      } catch (const std::invalid_argument) {
+      } catch (const std::invalid_argument& e) {
         LOG(WARNING) << "mlu_mem_handle is invalid.";
         return false;
       }

@@ -162,7 +162,7 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       try {
         InferTaskSptr task = obj_batching_stage_->Batching(finfo, obj);
         tp_->SubmitTask(task);
-      } catch (edk::MluResizeConvertOpError e) {
+      } catch (edk::MluResizeConvertOpError& e) {
         LOG(ERROR) << std::string(e.what());
         continue;
       }
@@ -184,7 +184,7 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
     try {
       InferTaskSptr task = batching_stage_->Batching(finfo);
       tp_->SubmitTask(task);
-    } catch (edk::MluResizeConvertOpError e) {
+    } catch (edk::MluResizeConvertOpError& e) {
       LOG(ERROR) << std::string(e.what());
       timeout_helper_.UnlockOperator();
       return card;
