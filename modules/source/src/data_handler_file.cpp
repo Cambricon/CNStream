@@ -27,6 +27,8 @@
 
 #include "data_handler_file.hpp"
 
+#define DEFAULT_MODULE_CATEGORY SOURCE
+
 namespace cnstream {
 
 std::shared_ptr<SourceHandler> FileHandler::Create(DataSource *module, const std::string &stream_id,
@@ -52,16 +54,16 @@ FileHandler::~FileHandler() {
 
 bool FileHandler::Open() {
   if (!this->module_) {
-    LOG(ERROR) << "module_ null";
+    MLOG(ERROR) << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOG(ERROR) << "impl_ null";
+    MLOG(ERROR) << "impl_ null";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOG(ERROR) << "invalid stream_idx";
+    MLOG(ERROR) << "invalid stream_idx";
     return false;
   }
 
@@ -109,6 +111,7 @@ void FileHandlerImpl::Loop() {
     } catch (edk::Exception &e) {
       if (nullptr != module_)
         module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup dev/channel.");
+      MLOG(DEBUG) << "Init MLU context failed.";
       return;
     }
   }
@@ -124,12 +127,14 @@ void FileHandlerImpl::Loop() {
       e.thread_id = std::this_thread::get_id();
       module_->PostEvent(e);
     }
+    MLOG(DEBUG) << "PrepareResources failed.";
     return;
   }
 
   FrController controller(framerate_);
   if (framerate_ > 0) controller.Start();
 
+  MLOG(DEBUG) << "File handler DecodeLoop";
   while (running_.load()) {
     if (!Process()) {
       break;
@@ -137,6 +142,7 @@ void FileHandlerImpl::Loop() {
     if (framerate_ > 0) controller.Control();
   }
 
+  MLOG(DEBUG) << "File handler DecoderLoop Exit.";
   ClearResources();
 }
 
@@ -160,13 +166,13 @@ bool FileHandlerImpl::PrepareResources(bool demux_only) {
   // open input
   int ret_code = avformat_open_input(&p_format_ctx_, filename_.c_str(), NULL, &options_);
   if (0 != ret_code) {
-    LOG(ERROR) << "Couldn't open input stream.";
+    MLOG(ERROR) << "Couldn't open input stream.";
     return false;
   }
   // find video stream information
   ret_code = avformat_find_stream_info(p_format_ctx_, NULL);
   if (ret_code < 0) {
-    LOG(ERROR) << "Couldn't find stream information.";
+    MLOG(ERROR) << "Couldn't find stream information.";
     return false;
   }
   video_index_ = -1;
@@ -183,7 +189,7 @@ bool FileHandlerImpl::PrepareResources(bool demux_only) {
     }
   }
   if (video_index_ == -1) {
-    LOG(ERROR) << "Didn't find a video stream.";
+    MLOG(ERROR) << "Didn't find a video stream.";
     return false;
   }
   // p_codec_ctx_ = vstream->codec;
@@ -215,7 +221,7 @@ bool FileHandlerImpl::PrepareResources(bool demux_only) {
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
     decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
   } else {
-    LOG(ERROR) << "unsupported decoder_type";
+    MLOG(ERROR) << "unsupported decoder_type";
     return false;
   }
   if (decoder_.get()) {
@@ -271,7 +277,7 @@ bool FileHandlerImpl::Extract() {
     // find pts information
     if (AV_NOPTS_VALUE == packet_.pts && find_pts_) {
       find_pts_ = false;
-      LOG(WARNING) << "Didn't find pts informations, "
+      MLOG(WARNING) << "Didn't find pts informations, "
                    << "use ordered numbers instead. "
                    << "stream url: " << filename_.c_str();
     } else if (AV_NOPTS_VALUE != packet_.pts) {
@@ -290,9 +296,9 @@ bool FileHandlerImpl::Process() {
   bool ret = Extract();
 
   if (!ret) {
-    LOG(INFO) << "Read EOS from file";
+    MLOG(INFO) << "Read EOS from file";
     if (this->loop_) {
-      LOG(INFO) << "Clear resources and restart";
+      MLOG(INFO) << "Clear resources and restart";
       ClearResources(true);
       if (!PrepareResources(true)) {
         ClearResources();
@@ -305,9 +311,10 @@ bool FileHandlerImpl::Process() {
           e.thread_id = std::this_thread::get_id();
           module_->PostEvent(e);
         }
+        MLOG(DEBUG) << "PrepareResources failed.";
         return false;
       }
-      LOG(INFO) << "Loop...";
+      MLOG(INFO) << "Loop...";
       return true;
     } else {
       decoder_->Process(nullptr, true);

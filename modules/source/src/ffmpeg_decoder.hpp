@@ -47,6 +47,7 @@ extern "C" {
 #include "ffmpeg_parser.hpp"
 #include "perf_manager.hpp"
 #include "cnstream_common.hpp"
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 

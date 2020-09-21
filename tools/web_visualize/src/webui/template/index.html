@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CNStream</title>
+    <link rel="icon" href="{{url_for('static', filename='data/title.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/index.css')}}" type="text/css">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/index_main.css')}}" type="text/css">
+    <script type="text/javascript" src= "{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+    <script src="{{url_for('static', filename='js/transmit_data.js')}}"></script>
+    <script src="{{url_for('static', filename='js/index.js')}}"></script>
+    <style>
+        a{text-decoration: none;}
+        a:hover{text-decoration: none;}
+    </style>
+</head>
+<body>
+<div class="ai-module-demo js-module-section" linknav="true">
+    <div class="cnstream-head-container">
+        <div id="prompt-message"></div>
+        <div class="ai-module-header">
+            Cambricon CNStream
+        </div>
+    </div>
+
+    <div class="cnstream-settings">
+        <div class="cnstream-setting-container">
+            <select id="source-selector">
+                <!--option value="default">Select Source</option-->
+                <option value="cars" selected>cars</option>
+                <option value="people">people</option>
+                <option value="images">images</option>
+                <option value="objects">objects</option>
+           </select>
+        </div>
+        <div class="cnstream-setting-container">
+            <select id="demo-selector">
+                 <!--option value="default">Select Demo</option-->
+                 <optgroup label="Apps" class="apps-selector">
+                    <option value="classification">Classification</option>
+                    <option value="detection" selected>Object Detection</option>
+                    <option value="tracking">Object Tracking</option>
+                    <option value="secondary">Secondary Classification</option>
+                </optgroup>
+                <optgroup label="Custom Design" class="custom-selector">
+                    <option value="custom">Custom Design</option>
+                </optgroup>
+                <optgroup label="User Config" id="user-json-selector"></optgroup>
+            </select>
+        </div>
+        <div id="upload-file-name"></div>
+        <div class="choose-file">Choose a file
+            <input type="file" id="source-file" value="" placeholder="">
+        </div>
+        <div class="button-design">
+            <button class="btn-design">Pipeline Design</button>
+        </div>
+    </div>
+
+    <div class="ai-demo-tab">
+        <div class="demo-preview">
+            <div class="preview-title">PREVIEW</div>
+        </div>
+        <div class="demo-status">
+            <div class="status-title">STATUS</div>
+        </div>
+        <div class="button-run">
+            <button class="btn-run">RUN</button>
+        </div>
+        <div class="button-stop">
+            <button class="btn-stop">STOP</button>
+        </div>
+    </div>
+
+    <div class="ai-module-demo-container">
+        <div class="demo-json" id="demo-json">
+            <div class="demo-collapse-item">
+                <div class="demo-collapse-item-title demo-json-title" onclick="switchWindow()">Pipeline Config<span id="request" class="demo-collapse-item-arrow is-active"></span>
+                </div>
+                <div class="demo-collapse-item-cnt" style="height: 520px; opacity: 1;">
+                    <textarea id="json"></textarea>
+                    <div class="demo-json-text"></div>
+                </div>
+            </div>
+            <div class="demo-collapse-item">
+                <div class="demo-collapse-item-title demo-json-title" onclick="switchWindow()">Pipeline Running Status<span id="response" class="demo-collapse-item-arrow"></span>
+                </div>
+                <div class="demo-collapse-item-cnt" id="pipeline-status" style="height: 0px; opacity: 0;">
+                    <div class="demo-json-content"></div>
+                    <div class="demo-json-text"></div>
+                    <div id="demo-console-result"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-container" id="preview-container">
+            <img id="demo-result" src="{{ url_for('video_feed', _=current_time) }}" display="block">
+            <!--img id="demo-source-image"-->
+            <!--video id="demo-source-video" src = "" controls="controls" autoplay="autoplay"></video-->
+        </div>
+    </div>
+</div>
+
+
+<hr>
+<div id="footer">
+    <div class="container">
+        <p>&copy; Based on Cambricon CNStream SDK</p>
+    </div>
+</div>
+</body>
+</html>

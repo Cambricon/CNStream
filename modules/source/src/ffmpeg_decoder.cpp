@@ -31,6 +31,8 @@
 #include "cnstream_frame_va.hpp"
 #include "util/cnstream_time_utility.hpp"
 
+#define DEFAULT_MODULE_CATEGORY SOURCE
+
 #define YUV420SP_STRIDE_ALIGN_FOR_SCALER 128
 
 namespace cnstream {
@@ -180,7 +182,7 @@ bool MluDecoder::Process(ESPacket *pkt) {
         eos_sent_.store(1);
       }
       if (input.streamLength > create_info_.suggestedLibAllocBitStrmBufSize) {
-        LOG(WARNING) << "cnvideoDecFeedData- truncate " << input.streamLength
+        MLOG(WARNING) << "cnvideoDecFeedData- truncate " << input.streamLength
                      << " to " << create_info_.suggestedLibAllocBitStrmBufSize;
         input.streamLength = create_info_.suggestedLibAllocBitStrmBufSize;
       }
@@ -195,11 +197,11 @@ bool MluDecoder::Process(ESPacket *pkt) {
     if (input.flags & CNVIDEODEC_FLAG_EOS) {
       int ret = cnvideoDecFeedData(instance_, &input, 10000);  // FIXME
       if (-CNCODEC_TIMEOUT == ret) {
-        LOG(ERROR) << "cnvideoDecFeedData(eos) timeout happened";
+        MLOG(ERROR) << "cnvideoDecFeedData(eos) timeout happened";
         cndec_abort_flag_ = 1;
         return false;
       } else if (CNCODEC_SUCCESS != ret) {
-        LOG(ERROR) << "Call cnvideoDecFeedData failed, ret = " <<  ret;
+        MLOG(ERROR) << "Call cnvideoDecFeedData failed, ret = " <<  ret;
         cndec_error_flag_ = 1;
         return false;
       } else {
@@ -211,10 +213,10 @@ bool MluDecoder::Process(ESPacket *pkt) {
         int ret = cnvideoDecFeedData(instance_, &input, 10000);  // FIXME
         if (-CNCODEC_TIMEOUT == ret) {
           retry_time--;
-          LOG(ERROR) << "cnvideoDecFeedData(data) timeout happened, retry feed data, time: " << 3 - retry_time;
+          MLOG(DEBUG) << "cnvideoDecFeedData(data) timeout happened, retry feed data, time: " << 3 - retry_time;
           continue;
         } else if (CNCODEC_SUCCESS != ret) {
-          LOG(ERROR) << "Call cnvideoDecFeedData(data) failed, ret = " <<  ret;
+          MLOG(ERROR) << "Call cnvideoDecFeedData(data) failed, ret = " <<  ret;
           cndec_error_flag_ = 1;
           return false;
         } else {
@@ -222,7 +224,7 @@ bool MluDecoder::Process(ESPacket *pkt) {
         }
       }
       if (0 == retry_time) {
-        LOG(ERROR) << "cnvideoDecFeedData(data) timeout 3 times, prepare abort decoder.";
+        MLOG(DEBUG) << "cnvideoDecFeedData(data) timeout 3 times, prepare abort decoder.";
         // don't processframe
         cndec_abort_flag_ = 1;
         // make sure all cndec buffers released before abort
@@ -233,11 +235,11 @@ bool MluDecoder::Process(ESPacket *pkt) {
         cnvideoDecAbort(instance_);
         instance_ = nullptr;
         if (!Create(&info_, interval_)) {
-          LOG(ERROR) << "cnvideoDecFeedData(data) timeout 3 times, restart failed.";
+          MLOG(ERROR) << "cnvideoDecFeedData(data) timeout 3 times, restart failed.";
           handler_->SendFlowEos();
           return false;
         }
-        LOG(ERROR) << "cnvideoDecFeedData(data) timeout 3 times, restart success.";
+        MLOG(DEBUG) << "cnvideoDecFeedData(data) timeout 3 times, restart success.";
         return true;
       }
     }
@@ -256,7 +258,7 @@ bool MluDecoder::Process(ESPacket *pkt) {
         eos_sent_.store(1);
       }
       if (input.streamLength > create_jpg_info_.suggestedLibAllocBitStrmBufSize) {
-        LOG(WARNING) << "cnjpegDecFeedData- truncate " << input.streamLength
+        MLOG(WARNING) << "cnjpegDecFeedData- truncate " << input.streamLength
                      << " to " << create_jpg_info_.suggestedLibAllocBitStrmBufSize;
         input.streamLength = create_jpg_info_.suggestedLibAllocBitStrmBufSize;
       }
@@ -271,11 +273,11 @@ bool MluDecoder::Process(ESPacket *pkt) {
     if (input.flags & CNJPEGDEC_FLAG_EOS) {
       int ret = cnjpegDecFeedData(jpg_instance_, &input, 10000);  // FIXME
       if (CNCODEC_TIMEOUT == ret) {
-        LOG(ERROR) << "cnjpegDecFeedData(eos) timeout happened";
+        MLOG(ERROR) << "cnjpegDecFeedData(eos) timeout happened";
         cndec_abort_flag_ = 1;
         return false;
       } else if (CNCODEC_SUCCESS != ret) {
-        LOG(ERROR) << "Call cnjpegDecFeedData(eos) failed, ret = " <<  ret;
+        MLOG(ERROR) << "Call cnjpegDecFeedData(eos) failed, ret = " <<  ret;
         cndec_error_flag_ = 1;
         return false;
       } else {
@@ -287,10 +289,10 @@ bool MluDecoder::Process(ESPacket *pkt) {
         int ret = cnjpegDecFeedData(jpg_instance_, &input, 10000);  // FIXME
         if (CNCODEC_TIMEOUT == ret) {
           retry_time--;
-          LOG(ERROR) << "cnjpegDecFeedData(data) timeout happened, retry feed data, time: " << 3 - retry_time;
+          MLOG(DEBUG) << "cnjpegDecFeedData(data) timeout happened, retry feed data, time: " << 3 - retry_time;
           continue;
         } else if (CNCODEC_SUCCESS != ret) {
-          LOG(ERROR) << "Call cnjpegDecFeedData(data) failed, ret = " <<  ret;
+          MLOG(ERROR) << "Call cnjpegDecFeedData(data) failed, ret = " <<  ret;
           cndec_error_flag_ = 1;
           return false;
         } else {
@@ -298,7 +300,7 @@ bool MluDecoder::Process(ESPacket *pkt) {
         }
       }
       if (0 == retry_time) {
-        LOG(ERROR) << "cnjpegDecFeedData(data) timeout 3 times, prepare abort decoder.";
+        MLOG(DEBUG) << "cnjpegDecFeedData(data) timeout 3 times, prepare abort decoder.";
         // don't processframe
         cndec_abort_flag_ = 1;
         // make sure all cndec buffers released before abort
@@ -309,11 +311,11 @@ bool MluDecoder::Process(ESPacket *pkt) {
         cnjpegDecAbort(jpg_instance_);
         jpg_instance_ = nullptr;
         if (!Create(&info_, interval_)) {
-          LOG(ERROR) << "cnjpegDecFeedData(data) timeout 3 times, restart failed.";
+          MLOG(ERROR) << "cnjpegDecFeedData(data) timeout 3 times, restart failed.";
           handler_->SendFlowEos();
           return false;
         }
-        LOG(ERROR) << "cnjpegDecFeedData(data) timeout 3 times, restart success.";
+        MLOG(DEBUG) << "cnjpegDecFeedData(data) timeout 3 times, restart success.";
         return true;
       }
     }
@@ -341,23 +343,23 @@ static int VideoDecodeCallback(cncodecCbEventType EventType, void *pData, void *
     case CNCODEC_CB_EVENT_SW_RESET:
     case CNCODEC_CB_EVENT_HW_RESET:
       // todo....
-      LOG(ERROR) << "Decode Firmware crash Event Event: " << EventType;
+      MLOG(ERROR) << "Decode Firmware crash Event Event: " << EventType;
       pThis->VideoResetCallback();
       break;
     case CNCODEC_CB_EVENT_OUT_OF_MEMORY:
-      LOG(ERROR) << "Decode out of memory, force stop";
+      MLOG(ERROR) << "Decode out of memory, force stop";
       pThis->VideoEosCallback();
       break;
     case CNCODEC_CB_EVENT_ABORT_ERROR:
-      LOG(ERROR) << "Decode abort error occured, force stop";
+      MLOG(ERROR) << "Decode abort error occured, force stop";
       pThis->VideoEosCallback();
       break;
     case CNCODEC_CB_EVENT_STREAM_CORRUPT:
-      LOG(WARNING) << "Stream corrupt, discard frame";
+      MLOG(WARNING) << "Stream corrupt, discard frame";
       pThis->CorruptCallback(*reinterpret_cast<cnvideoDecStreamCorruptInfo *>(pdata1));
       break;
     default:
-      LOG(ERROR) << "Unsupported Decode Event: " << EventType;
+      MLOG(ERROR) << "Unsupported Decode Event: " << EventType;
       break;
   }
   return 0;
@@ -388,20 +390,20 @@ void MluDecoder::SequenceCallback(cnvideoDecSequenceInfo *pFormat) {
   /*start decode*/
   int ret = cnvideoDecStart(instance_, &create_info_);
   if (CNCODEC_SUCCESS != ret) {
-    LOG(ERROR) << "Call cnvideoDecStart failed, ret = " << ret;
+    MLOG(ERROR) << "Call cnvideoDecStart failed, ret = " << ret;
     return;
   }
   cndec_start_flag_.store(1);
 }
 
 void MluDecoder::CorruptCallback(const cnvideoDecStreamCorruptInfo& streamcorruptinfo) {
-  LOG(WARNING) << "Skip frame number: " << streamcorruptinfo.frameNumber
+  MLOG(WARNING) << "Skip frame number: " << streamcorruptinfo.frameNumber
                << ", frame count: " << streamcorruptinfo.frameCount;
 }
 
 void MluDecoder::VideoFrameCallback(cnvideoDecOutput *output) {
   if (output->frame.width == 0 || output->frame.height == 0) {
-    LOG(WARNING) << "Skip frame! " << (int64_t)this << " width x height:" << output->frame.width << " x "
+    MLOG(WARNING) << "Skip frame! " << (int64_t)this << " width x height:" << output->frame.width << " x "
                  << output->frame.height << " timestamp:" << output->pts << std::endl;
     return;
   }
@@ -412,7 +414,7 @@ void MluDecoder::VideoFrameCallback(cnvideoDecOutput *output) {
     double start = TimeStamp::Current();
     ProcessFrame(output, &reused);
     double end = TimeStamp::Current();
-    LOG_IF(INFO, end - start > 5000000) << "processvideoFrame takes: " << end - start << "us.";
+    MLOG_IF(DEBUG, end - start > 5000000) << "processvideoFrame takes: " << end - start << "us.";
     if (!reused) {
       cnvideoDecReleaseReference(instance_, &output->frame);
     }
@@ -473,7 +475,7 @@ int MluDecoder::ProcessFrame(cnvideoDecOutput *output, bool *reused) {
     bytes = ROUND_UP(bytes, 64 * 1024);
     CNStreamMallocHost(&dataframe->cpu_data, bytes);
     if (nullptr == dataframe->cpu_data) {
-      LOG(FATAL) << "MluDecoder: failed to alloc cpu memory";
+      MLOG(FATAL) << "MluDecoder: failed to alloc cpu memory";
     }
     void* dst = dataframe->cpu_data;
     for (int i = 0; i < dataframe->GetPlanes(); i++) {
@@ -486,7 +488,7 @@ int MluDecoder::ProcessFrame(cnvideoDecOutput *output, bool *reused) {
       dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
     }
   } else {
-    LOG(FATAL) << "MluDecoder:output type not supported";
+    MLOG(FATAL) << "MluDecoder:output type not supported";
   }
   data->datas[CNDataFramePtrKey] = dataframe;
   handler_->SendFrameInfo(data);
@@ -517,7 +519,7 @@ bool MluDecoder::CreateVideoDecoder(VideoStreamInfo *info) {
       create_info_.codec = CNCODEC_HEVC;
       break;
     default: {
-      LOG(ERROR) << "codec type not supported yet, codec_id = " << info->codec_id;
+      MLOG(ERROR) << "codec type not supported yet, codec_id = " << info->codec_id;
       return false;
     }
   }
@@ -556,7 +558,7 @@ bool MluDecoder::CreateVideoDecoder(VideoStreamInfo *info) {
   cndec_start_flag_.store(0);
   int ret = cnvideoDecCreate(&this->instance_, VideoDecodeCallback, &create_info_);
   if (CNCODEC_SUCCESS != ret) {
-    LOG(ERROR) << "Call cnvideoDecCreate failed, ret = " << ret;
+    MLOG(ERROR) << "Call cnvideoDecCreate failed, ret = " << ret;
     return false;
   }
   int stride_align = 1;
@@ -565,7 +567,7 @@ bool MluDecoder::CreateVideoDecoder(VideoStreamInfo *info) {
 
   ret = cnvideoDecSetAttributes(this->instance_, CNVIDEO_DEC_ATTR_OUT_BUF_ALIGNMENT, &stride_align);
   if (CNCODEC_SUCCESS != ret) {
-    LOG(ERROR) << "Failed to set output buffer stride alignment,error code: " << ret;
+    MLOG(ERROR) << "Failed to set output buffer stride alignment,error code: " << ret;
     return false;
   }
   return true;
@@ -608,17 +610,17 @@ void MluDecoder::DestroyVideoDecoder() {
     }
     int ret = cnvideoDecStop(instance_);
     if (ret == -CNCODEC_TIMEOUT) {
-      LOG(ERROR) << "cnvideoDecStop timeout happened";
+      MLOG(ERROR) << "cnvideoDecStop timeout happened";
       cnvideoDecAbort(instance_);
       instance_ = nullptr;
       handler_->SendFlowEos();
       return;
     } else if (CNCODEC_SUCCESS != ret) {
-      LOG(ERROR) << "Call cnvideoDecStop failed, ret = " << ret;
+      MLOG(ERROR) << "Call cnvideoDecStop failed, ret = " << ret;
     }
     ret = cnvideoDecDestroy(instance_);
     if (CNCODEC_SUCCESS != ret) {
-      LOG(ERROR) << "Call cnvideoDecDestroy failed, ret = " << ret;
+      MLOG(ERROR) << "Call cnvideoDecDestroy failed, ret = " << ret;
     }
     instance_ = nullptr;
   }
@@ -665,7 +667,7 @@ void MluDecoder::JpegFrameCallback(cnjpegDecOutput *output) {
     double start = TimeStamp::Current();
     ProcessJpegFrame(output, &reused);
     double end = TimeStamp::Current();
-    LOG_IF(INFO, end - start > 5000000) << "processJpegFrame takes: " << end - start << "us.";
+    MLOG_IF(DEBUG, end - start > 5000000) << "processJpegFrame takes: " << end - start << "us.";
     if (!reused) {
       cnjpegDecReleaseReference(jpg_instance_, &output->frame);
     }
@@ -726,7 +728,7 @@ int MluDecoder::ProcessJpegFrame(cnjpegDecOutput *output, bool *reused) {
     bytes = ROUND_UP(bytes, 64 * 1024);
     CNStreamMallocHost(&dataframe->cpu_data, bytes);
     if (nullptr == dataframe->cpu_data) {
-      LOG(FATAL) << "MluDecoder: failed to alloc cpu memory";
+      MLOG(FATAL) << "MluDecoder: failed to alloc cpu memory";
     }
     void* dst = dataframe->cpu_data;
     for (int i = 0; i < dataframe->GetPlanes(); i++) {
@@ -739,7 +741,7 @@ int MluDecoder::ProcessJpegFrame(cnjpegDecOutput *output, bool *reused) {
       dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
     }
   } else {
-    LOG(FATAL) << "MluDecoder:output type not supported";
+    MLOG(FATAL) << "MluDecoder:output type not supported";
   }
   data->datas[CNDataFramePtrKey] = dataframe;
   handler_->SendFrameInfo(data);
@@ -755,7 +757,7 @@ static int JpegEventCallback(cncodecCbEventType event, void *context, void *data
 
     case CNCODEC_CB_EVENT_SW_RESET:
     case CNCODEC_CB_EVENT_HW_RESET:
-      LOG(ERROR) << "RESET Event received type = " << event;
+      MLOG(ERROR) << "RESET Event received type = " << event;
       pThis->JpegResetCallback();
       break;
 
@@ -766,7 +768,7 @@ static int JpegEventCallback(cncodecCbEventType event, void *context, void *data
       break;
 
     default:
-      LOG(ERROR) << "unexpected Event received = " << event;
+      MLOG(ERROR) << "unexpected Event received = " << event;
       return -1;
   }
   return 0;
@@ -781,7 +783,7 @@ bool MluDecoder::CreateJpegDecoder(VideoStreamInfo *info) {
   info->codec_height = 4320;
   memset(&create_jpg_info_, 0, sizeof(cnjpegDecCreateInfo));
   create_jpg_info_.deviceId = param_.device_id_;
-  create_jpg_info_.instance = CNVIDEODEC_INSTANCE_AUTO;
+  create_jpg_info_.instance = CNJPEGDEC_INSTANCE_AUTO;
   create_jpg_info_.pixelFmt = CNCODEC_PIX_FMT_NV12;          // FIXME
   create_jpg_info_.colorSpace = CNCODEC_COLOR_SPACE_BT_709;  // FIXME
   create_jpg_info_.width = info->codec_width;
@@ -799,7 +801,7 @@ bool MluDecoder::CreateJpegDecoder(VideoStreamInfo *info) {
   cndec_error_flag_.store(0);
   int ret = cnjpegDecCreate(&this->jpg_instance_, CNJPEGDEC_RUN_MODE_ASYNC, JpegEventCallback, &create_jpg_info_);
   if (CNCODEC_SUCCESS != ret) {
-    LOG(ERROR) << "Call cnjpegDecCreate failed, ret = " << ret;
+    MLOG(ERROR) << "Call cnjpegDecCreate failed, ret = " << ret;
     return false;
   }
   return true;
@@ -836,7 +838,7 @@ void MluDecoder::DestroyJpegDecoder() {
     }
     int ret = cnjpegDecDestroy(jpg_instance_);
     if (CNCODEC_SUCCESS != ret) {
-      LOG(ERROR) << "Call cnjpegDecDestroy failed, ret = " << ret;
+      MLOG(ERROR) << "Call cnjpegDecDestroy failed, ret = " << ret;
     }
     jpg_instance_ = nullptr;
   }
@@ -851,7 +853,7 @@ bool FFmpegCpuDecoder::Create(VideoStreamInfo *info, int interval) {
 
   stream_ = new (std::nothrow) AVStream();
   if (!stream_) {
-    LOG(ERROR) << "Create AVStream failed!";
+    MLOG(ERROR) << "Create AVStream failed!";
     return false;
   }
 
@@ -883,7 +885,7 @@ bool FFmpegCpuDecoder::Create(AVStream *st, int interval) {
   // create decoder
   AVCodec *dec = avcodec_find_decoder(codec_id);
   if (!dec) {
-    LOG(ERROR) << "avcodec_find_decoder failed";
+    MLOG(ERROR) << "avcodec_find_decoder failed";
     return false;
   }
 #if (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 14, 0)) || \
@@ -892,22 +894,22 @@ bool FFmpegCpuDecoder::Create(AVStream *st, int interval) {
 #else
   instance_ = avcodec_alloc_context3(dec);
   if (!instance_) {
-    LOG(ERROR) << "Failed to do avcodec_alloc_context3";
+    MLOG(ERROR) << "Failed to do avcodec_alloc_context3";
     return false;
   }
   if (avcodec_parameters_to_context(instance_, st->codecpar) < 0) {
-    LOG(ERROR) << "Failed to copy codec parameters to decoder context";
+    MLOG(ERROR) << "Failed to copy codec parameters to decoder context";
     return false;
   }
   av_codec_set_pkt_timebase(instance_, st->time_base);
 #endif
   if (avcodec_open2(instance_, dec, NULL) < 0) {
-    LOG(ERROR) << "Failed to open codec";
+    MLOG(ERROR) << "Failed to open codec";
     return false;
   }
   av_frame_ = av_frame_alloc();
   if (!av_frame_) {
-    LOG(ERROR) << "Could not alloc frame";
+    MLOG(ERROR) << "Could not alloc frame";
     return false;
   }
   interval_ = interval;
@@ -966,7 +968,7 @@ bool FFmpegCpuDecoder::Process(ESPacket *pkt) {
 }
 
 bool FFmpegCpuDecoder::Process(AVPacket *pkt, bool eos) {
-  LOG_IF(INFO, eos) << "[FFmpegCpuDecoder]  " << (int64_t)this << " send eos.";
+  MLOG_IF(INFO, eos) << "[FFmpegCpuDecoder]  " << (int64_t)this << " send eos.";
   if (eos) {
     AVPacket packet;
     av_init_packet(&packet);
@@ -988,7 +990,7 @@ bool FFmpegCpuDecoder::Process(AVPacket *pkt, bool eos) {
   int got_frame = 0;
   int ret = avcodec_decode_video2(instance_, av_frame_, &got_frame, pkt);
   if (ret < 0) {
-    LOG(ERROR) << "avcodec_decode_video2 failed, data ptr, size:" << pkt->data << ", " << pkt->size;
+    MLOG(ERROR) << "avcodec_decode_video2 failed, data ptr, size:" << pkt->data << ", " << pkt->size;
     return true;
   }
   if (got_frame) {
@@ -1000,7 +1002,8 @@ bool FFmpegCpuDecoder::Process(AVPacket *pkt, bool eos) {
 bool FFmpegCpuDecoder::FrameCvt2Yuv420sp(AVFrame *frame, uint8_t *sp, int dst_stride, bool nv21) {
   if (frame->format != AV_PIX_FMT_YUV420P && frame->format != AV_PIX_FMT_YUVJ420P &&
       frame->format != AV_PIX_FMT_YUYV422) {
-    LOG(ERROR) << "FFmpegCpuDecoder only supports AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUVJ420P and AV_PIX_FMT_YUYV422";
+    MLOG(ERROR) <<
+      "FFmpegCpuDecoder only supports AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUVJ420P and AV_PIX_FMT_YUYV422";
     return false;
   }
 
@@ -1054,7 +1057,8 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
   }
   if (instance_->pix_fmt != AV_PIX_FMT_YUV420P && instance_->pix_fmt != AV_PIX_FMT_YUVJ420P &&
       instance_->pix_fmt != AV_PIX_FMT_YUYV422) {
-    LOG(ERROR) << "FFmpegCpuDecoder only supports AV_PIX_FMT_YUV420P , AV_PIX_FMT_YUVJ420P and AV_PIX_FMT_YUYV422";
+    MLOG(ERROR) <<
+      "FFmpegCpuDecoder only supports AV_PIX_FMT_YUV420P , AV_PIX_FMT_YUVJ420P and AV_PIX_FMT_YUYV422";
     return false;
   }
   std::shared_ptr<CNDataFrame> dataframe(new (std::nothrow) CNDataFrame());
@@ -1080,11 +1084,11 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
   void *sp_data = nullptr;
   CNStreamMallocHost(&sp_data, frame_size * sizeof(uint8_t));
   if (!sp_data) {
-    LOG(ERROR) << "Malloc failed, size:" << frame_size;
+    MLOG(ERROR) << "Malloc failed, size:" << frame_size;
     return false;
   }
   if (!FrameCvt2Yuv420sp(frame, reinterpret_cast<uint8_t *>(sp_data), dst_stride, false)) {
-    LOG(ERROR) << "Yuv420p cvt yuv420sp failed.";
+    MLOG(ERROR) << "Yuv420p cvt yuv420sp failed.";
     return false;
   }
 
@@ -1124,7 +1128,7 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     CALL_CNRT_BY_CONTEXT(cnrtMalloc(&dataframe->mlu_data, frame_size), dataframe->ctx.dev_id,
                          dataframe->ctx.ddr_channel);
     if (nullptr == dataframe->mlu_data) {
-      LOG(ERROR) << "FFmpegCpuDecoder: Failed to alloc mlu memory";
+      MLOG(ERROR) << "FFmpegCpuDecoder: Failed to alloc mlu memory";
       return false;
     }
     CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dataframe->mlu_data, sp_data, frame_size, CNRT_MEM_TRANS_DIR_HOST2DEV),
@@ -1135,7 +1139,8 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
       size_t plane_size = dataframe->GetPlaneBytes(i);
       CNSyncedMemory *CNSyncedMemory_ptr =
           new (std::nothrow) CNSyncedMemory(plane_size, dataframe->ctx.dev_id, dataframe->ctx.ddr_channel);
-      LOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "FFmpegCpuDecoder::ProcessFrame() new CNSyncedMemory failed";
+      MLOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) <<
+        "FFmpegCpuDecoder::ProcessFrame() new CNSyncedMemory failed";
       dataframe->data[i].reset(CNSyncedMemory_ptr);
       dataframe->data[i]->SetMluData(t);
       t += plane_size;
@@ -1174,13 +1179,14 @@ bool FFmpegCpuDecoder::ProcessFrame(AVFrame *frame) {
     for (int i = 0; i < dataframe->GetPlanes(); ++i) {
       size_t plane_size = dataframe->GetPlaneBytes(i);
       CNSyncedMemory *CNSyncedMemory_ptr = new (std::nothrow) CNSyncedMemory(plane_size);
-      LOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "FFmpegCpuDecoder::ProcessFrame() new CNSyncedMemory failed";
+      MLOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) <<
+        "FFmpegCpuDecoder::ProcessFrame() new CNSyncedMemory failed";
       dataframe->data[i].reset(CNSyncedMemory_ptr);
       dataframe->data[i]->SetCpuData(t);
       t += plane_size;
     }
   } else {
-    LOG(ERROR) << "DevContex::INVALID";
+    MLOG(ERROR) << "DevContex::INVALID";
     return false;
   }
 

@@ -77,7 +77,7 @@ inline void CNStreamFreeHost(void* ptr) { free(ptr); }
  *
  * @note CNSyncedMemory::Head() always returns CNSyncedMemory::UNINITIALIZED when memory size is 0.
  */
-class CNSyncedMemory {
+class CNSyncedMemory : private NonCopyable {
  public:
   /**
    * Constructor.
@@ -230,7 +230,6 @@ class CNSyncedMemory {
   int dev_id_ = 0;   ///< Ordinal MLU device ID.
   int ddr_chn_ = 0;  ///< Ordinal MLU DDR channel ID. The value should be [0, 4).
 
-  DISABLE_COPY_AND_ASSIGN(CNSyncedMemory);
   mutable std::mutex mutex_;
 };  // class CNSyncedMemory
 

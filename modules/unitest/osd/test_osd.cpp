@@ -230,14 +230,6 @@ TEST(Osd, CheckParamSet) {
   EXPECT_FALSE(osd->CheckParamSet(param));
   param.clear();
 
-  param["chinese_label_flag"] = "true";
-  EXPECT_TRUE(osd->CheckParamSet(param));
-  param["chinese_label_flag"] = "false";
-  EXPECT_TRUE(osd->CheckParamSet(param));
-  param["chinese_label_flag"] = "wrong_flag";
-  EXPECT_FALSE(osd->CheckParamSet(param));
-  param.clear();
-
   param["secondary_label_path"] = label_path;
   EXPECT_TRUE(osd->CheckParamSet(param));
   param["secondary_label_path"] = "wrong_path";

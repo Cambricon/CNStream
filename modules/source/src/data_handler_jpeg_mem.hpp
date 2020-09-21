@@ -30,9 +30,11 @@
 #include "data_source.hpp"
 #include "device/mlu_context.h"
 #include "ffmpeg_decoder.hpp"
-#include "glog/logging.h"
+#include "cnstream_logging.hpp"
 #include "ffmpeg_parser.hpp"
 #include "data_handler_util.hpp"
+
+#define DEFAULT_MODULE_CATEGORY SOURCE
 
 namespace cnstream {
 
@@ -91,7 +93,7 @@ class ESJpegMemHandlerImpl : public IHandler {
     if (eos_sent_) return;
     auto data = CreateFrameInfo(true);
     if (!data) {
-      LOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
+      MLOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
       return;
     }
     SendFrameInfo(data);
@@ -118,4 +120,5 @@ class ESJpegMemHandlerImpl : public IHandler {
 
 }  // namespace cnstream
 
+#undef DEFAULT_MODULE_CATEGORY
 #endif  // MODULES_SOURCE_HANDLER_JPEG_MEM_HPP_

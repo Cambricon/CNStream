@@ -26,7 +26,6 @@ endif()
 
 # ---[ Options
 option(build_ipc   "build module ipc" ON)
-option(build_cnencode  "build module cnencode" ON)
 option(build_display   "build module display" OFF)
 option(build_encode    "build module encode" ON)
 option(build_inference "build module inference" ON)
@@ -39,12 +38,13 @@ option(build_samples "build sample programs" ON)
 option(build_modules_contrib "build extra modules" ON)
 option(build_test_coverage  "Test code coverage" OFF)
 option(ENABLE_KCF "Build with KCF track" OFF)
+option(with_web_visualize "build web visualize" OFF)
 
 option(RELEASE "build type" ON)
 option(WITH_FFMPEG "with ffmpeg" ON)
 option(WITH_FFMPEG_AVDEVICE "with ffmpeg avdevice" OFF)
 option(WITH_OPENCV "with opencv" ON)
-option(WITH_CHINESE "with chinese" OFF)
+option(WITH_FREETYPE "with freetype" OFF)
 option(WITH_RTSP "with rtsp" ON)
 
 # To use sanitizers, the version of GCC is required to be no less than 4.9
@@ -227,7 +227,7 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_SQLITE")
 
 ##Chinses label
-if(WITH_CHINESE)
+if(WITH_FREETYPE)
   find_package(Freetype REQUIRED)
   if (FREETYPE_FOUND)
     include_directories(${FREETYPE_INCLUDE_DIR_ft2build})
@@ -283,8 +283,8 @@ endif()
 # ---[ Subdirectories
 add_subdirectory(3rdparty)
 add_subdirectory(easydk)
-add_subdirectory(modules)
 add_subdirectory(framework)
+add_subdirectory(modules)
 if(build_modules_contrib)
   add_subdirectory(modules_contrib)
 endif()

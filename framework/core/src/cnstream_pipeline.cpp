@@ -208,7 +208,7 @@ EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
       ret = EVENT_HANDLE_STOP;
       break;
     case EventType::EVENT_EOS: {
-      LOG(INFO) << "Pipeline received eos from module " + event.module_name << " of stream " << event.message;
+      LOG(INFO) << "Pipeline received eos from module " + event.module_name << " of stream " << event.stream_id;
       ret = EVENT_HANDLE_SYNCED;
       break;
     }
@@ -389,11 +389,13 @@ bool Pipeline::Start() {
       LOG(ERROR) << "The parallelism of the first module should be 0, and the parallelism of other modules should be "
                     "larger than 0. "
                  << "Please check the config of " << node_name << " module.";
+      Stop();
       return false;
     }
     if ((!parallelism && module_info.connector) || (parallelism && !module_info.connector) ||
         (parallelism && module_info.connector && parallelism != module_info.connector->GetConveyorCount())) {
       LOG(ERROR) << "Module parallelism do not equal input Connector's Conveyor number, in module " << node_name;
+      Stop();
       return false;
     }
     for (uint32_t conveyor_idx = 0; conveyor_idx < parallelism; ++conveyor_idx) {
@@ -472,7 +474,7 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     Event e;
     e.type = EventType::EVENT_EOS;
     e.module_name = moduleName;
-    e.message = data->stream_id;
+    e.stream_id = data->stream_id;
     e.thread_id = std::this_thread::get_id();
     event_bus_->PostEvent(e);
     const uint64_t eos_mask = data->AddEOSMask(modules_map_[moduleName].get());
@@ -567,6 +569,7 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
       e.type = EventType::EVENT_ERROR;
       e.module_name = node_name;
       e.message = node_name + " process failed, return number: " + std::to_string(ret);
+      e.stream_id = data->stream_id;
       e.thread_id = std::this_thread::get_id();
       event_bus_->PostEvent(e);
       StreamMsg msg;
@@ -658,6 +661,20 @@ Module* Pipeline::GetModule(const std::string& moduleName) {
   if (iter != modules_map_.end()) {
     return modules_map_[moduleName].get();
   }
+  return nullptr;
+}
+
+Module* Pipeline::GetEndModule() {
+  std::string end_node_name;
+  for (auto& it : modules_) {
+    const std::string node_name = it.first;
+    ModuleAssociatedInfo& module_info = it.second;
+    if (0 == module_info.down_nodes.size()) {
+      end_node_name = end_node_name.empty() ? node_name : "";
+    }
+  }
+
+  if (!end_node_name.empty()) return modules_map_[end_node_name].get();
   return nullptr;
 }
 

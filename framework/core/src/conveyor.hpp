@@ -46,7 +46,7 @@ class Connector;
  * configuration json file). If there is no element in buffer queue, the downstream node will wait to pop and
  * be blocked. On contrary, if the queue is full, the upstream node will wait to push and be blocked.
  */
-class Conveyor {
+class Conveyor : private NonCopyable {
  public:
   friend class Connector;
 
@@ -63,8 +63,6 @@ class Conveyor {
   Conveyor(Connector* container, size_t max_size, bool enable_drop = false);
 
  private:
-  DISABLE_COPY_AND_ASSIGN(Conveyor);
-
   ThreadSafeQueue<CNFrameInfoPtr> dataq_;
   Connector* container_;
   size_t max_size_;

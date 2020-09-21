@@ -37,8 +37,10 @@ extern "C" {
 #include <utility>
 #include <memory>
 
-#include "data_handler_mem.hpp"
 #include "perf_manager.hpp"
+#include "data_handler_mem.hpp"
+
+#define DEFAULT_MODULE_CATEGORY SOURCE
 
 namespace cnstream {
 
@@ -62,16 +64,16 @@ ESMemHandler::~ESMemHandler() {
 
 bool ESMemHandler::Open() {
   if (!this->module_) {
-    LOG(ERROR) << "module_ null";
+    MLOG(ERROR) << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOG(ERROR) << "impl_ null";
+    MLOG(ERROR) << "impl_ null";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOG(ERROR) << "invalid stream_idx";
+    MLOG(ERROR) << "invalid stream_idx";
     return false;
   }
 
@@ -111,7 +113,7 @@ bool ESMemHandlerImpl::Open() {
   param_ = source->GetSourceParam();
 #if 0
   if (param_.decoder_type_ != DECODER_MLU) {
-    LOG(ERROR) << "decoder_type not supported:" << param_.decoder_type_;
+    MLOG(ERROR) << "decoder_type not supported:" << param_.decoder_type_;
     return false;
   }
 #endif
@@ -209,16 +211,27 @@ void ESMemHandlerImpl::DecodeLoop() {
     } catch (edk::Exception &e) {
       if (nullptr != module_)
         module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup dev/channel.");
+      MLOG(DEBUG) << "Init MLU context failed.";
       return;
     }
   }
 
   if (!PrepareResources()) {
-    if (nullptr != module_)
-      module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " prepare codec resources failed.");
+    ClearResources();
+    if (nullptr != module_) {
+      Event e;
+      e.type = EventType::EVENT_STREAM_ERROR;
+      e.module_name = module_->GetName();
+      e.message = "Prepare codec resources failed.";
+      e.stream_id = stream_id_;
+      e.thread_id = std::this_thread::get_id();
+      module_->PostEvent(e);
+    }
+    MLOG(DEBUG) << "PrepareResources failed.";
     return;
   }
 
+  MLOG(DEBUG) << "Mem handler DecodeLoop.";
   while (running_.load()) {
     if (!Process()) {
       break;
@@ -226,16 +239,20 @@ void ESMemHandlerImpl::DecodeLoop() {
   }
 
   ClearResources();
-  LOG(INFO) << "DecodeLoop Exit";
+  MLOG(DEBUG) << "Mem handler DecodeLoop Exit.";
 }
 
 bool ESMemHandlerImpl::PrepareResources() {
   VideoStreamInfo info;
   while (running_.load()) {
-    if (parser_.GetInfo(info)) {
+    int ret = parser_.GetInfo(info);
+    if (-1 == ret) {
+      return false;
+    } else if (0 == ret) {
+      usleep(1000 * 10);
+    } else {
       break;
     }
-    usleep(1000 * 10);
   }
 
   if (!running_.load()) {
@@ -247,7 +264,7 @@ bool ESMemHandlerImpl::PrepareResources() {
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
     decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
   } else {
-    LOG(ERROR) << "unsupported decoder_type";
+    MLOG(ERROR) << "unsupported decoder_type";
     return false;
   }
   if (!decoder_) {
@@ -255,7 +272,7 @@ bool ESMemHandlerImpl::PrepareResources() {
   }
   bool ret = decoder_->Create(&info, interval_);
   if (!ret) {
-      return false;
+    return false;
   }
   if (info.extra_data.size()) {
     ESPacket pkt;
@@ -287,7 +304,7 @@ bool ESMemHandlerImpl::Process() {
   }
 
   if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-    LOG(INFO) << "Eos reached";
+    MLOG(DEBUG) << "Eos reached";
     ESPacket pkt;
     pkt.data = in->pkt_.data;
     pkt.size = in->pkt_.size;

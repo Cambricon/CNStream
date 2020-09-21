@@ -33,7 +33,9 @@ extern "C" {
 #include <vector>
 
 #include "ffmpeg_parser.hpp"
-#include "glog/logging.h"
+#include "cnstream_logging.hpp"
+
+#define DEFAULT_MODULE_CATEGORY SOURCE
 
 RingBuffer::RingBuffer(const size_t capacity)
   : front_(0)
@@ -160,7 +162,7 @@ class StreamParserImpl {
   }
 
   int Parse(unsigned char *bitstream, int size);
-  bool GetInfo(VideoStreamInfo &info);  // NOLINT
+  int GetInfo(VideoStreamInfo &info);  // NOLINT
 
  private:
   void FindInfo();
@@ -202,11 +204,11 @@ int StreamParser::Parse(unsigned char *bitstream, int size) {
   return -1;
 }
 
-bool StreamParser::GetInfo(VideoStreamInfo &info) {
+int StreamParser::GetInfo(VideoStreamInfo &info) {
   if (impl_) {
     return impl_->GetInfo(info);
   }
-  return false;
+  return -1;
 }
 
 static int read_packet(void *opaque, uint8_t *buf, int buf_size) {
@@ -236,7 +238,7 @@ bool GetVideoStreamInfo(const AVFormatContext *ic, int &video_index, VideoStream
     }
   }
   if (video_index == -1) {
-    LOG(ERROR) << "Didn't find a video stream.";
+    MLOG(ERROR) << "Didn't find a video stream.";
     return false;
   }
 
@@ -255,6 +257,10 @@ bool GetVideoStreamInfo(const AVFormatContext *ic, int &video_index, VideoStream
   info.color_space = st->codec->colorspace;
   info.bitrate = st->codec->bit_rate / 1000;
 #endif
+  if (!info.codec_width || !info.codec_height) {
+    MLOG(ERROR) << "Parse video stream info failed.";
+    return false;
+  }
   /*At this moment, if the demuxer does not set this value (avctx->field_order == UNKNOWN),
   *   the input stream will be assumed as progressive one.
   */
@@ -307,12 +313,14 @@ void StreamParserImpl::FindInfo() {
   avio = avio_alloc_context(io_buffer, io_buffer_size_, 0, this->queue_, &read_packet, nullptr, nullptr);
   if (!avio) {
     av_free(io_buffer);
+    info_got_.store(-1);
     return;
   }
   ic = avformat_alloc_context();
   if (!ic) {
     av_freep(&avio->buffer);
     av_free(avio);
+    info_got_.store(-1);
     return;
   }
   ic->pb = avio;
@@ -331,6 +339,7 @@ void StreamParserImpl::FindInfo() {
     av_free(avio);
     ic->pb = nullptr;
     avformat_close_input(&ic);
+    info_got_.store(-1);
     return;
   }
 
@@ -339,6 +348,7 @@ void StreamParserImpl::FindInfo() {
     av_free(avio);
     ic->pb = nullptr;
     avformat_close_input(&ic);
+    info_got_.store(-1);
     return;
   }
 
@@ -349,14 +359,15 @@ void StreamParserImpl::FindInfo() {
     av_free(avio);
     ic->pb = nullptr;
     avformat_close_input(&ic);
+    info_got_.store(-1);
     return;
   }
 
   promise_.set_value(info);
   info_got_.store(1);
 
-  LOG(INFO) << this << " codec_id = " << info.codec_id;
-  LOG(INFO) << this << " framerate = " << info.framerate.num << "/" << info.framerate.den;
+  MLOG(INFO) << this << " codec_id = " << info.codec_id;
+  MLOG(INFO) << this << " framerate = " << info.framerate.num << "/" << info.framerate.den;
   // free avio explicitly
   av_freep(&avio->buffer);
   av_free(avio);
@@ -366,9 +377,15 @@ void StreamParserImpl::FindInfo() {
 }
 
 int StreamParserImpl::Parse(unsigned char *buf, int size) {
-  if (info_got_.load()) {
+  if (info_got_.load() == -1) {
+    MLOG(ERROR) << this << " Parse info failed.";
+    return -1;
+  }
+
+  if (info_got_.load() == 1) {
     return 1;
   }
+
   if (!buf || !size || !queue_) {
     return 0;
   }
@@ -377,7 +394,7 @@ int StreamParserImpl::Parse(unsigned char *buf, int size) {
   while (1) {
     int bytes = queue_->Write(buf + offset, size - offset);
     if (bytes < 0) {
-      LOG(ERROR) << this << " Write failed";
+      MLOG(ERROR) << this << " Write failed";
       return -1;
     }
     offset += bytes;
@@ -388,19 +405,22 @@ int StreamParserImpl::Parse(unsigned char *buf, int size) {
   return 0;
 }
 
-bool StreamParserImpl::GetInfo(VideoStreamInfo &info) {
+int StreamParserImpl::GetInfo(VideoStreamInfo &info) {
+  if (info_got_.load() == -1) {
+    return -1;
+  }
   if (info_ready_.load()) {
     info = info_;
-    return true;
+    return 1;
   }
-  if (info_got_.load()) {
+  if (info_got_.load() == 1) {
     std::future<VideoStreamInfo> future_ = promise_.get_future();
     info_ = future_.get();
     info = info_;
     info_ready_.store(1);
-    return true;
+    return 1;
   }
-  return false;
+  return 0;
 }
 
 static int FindStartCode(unsigned char *buf) {
@@ -434,7 +454,7 @@ static int GetNaluH2645(unsigned char *buf, int len, bool isH264, std::vector<Na
     desc.len = vec_pos[i + 1] - vec_pos[i];
     int type_idx = (desc.nal[2] == 1) ? 3 : 4;
     if (desc.len < type_idx) {
-      LOG(ERROR) << "INVALID nal size";
+      MLOG(ERROR) << "INVALID nal size";
       return -1;
     }
     if (isH264) {
@@ -478,7 +498,7 @@ int H2645NalSplitter::SplitterWriteFrame(unsigned char *buf, int len) {
     for (auto &it : vec_desc) {
       int ret = this->SplitterOnNal(it, false);
       if (ret < 0) {
-        LOG(ERROR) << "Write h264/5 nalu failed.";
+        MLOG(ERROR) << "Write h264/5 nalu failed.";
         return ret;
       }
     }
@@ -486,7 +506,7 @@ int H2645NalSplitter::SplitterWriteFrame(unsigned char *buf, int len) {
     NalDesc desc;
     int ret = this->SplitterOnNal(desc, true);
     if (ret < 0) {
-      LOG(ERROR) << "Write h264/5 nalu failed.";
+      MLOG(ERROR) << "Write h264/5 nalu failed.";
       return ret;
     }
   }
@@ -499,13 +519,13 @@ int H2645NalSplitter::SplitterWriteChunk(unsigned char *buf, int len) {
     if (!es_buffer_) {
       es_buffer_ = new(std::nothrow) unsigned char[max_es_buffer_size];
       if (!es_buffer_) {
-        LOG(ERROR) << "Failed to alloc es_buffer";
+        MLOG(ERROR) << "Failed to alloc es_buffer";
         return -1;
       }
       es_len_ = 0;
     }
     if (es_len_ + len > max_es_buffer_size) {
-      LOG(ERROR) << "Buffer overflow...FIXME";
+      MLOG(ERROR) << "Buffer overflow...FIXME";
       return -1;
     }
     memcpy(es_buffer_ + es_len_, buf, len);
@@ -514,7 +534,7 @@ int H2645NalSplitter::SplitterWriteChunk(unsigned char *buf, int len) {
     std::vector<NalDesc> vec_desc;
     int ret = GetNaluH2645(es_buffer_, es_len_, isH264_, vec_desc);
     if (ret < 0) {
-      LOG(ERROR) << "Get h264/5 nalu failed.";
+      MLOG(ERROR) << "Get h264/5 nalu failed.";
       return ret;
     }
     // remove the last one
@@ -525,7 +545,7 @@ int H2645NalSplitter::SplitterWriteChunk(unsigned char *buf, int len) {
       for (auto &it : vec_desc) {
         int ret = this->SplitterOnNal(it, false);
         if (ret < 0) {
-          LOG(ERROR) << "Write h264/5 nalu failed.";
+          MLOG(ERROR) << "Write h264/5 nalu failed.";
           return ret;
         }
       }
@@ -551,11 +571,19 @@ int H2645NalSplitter::SplitterWriteChunk(unsigned char *buf, int len) {
         desc.type = (desc.nal[type_idx] >> 1)& 0x3F;
       }
     }
-    int ret = this->SplitterOnNal(desc, true);
+    int ret = this->SplitterOnNal(desc, false);
     if (ret < 0) {
-      LOG(ERROR) << "Write h264/5 nalu failed.";
+      MLOG(ERROR) << "Write h264/5 nalu failed.";
       return ret;
     }
+  }
+
+  // send eos
+  NalDesc desc;
+  int ret = this->SplitterOnNal(desc, true);
+  if (ret < 0) {
+    LOG(ERROR) << "Write eos failed. nalu mode.";
+    return ret;
   }
   return 0;
 }

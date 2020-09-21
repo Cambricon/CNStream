@@ -27,6 +27,8 @@
 
 #include "data_handler_usb.hpp"
 
+#define DEFAULT_MODULE_CATEGORY SOURCE
+
 namespace cnstream {
 
 std::shared_ptr<SourceHandler> UsbHandler::Create(DataSource *module, const std::string &stream_id,
@@ -52,16 +54,16 @@ UsbHandler::~UsbHandler() {
 
 bool UsbHandler::Open() {
   if (!this->module_) {
-    LOG(ERROR) << "module_ null";
+    MLOG(ERROR) << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOG(ERROR) << "impl_ null";
+    MLOG(ERROR) << "impl_ null";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOG(ERROR) << "invalid stream_idx";
+    MLOG(ERROR) << "invalid stream_idx";
     return false;
   }
 
@@ -106,21 +108,26 @@ void UsbHandlerImpl::Loop() {
     } catch (edk::Exception &e) {
       if (nullptr != module_)
         module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup dev/channel.");
+      MLOG(DEBUG) << "Init MLU context failed.";
       return;
     }
   }
 
   if (!PrepareResources()) {
     if (nullptr != module_)
-      module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + "Prepare codec resources failed.");
+      module_->PostEvent(EVENT_STREAM_ERROR, "stream_id " + stream_id_ + "Prepare codec resources failed.");
+    MLOG(DEBUG) << "PrepareResources failed.";
     return;
   }
 
+  MLOG(DEBUG) << "USB handler DecodeLoop.";
   while (running_.load()) {
     if (!Process()) {
       break;
     }
   }
+
+  MLOG(DEBUG) << "USB handler DecodeLoop Exit.";
 
   ClearResources();
 }
@@ -144,7 +151,7 @@ bool UsbHandlerImpl::PrepareResources(bool demux_only) {
   // check usb input name
   const char* usb_prefix = "/dev/video";
   if (0 != strncasecmp(filename_.c_str(), usb_prefix, strlen(usb_prefix))) {
-    LOG(ERROR) << "Couldn't open input stream.";
+    MLOG(ERROR) << "Couldn't open input stream.";
     return false;
   }
 
@@ -153,25 +160,25 @@ bool UsbHandlerImpl::PrepareResources(bool demux_only) {
 #if defined(__linux) || defined(__unix)
   ifmt = av_find_input_format("video4linux2");
   if (!ifmt) {
-    LOG(ERROR) << "Could not find v4l2 format.";
+    MLOG(ERROR) << "Could not find v4l2 format.";
     return false;
   }
 #elif defined(_WIN32) || defined(_WIN64)
   ifmt = av_find_input_format("dshow");
   if (!ifmt) {
-    LOG(ERROR) << "Could not find dshow.";
+    MLOG(ERROR) << "Could not find dshow.";
     return false;
   }
 #endif
   int ret_code = avformat_open_input(&p_format_ctx_, filename_.c_str(), ifmt, &options_);
   if (0 != ret_code) {
-    LOG(ERROR) << "Couldn't open input stream.";
+    MLOG(ERROR) << "Couldn't open input stream.";
     return false;
   }
   // find video stream information
   ret_code = avformat_find_stream_info(p_format_ctx_, NULL);
   if (ret_code < 0) {
-    LOG(ERROR) << "Couldn't find stream information.";
+    MLOG(ERROR) << "Couldn't find stream information.";
     return false;
   }
   video_index_ = -1;
@@ -188,7 +195,7 @@ bool UsbHandlerImpl::PrepareResources(bool demux_only) {
     }
   }
   if (video_index_ == -1) {
-    LOG(ERROR) << "Didn't find a video stream.";
+    MLOG(ERROR) << "Didn't find a video stream.";
     return false;
   }
   // p_codec_ctx_ = vstream->codec;
@@ -220,7 +227,7 @@ bool UsbHandlerImpl::PrepareResources(bool demux_only) {
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
     decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
   } else {
-    LOG(ERROR) << "unsupported decoder_type";
+    MLOG(ERROR) << "unsupported decoder_type";
     return false;
   }
   if (decoder_.get()) {
@@ -280,7 +287,7 @@ bool UsbHandlerImpl::Extract() {
     // find pts information
     if (AV_NOPTS_VALUE == packet_.pts && find_pts_) {
       find_pts_ = false;
-      LOG(WARNING) << "Didn't find pts informations, "
+      MLOG(WARNING) << "Didn't find pts informations, "
                    << "use ordered numbers instead. "
                    << "stream url: " << filename_.c_str();
     } else if (AV_NOPTS_VALUE != packet_.pts) {
@@ -306,15 +313,17 @@ bool UsbHandlerImpl::Process() {
   }
 
   if (!ret) {
-    LOG(INFO) << "Read EOS from file";
+    MLOG(INFO) << "Read EOS from file";
     if (this->loop_) {
-      LOG(INFO) << "Clear resources and restart";
+      MLOG(INFO) << "Clear resources and restart";
       ClearResources(true);
       if (!PrepareResources(true)) {
-        if (nullptr != module_) module_->PostEvent(EVENT_ERROR, "Prepare codec resources failed");
+        if (nullptr != module_)
+          module_->PostEvent(EVENT_STREAM_ERROR, "Prepare codec resources failed");
+        MLOG(DEBUG) << "PrepareResources failed.";
         return false;
       }
-      LOG(INFO) << "Loop...";
+      MLOG(INFO) << "Loop...";
       return true;
     } else {
       decoder_->Process(nullptr, true);

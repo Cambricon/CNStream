@@ -8,13 +8,14 @@
 #
 # @notice: other flags see ./../../bin/demo --help
 #*************************************************************************#
-source ../env.sh
-mkdir -p output
-./../../bin/demo  \
-    --data_path ./../files.list_video \
+CURRENT_FILE=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
+source $CURRENT_FILE/../env.sh
+mkdir -p $CURRENT_FILE/output
+$CURRENT_FILE/../../bin/demo  \
+    --data_path $CURRENT_FILE/../files.list_video \
     --src_frame_rate 100   \
     --wait_time 0 \
     --loop=false \
-    --config_fname "config_process1.json" \
+    --config_fname "$CURRENT_FILE/config_process1.json" \
     --alsologtostderr \
-    --perf_db_dir="./process1"
+    --perf_db_dir="$CURRENT_FILE/process1"

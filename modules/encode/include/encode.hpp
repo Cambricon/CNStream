@@ -18,13 +18,13 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef MODULES_CNENCODER_HPP_
-#define MODULES_CNENCODER_HPP_
+#ifndef MODULES_ENCODE_HPP_
+#define MODULES_ENCODE_HPP_
 
 /**
  *  \file cnencoder.hpp
  *
- *  This file contains a declaration of class CNEncoder
+ *  This file contains a declaration of class Encode
  */
 
 #include <memory>
@@ -41,52 +41,52 @@ namespace cnstream {
 /// Pointer for frame info
 using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
 
-struct CNEncoderContext;
+struct EncodeContext;
+class EncodeParam;
 /**
- * @brief CNEncoder is a module for encoding the video or image on MLU.
+ * @brief Encode is a module for encoding the video or image on MLU.
  */
-class CNEncoder : public Module, public ModuleCreator<CNEncoder> {
+class Encode : public Module, public ModuleCreator<Encode> {
  public:
   /**
-   * @brief The enum of picture format
-   */
-  enum PictureFormat {
-    YUV420P = 0,  /// Planar Y4-U1-V1
-    RGB24,        /// Packed R8G8B8
-    BGR24,        /// Packed B8G8R8
-    NV21,         /// Semi-Planar Y4-V1U1
-    NV12,         /// Semi-Planar Y4-U1V1
-  };
-  /**
-   * @brief The enum of codec type
-   */
-  enum CodecType {
-    H264 = 0,   /// H264
-    HEVC,       /// HEVC
-    MPEG4,      /// MPEG4
-    JPEG        /// JPEG
-  };
-  /**
-   * @brief CNEncoder constructor
+   * @brief Encode constructor
    *
    * @param name : module name
    */
-  explicit CNEncoder(const std::string& name);
+  explicit Encode(const std::string& name);
   /**
-   * @brief CNEncoder destructor
+   * @brief Encode destructor
    */
-  ~CNEncoder();
+  ~Encode();
 
   /**
    * @brief Called by pipeline when pipeline start.
    *
    * @param paramSet :
    * @verbatim
-   *   frame_rate_: frame rate
-   *   bit_rate_: bit rate
-   *   gop_size_: gop size
-   *   cn_type_: cnencoder type
-   *   cn_fomate_: cnencoder formate
+   *   encoder_type: Optional. Use cpu encoding or mlu encoding. The default encoder_type is cpu.
+   *                 Supported values are ``mlu`` and ``cpu``.
+   *   codec_type:   Optional. The codec type. The default codec_type is h264.
+   *                 Supported values are ``jpeg``, ``h264`` and ``hevc``.
+   *   preproc_type: Optional. Preprocessing data on cpu or mlu(mlu is not supported yet). The default preproc_type is cpu.
+   *                 Supported value is ``cpu``.
+   * 
+   *   use_ffmpeg:   Optional.Do resize and color space convert using ffmpeg. The default use_ffmpeg is false.
+   *                 Supported values are ``true`` and ``false``.
+   *   dst_width:    Optional.The width of the output. The default dst_width is the src_width.
+   *                 Supported values are digital numbers.
+   *   dst_height:   Optional.The height of the output. The default dst_height is the src_height.
+   *                 Supported values are digital numbers.
+   *   frame_rate:   Optional.The frame rate. The default frame_rate is 25.
+   *                 Supported values are digital numbers.
+   *   kbit_rate:    Optional.The bit rate in kbps. The default bit rate is 1Mbps.
+   *                 Supported values are digital numbers.
+   *   gop_size:     Optional.The gop size. The default gop size is 30.
+   *                 Supported values are digital numbers.
+   *   output_dir:   Optional.The output directory. The default output directory is {CURRENT_DIR}/output.
+   *                 Supported values are directories which could be accessed.
+   *   device_id:    Required if encoder_type or preproc_type is set to ``mlu``. The device id.
+   *                 Supported values are digital numbers.
    * @endverbatim
    *
    * @return if module open succeed
@@ -132,20 +132,13 @@ class CNEncoder : public Module, public ModuleCreator<CNEncoder> {
   void RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished) override;
 
  private:
-  CNEncoderContext* GetCNEncoderContext(CNFrameInfoPtr data);
-  std::string pre_type_;
-  std::string enc_type_;
-  uint32_t device_id_ = 0;
-  uint32_t bit_rate_ = 0;
-  uint32_t gop_size_ = 0;
-  uint32_t frame_rate_ = 0;
-  uint32_t dst_width_ = 0;
-  uint32_t dst_height_ = 0;
-  CodecType cn_type_;
-  PictureFormat cn_format_;
-  std::unordered_map<std::string, CNEncoderContext*> ctxs_;
-  std::mutex mutex_;
-};  // class CNEncoder
+  EncodeContext* GetEncodeContext(CNFrameInfoPtr data);
+  EncodeParam* param_ = nullptr;
+  uint32_t dst_stride_;
+  std::unordered_map<std::string, EncodeContext*> ctxs_;
+  RwLock ctx_lock_;
+};  // class Encode
 
 }  // namespace cnstream
-#endif
+
+#endif  // MODULES_ENCODE_HPP_

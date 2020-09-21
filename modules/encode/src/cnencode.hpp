@@ -18,8 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef MODULES_CNENCODER_STREAM_HPP_
-#define MODULES_CNENCODER_STREAM_HPP_
+#ifndef MODULES_CNENCODE_HPP_
+#define MODULES_CNENCODE_HPP_
 
 #include <glog/logging.h>
 extern "C" {
@@ -39,84 +39,74 @@ extern "C" {
 #error OpenCV required
 #endif
 
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <iostream>
 #include <memory>
-#include <mutex>
-#include <queue>
 #include <string>
-#include <thread>
 
-#include "cnencoder.hpp"
+#include "common.hpp"
+#include "encode.hpp"
 #include "easycodec/easy_encode.h"
 #include "easycodec/vformat.h"
 #include "perf_manager.hpp"
 
 namespace cnstream {
 
-class CNEncoderStream {
+class CNEncode {
  public:
-  CNEncoderStream(int src_width, int src_height, int width, int height, float frame_rate,
-                  CNEncoder::PictureFormat format, int bit_rate, int gop_size, CNEncoder::CodecType type,
-                  uint8_t channelIdx, uint32_t device_id, std::string pre_type);
-  virtual ~CNEncoderStream();
+  struct CNEncodeParam {
+    uint32_t dst_height = 0;
+    uint32_t dst_width = 0;
+    uint32_t dst_stride = 0;
+    CNPixelFormat dst_pix_fmt = BGR24;
+    std::string encoder_type = "cpu";
+    CNCodecType codec_type = H264;
+    int frame_rate = 25;
+    int bit_rate = 0x100000;
+    int gop = 30;
+    int device_id = -1;
+    std::string stream_id = "";
+    std::string output_dir = "";
+  };
+  explicit CNEncode(const CNEncodeParam &param);
+  virtual ~CNEncode();
 
-  bool Update(const cv::Mat &image, int64_t timestamp, bool eos);
-  bool Update(uint8_t *image, int64_t timestamp, bool eos);
-  void ResizeYuvNearest(uint8_t *src, uint8_t *dst);
-  void Bgr2YUV420NV(const cv::Mat &bgr, CNEncoder::PictureFormat ToFormat, uint8_t *nv_data);
-  void Convert(const uint8_t *src_buffer, const size_t src_buffer_size, uint8_t *dst_buffer,
-               const size_t dst_buffer_size);
+  bool Init();
+  bool CreateMluEncoder();
+  bool CreateCpuEncoder();
+  bool Update(uint8_t* src_y, uint8_t* src_uv, int64_t timestamp, bool eos);
+  bool Update(const cv::Mat src, int64_t timestamp);
 
   void EosCallback();
   void PacketCallback(const edk::CnPacket &packet);
+
   void SetPerfManager(std::shared_ptr<cnstream::PerfManager> manager) { perf_manager_ = manager; }
   void SetModuleName(std::string name) { module_name_ = name; }
 
  private:
   void RecordEndTime(int64_t pts);
-  bool copy_frame_buffer_ = false;
+  bool CreateDir(std::string dir);
+  // bool copy_frame_buffer_ = false;
 
-  std::string pre_type_;
-  std::mutex update_lock_;
-  uint8_t *output_data = nullptr;
+  CNEncodeParam cnencode_param_;
+  bool is_init_ = false;
 
-  uint32_t src_width_ = 0;
-  uint32_t src_height_ = 0;
-  uint32_t dst_width_ = 0;
-  uint32_t dst_height_ = 0;
-  uint32_t output_frame_size_;
-  uint32_t frame_rate_num_;
-  uint32_t frame_rate_den_;
-  uint32_t gop_size_;
-  uint32_t bit_rate_;
-  uint32_t device_id_;
+  uint32_t output_frame_size_ = 0;
 
-  uint8_t channelIdx_;
   uint32_t frame_count_ = 0;
-  char output_file[256] = {0};
-  size_t written;
-  FILE *p_file = nullptr;
 
-  CNEncoder::CodecType type_;
-  CNEncoder::PictureFormat format_;
+  std::string output_file_name_ = "";
+  size_t written_ = 0;
+  FILE *p_file_ = nullptr;
 
-  cv::Mat canvas_;
   edk::PixelFmt picture_format_;
-  edk::CodecType codec_type_;
-  edk::EasyEncode *encoder_ = nullptr;
+  edk::EasyEncode *mlu_encoder_ = nullptr;
 
-  SwsContext *swsctx_ = nullptr;
-  AVFrame *src_pic_ = nullptr;
-  AVFrame *dst_pic_ = nullptr;
-  AVPixelFormat src_pix_fmt_ = AV_PIX_FMT_NONE;  // AV_PIX_FMT_BGR24
-  AVPixelFormat dst_pix_fmt_ = AV_PIX_FMT_NONE;
+  cv::VideoWriter writer_;
+  cv::Size size_;
+
   std::shared_ptr<cnstream::PerfManager> perf_manager_ = nullptr;
   std::string module_name_ = "";
-};
+};  // class CNEncode
 
 }  // namespace cnstream
-#endif  // CNEncoder_STREAM_HPP_
+
+#endif  // MODULES_CNENCODE_HPP_

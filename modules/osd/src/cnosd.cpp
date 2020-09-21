@@ -129,7 +129,7 @@ void CnOsd::DrawLabel(cv::Mat* image, const cnstream::CNObjsVec& objects,
     int text_height = 0;
     for (auto& key : attr_keys) {
       cnstream::CNInferAttr infer_attr = object->GetAttribute(key);
-      if (infer_attr.value < 0) continue;
+      if (infer_attr.value < 0 || infer_attr.value > static_cast<int>(secondary_labels_.size()) - 1) continue;
       std::string secondary_lable = secondary_labels_[infer_attr.value];
       std::string secondary_score = std::to_string(infer_attr.score);
       std::string secondary_text = secondary_lable + " : " + secondary_score;
@@ -175,16 +175,23 @@ void CnOsd::DrawText(cv::Mat* image, const cv::Point &bottom_left, const std::st
   int box_thickness = CalcThickness(image->cols, box_thickness_) * scale;
 
   int baseline = 0;
+  int space_before = 0;
   cv::Size text_size;
   int label_height;
   if (cn_font_ == nullptr) {
     text_size = cv::getTextSize(text, font_, txt_scale, txt_thickness, &baseline);
-    label_height = baseline + txt_thickness + text_size.height;
+    space_before = 3 * txt_scale;
+    text_size.width += space_before * 2;
   } else {
-    // TODO(gaoyujia): Get the height and width of chinese character
-    text_size = cv::getTextSize(text, font_, 1, 1, &baseline);
-    label_height = baseline + text_size.height;
+    uint32_t text_h = 0, text_w = 0;
+    char* str = const_cast<char*>(text.data());
+    cn_font_->GetTextSize(str, &text_w, &text_h);
+    baseline = cn_font_->GetFontPixel() / 4;
+    space_before = baseline / 2;
+    text_size.height = text_h;
+    text_size.width = text_w + space_before * 2;
   }
+  label_height = baseline + txt_thickness + text_size.height;
   int offset = (box_thickness == 1 ? 0 : -(box_thickness + 1) / 2);
   cv::Point label_top_left = bottom_left + cv::Point(offset, offset);
   cv::Point label_bottom_right = label_top_left + cv::Point(text_size.width + offset, label_height);
@@ -201,7 +208,8 @@ void CnOsd::DrawText(cv::Mat* image, const cv::Point &bottom_left, const std::st
   // draw text background
   cv::rectangle(*image, label_top_left, label_bottom_right, color, CV_FILLED);
   // draw text
-  cv::Point text_left_bottom = label_top_left + cv::Point(0, text_size.height + baseline / 2);
+  cv::Point text_left_bottom =
+      label_top_left + cv::Point(space_before, label_height - baseline / 2 - txt_thickness / 2);
   cv::Scalar text_color = cv::Scalar(255, 255, 255) - color;
   if (cn_font_ == nullptr) {
     cv::putText(*image, text, text_left_bottom, font_, txt_scale, text_color, txt_thickness);

@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <META HTTP-EQUIV="pragma" CONTENT="no-cache"> 
+    <META HTTP-EQUIV="Cache-Control" CONTENT="no-cache, must-revalidate"> 
+    <META HTTP-EQUIV="expires" CONTENT="0">
+    <title>Easy Flow</title>
+    <link rel="icon" href="{{url_for('static', filename='data/title.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='css/easy_flow.css') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='css/pipeline_canvas.css') }}">
+    <script type="text/javascript" src= "{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+    <script type="text/javascript" src= "{{ url_for('static', filename='js/jsPlumb.min.js') }}"></script>
+    <script type="text/javascript" src= "{{ url_for('static', filename='js/pipeline_canvas.js') }}"></script>
+    <script type="text/javascript" src= "{{ url_for('static', filename='js/easy_flow.js') }}"></script>
+    <script type="text/javascript" src= "{{ url_for('static', filename='js/modules_data.js') }}"></script>
+    <script type="text/javascript" src= "{{ url_for('static', filename='js/parameter_desc.js') }}"></script>
+    <script type="text/javascript" src= "{{ url_for('static', filename='js/transmit_data.js') }}"></script>
+    <style>
+      a{text-decoration: none;}
+      a:hover{text-decoration: none;}
+    </style>
+</head>
+
+<body>
+    <div class='top'>
+        <h3>Easy Flow  &nbsp&nbsp- Cambricon CNStream based Video Analytics</h3>
+    </div>
+    <div class='pipeline-panel'>
+        <div class='left'>
+            <h3>Modules&nbsp&nbsp(click to add)</h3>
+            <ul class='nodes'></ul>
+        </div>
+        <div class='middle'>
+            <div id="demo-chart"></div>
+        </div>
+        <div class='right' id='right'>
+            <div class="right-container">
+                <div class="demo-collapse-item">
+                    <div class="demo-collapse-item-title right-item-title" onclick="showMessage(0)">Edit Parameter<span id="item-0" class="demo-collapse-item-arrow is-active"></span></div>
+                    <div class="demo-collapse-item-cnt" style="opacity: 1;">
+                        <h3 class='module-name'></h3>
+                        <div class="module-params"></div>
+                    </div>
+                </div>
+                <div class="demo-collapse-item">
+                    <div class="demo-collapse-item-title right-item-title" onclick="showMessage(1)">Parameter Description<span id="item-1" class="demo-collapse-item-arrow"></span></div>
+                    <div class="demo-collapse-item-cnt" style="height: 0px; opacity: 0;">
+                        <h3 class='module-name'></h3>
+                        <p class='module-desc'></p>
+                        <div class="param-desc"></div>
+                    </div>
+                </div>
+                <div class="demo-collapse-item">
+                    <div class="demo-collapse-item-title right-item-title" onclick="showMessage(2)">Json Configuration<span id="item-2" class="demo-collapse-item-arrow"></span></div>
+                    <div class="demo-collapse-item-cnt" style="height: 0px; opacity: 0;">
+                        <textarea id="json-output"></textarea>
+                    </div>
+                </div>
+                <div class="demo-collapse-item">
+                    <div class="demo-collapse-item-title right-item-title" onclick="showMessage(3)">Check Reuslt<span id="item-3" class="demo-collapse-item-arrow"></span></div>
+                    <div class="demo-collapse-item-cnt" style="height: 0px; opacity: 0;">
+                        <div class='check-json-result' id='check-result'></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class='btns'>
+        <button class='btn-gen'>Generate Json Config</button>
+        <button class='btn-save'>Download Json Config</button>
+        <button class='btn-clear'>Clear</button>
+        <button class='btn-return'>Back To Home</button>
+        <button class='btn-done'>Done</button>
+    </div>
+</body>
+
+</html>

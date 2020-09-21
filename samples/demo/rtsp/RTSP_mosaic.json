@@ -35,7 +35,6 @@
     "next_modules" : ["rtsp_sink"],
     "show_perf_info" : true,
     "custom_params" : {
-      "chinese_label_flag" : "false", 
       "label_path" : "../../../data/models/MLU270/Primary_Detector/ssd/label_voc.txt"
     }
   },

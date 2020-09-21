@@ -19,6 +19,7 @@
    ./customize_module/how_to_implement_module
    ./programming_mode/ProgrammingModel
    ./application/how_to_build_apps
+   ./web_ui/web_visualize
    ./tool/Inspect_tool
    ./measure_performance/measure_performance
    ./FAQ/FAQ

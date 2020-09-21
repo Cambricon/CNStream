@@ -42,10 +42,6 @@ if(build_track)
   list(APPEND module_list track)
   install(DIRECTORY track/include/ DESTINATION include)
 endif()
-if(build_cnencode)
-  list(APPEND module_list cnencode)
-  install(DIRECTORY cnencode/include/ DESTINATION include)
-endif()
 
 list(APPEND module_list display)
 install(DIRECTORY display/include/ DESTINATION include)
@@ -59,13 +55,13 @@ endif()
 
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/sqlite3/)
 
-
+set(SOURCE_LINKER_LIBS rt dl cnstream_core ${CN_LIBS} ${3RDPARTY_LIBS} ${OPENCV_LIBS} ${FFMPEG_LIBRARIES} pthread)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 #FIXME
 if(MLU_PLATFORM STREQUAL MLU220_SOC)
-  set(SOURCE_LINKER_LIBS dl cnstream_core ion ${CN_LIBS} ${3RDPARTY_LIBS} ${OpenCV_LIBS} ${FFMPEG_LIBRARIES} pthread)
+  list(APPEND SOURCE_LINKER_LIBS ion)
 else()
-  set(SOURCE_LINKER_LIBS dl cnstream_core ${CN_LIBS} ${3RDPARTY_LIBS} ${OpenCV_LIBS} ${SDL2_LIBRARIES} ${FFMPEG_LIBRARIES} pthread)
+  list(APPEND SOURCE_LINKER_LIBS ${SDL2_LIBRARIES})
 endif()
 
 include_directories(${PROJECT_SOURCE_DIR}/modules)

@@ -77,7 +77,7 @@ class PerfManager;
  * such as source, inferencer, and so on.
  * You can also design your own modules.
  */
-class Module {
+class Module : private NonCopyable {
  public:
   /**
    * Constructor.

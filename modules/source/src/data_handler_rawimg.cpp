@@ -33,12 +33,14 @@
 #include "device/mlu_context.h"
 #include "perf_manager.hpp"
 
+#define DEFAULT_MODULE_CATEGORY SOURCE
+
 #define STRIDE_ALIGN_FOR_SCALER_NV12 128
 #define STRIDE_ALIGN 64
 
 namespace cnstream {
 
-#if HAVE_OPENCV
+#ifdef HAVE_OPENCV
 static bool CvtI420ToNV12(uint8_t *src_I420, uint8_t *dst_nv12, int width, int height, int dst_stride) {
   if (!src_I420 || !dst_nv12 || width <= 0 || height <= 0 || dst_stride <= 0) {
     return false;
@@ -88,7 +90,7 @@ static bool CvtNV21ToNV12(uint8_t *src_nv21, uint8_t *dst_nv12, int width, int h
   }
 
   if (width % 2 != 0) {
-    LOG(WARNING) << "CvtNV21ToNV12 do not support image with width%2 != 0";
+    MLOG(WARNING) << "CvtNV21ToNV12 do not support image with width%2 != 0";
     return false;
   }
 
@@ -115,7 +117,7 @@ static bool CvtNV12ToNV12WithStride(uint8_t *src_nv12, uint8_t *dst_nv12, int wi
   }
 
   if (width % 2 != 0) {
-    LOG(WARNING) << "CvtNV12ToNV12WithStride do not support image with width%2 != 0";
+    MLOG(WARNING) << "CvtNV12ToNV12WithStride do not support image with width%2 != 0";
     return false;
   }
 
@@ -153,16 +155,16 @@ RawImgMemHandler::~RawImgMemHandler() {
 
 bool RawImgMemHandler::Open() {
   if (!this->module_) {
-    LOG(ERROR) << "module_ null";
+    MLOG(ERROR) << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOG(ERROR) << "impl_ null";
+    MLOG(ERROR) << "impl_ null";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOG(ERROR) << "invalid stream_idx";
+    MLOG(ERROR) << "invalid stream_idx";
     return false;
   }
 
@@ -260,7 +262,7 @@ void RawImgMemHandlerImpl::Close() {
 #ifdef HAVE_OPENCV
 int RawImgMemHandlerImpl::Write(cv::Mat *mat_data) {
   if (eos_got_.load()) {
-    LOG(WARNING) << "eos got, can not feed data any more.";
+    MLOG(WARNING) << "eos got, can not feed data any more.";
     return -1;
   }
 
@@ -297,7 +299,7 @@ int RawImgMemHandlerImpl::Write(cv::Mat *mat_data) {
 
 int RawImgMemHandlerImpl::Write(cv::Mat *mat_data, uint64_t pts) {
   if (eos_got_.load()) {
-    LOG(WARNING) << "eos got, can not feed data any more.";
+    MLOG(WARNING) << "eos got, can not feed data any more.";
     return -1;
   }
 
@@ -335,7 +337,7 @@ int RawImgMemHandlerImpl::Write(cv::Mat *mat_data, uint64_t pts) {
 
 int RawImgMemHandlerImpl::Write(unsigned char *img_data, int size, int w, int h, CNDataFormat pixel_fmt) {
   if (eos_got_.load()) {
-    LOG(WARNING) << "eos got, can not feed data any more.";
+    MLOG(WARNING) << "eos got, can not feed data any more.";
     return -1;
   }
 
@@ -372,7 +374,7 @@ int RawImgMemHandlerImpl::Write(unsigned char *img_data, int size, int w, int h,
 int RawImgMemHandlerImpl::Write(unsigned char *img_data, int size, uint64_t pts,
     int w, int h, CNDataFormat pixel_fmt) {
   if (eos_got_.load()) {
-    LOG(WARNING) << "eos got, can not feed data any more.";
+    MLOG(WARNING) << "eos got, can not feed data any more.";
     return -1;
   }
 
@@ -434,17 +436,19 @@ void RawImgMemHandlerImpl::ProcessLoop() {
     } catch (edk::Exception &e) {
       if (nullptr != module_)
         module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup dev/channel.");
+      MLOG(DEBUG) << "Init MLU context failed.";
       return;
     }
   }
 
+  MLOG(DEBUG) << "Rawing handler ProcessLoop.";
   while (running_.load()) {
     if (!Process()) {
       break;
     }
   }
 
-  LOG(INFO) << "ProcessLoop Exit";
+  MLOG(DEBUG) << "Rawing handler ProcessLoop Exit.";
 }
 
 bool RawImgMemHandlerImpl::Process() {
@@ -541,7 +545,8 @@ bool RawImgMemHandlerImpl::CvtColorWithStride(ImagePacket *img_pkt, uint8_t *dst
 #else
     case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
     case CNDataFormat::CN_PIXEL_FORMAT_RGB24:
-      LOG(ERROR) << "opencv is not linked, can not support CN_PIXEL_FORMAT_BGR24 and CN_PIXEL_FORMAT_RGB24 format.";
+      MLOG(ERROR) <<
+        "opencv is not linked, can not support CN_PIXEL_FORMAT_BGR24 and CN_PIXEL_FORMAT_RGB24 format.";
       return false;
 #endif
     case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
@@ -550,7 +555,7 @@ bool RawImgMemHandlerImpl::CvtColorWithStride(ImagePacket *img_pkt, uint8_t *dst
       return CvtNV12ToNV12WithStride(img_pkt->data, dst_nv12_data, width, height, dst_stride);
     case CNDataFormat::CN_INVALID:
     default:
-      LOG(ERROR) << "raw image data with invalid pixel_fmt, not support.";
+      MLOG(ERROR) << "raw image data with invalid pixel_fmt, not support.";
       break;
   }
 
@@ -571,13 +576,13 @@ bool RawImgMemHandlerImpl::ProcessOneFrame(ImagePacket *img_pkt) {
   size_t frame_size = dst_stride * img_pkt->height * 3 / 2;
   uint8_t *sp_data = new (std::nothrow) uint8_t[frame_size];
   if (!sp_data) {
-    LOG(ERROR) << "Malloc dst nv12 data buffer failed, size:" << frame_size;
+    MLOG(ERROR) << "Malloc dst nv12 data buffer failed, size:" << frame_size;
     return false;
   }
 
   // convert raw image data to NV12 data with stride
   if (!CvtColorWithStride(img_pkt, sp_data, dst_stride)) {
-    LOG(ERROR) << "convert raw image to NV12 format with stride failed.";
+    MLOG(ERROR) << "convert raw image to NV12 format with stride failed.";
     if (img_pkt->data) delete[] img_pkt->data;
     return false;
   }
@@ -612,7 +617,7 @@ bool RawImgMemHandlerImpl::ProcessOneFrame(ImagePacket *img_pkt) {
     CALL_CNRT_BY_CONTEXT(cnrtMalloc(&dataframe->mlu_data, frame_size), dataframe->ctx.dev_id,
                          dataframe->ctx.ddr_channel);
     if (nullptr == dataframe->mlu_data) {
-      LOG(ERROR) << "RawImgMemHandlerImpl failed to alloc mlu memory, size: " << frame_size;
+      MLOG(ERROR) << "RawImgMemHandlerImpl failed to alloc mlu memory, size: " << frame_size;
       return false;
     }
 
@@ -624,7 +629,7 @@ bool RawImgMemHandlerImpl::ProcessOneFrame(ImagePacket *img_pkt) {
       size_t plane_size = dataframe->GetPlaneBytes(i);
       CNSyncedMemory *CNSyncedMemory_ptr =
           new (std::nothrow) CNSyncedMemory(plane_size, dataframe->ctx.dev_id, dataframe->ctx.ddr_channel);
-      LOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "RawImgMemHandlerImpl new CNSyncedMemory failed";
+      MLOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "RawImgMemHandlerImpl new CNSyncedMemory failed";
       dataframe->data[i].reset(CNSyncedMemory_ptr);
       dataframe->data[i]->SetMluData(t);
       t += plane_size;
@@ -636,13 +641,13 @@ bool RawImgMemHandlerImpl::ProcessOneFrame(ImagePacket *img_pkt) {
     for (int i = 0; i < dataframe->GetPlanes(); ++i) {
       size_t plane_size = dataframe->GetPlaneBytes(i);
       CNSyncedMemory *CNSyncedMemory_ptr = new (std::nothrow) CNSyncedMemory(plane_size);
-      LOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "RawImgMemHandlerImpl new CNSyncedMemory failed";
+      MLOG_IF(FATAL, nullptr == CNSyncedMemory_ptr) << "RawImgMemHandlerImpl new CNSyncedMemory failed";
       dataframe->data[i].reset(CNSyncedMemory_ptr);
       dataframe->data[i]->SetCpuData(t);
       t += plane_size;
     }
   } else {
-    LOG(ERROR) << "DevContex::INVALID";
+    MLOG(ERROR) << "DevContex::INVALID";
     return false;
   }
 
@@ -656,3 +661,7 @@ bool RawImgMemHandlerImpl::ProcessOneFrame(ImagePacket *img_pkt) {
 }
 
 }  // namespace cnstream
+
+#undef STRIDE_ALIGN_FOR_SCALER_NV12
+#undef STRIDE_ALIGN
+#undef DEFAULT_MODULE_CATEGORY

@@ -38,7 +38,9 @@
 #include "data_handler_util.hpp"
 #include "data_source.hpp"
 #include "ffmpeg_decoder.hpp"
-#include "glog/logging.h"
+#include "cnstream_logging.hpp"
+
+#define DEFAULT_MODULE_CATEGORY SOURCE
 
 namespace cnstream {
 
@@ -169,7 +171,7 @@ class RawImgMemHandlerImpl : public IHandler {
     if (eos_sent_) return;
     auto data = CreateFrameInfo(true);
     if (!data) {
-      LOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
+      MLOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
       return;
     }
     SendFrameInfo(data);
@@ -185,4 +187,5 @@ class RawImgMemHandlerImpl : public IHandler {
 
 }  // namespace cnstream
 
+#undef DEFAULT_MODULE_CATEGORY
 #endif  // MODULES_SOURCE_HANDLER_RAWIMGMEM_HPP_

@@ -60,7 +60,7 @@ static bool STR2U32(const std::string &value, uint32_t *ret) {
     t = stoul(value);
     if (t > std::numeric_limits<uint32_t>::max()) return false;
     *ret = t;
-  } catch (std::exception e) {
+  } catch (std::exception& e) {
     return false;
   }
   return true;
@@ -70,7 +70,7 @@ static bool STR2FLOAT(const std::string &value, float *ret) {
   if (!ret) return false;
   try {
     *ret = stof(value);
-  } catch (std::exception e) {
+  } catch (std::exception& e) {
     return false;
   }
   return true;

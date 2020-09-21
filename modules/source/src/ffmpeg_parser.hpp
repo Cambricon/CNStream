@@ -90,7 +90,7 @@ class StreamParser {
   int Open(std::string fmt = "");
   void Close();
   int Parse(unsigned char *bitstream, int size);
-  bool GetInfo(VideoStreamInfo &info);  // NOLINT
+  int GetInfo(VideoStreamInfo &info);  // NOLINT
 
  private:
   StreamParser(const StreamParser &) = delete;
@@ -141,7 +141,7 @@ class ParserHelper {
     }
   }
 
-  bool GetInfo(VideoStreamInfo &info) {  // NOLINT
+  int GetInfo(VideoStreamInfo &info) {  // NOLINT
     std::unique_lock<std::mutex> lk(mutex_getinfo_);
     return parser_.GetInfo(info);
   }
