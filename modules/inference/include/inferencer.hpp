@@ -35,6 +35,14 @@
 #include "cnstream_error.hpp"
 #include "cnstream_module.hpp"
 
+#define DECLARE_PRIVATE(d_ptr, Class) \
+  friend class Class##Private;        \
+  Class##Private* d_ptr = nullptr;
+
+#define DECLARE_PUBLIC(q_ptr, Class) \
+  friend class Class;                \
+  Class* q_ptr = nullptr;
+
 namespace cnstream {
 
 CNSTREAM_REGISTER_EXCEPTION(Inferencer);

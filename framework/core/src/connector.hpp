@@ -53,7 +53,7 @@ class Conveyor;
  * |           |       \---------------------------------/       |           |
  *  -----------                                                   -----------
  */
-class Connector {
+class Connector : private NonCopyable {
  public:
   /**
    * @brief Connector constructor.
@@ -77,7 +77,6 @@ class Connector {
   void EmptyDataQueue();
 
  private:
-  DISABLE_COPY_AND_ASSIGN(Connector);
   Conveyor* GetConveyorByIdx(int idx) const;
 
   std::vector<Conveyor*> conveyors_;

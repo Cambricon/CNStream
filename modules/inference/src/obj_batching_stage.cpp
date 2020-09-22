@@ -85,14 +85,14 @@ ResizeConvertObjBatchingStage::~ResizeConvertObjBatchingStage() {}
 std::shared_ptr<InferTask> ResizeConvertObjBatchingStage::Batching(std::shared_ptr<CNFrameInfo> finfo,
                                                                    std::shared_ptr<CNInferObject> obj) {
   CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(finfo->datas[CNDataFramePtrKey]);
-  void* src_y = frame->data[0]->GetMutableMluData();
-  void* src_uv = frame->data[1]->GetMutableMluData();
-  QueuingTicket ticket = rcop_res_->PickUpTicket();
-  std::shared_ptr<RCOpValue> value = rcop_res_->WaitResourceByTicket(&ticket);
   if (frame->fmt != CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 &&
       frame->fmt != CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) {
     throw CnstreamError("Can not handle this frame with format :" + std::to_string(static_cast<int>(frame->fmt)));
   }
+  void* src_y = frame->data[0]->GetMutableMluData();
+  void* src_uv = frame->data[1]->GetMutableMluData();
+  QueuingTicket ticket = rcop_res_->PickUpTicket();
+  std::shared_ptr<RCOpValue> value = rcop_res_->WaitResourceByTicket(&ticket);
   if (!rcop_res_->Initialized()) {
     uint32_t dst_w = model_->InputShapes()[0].w;
     uint32_t dst_h = model_->InputShapes()[0].h;
@@ -123,7 +123,7 @@ std::shared_ptr<InferTask> ResizeConvertObjBatchingStage::Batching(std::shared_p
   input_data.crop_h = obj->bbox.h * frame->height;
   try {
     value->op.BatchingUp(input_data);
-  } catch (edk::MluResizeConvertOpError e) {
+  } catch (edk::MluResizeConvertOpError& e) {
     rcop_res_->DeallingDone();
     throw e;
   }

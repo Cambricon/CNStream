@@ -51,7 +51,7 @@ enum CNFrameFlag {
 /**
  *  A structure holding the information of a frame.
  */
-struct CNFrameInfo {
+struct CNFrameInfo : private NonCopyable {
   /**
    * Creates a CNFrameInfo instance.
    *
@@ -120,7 +120,6 @@ struct CNFrameInfo {
 
  private:
   CNFrameInfo() {}
-  DISABLE_COPY_AND_ASSIGN(CNFrameInfo);
   static cnstream::SpinLock spinlock_;
   static std::unordered_map<std::string, int> stream_count_map_;
 

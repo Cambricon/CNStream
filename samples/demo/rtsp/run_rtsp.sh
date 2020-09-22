@@ -9,9 +9,9 @@
 # @notice: other flags see ${SAMPLES_DIR}/bin/demo --help
 #*************************************************************************#
 
-CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
-SAMPLES_DIR=$CURRENT_DIR/../..
-MODEL_PATH=$CURRENT_DIR/../../../data/models/MLU270/Primary_Detector/ssd/
+CURRENT_FILE=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
+SAMPLES_DIR=$CURRENT_FILE/../..
+MODEL_PATH=$CURRENT_FILE/../../../data/models/MLU270/Primary_Detector/ssd/
 MODEL_NAME=resnet34_ssd.cambricon
 mkdir -p $MODEL_PATH
 
@@ -32,5 +32,5 @@ ${SAMPLES_DIR}/bin/demo  \
     --src_frame_rate 30   \
     --wait_time 0 \
     --loop=false \
-    --config_fname "RTSP.json" \
+    --config_fname "$CURRENT_FILE/RTSP.json" \
     --alsologtostderr

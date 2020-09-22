@@ -35,18 +35,6 @@
 
 #include "glog/logging.h"
 
-#define DISABLE_COPY_AND_ASSIGN(TypeName) \
-  TypeName(const TypeName&) = delete;     \
-  const TypeName& operator=(const TypeName&) = delete;
-
-#define DECLARE_PRIVATE(d_ptr, Class) \
-  friend class Class##Private;        \
-  Class##Private* d_ptr = nullptr;
-
-#define DECLARE_PUBLIC(q_ptr, Class) \
-  friend class Class;                \
-  Class* q_ptr = nullptr;
-
 #define UNSUPPORTED LOG(FATAL) << "Not supported";
 
 #define DEFAULT_ABORT LOG(FATAL) << "Default abort"
@@ -70,6 +58,18 @@ enum EventType {
   EVENT_STOP,     ///< Stops an event that is called by application layer usually.
   EVENT_STREAM_ERROR,  ///< A stream error event.
   EVENT_TYPE_END  ///< Reserved for your custom events.
+};
+
+
+class NonCopyable {
+protected:
+    NonCopyable() = default;
+    ~NonCopyable() = default;
+private:
+    NonCopyable(const NonCopyable &) = delete;
+    NonCopyable(NonCopyable &&) = delete;
+    NonCopyable &operator=(const NonCopyable &) = delete;
+    NonCopyable &operator=(NonCopyable &&) = delete;
 };
 
 /*helper functions

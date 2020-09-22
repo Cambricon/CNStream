@@ -107,7 +107,6 @@ After finished prerequisites, you can build instructions with the following step
    | -------------------- | ---------------------------------------- | ------- | --------------------------- |
    | build_display        | ON / OFF                                 | ON      | build display module        |
    | build_ipc            | ON / OFF                                 | ON      | build ipc module            |
-   | build_cnencode       | ON / OFF                                 | ON      | build cnencode module       |
    | build_encode         | ON / OFF                                 | ON      | build encode module         |
    | build_inference      | ON / OFF                                 | ON      | build inference module      |
    | build_osd            | ON / OFF                                 | ON      | build osd module            |
@@ -120,7 +119,7 @@ After finished prerequisites, you can build instructions with the following step
    | RELEASE              | ON / OFF                                 | ON      | release / debug             |
    | WITH_FFMPEG          | ON / OFF                                 | ON      | build with FFMPEG           |
    | WITH_OPENCV          | ON / OFF                                 | ON      | build with OPENCV           |
-   | WITH_CHINESE         | ON / OFF                                 | OFF     | build with CHINESE          |
+   | WITH_FREETYPE        | ON / OFF                                 | OFF     | build with FREETYPE         |
    | WITH_RTSP            | ON / OFF                                 | ON      | build with RTSP             |
 
 3. If you want to build CNStream samples:

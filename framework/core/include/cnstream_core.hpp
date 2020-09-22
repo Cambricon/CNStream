@@ -25,5 +25,6 @@
 #include "cnstream_frame.hpp"
 #include "cnstream_pipeline.hpp"
 #include "cnstream_version.hpp"
+#include "cnstream_logging.hpp"
 
 #endif  // CNSTREAM_CORE_HPP_

@@ -262,9 +262,17 @@ struct CNDataFrame {
    * @return Returns data with opencv mat type.
    */
   cv::Mat* ImageBGR();
+  bool HasBGRImage() {
+    if (bgr_mat) return true;
+    return false;
+  }
 
  private:
   cv::Mat* bgr_mat = nullptr;
+#else
+  bool HasBGRImage() {
+    return false;
+  }
 #endif
 
  private:

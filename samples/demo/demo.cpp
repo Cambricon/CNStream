@@ -50,6 +50,7 @@
 #endif
 
 DEFINE_string(data_path, "", "video file list.");
+DEFINE_string(data_name, "", "video file name.");
 DEFINE_int32(src_frame_rate, 25, "frame rate for send data");
 DEFINE_int32(wait_time, 0, "time of one test case");
 DEFINE_bool(loop, false, "display repeat");
@@ -64,15 +65,11 @@ cnstream::Displayer* gdisplayer = nullptr;
 
 std::atomic<bool> thread_running{true};
 
-class LogHelper {
+class UserLogSink: public cnstream::LogSink {
  public:
-  explicit LogHelper(char *program) {
-    google::InitGoogleLogging(program);
-    FLAGS_colorlogtostderr = true;
-    FLAGS_alsologtostderr = true;
-    google::InstallFailureSignalHandler();
+  void Send(const std::string& message) override {
+    std::cout << "UserLogSink: " << message << std::endl;
   }
-  ~LogHelper() { google::ShutdownGoogleLogging(); }
 };
 
 class MsgObserver : cnstream::StreamMsgObserver {
@@ -103,6 +100,10 @@ class MsgObserver : cnstream::StreamMsgObserver {
         if (source) source->RemoveSource(smsg.stream_id);
         pipeline_->RemovePerfManager(smsg.stream_id);
         stream_cnt_--;
+        if (stream_cnt_ == 0) {
+          LOG(INFO) << "[Observer] all streams is removed from pipeline, pipeline will stop.";
+          stop_ = true;
+        }
         break;
 
       case cnstream::StreamMsgType::ERROR_MSG:
@@ -175,13 +176,16 @@ int AddSourceForVideoInMem(cnstream::DataSource *source, const std::string &stre
     while (thread_running.load()) {
       if (!feof(fp)) {
         int size = fread(buf, 1, 4096, fp);
-        memHandler->Write(buf, size);
+        if (memHandler->Write(buf, size) != 0) {
+          break;
+        }
       } else if (loop) {
         fseek(fp, 0, SEEK_SET);
       } else {
         break;
       }
     }
+    fclose(fp);
     memHandler->Write(nullptr, 0);
   });
   thread_source.detach();
@@ -230,7 +234,10 @@ int AddSourceForImageInMem(cnstream::DataSource *source, const std::string &stre
         pkt.data = buf;
         pkt.size = size;
         pkt.pts = pts_++;
-        memHandler->Write(&pkt);
+        if (memHandler->Write(&pkt) != 0) {
+          fclose(fp);
+          break;
+        }
         fclose(fp);
       }
       itor++;
@@ -308,14 +315,24 @@ int AddSourceForFile(cnstream::DataSource* source, const std::string &stream_id,
 
 int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, false);
-  LogHelper log_helper(argv[0]);
+  cnstream::InitCNStreamLogging(argv[0], nullptr);
+#if 0
+  UserLogSink log_listener;
+  cnstream::AddLogSink(&log_listener);
+#endif
 
   LOG(INFO) << "CNSTREAM VERSION:" << cnstream::VersionString();
 
   /*
     flags to variables
   */
-  std::list<std::string> video_urls = ::ReadFileList(FLAGS_data_path);
+  std::list<std::string> video_urls;
+  if (FLAGS_data_name != "") {
+    video_urls = {FLAGS_data_name};
+  } else {
+    video_urls = ::ReadFileList(FLAGS_data_path);
+  }
+
   std::string source_name = "source";  // source module name, which is defined in pipeline json config
 
   /*
@@ -445,7 +462,7 @@ int main(int argc, char** argv) {
       pipeline.Stop();
     } else {
       /*
-       * stop by hand or by FLGAS_wait_time
+       * stop by hand or by FLAGS_wait_time
        */
       if (FLAGS_wait_time) {
         std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_time));

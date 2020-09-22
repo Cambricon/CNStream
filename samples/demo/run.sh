@@ -24,15 +24,15 @@ pushd $MODEL_PATH
       echo "label_voc.txt exists."
     fi
 popd
-source env.sh
-mkdir -p output
-./../bin/demo  \
-    --data_path ./files.list_video \
+source $CURRENT_DIR/env.sh
+mkdir -p $CURRENT_DIR/output
+$CURRENT_DIR/../bin/demo  \
+    --data_path $CURRENT_DIR/files.list_video \
     --src_frame_rate 30   \
     --wait_time 0 \
     --loop=false \
     --raw_img_input=false \
-    --config_fname "detection_config.json"
+    --config_fname "$CURRENT_DIR/detection_config.json"
     # uncomment to stop measuring performance
     #--perf=false \
     # uncomment to change directory of database file

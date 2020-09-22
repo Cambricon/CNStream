@@ -70,7 +70,7 @@ static std::vector<std::string> LoadLabels(const std::string& label_path) {
 Osd::Osd(const std::string& name) : Module(name) {
   param_register_.SetModuleDesc("Osd is a module for drawing objects on image. Output image is BGR24 format.");
   param_register_.Register("label_path", "The path of the label file.");
-  param_register_.Register("chinese_label_flag", "Whether chinese label will be used.");
+  param_register_.Register("font_path", "The path of font.");
   param_register_.Register("label_size", " The size of the label, support value: "
                            "normal, large, larger, small, smaller and number. The default value is normal");
   param_register_.Register("text_scale", "The scale of the text, which can change the size of text put on image. "
@@ -87,11 +87,11 @@ Osd::~Osd() { Close(); }
 
 std::shared_ptr<CnOsd> Osd::GetOsdContext() {
   std::shared_ptr<CnOsd> ctx = nullptr;
-  std::string thread_name = GetThreadName(pthread_self());
+  std::thread::id thread_id = std::this_thread::get_id();
   {
     RwLockReadGuard lg(ctx_lock_);
-    if (osd_ctxs_.find(thread_name) != osd_ctxs_.end()) {
-      ctx = osd_ctxs_[thread_name];
+    if (osd_ctxs_.find(thread_id) != osd_ctxs_.end()) {
+      ctx = osd_ctxs_[thread_id];
     }
   }
   if (!ctx) {
@@ -107,9 +107,12 @@ std::shared_ptr<CnOsd> Osd::GetOsdContext() {
     ctx->SetSecondaryLabels(secondary_labels_);
 
 #ifdef HAVE_FREETYPE
-    if (chinese_label_flag_) {
+    if (!font_path_.empty()) {
       std::shared_ptr<CnFont> font = std::make_shared<CnFont>();
-      if (font && font->Init("/usr/include/wqy_zenhei.ttf")) {
+      float font_size = label_size_ * text_scale_ * 30;
+      float space = font_size / 75;
+      float step = font_size / 200;
+      if (font && font->Init(font_path_, font_size, space, step)) {
         ctx->SetCnFont(font);
       } else {
         LOG(ERROR) << "Create and initialize CnFont failed.";
@@ -117,7 +120,7 @@ std::shared_ptr<CnOsd> Osd::GetOsdContext() {
     }
 #endif
     RwLockWriteGuard lg(ctx_lock_);
-    osd_ctxs_[thread_name] = ctx;
+    osd_ctxs_[thread_id] = ctx;
   }
   return ctx;
 }
@@ -134,8 +137,9 @@ bool Osd::Open(cnstream::ModuleParamSet paramSet) {
       LOG(WARNING) << "Empty label file or wrong file path.";
     } else {
 #ifdef HAVE_FREETYPE
-      if (paramSet.find("chinese_label_flag") != paramSet.end() && paramSet["chinese_label_flag"] == "true") {
-        chinese_label_flag_ = true;
+      if (paramSet.find("font_path") != paramSet.end()) {
+        std::string font_path = paramSet["font_path"];
+        font_path_ = GetPathRelativeToTheJSONFile(font_path, paramSet);
       }
 #endif
     }
@@ -233,9 +237,9 @@ bool Osd::CheckParamSet(const ModuleParamSet& paramSet) const {
       ret = false;
     }
   }
-  if (paramSet.find("chinese_label_flag") != paramSet.end()) {
-    if (paramSet.at("chinese_label_flag") != "true" && paramSet.at("chinese_label_flag") != "false") {
-      LOG(ERROR) << "[Osd] [chinese_label_flag] must be true or false.";
+  if (paramSet.find("font_path") != paramSet.end()) {
+    if (!checker.CheckPath(paramSet.at("font_path"), paramSet)) {
+      LOG(ERROR) << "[Osd] [font_path] : " << paramSet.at("font_path") << " non-existence.";
       ret = false;
     }
   }

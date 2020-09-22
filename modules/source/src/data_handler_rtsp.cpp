@@ -36,6 +36,8 @@ extern "C" {
 
 #include "data_handler_rtsp.hpp"
 
+#define DEFAULT_MODULE_CATEGORY SOURCE
+
 namespace cnstream {
 
 std::shared_ptr<SourceHandler> RtspHandler::Create(DataSource *module, const std::string &stream_id,
@@ -109,14 +111,14 @@ class FFmpegDemuxer : public IDemuxer {
     // open input
     ret_code = avformat_open_input(&p_format_ctx_, url_name_.c_str(), NULL, &options_);
     if (0 != ret_code) {
-      LOG(ERROR) << "Couldn't open input stream.";
+      MLOG(ERROR) << "Couldn't open input stream.";
       return false;
     }
 
     // find video stream information
     ret_code = avformat_find_stream_info(p_format_ctx_, NULL);
     if (ret_code < 0) {
-      LOG(ERROR) << "Couldn't find stream information.";
+      MLOG(ERROR) << "Couldn't find stream information.";
       return false;
     }
 
@@ -168,7 +170,7 @@ class FFmpegDemuxer : public IDemuxer {
       // find pts information
       if (AV_NOPTS_VALUE == packet_.pts && find_pts_) {
         find_pts_ = false;
-        LOG(WARNING) << "Didn't find pts informations, "
+        MLOG(WARNING) << "Didn't find pts informations, "
                      << "use ordered numbers instead. "
                      << "stream url: " << url_name_.c_str();
       } else if (AV_NOPTS_VALUE != packet_.pts) {
@@ -186,7 +188,7 @@ class FFmpegDemuxer : public IDemuxer {
   bool Process() override {
     bool ret = Extract();
     if (!ret) {
-      LOG(INFO) << "Read EOS";
+      MLOG(INFO) << "Read EOS";
       ESPacket pkt;
       pkt.flags = ESPacket::FLAG_EOS;
       if (queue_) {
@@ -244,7 +246,10 @@ class Live555Demuxer : public IDemuxer, public IRtspCB {
     // waiting for stream info...
     VideoStreamInfo info;
     while (1) {
-      if (parser_.GetInfo(info)) {
+      int ret = parser_.GetInfo(info);
+      if (-1 == ret) {
+        return false;
+      } else if (1 == ret) {
         break;
       }
       if (exit_flag) {
@@ -278,7 +283,7 @@ class Live555Demuxer : public IDemuxer, public IRtspCB {
       case FrameInfo::H264: parser_.Init("h264"); break;
       case FrameInfo::H265: parser_.Init("h265"); break;
       default: {
-          LOG(ERROR) << "unsupported codec type";
+          MLOG(ERROR) << "unsupported codec type";
           return;
         }
       }
@@ -337,16 +342,16 @@ RtspHandler::~RtspHandler() {
 
 bool RtspHandler::Open() {
   if (!this->module_) {
-    LOG(ERROR) << "module_ null";
+    MLOG(ERROR) << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOG(ERROR) << "impl_ null";
+    MLOG(ERROR) << "impl_ null";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOG(ERROR) << "invalid stream_idx";
+    MLOG(ERROR) << "invalid stream_idx";
     return false;
   }
 
@@ -400,7 +405,7 @@ void RtspHandlerImpl::Close() {
 }
 
 void RtspHandlerImpl::DemuxLoop() {
-  LOG(INFO) << "DemuxLoop Start...";
+  MLOG(INFO) << "DemuxLoop Start...";
   std::shared_ptr<IDemuxer> demuxer;
   if (use_ffmpeg_) {
     demuxer = std::make_shared<FFmpegDemuxer>(queue_, url_name_);
@@ -408,13 +413,20 @@ void RtspHandlerImpl::DemuxLoop() {
     demuxer = std::make_shared<Live555Demuxer>(queue_, url_name_, reconnect_);
   }
   if (!demuxer) {
-    LOG(ERROR) << "Failed to create demuxer";
+    MLOG(ERROR) << "Failed to create demuxer";
     return;
   }
   if (!demuxer->PrepareResources(demux_exit_flag_)) {
-    if (nullptr != module_)
-      module_->PostEvent(
-          EVENT_ERROR, "stream_id " + stream_id_ + " prepare codec resources failed.");
+    if (nullptr != module_) {
+      Event e;
+      e.type = EventType::EVENT_STREAM_ERROR;
+      e.module_name = module_->GetName();
+      e.message = "Prepare codec resources failed.";
+      e.stream_id = stream_id_;
+      e.thread_id = std::this_thread::get_id();
+      module_->PostEvent(e);
+    }
+    MLOG(DEBUG) << "PrepareResources failed.";
     return;
   }
   {
@@ -423,17 +435,19 @@ void RtspHandlerImpl::DemuxLoop() {
     stream_info_set_ = true;
   }
 
+  MLOG(DEBUG) << "RTSP handler DemuxLoop.";
+
   while (!demux_exit_flag_) {
     if (demuxer->Process() != true) {
       break;
     }
   }
   demuxer->ClearResources(demux_exit_flag_);
-  LOG(INFO) << "DemuxLoop Exit";
+  MLOG(DEBUG) << "RTSP handler DemuxLoop Exit";
 }
 
 void RtspHandlerImpl::DecodeLoop() {
-  LOG(INFO) << "DecodeLoop Start...";
+  MLOG(INFO) << "RTSP handler DecodeLoop Start...";
   /*meet cnrt requirement*/
   if (param_.device_id_ >=0) {
     try {
@@ -445,6 +459,7 @@ void RtspHandlerImpl::DecodeLoop() {
       if (nullptr != module_)
         module_->PostEvent(EVENT_ERROR, \
             "stream_id " + stream_id_ + " failed to setup dev/channel.");
+      MLOG(DEBUG) << "Init MLU context failed.";
       return;
     }
   }
@@ -466,19 +481,19 @@ void RtspHandlerImpl::DecodeLoop() {
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
     decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
   } else {
-    LOG(ERROR) << "unsupported decoder_type";
+    MLOG(ERROR) << "unsupported decoder_type";
     return;
   }
   if (decoder_.get()) {
     std::unique_lock<std::mutex> lk(mutex_);
     bool ret = decoder_->Create(&stream_info_, interval_);
     if (!ret) {
-      LOG(ERROR) << "Failed to create cndecoder";
+      MLOG(ERROR) << "Failed to create cndecoder";
       decoder_->Destroy();
       return;
     }
   } else {
-    LOG(ERROR) << "Failed to create decoder";
+    MLOG(ERROR) << "Failed to create decoder";
     decoder_->Destroy();
     return;
   }
@@ -499,12 +514,12 @@ void RtspHandlerImpl::DecodeLoop() {
     int timeoutMs = 1000;
     bool ret = this->queue_->Pop(timeoutMs, in);
     if (!ret) {
-      LOG(INFO) << "Read Timeout";
+      MLOG(INFO) << "Read Timeout";
       continue;
     }
 
     if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-      LOG(INFO) << "Read EOS";
+      MLOG(INFO) << "Read EOS";
       ESPacket pkt;
       pkt.data = in->pkt_.data;
       pkt.size = in->pkt_.size;
@@ -530,7 +545,7 @@ void RtspHandlerImpl::DecodeLoop() {
   if (decoder_.get()) {
     decoder_->Destroy();
   }
-  LOG(INFO) << "DecodeLoop Exit";
+  MLOG(DEBUG) << "RTSP handler DecodeLoop Exit";
 }
 
 }  // namespace cnstream

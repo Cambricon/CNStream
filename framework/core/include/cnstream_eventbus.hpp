@@ -76,7 +76,7 @@ using BusWatcher = std::function<EventHandleFlag(const Event &)>;
 /**
  * @brief The event bus that transmits events from modules to a pipeline.
  */
-class EventBus {
+class EventBus : private NonCopyable {
  public:
   friend class Pipeline;
   /**
@@ -141,7 +141,6 @@ class EventBus {
   void EventLoop();
 
  private:
-  DISABLE_COPY_AND_ASSIGN(EventBus);
 
   std::mutex watcher_mtx_;
   ThreadSafeQueue<Event> queue_;

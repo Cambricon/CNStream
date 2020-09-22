@@ -18,8 +18,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include "data_handler_jpeg_mem.hpp"
-
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -30,13 +28,16 @@
 #include <utility>
 
 #include "perf_manager.hpp"
+#include "data_handler_jpeg_mem.hpp"
+
+#define DEFAULT_MODULE_CATEGORY SOURCE
 
 namespace cnstream {
 
 std::shared_ptr<SourceHandler> ESJpegMemHandler::Create(DataSource *module, const std::string &stream_id, int max_width,
                                                         int max_height) {
   if (!module || stream_id.empty()) {
-    LOG(ERROR) << "source module or stream id must not be empty";
+    MLOG(ERROR) << "source module or stream id must not be empty";
     return nullptr;
   }
   std::shared_ptr<ESJpegMemHandler> handler(new (std::nothrow)
@@ -57,16 +58,16 @@ ESJpegMemHandler::~ESJpegMemHandler() {
 
 bool ESJpegMemHandler::Open() {
   if (!this->module_) {
-    LOG(ERROR) << "module_ null";
+    MLOG(ERROR) << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOG(ERROR) << "impl_ null";
+    MLOG(ERROR) << "impl_ null";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOG(ERROR) << "invalid stream_idx";
+    MLOG(ERROR) << "invalid stream_idx";
     return false;
   }
 
@@ -92,7 +93,7 @@ bool ESJpegMemHandlerImpl::Open() {
   if (nullptr != source) {
     param_ = source->GetSourceParam();
   } else {
-    LOG(ERROR) << "source module is null";
+    MLOG(ERROR) << "source module is null";
     return false;
   }
 
@@ -158,7 +159,9 @@ void ESJpegMemHandlerImpl::DecodeLoop() {
       // mlu_ctx.SetChannelId(dev_ctx_.ddr_channel);
       mlu_ctx.ConfigureForThisThread();
     } catch (edk::Exception &e) {
-      if (nullptr != module_) module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup mlu dev.");
+      if (nullptr != module_)
+        module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup mlu dev.");
+      MLOG(DEBUG) << "Init MLU context failed.";
       return;
     }
   }
@@ -174,9 +177,11 @@ void ESJpegMemHandlerImpl::DecodeLoop() {
       e.thread_id = std::this_thread::get_id();
       module_->PostEvent(e);
     }
+    MLOG(DEBUG) << "PrepareResources failed.";
     return;
   }
 
+  MLOG(DEBUG) << "Jpeg Mem handler DecodeLoop.";
   while (running_.load()) {
     if (!Process()) {
       break;
@@ -184,7 +189,7 @@ void ESJpegMemHandlerImpl::DecodeLoop() {
   }
 
   ClearResources();
-  LOG(INFO) << "DecodeLoop Exit";
+  MLOG(DEBUG) << "Jpeg Mem handler DecodeLoop Exit.";
 }
 
 bool ESJpegMemHandlerImpl::PrepareResources() {
@@ -208,15 +213,22 @@ bool ESJpegMemHandlerImpl::PrepareResources() {
     parser_->Init("mjpeg");
 
     while (running_.load()) {
-      if (parser_->GetInfo(info)) {
+      int ret = parser_->GetInfo(info);
+      if (-1 == ret) {
+        return false;
+      } else if (0 == ret) {
+        usleep(1000 * 10);
+      } else {
         break;
       }
-      usleep(1000 * 10);
     }
 
+    if (!running_.load()) {
+      return false;
+    }
     decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
   } else {
-    LOG(ERROR) << "unsupported decoder_type";
+    MLOG(ERROR) << "unsupported decoder_type";
     return false;
   }
 
@@ -256,7 +268,7 @@ bool ESJpegMemHandlerImpl::Process() {
     pkt.size = in->pkt_.size;
     pkt.pts = in->pkt_.pts;
     pkt.flags = ESPacket::FLAG_EOS;
-    LOG(INFO) << "Stream id: " << stream_id_ << " Eos reached: data ptr, size, pts: "
+    MLOG(DEBUG) << "Stream id: " << stream_id_ << " Eos reached: data ptr, size, pts: "
               << (size_t)pkt.data << ", " << (size_t)pkt.size << ", " << (size_t)pkt.pts;
     decoder_->Process(&pkt);
     return false;

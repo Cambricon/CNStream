@@ -8,11 +8,12 @@
 #
 # @notice: other flags see ../../bin/demo --help
 #*************************************************************************#
-source ../env.sh
-../../bin/demo  \
-    --data_path ../files.list_video \
+CURRENT_FILE=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
+source $CURRENT_FILE/../env.sh
+$CURRENT_FILE/../../bin/demo  \
+    --data_path $CURRENT_FILE/../files.list_video \
     --src_frame_rate 3000   \
     --wait_time 0 \
     --loop=false \
-    --config_fname "decoder_config.json" \
+    --config_fname "$CURRENT_FILE/decoder_config.json" \
     --alsologtostderr
