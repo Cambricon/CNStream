@@ -130,7 +130,7 @@ class LogSink : public google::LogSink {
  public:
   virtual ~LogSink() = default;
   virtual void Send(const std::string& message_string) = 0;
-  virtual void WaitTillSent() {}
+  void WaitTillSent() override {}
 
  protected:
   void send(LogSeverity severity, const char* full_filename,

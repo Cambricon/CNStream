@@ -74,6 +74,7 @@ foreach(module ${module_list})
 endforeach()
 
 add_library(cnstream_va SHARED ${srcs})
+set_target_properties(cnstream_va PROPERTIES LINK_FLAGS_RELEASE -s)
 
 if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED)
     add_sanitizers(cnstream_va)

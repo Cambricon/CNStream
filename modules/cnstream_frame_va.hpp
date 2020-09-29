@@ -175,8 +175,8 @@ struct CNDataFrame {
   DevContext ctx;                                            ///< The device context of this frame.
   void* ptr_mlu[CN_MAX_PLANES];                              ///< The MLU data addresses for planes.
   void* ptr_cpu[CN_MAX_PLANES];                              ///< The CPU data addresses for planes.
-  std::shared_ptr<IDataDeallocator> deAllocator_ = nullptr;  ///< The dedicated deallocator for CNDecoder buffer.
-  std::shared_ptr<ICNMediaImageMapper> mapper_ = nullptr;    ///< The dedicated Mapper for M220 CNDecoder.
+  std::unique_ptr<IDataDeallocator> deAllocator_ = nullptr;  ///< The dedicated deallocator for CNDecoder buffer.
+  std::unique_ptr<ICNMediaImageMapper> mapper_ = nullptr;    ///< The dedicated Mapper for M220 CNDecoder.
 
   CNDataFrame() {}
 
@@ -251,7 +251,7 @@ struct CNDataFrame {
  public:
   void* cpu_data = nullptr;  ///< CPU data pointer. You need to allocate it by calling CNStreamMallocHost().
   void* mlu_data = nullptr;  ///< A pointer to the MLU data.
-  std::shared_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Synchronizes data helper.
+  std::unique_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Synchronizes data helper.
 
 #ifdef HAVE_OPENCV
   /**

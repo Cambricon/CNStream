@@ -13,6 +13,7 @@ endforeach()
 
 if(DEFINED contrib_modules_list)
   add_library(cnstream_contrib SHARED ${contrib_module_srcs})
+  set_target_properties(cnstream_contrib PROPERTIES LINK_FLAGS_RELEASE -s)
   include_directories(${OpenCV_INCLUDE_DIRS})
   target_link_libraries(cnstream_contrib cnrt easydk cnstream_core ${OpenCV_LIBS}
     ${SOURCE_LINKER_LIBS})

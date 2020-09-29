@@ -228,11 +228,11 @@ bool GetVideoStreamInfo(const AVFormatContext *ic, int &video_index, VideoStream
   AVStream* st = nullptr;
   for (uint32_t loop_i = 0; loop_i < ic->nb_streams; loop_i++) {
     st = ic->streams[loop_i];
-  #if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
+#if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
     if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-  #else
+#else
     if (st->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-  #endif
+#endif
       video_index = loop_i;
       break;
     }
@@ -288,7 +288,7 @@ bool GetVideoStreamInfo(const AVFormatContext *ic, int &video_index, VideoStream
   int extradata_size = st->codec->extradata_size;
 #endif
   if (extradata && extradata_size) {
-    info.extra_data.reserve(extradata_size);
+    info.extra_data.resize(extradata_size);
     memcpy(info.extra_data.data(), extradata, extradata_size);
   }
   return true;
@@ -506,7 +506,7 @@ int H2645NalSplitter::SplitterWriteFrame(unsigned char *buf, int len) {
     NalDesc desc;
     int ret = this->SplitterOnNal(desc, true);
     if (ret < 0) {
-      MLOG(ERROR) << "Write h264/5 nalu failed.";
+      MLOG(ERROR) << "Write h264/5 eos failed.";
       return ret;
     }
   }

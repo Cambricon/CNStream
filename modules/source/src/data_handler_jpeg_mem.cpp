@@ -264,12 +264,8 @@ bool ESJpegMemHandlerImpl::Process() {
 
   if (in->pkt_.flags & ESPacket::FLAG_EOS) {
     ESPacket pkt;
-    pkt.data = in->pkt_.data;
-    pkt.size = in->pkt_.size;
-    pkt.pts = in->pkt_.pts;
     pkt.flags = ESPacket::FLAG_EOS;
-    MLOG(DEBUG) << "Stream id: " << stream_id_ << " Eos reached: data ptr, size, pts: "
-              << (size_t)pkt.data << ", " << (size_t)pkt.size << ", " << (size_t)pkt.pts;
+    MLOG(DEBUG) << "Jpeg Mem handler stream id: " << stream_id_ << " Eos reached";
     decoder_->Process(&pkt);
     return false;
   }  // if (!ret)

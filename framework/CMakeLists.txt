@@ -25,7 +25,9 @@ foreach(module ${module_list})
   file(GLOB_RECURSE module_src ${PROJECT_SOURCE_DIR}/framework/${module}/*.cpp)
   list(APPEND srcs ${module_src})
 endforeach()
+
 add_library(cnstream_core SHARED ${srcs})
+set_target_properties(cnstream_core PROPERTIES LINK_FLAGS_RELEASE -s)
 
 if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED)
     add_sanitizers(cnstream_core)

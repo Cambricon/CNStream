@@ -100,7 +100,7 @@ std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<
     if (frame->fmt != rcop_res_->SrcFmt()) {
       throw CnstreamError(
           "Resize convert operator should be reinitialized, but we can not do this."
-          " Maybe you have different pixel format between each frame, wo can not use mlu preprocessing to deal with "
+          " Maybe you have different pixel format between each frame, we can not use mlu preprocessing to deal with "
           "this.");
     }
   }

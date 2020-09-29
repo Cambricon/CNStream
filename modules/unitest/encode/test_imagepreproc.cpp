@@ -33,7 +33,6 @@
 #include "test_base.hpp"
 
 namespace cnstream {
-static constexpr const char *gname = "encode";
 
 TEST(EncodePreprocTest, InitFailedCase) {
   ImagePreproc::ImagePreprocParam params;

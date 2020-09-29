@@ -45,7 +45,7 @@ struct OpenParam {
   std::string url; /*rtsp://ip[:port]/stream_id
                     * rtsp://username:password@ip[:port]/stream_id
                     */
-  bool streamOverTcp = false;
+  bool streammingPreferTcp = true;
   int reconnect = 0;
   int livenessTimeoutMs = 2000;
   IRtspCB *cb = nullptr;

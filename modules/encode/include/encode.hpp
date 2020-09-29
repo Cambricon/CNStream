@@ -42,7 +42,7 @@ namespace cnstream {
 using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
 
 struct EncodeContext;
-class EncodeParam;
+struct EncodeParam;
 /**
  * @brief Encode is a module for encoding the video or image on MLU.
  */

@@ -177,9 +177,13 @@ CNVideoEncoder::CNVideoEncoder(const RtspParam &rtsp_param) : VideoEncoder(OUTPU
 }
 
 CNVideoEncoder::~CNVideoEncoder() {
-  edk::MluContext context;
-  context.SetDeviceId(rtsp_param_.device_id);
-  context.ConfigureForThisThread();
+  try {
+    edk::MluContext context;
+    context.SetDeviceId(rtsp_param_.device_id);
+    context.ConfigureForThisThread();
+  } catch (edk::MluContextError &err) {
+    LOG(ERROR) << "CNEncoderStream: set mlu env failed";
+  }
   Stop();
   Destroy();
 }

@@ -39,15 +39,15 @@ extern "C" {
 #include <memory>
 #include <string>
 #include <thread>
-#include "cnstream_frame_va.hpp"
-#include "cn_video_dec.h"
 #include "cn_jpeg_dec.h"
+#include "cn_video_dec.h"
+#include "cnstream_common.hpp"
+#include "cnstream_frame_va.hpp"
+#include "cnstream_logging.hpp"
 #include "data_source.hpp"
 #include "device/mlu_context.h"
 #include "ffmpeg_parser.hpp"
 #include "perf_manager.hpp"
-#include "cnstream_common.hpp"
-#include "cnstream_logging.hpp"
 
 namespace cnstream {
 
@@ -57,7 +57,7 @@ class IHandler {
   virtual std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) = 0;
   virtual bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) = 0;
   virtual void SendFlowEos() = 0;
-  virtual const DataSourceParam& GetDecodeParam() const = 0;
+  virtual const DataSourceParam &GetDecodeParam() const = 0;
 
  protected:
   void RecordStartTime(std::string module_name, int64_t pts) {
@@ -70,9 +70,7 @@ class IHandler {
   void SetThreadName(std::string module_name, uint64_t stream_idx) {
     thread_name_ = "cn-" + module_name + "-" + NumToFormatStr(stream_idx, 2);
   }
-  void SetPerfManager(std::shared_ptr<PerfManager> perf_manager) {
-    perf_manager_ = perf_manager;
-  }
+  void SetPerfManager(std::shared_ptr<PerfManager> perf_manager) { perf_manager_ = perf_manager; }
 
  private:
   std::shared_ptr<PerfManager> perf_manager_;
@@ -87,10 +85,10 @@ class Decoder {
     }
   }
   virtual ~Decoder() {}
-  virtual bool Create(AVStream *st, int interval = 1) { return false ;}
-  virtual bool Create(VideoStreamInfo *info, int interval) {return false;}
-  virtual bool Process(AVPacket *pkt, bool eos) {return false;}
-  virtual bool Process(ESPacket *pkt) {return false;}
+  virtual bool Create(AVStream *st, int interval = 1) { return false; }
+  virtual bool Create(VideoStreamInfo *info, int interval) { return false; }
+  virtual bool Process(AVPacket *pkt, bool eos) { return false; }
+  virtual bool Process(ESPacket *pkt) { return false; }
   virtual void Destroy() = 0;
 
  protected:
@@ -105,9 +103,13 @@ class MluDecoder : public Decoder {
  public:
   explicit MluDecoder(IHandler *handler) : Decoder(handler) {}
   ~MluDecoder() {
-    edk::MluContext env;
-    env.SetDeviceId(param_.device_id_);
-    env.ConfigureForThisThread();
+    try {
+      edk::MluContext env;
+      env.SetDeviceId(param_.device_id_);
+      env.ConfigureForThisThread();
+    } catch (edk::MluContextError &err) {
+      LOG(ERROR) << "CNEncoderStream: set mlu env failed";
+    }
     // PrintPerformanceInfomation();
   }
   bool Create(AVStream *st, int interval = 1) override;
@@ -121,7 +123,7 @@ class MluDecoder : public Decoder {
   void DestroyVideoDecoder();
   void SequenceCallback(cnvideoDecSequenceInfo *pFormat);
   void VideoFrameCallback(cnvideoDecOutput *dec_output);
-  void CorruptCallback(const cnvideoDecStreamCorruptInfo& streamcorruptinfo);
+  void CorruptCallback(const cnvideoDecStreamCorruptInfo &streamcorruptinfo);
   void VideoEosCallback();
   void VideoResetCallback();
 
