@@ -40,7 +40,7 @@ class SdlInitTool {
   SdlInitTool() : initialized_(false) {}
   ~SdlInitTool() {
     if (initialized_) {
-      SDL_Quit();
+      atexit(SDL_Quit());
     }
   }
   bool initialized_;

@@ -8,12 +8,13 @@
 #
 # @notice: other flags see ../../bin/demo --help
 #*************************************************************************#
-source ../env.sh
-mkdir -p output
-../../bin/demo  \
-    --data_path ../files.list_video \
+CURRENT_FILE=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
+source $CURRENT_FILE/../env.sh
+mkdir -p $CURRENT_FILE/output
+$CURRENT_FILE/../../bin/demo  \
+    --data_path $CURRENT_FILE/../files.list_video \
     --src_frame_rate 30   \
     --wait_time 0 \
     --loop=false \
-    --config_fname "cnencoder_config.json" \
+    --config_fname "$CURRENT_FILE/encode_config.json" \
     --alsologtostderr

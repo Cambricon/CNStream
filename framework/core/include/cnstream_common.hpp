@@ -33,17 +33,7 @@
 #include <string>
 #include <vector>
 
-#include "glog/logging.h"
-
-#define UNSUPPORTED LOG(FATAL) << "Not supported";
-
-#define DEFAULT_ABORT LOG(FATAL) << "Default abort"
-
-#define CNS_CNRT_CHECK(__EXPRESSION__)                                                                        \
-  do {                                                                                                        \
-    cnrtRet_t ret = (__EXPRESSION__);                                                                         \
-    LOG_IF(FATAL, CNRT_RET_SUCCESS != ret) << "Call [" << #__EXPRESSION__ << "] failed, error code: " << ret; \
-  } while (0)
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 
@@ -62,31 +52,19 @@ enum EventType {
 
 
 class NonCopyable {
-protected:
-    NonCopyable() = default;
-    ~NonCopyable() = default;
-private:
-    NonCopyable(const NonCopyable &) = delete;
-    NonCopyable(NonCopyable &&) = delete;
-    NonCopyable &operator=(const NonCopyable &) = delete;
-    NonCopyable &operator=(NonCopyable &&) = delete;
+ protected:
+  NonCopyable() = default;
+  ~NonCopyable() = default;
+
+ private:
+  NonCopyable(const NonCopyable& ) = delete;
+  NonCopyable(NonCopyable&& ) = delete;
+  NonCopyable& operator=(const NonCopyable& ) = delete;
+  NonCopyable& operator=(NonCopyable&& ) = delete;
 };
 
 /*helper functions
  */
-inline std::string GetFullPath(const std::string& path) {
-  if (path.empty() || path.front() == '/') {  // absolute path
-    return path;
-  } else {
-    const int MAX_PATH = 1024;
-    char result[MAX_PATH];
-    ssize_t count = readlink("/proc/self/exe", result, MAX_PATH);
-    std::string exe_path = std::string(result, (count > 0) ? count : 0);
-    const auto pos = exe_path.find_last_of('/');
-    return exe_path.substr(0, pos + 1) + path;
-  }
-}
-
 static const pthread_t invalid_pthread_tid = static_cast<pthread_t>(-1);
 
 inline void SetThreadName(const std::string& name, pthread_t thread = invalid_pthread_tid) {
@@ -112,10 +90,10 @@ inline std::string GetThreadName(pthread_t thread = invalid_pthread_tid) {
 }
 
 /*pipeline capacities*/
-const size_t INVALID_MODULE_ID = (size_t)(-1);
+constexpr size_t INVALID_MODULE_ID = (size_t)(-1);
 uint32_t GetMaxModuleNumber();
 
-const uint32_t INVALID_STREAM_IDX = (uint32_t)(-1);
+constexpr uint32_t INVALID_STREAM_IDX = (uint32_t)(-1);
 uint32_t GetMaxStreamNumber();
 
 /**

@@ -96,9 +96,9 @@ class ourRTSPClient : public RTSPClient {
 
  public:
   Authenticator* authenticator_ = nullptr;
-  // By default, we request that the server stream its data using RTP/UDP.
-  // If, instead, you want to request that the server stream via RTP-over-TCP, change the following to True:
-  bool REQUEST_STREAMING_OVER_TCP = False;
+  bool streammingPreferTcp = true;
+  bool streammingOverTcp = true;
+  bool setupOk = false;
   char* eventLoopWatchVariable = nullptr;
   StreamClientState scs;
 
@@ -194,39 +194,47 @@ void continueAfterDESCRIBE(RTSPClient* rtspClient, int resultCode, char* resultS
 
 void setupNextSubsession(RTSPClient* rtspClient) {
   UsageEnvironment& env = rtspClient->envir();                 // alias
-  StreamClientState& scs = ((ourRTSPClient*)rtspClient)->scs;  // alias
-  bool REQUEST_STREAMING_OVER_TCP = ((ourRTSPClient*)rtspClient)->REQUEST_STREAMING_OVER_TCP;
+  ourRTSPClient* client = (ourRTSPClient*)rtspClient;          // alias
+  StreamClientState& scs = client->scs;                        // alias
 
-  scs.subsession = scs.iter->next();
+  if (!client->setupOk) {
+    if (scs.subsession == NULL) {
+      // find the first video subsession, and only handle one video subsession
+      MediaSubsession *subsession = scs.iter->next();
+      while (subsession != NULL) {
+        const char* mediumName = subsession->mediumName();
+        if (strstr(mediumName, "video") != NULL) {
+          scs.subsession = subsession;
+          break;
+        }
+        subsession = scs.iter->next();
+      }
+      if (scs.subsession == NULL) {
+        env << "Failed to find a video session\n";
+        return;
+      }
+    }
+    if (scs.subsession != NULL) {
+      if (!scs.subsession->initiate()) {
+        env << *rtspClient << "Failed to initiate the \"" << *scs.subsession << "\" subsession: " << env.getResultMsg()
+            << "\n";
+        setupNextSubsession(rtspClient);  // give up on this subsession; go to the next one
+      } else {
+        env << *rtspClient << "Initiated the \"" << *scs.subsession << "\" subsession (";
+        if (scs.subsession->rtcpIsMuxed()) {
+          env << "client port " << scs.subsession->clientPortNum();
+        } else {
+          env << "client ports " << scs.subsession->clientPortNum() << "-" << scs.subsession->clientPortNum() + 1;
+        }
+        env << ")\n";
 
-  if (scs.subsession != NULL) {
-    //
-    // only video session will be processed, TODO
-    //
-    std::string mediaName = scs.subsession->mediumName();
-    if (mediaName.find("video") == std::string::npos) {
-      setupNextSubsession(rtspClient);  // give up on this subsession; go to the next one
+        // Continue setting up this subsession, by sending a RTSP "SETUP" command:
+        Boolean streamUsingTCP = (client->streammingPreferTcp && client->streammingOverTcp);
+        rtspClient->sendSetupCommand(*scs.subsession, continueAfterSETUP, False, streamUsingTCP, false,
+                                     ((ourRTSPClient*)rtspClient)->authenticator_);
+      }
       return;
     }
-
-    if (!scs.subsession->initiate()) {
-      env << *rtspClient << "Failed to initiate the \"" << *scs.subsession << "\" subsession: " << env.getResultMsg()
-          << "\n";
-      setupNextSubsession(rtspClient);  // give up on this subsession; go to the next one
-    } else {
-      env << *rtspClient << "Initiated the \"" << *scs.subsession << "\" subsession (";
-      if (scs.subsession->rtcpIsMuxed()) {
-        env << "client port " << scs.subsession->clientPortNum();
-      } else {
-        env << "client ports " << scs.subsession->clientPortNum() << "-" << scs.subsession->clientPortNum() + 1;
-      }
-      env << ")\n";
-
-      // Continue setting up this subsession, by sending a RTSP "SETUP" command:
-      rtspClient->sendSetupCommand(*scs.subsession, continueAfterSETUP, False, REQUEST_STREAMING_OVER_TCP, false,
-                                   ((ourRTSPClient*)rtspClient)->authenticator_);
-    }
-    return;
   }
 
   // We've finished setting up all of the subsessions.  Now, send a RTSP "PLAY" command to start the streaming:
@@ -244,12 +252,24 @@ void setupNextSubsession(RTSPClient* rtspClient) {
 void continueAfterSETUP(RTSPClient* rtspClient, int resultCode, char* resultString) {
   do {
     UsageEnvironment& env = rtspClient->envir();                 // alias
-    StreamClientState& scs = ((ourRTSPClient*)rtspClient)->scs;  // alias
+    ourRTSPClient* client = (ourRTSPClient*)rtspClient;          // alias
+    StreamClientState& scs = client->scs;                        // alias
 
     if (resultCode != 0) {
-      env << *rtspClient << "Failed to set up the \"" << *scs.subsession << "\" subsession: " << resultString << "\n";
-      break;
+      env << "Failed to set up the \"" << client->scs.subsession->mediumName()
+          << "\" subsession: " << resultString << "\n";
+      if (!client->setupOk) {
+        if (client->streammingPreferTcp && client->streammingOverTcp) {
+          env << "Failed to set up streaming over TCP, try UDP\n";
+          client->streammingOverTcp = false;
+          break;
+        } else {
+          env << "Failed to set up streaming over UDP\n";
+          break;
+        }
+      }
     }
+    if (!client->setupOk) client->setupOk = true;
 
     env << *rtspClient << "Set up the \"" << *scs.subsession << "\" subsession (";
     if (scs.subsession->rtcpIsMuxed()) {
@@ -649,7 +669,9 @@ class RtspSessionImpl {
     this->eventLoopWatchVariable = 0;
     ((ourRTSPClient*)rtspClient)->eventLoopWatchVariable = &this->eventLoopWatchVariable;
     ((ourRTSPClient*)rtspClient)->livenessTimeoutMs = param_.livenessTimeoutMs;
-    ((ourRTSPClient*)rtspClient)->REQUEST_STREAMING_OVER_TCP = param_.streamOverTcp;
+    ((ourRTSPClient*)rtspClient)->streammingPreferTcp = param_.streammingPreferTcp;
+    ((ourRTSPClient*)rtspClient)->streammingOverTcp = true;
+    ((ourRTSPClient*)rtspClient)->setupOk = false;
     ((ourRTSPClient*)rtspClient)->cb_ = param_.cb;
 
     // Next, send a RTSP "DESCRIBE" command, to get a SDP description for the stream.

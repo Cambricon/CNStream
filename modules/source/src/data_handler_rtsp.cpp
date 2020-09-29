@@ -107,7 +107,7 @@ class FFmpegDemuxer : public IDemuxer {
     av_dict_set(&options_, "buffer_size", "1024000", 0);
     av_dict_set(&options_, "max_delay", "500000", 0);
     av_dict_set(&options_, "stimeout", "20000000", 0);
-    av_dict_set(&options_, "rtsp_transport", "tcp", 0);
+    av_dict_set(&options_, "rtsp_flags", "prefer_tcp", 0);
     // open input
     ret_code = avformat_open_input(&p_format_ctx_, url_name_.c_str(), NULL, &options_);
     if (0 != ret_code) {
@@ -519,12 +519,9 @@ void RtspHandlerImpl::DecodeLoop() {
     }
 
     if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-      MLOG(INFO) << "Read EOS";
       ESPacket pkt;
-      pkt.data = in->pkt_.data;
-      pkt.size = in->pkt_.size;
-      pkt.pts = in->pkt_.pts;
       pkt.flags = ESPacket::FLAG_EOS;
+      MLOG(INFO) << "RTSP handler stream_id: " << stream_id_ << "EOS reached";
       decoder_->Process(&pkt);
       break;
     }  // if (eos)

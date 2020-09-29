@@ -51,7 +51,8 @@ enum CNFrameFlag {
 /**
  *  A structure holding the information of a frame.
  */
-struct CNFrameInfo : private NonCopyable {
+class CNFrameInfo : private NonCopyable {
+ public:
   /**
    * Creates a CNFrameInfo instance.
    *

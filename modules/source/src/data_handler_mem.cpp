@@ -175,11 +175,12 @@ int ESMemHandlerImpl::SplitterOnNal(NalDesc &desc, bool eos) {
   std::lock_guard<std::mutex> lk(queue_mutex_);
   if (queue_) {
     ESPacket pkt;
-    pkt.data = desc.nal;
-    pkt.size = desc.len;
-    pkt.pts = pts_++;
     if (eos) {
       pkt.flags = ESPacket::FLAG_EOS;
+    } else {
+      pkt.data = desc.nal;
+      pkt.size = desc.len;
+      pkt.pts = pts_++;
     }
     int timeoutMs = 1000;
     while (running_.load()) {
@@ -304,12 +305,9 @@ bool ESMemHandlerImpl::Process() {
   }
 
   if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-    MLOG(DEBUG) << "Eos reached";
     ESPacket pkt;
-    pkt.data = in->pkt_.data;
-    pkt.size = in->pkt_.size;
-    pkt.pts = in->pkt_.pts;
     pkt.flags = ESPacket::FLAG_EOS;
+    MLOG(DEBUG) << "Mem handler stream id: " << stream_id_ << "EOS reached";
     decoder_->Process(&pkt);
     return false;
   }  // if (!ret)

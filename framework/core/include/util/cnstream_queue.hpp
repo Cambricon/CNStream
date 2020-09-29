@@ -40,7 +40,7 @@ class ThreadSafeQueue {
 
   bool WaitAndTryPop(T& value, const std::chrono::microseconds rel_time);
 
-  void Push(T new_value);
+  void Push(const T& new_value);
 
   bool Empty() {
     std::lock_guard<std::mutex> lk(data_m_);
@@ -91,9 +91,10 @@ bool ThreadSafeQueue<T>::WaitAndTryPop(T& value, const std::chrono::microseconds
 }
 
 template <typename T>
-void ThreadSafeQueue<T>::Push(T new_value) {
-  std::lock_guard<std::mutex> lk(data_m_);
+void ThreadSafeQueue<T>::Push(const T& new_value) {
+  std::unique_lock<std::mutex> lk(data_m_);
   q_.push(new_value);
+  lk.unlock();
   notempty_cond_.notify_one();
 }
 

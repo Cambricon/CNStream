@@ -162,10 +162,9 @@ void Module::RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished) {
 }
 
 std::shared_ptr<PerfManager> Module::GetPerfManager(const std::string& stream_id) {
-  std::unordered_map<std::string, std::shared_ptr<PerfManager>> managers;
   RwLockReadGuard guard(container_lock_);
   if (container_) {
-    managers = container_->GetPerfManagers();
+    auto managers = container_->GetPerfManagers();
     if (managers.find(stream_id) != managers.end()) {
       return managers[stream_id];
     }

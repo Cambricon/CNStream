@@ -288,7 +288,12 @@ class ESMemHandler : public SourceHandler {
   /**
    * @brief The enum of data type.
    */
-  enum DataType { INVALID, H264, H265 };
+  enum DataType {
+    INVALID,     /// Invalid data type.
+    H264,        /// The data type of H264.
+    H265         /// The data type of H265.
+  };
+
   /**
    * @brief Sets data type.
    *
