@@ -9,9 +9,9 @@
 # @notice: other flags see ${SAMPLES_DIR}/bin/demo --help
 #*************************************************************************#
 
-CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
-SAMPLES_DIR=$CURRENT_DIR/../../..
-MODEL_PATH=$CURRENT_DIR/../../../../data/models/MLU270/yolov3/
+CURRENT_FILE=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
+SAMPLES_DIR=$CURRENT_FILE/../../..
+MODEL_PATH=$CURRENT_FILE/../../../../data/models/MLU270/yolov3/
 MODEL_NAME=yolov3_offline_u4_v1.3.0.cambricon
 mkdir -p $MODEL_PATH
 cd $MODEL_PATH
@@ -33,11 +33,11 @@ cd $MODEL_PATH
     fi
 cd -
 
-mkdir -p output
+mkdir -p $CURRENT_FILE/output
 ${SAMPLES_DIR}/bin/demo  \
     --data_path ${SAMPLES_DIR}/demo/files.list_video \
     --src_frame_rate 60  \
     --wait_time 0 \
     --loop=false \
-    --config_fname "yolov3_track_mlu270.json" \
+    --config_fname "$CURRENT_FILE/yolov3_track_mlu270.json" \
     --alsologtostderr

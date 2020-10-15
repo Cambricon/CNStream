@@ -8,9 +8,9 @@
 #
 # @notice: other flags see ../../bin/demo --help
 #*************************************************************************#
-CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
-SAMPLES_DIR=$CURRENT_DIR/../..
-MODEL_PATH=$CURRENT_DIR/../../../data/models/MLU270/Classification/resnet50
+CURRENT_FILE=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
+SAMPLES_DIR=$CURRENT_FILE/../..
+MODEL_PATH=$CURRENT_FILE/../../../data/models/MLU270/Classification/resnet50
 mkdir -p $MODEL_PATH
 
 cd $MODEL_PATH
@@ -21,7 +21,7 @@ cd $MODEL_PATH
       echo "resnet50 offline model exists."
     fi
 cd -
-MODEL_PATH=$CURRENT_DIR/../../../data/models/MLU270/Primary_Detector/ssd
+MODEL_PATH=$CURRENT_FILE/../../../data/models/MLU270/Primary_Detector/ssd
 mkdir -p $MODEL_PATH
 
 cd $MODEL_PATH
@@ -33,12 +33,12 @@ cd $MODEL_PATH
     fi
 cd -
 
-source ../env.sh
-mkdir -p output
-../../bin/demo  \
-    --data_path ../files.list_video \
+source $CURRENT_FILE/../env.sh
+mkdir -p $CURRENT_FILE/output
+$CURRENT_FILE/../../bin/demo  \
+    --data_path $CURRENT_FILE/../files.list_video \
     --src_frame_rate 60  \
     --wait_time 0 \
     --loop=false \
-    --config_fname "ssd_resnet34_and_resnet50_mlu270_config.json" \
+    --config_fname "$CURRENT_FILE/ssd_resnet34_and_resnet50_mlu270_config.json" \
     --alsologtostderr

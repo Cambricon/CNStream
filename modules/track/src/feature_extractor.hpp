@@ -61,7 +61,7 @@ class FeatureExtractor {
  private:
   void ExtractFeatureOnMlu(const cv::Mat& image, const cnstream::CNObjsVec& inputs,
                            std::vector<std::vector<float>>* features);
-  void ExtractFeatureOnCpu(const cv::Mat& image, const ThreadSafeVector<std::shared_ptr<CNInferObject>>& inputs,
+  void ExtractFeatureOnCpu(const cv::Mat& image, const std::vector<std::shared_ptr<CNInferObject>>& inputs,
                            std::vector<std::vector<float>>* features);
   int RunBatch(const std::vector<std::vector<float*>>& inputs,
                                std::vector<std::vector<float>>* outputs);

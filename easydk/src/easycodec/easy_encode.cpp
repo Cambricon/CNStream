@@ -28,7 +28,9 @@
 #include <condition_variable>
 #include <cstring>
 #include <mutex>
+#include <queue>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "easycodec/easy_encode.h"
@@ -222,23 +224,32 @@ class EncodeHandler {
   bool SendVideoData(const CnFrame &frame, bool eos);
   void CopyFrame(cncodecFrame *dst, const CnFrame &input);
 
+  void ReceiveEvent(cncodecCbEventType type);
 #ifdef APP_ALLOC_BUFFER
   void AllocInputBuffer(cnvideoEncCreateInfo *params);
   void AllocOutputBuffer(cnvideoEncCreateInfo *params);
   void FreeInputBuffer(const cnvideoEncCreateInfo &params);
   void FreeOutputBuffer(const cnvideoEncCreateInfo &params);
 #endif
+  EasyEncode::Attr attr_;
+  bool send_eos_ = false;
+  bool jpeg_encode_ = false;
+
+ private:
+  void EventTaskRunner();
+
+  std::queue<cncodecCbEventType> event_queue_;
+  std::mutex event_mtx_;
+  std::condition_variable event_cond_;
+  std::thread event_loop_;
 
   cnvideoEncCreateInfo vcreate_params_;
   cnjpegEncCreateInfo jcreate_params_;
-  EasyEncode::Attr attr_;
   EasyEncode *encoder_ = nullptr;
   const FormatInfo *pixel_fmt_info_ = nullptr;
 
   void *handle_ = nullptr;
   uint64_t packet_cnt_ = 0;
-  bool jpeg_encode_ = false;
-  bool send_eos_ = false;
   bool got_eos_ = false;
   std::mutex eos_mutex_;
   std::condition_variable eos_cond_;
@@ -254,6 +265,7 @@ EncodeHandler::EncodeHandler(EasyEncode *encoder, const EasyEncode::Attr &attr) 
   } else {
     InitVideoEncode();
   }
+  event_loop_ = std::thread(&EncodeHandler::EventTaskRunner, this);
 }
 
 void EncodeHandler::InitVideoEncode() {
@@ -372,7 +384,7 @@ void EncodeHandler::InitVideoEncode() {
 void EncodeHandler::InitJpegEncode() {
   // 1. create params
   jcreate_params_.deviceId = attr_.dev_id;
-  jcreate_params_.instance = CNVIDEOENC_INSTANCE_AUTO;
+  jcreate_params_.instance = CNJPEGENC_INSTANCE_AUTO;
   jcreate_params_.pixelFmt = pixel_fmt_info_->cncodec_fmt;
   jcreate_params_.colorSpace = ColorStdCast(attr_.color_std);
   jcreate_params_.width = attr_.frame_geometry.w;
@@ -431,6 +443,10 @@ EncodeHandler::~EncodeHandler() {
     eos_cond_.wait(eos_lk, [this]() -> bool { return got_eos_; });
   }
 
+  event_cond_.notify_all();
+  if (event_loop_.joinable()) {
+    event_loop_.join();
+  }
   // destroy encoder
   if (handle_) {
     int ecode;
@@ -521,7 +537,18 @@ void EncodeHandler::ReceiveEOS() {
 }
 
 void EncodeHandler::CopyFrame(cncodecFrame *dst, const CnFrame &input) {
-  uint32_t frame_size = input.width * input.height;
+  uint32_t frame_size = 0, uv_size = 0;
+  if (input.strides[0] == 0) {
+    frame_size = input.width * input.height;
+  } else {
+    frame_size = input.strides[0] * input.height;
+  }
+  if (input.strides[1] == 0) {
+    uv_size = input.width * input.height >> 1;
+  } else {
+    uv_size = input.strides[1] * input.height >> 1;
+  }
+
   if (input.frame_size > 0) {
     MluMemoryOp mem_op;
     // cnrtRet_t cnrt_ecode = CNRT_RET_SUCCESS;
@@ -531,16 +558,16 @@ void EncodeHandler::CopyFrame(cncodecFrame *dst, const CnFrame &input) {
         VLOG(5) << "Copy frame luminance";
         mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[0].addr), input.ptrs[0], frame_size, 1);
         VLOG(5) << "Copy frame chroma";
-        mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[1].addr), input.ptrs[1], frame_size >> 1, 1);
+        mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[1].addr), input.ptrs[1], uv_size, 1);
         break;
       }
       case PixelFmt::I420: {
         VLOG(5) << "Copy frame luminance";
         mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[0].addr), input.ptrs[0], frame_size, 1);
         VLOG(5) << "Copy frame chroma 0";
-        mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[1].addr), input.ptrs[1], frame_size >> 2, 1);
+        mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[1].addr), input.ptrs[1], uv_size >> 1, 1);
         VLOG(5) << "Copy frame chroma 1";
-        mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[2].addr), input.ptrs[2], frame_size >> 2, 1);
+        mem_op.MemcpyH2D(reinterpret_cast<void *>(dst->plane[2].addr), input.ptrs[2], uv_size >> 1, 1);
         break;
       }
       case PixelFmt::ARGB:
@@ -566,7 +593,8 @@ bool EncodeHandler::SendJpegData(const CnFrame &frame, bool eos) {
     VLOG(5) << "cnjpegEncWaitAvailInputBuf timeout";
     return false;
   } else if (CNCODEC_SUCCESS != ecode) {
-    throw EasyEncodeError("Avaliable input buffer failed. Error code: " + to_string(ecode));
+    LOG(ERROR) << "Get jpeg enc avaliable input buffer failed. Error code: " + to_string(ecode);
+    return false;
   }
 
   // 2. copy data to codec
@@ -586,6 +614,9 @@ bool EncodeHandler::SendJpegData(const CnFrame &frame, bool eos) {
   input.frame.width = frame.width;
   input.frame.height = frame.height;
   input.pts = frame.pts;
+  for (uint32_t i = 0; i < frame.n_planes; ++i) {
+    input.frame.stride[i] = frame.strides[i];
+  }
   params.quality = attr_.jpeg_qfactor;
   params.restartInterval = 0;
   // 4. send data to codec
@@ -608,7 +639,8 @@ bool EncodeHandler::SendVideoData(const CnFrame &frame, bool eos) {
     LOG(ERROR) << "cnvideoEncWaitAvailInputBuf timeout";
     return false;
   } else if (CNCODEC_SUCCESS != ecode) {
-    throw EasyEncodeError("Avaliable input buffer failed. Error code: " + to_string(ecode));
+    LOG(ERROR) << "Get video enc avaliable input buffer failed. Error code: " + to_string(ecode);
+    return false;
   }
 
   // 2. copy data to codec
@@ -723,37 +755,68 @@ void EncodeHandler::FreeOutputBuffer(const cnvideoEncCreateInfo &params) {
 }
 #endif
 
+void EncodeHandler::ReceiveEvent(cncodecCbEventType type) {
+  std::lock_guard<std::mutex> lock(event_mtx_);
+  event_queue_.push(type);
+  event_cond_.notify_one();
+}
+
+void EncodeHandler::EventTaskRunner() {
+  std::unique_lock<std::mutex> lock(event_mtx_);
+  while (!event_queue_.empty() || !got_eos_) {
+    event_cond_.wait(lock, [this] { return !event_queue_.empty() || got_eos_; });
+
+    if (event_queue_.empty()) {
+      // notified by eos
+      continue;
+    }
+
+    cncodecCbEventType type = event_queue_.front();
+    event_queue_.pop();
+    lock.unlock();
+
+    switch (type) {
+      case CNCODEC_CB_EVENT_EOS:
+        ReceiveEOS();
+        break;
+      case CNCODEC_CB_EVENT_SW_RESET:
+      case CNCODEC_CB_EVENT_HW_RESET:
+        LOG(ERROR) << "Encode firmware crash event: " << type;
+        AbortEncoder();
+        break;
+      case CNCODEC_CB_EVENT_OUT_OF_MEMORY:
+        LOG(ERROR) << "Out of memory error thrown from cncodec";
+        AbortEncoder();
+        break;
+      case CNCODEC_CB_EVENT_ABORT_ERROR:
+        LOG(ERROR) << "Abort error thrown from cncodec";
+        AbortEncoder();
+        break;
+  #if CNCODEC_VERSION >= 10600
+      case CNCODEC_CB_EVENT_STREAM_CORRUPT:
+        LOG(WARNING) << "Stream corrupt, discard frame";
+        break;
+  #endif
+      default:
+        LOG(ERROR) << "Unknown event type";
+        AbortEncoder();
+        break;
+    }
+    lock.lock();
+  }
+}
+
 static int32_t EventHandler(cncodecCbEventType type, void *user_data, void *package) {
   auto handler = reinterpret_cast<EncodeHandler *>(user_data);
-  switch (type) {
-    case CNCODEC_CB_EVENT_NEW_FRAME:
-      handler->ReceivePacket(package);
-      break;
-    case CNCODEC_CB_EVENT_EOS:
-      handler->ReceiveEOS();
-      break;
-    case CNCODEC_CB_EVENT_SW_RESET:
-    case CNCODEC_CB_EVENT_HW_RESET:
-      LOG(ERROR) << "Encode firmware crash event: " << type;
-      handler->AbortEncoder();
-      break;
-    case CNCODEC_CB_EVENT_OUT_OF_MEMORY:
-      LOG(ERROR) << "Out of memory error thrown from cncodec";
-      handler->AbortEncoder();
-      break;
-    case CNCODEC_CB_EVENT_ABORT_ERROR:
-      LOG(ERROR) << "Abort error thrown from cncodec";
-      handler->AbortEncoder();
-      break;
-#if CNCODEC_VERSION >= 10600
-    case CNCODEC_CB_EVENT_STREAM_CORRUPT:
-      LOG(WARNING) << "Stream corrupt, discard frame";
-      break;
-#endif
-    default:
-      LOG(ERROR) << "Unknown event type";
-      handler->AbortEncoder();
-      break;
+  if (handler != nullptr) {
+    switch (type) {
+      case CNCODEC_CB_EVENT_NEW_FRAME:
+        handler->ReceivePacket(package);
+        break;
+      default:
+        handler->ReceiveEvent(type);
+        break;
+    }
   }
   return 0;
 }

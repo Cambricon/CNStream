@@ -50,6 +50,7 @@
 #endif
 
 DEFINE_string(data_path, "", "video file list.");
+DEFINE_string(data_name, "", "video file name.");
 DEFINE_int32(src_frame_rate, 25, "frame rate for send data");
 DEFINE_int32(wait_time, 0, "time of one test case");
 DEFINE_bool(loop, false, "display repeat");
@@ -325,7 +326,13 @@ int main(int argc, char** argv) {
   /*
     flags to variables
   */
-  std::list<std::string> video_urls = ::ReadFileList(FLAGS_data_path);
+  std::list<std::string> video_urls;
+  if (FLAGS_data_name != "") {
+    video_urls = {FLAGS_data_name};
+  } else {
+    video_urls = ::ReadFileList(FLAGS_data_path);
+  }
+
   std::string source_name = "source";  // source module name, which is defined in pipeline json config
 
   /*

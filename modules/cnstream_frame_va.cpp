@@ -455,6 +455,7 @@ void CNDataFrame::ReleaseSharedMem(MemMapType type, std::string stream_id) {
 }
 
 bool CNInferObject::AddAttribute(const std::string& key, const CNInferAttr& value) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
   if (attributes_.find(key) != attributes_.end()) return false;
 
   attributes_.insert(std::make_pair(key, value));
@@ -462,6 +463,7 @@ bool CNInferObject::AddAttribute(const std::string& key, const CNInferAttr& valu
 }
 
 bool CNInferObject::AddAttribute(const std::pair<std::string, CNInferAttr>& attribute) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
   if (attributes_.find(attribute.first) != attributes_.end()) return false;
 
   attributes_.insert(attribute);
@@ -469,21 +471,23 @@ bool CNInferObject::AddAttribute(const std::pair<std::string, CNInferAttr>& attr
 }
 
 CNInferAttr CNInferObject::GetAttribute(const std::string& key) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
   if (attributes_.find(key) != attributes_.end()) return attributes_[key];
 
   return CNInferAttr();
 }
 
 bool CNInferObject::AddExtraAttribute(const std::string& key, const std::string& value) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
   if (extra_attributes_.find(key) != extra_attributes_.end()) return false;
 
   extra_attributes_.insert(std::make_pair(key, value));
   return true;
 }
 
-bool CNInferObject::AddExtraAttribute(const std::vector<std::pair<std::string, std::string>>& attributes) {
+bool CNInferObject::AddExtraAttributes(const std::vector<std::pair<std::string, std::string>>& attributes) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
   bool ret = true;
-
   for (auto& attribute : attributes) {
     ret &= AddExtraAttribute(attribute.first, attribute.second);
   }
@@ -491,13 +495,46 @@ bool CNInferObject::AddExtraAttribute(const std::vector<std::pair<std::string, s
 }
 
 std::string CNInferObject::GetExtraAttribute(const std::string& key) {
-  if (extra_attributes_.find(key) != extra_attributes_.end()) return extra_attributes_[key];
-
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
+  if (extra_attributes_.find(key) != extra_attributes_.end()) {
+    return extra_attributes_[key];
+  }
   return "";
 }
 
-void CNInferObject::AddFeature(const CNInferFeature& feature) { features_.push_back(feature); }
+bool CNInferObject::RemoveExtraAttribute(const std::string& key) {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
+  if (extra_attributes_.find(key) != extra_attributes_.end()) {
+    extra_attributes_.erase(key);
+  }
+  return true;
+}
 
-ThreadSafeVector<CNInferFeature> CNInferObject::GetFeatures() { return features_; }
+StringPairs CNInferObject::GetExtraAttributes() {
+  std::lock_guard<std::mutex> lk(attribute_mutex_);
+  return StringPairs(extra_attributes_.begin(), extra_attributes_.end());
+}
+
+bool CNInferObject::AddFeature(const std::string &key, const CNInferFeature &feature) {
+  std::lock_guard<std::mutex> lk(feature_mutex_);
+  if (features_.find(key) != features_.end()) {
+    return false;
+  }
+  features_.insert(std::make_pair(key, feature));
+  return true;
+}
+
+CNInferFeature CNInferObject::GetFeature(const std::string &key) {
+  std::lock_guard<std::mutex> lk(feature_mutex_);
+  if (features_.find(key) != features_.end()) {
+    return features_[key];
+  }
+  return CNInferFeature();
+}
+
+CNInferFeatures CNInferObject::GetFeatures() {
+  std::lock_guard<std::mutex> lk(feature_mutex_);
+  return CNInferFeatures(features_.begin(), features_.end());
+}
 
 }  // namespace cnstream

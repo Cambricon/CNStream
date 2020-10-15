@@ -119,7 +119,7 @@ After finished prerequisites, you can build instructions with the following step
    | RELEASE              | ON / OFF                                 | ON      | release / debug             |
    | WITH_FFMPEG          | ON / OFF                                 | ON      | build with FFMPEG           |
    | WITH_OPENCV          | ON / OFF                                 | ON      | build with OPENCV           |
-   | WITH_CHINESE         | ON / OFF                                 | OFF     | build with CHINESE          |
+   | WITH_FREETYPE        | ON / OFF                                 | OFF     | build with FREETYPE         |
    | WITH_RTSP            | ON / OFF                                 | ON      | build with RTSP             |
 
 3. If you want to build CNStream samples:
@@ -134,7 +134,14 @@ After finished prerequisites, you can build instructions with the following step
       ```bash
       cmake -DCMAKE_TOOLCHAIN_FILE=${CNSTREAM_DIR}/cmake/cross-compile.cmake ${CNSTREAM_DIR}
       ```
-      Note: you need to configure toolchain by yourself in cross-compile.cmake
+      Note: you need to configure toolchain by yourself in cross-compile.cmake and cross-compile gflags, glog, opencv, ffmpeg and install them into ${CNSTREAM_DIR}
+
+      take MLU220_SOC as example:
+
+      ```bash
+      cmake ${CNSTREAM_DIR} -DCMAKE_TOOLCHAIN_FILE=${CNSTREAM_DIR}/cmake/cross-compile.cmake -Dbuild_tests=OFF -Dbuild_track=OFF -DWITH_TRACKER=OFF -DENABLE_KCF=OFF -DMLU=MLU220_SOC
+      ```
+
 4. Run the following command to build instructions:
 
       ```bash
@@ -146,9 +153,6 @@ After finished prerequisites, you can build instructions with the following step
      make
      make install
      ```
-
-
-
 
 ## Samples ##
 

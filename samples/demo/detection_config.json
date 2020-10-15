@@ -35,7 +35,7 @@
     "next_modules" : ["displayer"],
     "show_perf_info" : true,
     "custom_params" : {
-      "chinese_label_flag" : "false", 
+      // "chinese_font_path" : "/user/include/wqy_zenhei.ttf",
       "label_path" : "../../data/models/MLU270/Primary_Detector/ssd/label_voc.txt"
     }
   },

@@ -250,6 +250,13 @@ class Pipeline {
    */
   Module* GetModule(const std::string& moduleName);
   /**
+   * @brief Gets end module in pipeline(only valid when pipeline graph converged at end module).
+   *
+   * @return Returns endmodule pointer when endmodule found and pipeline graph is converged at it,
+   *   otherwise return nullptr.
+   */
+  Module* GetEndModule();
+  /**
    * Gets parameter set of a module.
    * Module parameter set is used in Module::Open. It provides the ability for modules to
    * customize parameters.

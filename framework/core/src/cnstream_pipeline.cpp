@@ -663,11 +663,25 @@ Module* Pipeline::GetModule(const std::string& moduleName) {
   return nullptr;
 }
 
+Module* Pipeline::GetEndModule() {
+  std::string end_node_name;
+  for (auto& it : modules_) {
+    const std::string node_name = it.first;
+    ModuleAssociatedInfo& module_info = it.second;
+    if (0 == module_info.down_nodes.size()) {
+      end_node_name = end_node_name.empty() ? node_name : "";
+    }
+  }
+
+  if (!end_node_name.empty()) return modules_map_[end_node_name].get();
+  return nullptr;
+}
+
 bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir,
                                  uint32_t clear_data_interval_in_minutes) {
   if (perf_running_) return false;
   if (db_dir.empty()) db_dir = "perf_database";
-  PerfManager::PrepareDbFileDir(db_dir + "/");
+  PerfManager::CreateDir(db_dir + "/");
 
   SetStartAndEndNodeNames();
   std::vector<std::string> module_names = GetModuleNames();

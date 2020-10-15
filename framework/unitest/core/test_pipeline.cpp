@@ -1100,6 +1100,15 @@ TEST(CorePipeline, CreatePerfManager) {
   EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, ""));
   EXPECT_TRUE(pipeline.Start());
   EXPECT_TRUE(pipeline.Stop());
+  remove(gTestPerfDir.c_str());
+  PerfManager::CreateDir(gTestPerfDir);
+  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, ""));
+  EXPECT_TRUE(pipeline.Start());
+  EXPECT_TRUE(pipeline.Stop());
+  remove(gTestPerfDir.c_str());
+  EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, ""));
+  EXPECT_TRUE(pipeline.Start());
+  EXPECT_TRUE(pipeline.Stop());
 }
 
 

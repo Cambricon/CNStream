@@ -250,35 +250,20 @@ TEST(CoreFrame, InferObjGetExtraAttribute) {
 
 TEST(CoreFrame, InferObjAddAndGetfeature) {
   CNInferObject infer_obj;
-  CNInferFeature infer_feature1;
-  infer_feature1.data = std::make_shared<float>(0.1);
-  infer_feature1.size = 1;
-  CNInferFeature infer_feature2;
-  infer_feature2.data = std::make_shared<float>(0.2);
-  infer_feature2.size = 1;
 
+  CNInferFeature infer_feature1{1, 2, 3, 4, 5};
 
-  // CNInferFeature infer_feature1;
-  // infer_feature1 = {1, 2, 3, 4, 5};
-
-  // CNInferFeature infer_feature2;
-  // infer_feature2 = {1, 2, 3, 4, 5, 6, 7};
+  CNInferFeature infer_feature2{1, 2, 3, 4, 5, 6, 7};
 
   // add feature successfully
-  EXPECT_NO_THROW(infer_obj.AddFeature(infer_feature1));
-  EXPECT_NO_THROW(infer_obj.AddFeature(infer_feature2));
+  EXPECT_NO_THROW(infer_obj.AddFeature("feature1", infer_feature1));
+  EXPECT_NO_THROW(infer_obj.AddFeature("feature2", infer_feature2));
 
   // get features
-  ThreadSafeVector<CNInferFeature> features = infer_obj.GetFeatures();
+  CNInferFeatures features = infer_obj.GetFeatures();
   EXPECT_EQ(features.size(), (uint32_t)2);
-  EXPECT_EQ(features[0].size, infer_feature1.size);
-  EXPECT_EQ(*(features[0].data.get()), *(infer_feature1.data.get()));
-
-  EXPECT_EQ(features[1].size, infer_feature2.size);
-  EXPECT_EQ(*(features[1].data.get()), *(infer_feature2.data.get()));
-
-  // EXPECT_EQ(features[0], infer_feature1);
-  // EXPECT_EQ(features[1], infer_feature2);
+  EXPECT_EQ(infer_obj.GetFeature("feature1"), infer_feature1);
+  EXPECT_EQ(infer_obj.GetFeature("feature2"), infer_feature2);
 }
 
 TEST(CoreFrame, SetAndGetFlowDepth) {

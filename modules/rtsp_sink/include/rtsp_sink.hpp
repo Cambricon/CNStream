@@ -27,12 +27,13 @@
 
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
-#include "rtsp_sink_stream.hpp"
 
 namespace cnstream {
 
+struct RtspSinkContext;
+
+/// Pointer for frame info
 using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
-using RtspSinkContext = std::shared_ptr<RtspSinkJoinStream>;
 
 /**
  * @brief The enum of color format
@@ -139,9 +140,9 @@ class RtspSink : public Module, public ModuleCreator<RtspSink> {
   bool CheckParamSet(const ModuleParamSet& paramSet) const override;
 
  private:
-  RtspSinkContext GetRtspSinkContext(CNFrameInfoPtr data);
+  RtspSinkContext* GetRtspSinkContext(CNFrameInfoPtr data);
   RtspParam GetRtspParam(CNFrameInfoPtr data);
-  RtspSinkContext CreateRtspSinkContext(CNFrameInfoPtr data, int channel_idx);
+  RtspSinkContext* CreateRtspSinkContext(CNFrameInfoPtr data);
   void SetParam(const ModuleParamSet& paramSet, std::string name, int* variable, int default_value);
   void SetParam(const ModuleParamSet& paramSet, std::string name, std::string* variable, std::string default_value);
 
@@ -149,8 +150,8 @@ class RtspSink : public Module, public ModuleCreator<RtspSink> {
 
   bool is_mosaic_style_ = false;
 
-  std::mutex ctx_lock_;
-  std::unordered_map<int, RtspSinkContext> ctxs_;
+  RwLock rtsp_lock_;
+  std::unordered_map<int, RtspSinkContext*> contexts_;
 };  // class RtspSink
 
 }  // namespace cnstream

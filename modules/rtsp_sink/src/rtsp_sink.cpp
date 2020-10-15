@@ -19,6 +19,7 @@
  *************************************************************************/
 
 #include "rtsp_sink.hpp"
+#include "rtsp_sink_stream.hpp"
 
 #include <memory>
 #include <sstream>
@@ -28,8 +29,13 @@
 
 namespace cnstream {
 
-RtspSinkContext RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {
-  RtspSinkContext ctx = nullptr;
+struct RtspSinkContext {
+  std::unique_ptr<RtspSinkJoinStream> rtsp_stream_ = nullptr;
+};
+
+RtspSinkContext* RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {
+  RtspSinkContext* ctx = nullptr;
+  RwLockWriteGuard lg(rtsp_lock_);
   if (is_mosaic_style_) {
     if (data->GetStreamIndex() >= static_cast<uint32_t>(params_.view_cols * params_.view_rows)) {
       LOG(INFO) << "================================================================================";
@@ -39,38 +45,40 @@ RtspSinkContext RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {
       return nullptr;
     }
 
-    ctx_lock_.lock();
-    auto search = ctxs_.find(0);
-    if (search != ctxs_.end()) {
+    auto search = contexts_.find(0);
+    if (search != contexts_.end()) {
       ctx = search->second;
     } else {
-      ctx = CreateRtspSinkContext(data, 0);
+      ctx = CreateRtspSinkContext(data);
+      contexts_[0] = ctx;
     }
-    ctx_lock_.unlock();
   } else {
-    ctx_lock_.lock();
-    auto search = ctxs_.find(data->GetStreamIndex());
-    if (search != ctxs_.end()) {
+    uint32_t channel_idx = data->GetStreamIndex();
+    auto search = contexts_.find(channel_idx);
+    if (search != contexts_.end()) {
       ctx = search->second;
     } else {
-      ctx = CreateRtspSinkContext(data, data->GetStreamIndex());
+      ctx = CreateRtspSinkContext(data);
+      contexts_[channel_idx] = ctx;
     }
-    ctx_lock_.unlock();
   }
   return ctx;
 }
 
-RtspSinkContext RtspSink::CreateRtspSinkContext(CNFrameInfoPtr data, int channel_idx) {
-  RtspSinkContext ctx = std::make_shared<RtspSinkJoinStream>();
-  RtspParam rtsp_param = GetRtspParam(data);
+RtspSinkContext* RtspSink::CreateRtspSinkContext(CNFrameInfoPtr data) {
+  RtspSinkContext* context = new RtspSinkContext();
+  RtspSinkJoinStream* rtsp_sink = new RtspSinkJoinStream();
+  context->rtsp_stream_.reset(rtsp_sink);
 
-  bool ret = ctx->Open(rtsp_param);
+  RtspParam rtsp_param = GetRtspParam(data);
+  bool ret = context->rtsp_stream_->Open(rtsp_param);
+
   if (!ret) {
+    delete context;
     LOG(ERROR) << "[RtspSink] Open rtsp stream failed. Invalid parameter";
     return nullptr;
   }
-  ctxs_[channel_idx] = ctx;
-  return ctx;
+  return context;
 }
 
 RtspParam RtspSink::GetRtspParam(CNFrameInfoPtr data) {
@@ -164,28 +172,24 @@ bool RtspSink::Open(ModuleParamSet paramSet) {
     SetParam(paramSet, "view_cols", &params_.view_cols, 4);
     SetParam(paramSet, "view_rows", &params_.view_rows, 4);
   }
-
   return true;
 }
 
 void RtspSink::Close() {
-  if (ctxs_.empty()) {
-    return;
+  for (auto& it : contexts_) {
+    delete it.second;
   }
-  for (auto &it : ctxs_) {
-    it.second->Close();
-  }
-  ctxs_.clear();
+  contexts_.clear();
 }
 
 int RtspSink::Process(CNFrameInfoPtr data) {
-  RtspSinkContext ctx = GetRtspSinkContext(data);
+  RtspSinkContext* ctx = GetRtspSinkContext(data);
   if (!ctx) return -1;
   CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
   if ("cpu" == params_.preproc_type) {
     if ("bgr" == params_.color_mode || params_.color_format == BGR24) {
       cv::Mat image = *frame->ImageBGR();
-      ctx->UpdateBGR(image, data->timestamp, data->GetStreamIndex());
+      ctx->rtsp_stream_->UpdateBGR(image, data->timestamp, data->GetStreamIndex());
     } else if ("nv" == params_.color_mode) {
       uint8_t *image_data = nullptr;
       image_data = new uint8_t[frame->GetBytes()];
@@ -194,7 +198,7 @@ int RtspSink::Process(CNFrameInfoPtr data) {
       memcpy(image_data, plane_0, frame->GetPlaneBytes(0) * sizeof(uint8_t));
       memcpy(image_data + frame->GetPlaneBytes(0), plane_1, frame->GetPlaneBytes(1) * sizeof(uint8_t));
       frame->deAllocator_.reset();
-      ctx->UpdateYUV(image_data, data->timestamp);
+      ctx->rtsp_stream_->UpdateYUV(image_data, data->timestamp);
       delete[] image_data;
       image_data = nullptr;
     } else {

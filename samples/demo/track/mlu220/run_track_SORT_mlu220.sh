@@ -9,9 +9,9 @@
 # @notice: other flags see ${SAMPLES_DIR}/detection --help
 #*************************************************************************#
 
-CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
-SAMPLES_DIR=$CURRENT_DIR/../../..
-MODEL_PATH=$CURRENT_DIR/../../../../data/models/MLU220/Primary_Detector/YOLOv3/
+CURRENT_FILE=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
+SAMPLES_DIR=$CURRENT_FILE/../../..
+MODEL_PATH=$CURRENT_FILE/../../../../data/models/MLU220/Primary_Detector/YOLOv3/
 MODEL_NAME=yolov3_argb_bs4core4.cambricon
 mkdir -p $MODEL_PATH
 
@@ -24,11 +24,11 @@ cd $MODEL_PATH
 cd -
 
 source ${SAMPLES_DIR}/demo/env.sh
-mkdir -p output
+mkdir -p $CURRENT_FILE/output
 ${SAMPLES_DIR}/bin/demo \
     --data_path ${SAMPLES_DIR}/demo/files.list_video \
     --src_frame_rate 30 \
     --wait_time 0 \
     --loop=false \
-    --config_fname "track_SORT_mlu220_config.json" \
+    --config_fname "$CURRENT_FILE/track_SORT_mlu220_config.json" \
     --alsologtostderr

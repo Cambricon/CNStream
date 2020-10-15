@@ -28,29 +28,29 @@
 #include <vector>
 
 #include "cnstream_frame_va.hpp"
-#include "encoder.hpp"
+#include "encode.hpp"
 #include "test_base.hpp"
 
 namespace cnstream {
-static constexpr const char *gname = "encoder";
+static constexpr const char *gname = "encode";
 
 TEST(EncoderModule, OpenClose) {
-  Encoder module(gname);
+  Encode module(gname);
   ModuleParamSet params;
 
   params.clear();
   EXPECT_TRUE(module.Open(params));
+  module.Close();
 
-  params["dump_dir"] = GetExePath();
+  params["output_dir"] = GetExePath();
   EXPECT_TRUE(module.Open(params));
   module.Close();
-  // module.Process(nullptr);
 }
 
 TEST(EncoderModule, Process) {
-  std::shared_ptr<Module> ptr = std::make_shared<Encoder>(gname);
+  std::shared_ptr<Module> ptr = std::make_shared<Encode>(gname);
   ModuleParamSet params;
-  params["dump_dir"] = GetExePath();
+  params["output_dir"] = GetExePath();
   EXPECT_TRUE(ptr->Open(params));
   // prepare data
   int width = 1920;
@@ -69,20 +69,21 @@ TEST(EncoderModule, Process) {
   frame->fmt = CN_PIXEL_FORMAT_BGR24;
   frame->CopyToSyncMem();
   data->datas[CNDataFramePtrKey] = frame;
-  EXPECT_EQ(ptr->Process(data), 0);
+  EXPECT_EQ(ptr->Process(data), 1);
   ptr->Close();
 
-  params["dump_type"] = "image";
+  params["codec_type"] = "jpeg";
+  params.clear();
   EXPECT_TRUE(ptr->Open(params));
-  EXPECT_EQ(ptr->Process(data), 0);
+  EXPECT_EQ(ptr->Process(data), 1);
   ptr->Close();
 }
 
 TEST(EncoderModule, CheckParamSet) {
-  Encoder module(gname);
+  Encode module(gname);
   ModuleParamSet params;
-  params["dump_dir"] = GetExePath();
-  params["dump_type"] = "image";
+  params["output_dir"] = GetExePath();
+  params["codec_type"] = "jpeg";
   EXPECT_TRUE(module.CheckParamSet(params));
 
   params["fake_key"] = "fake_value";

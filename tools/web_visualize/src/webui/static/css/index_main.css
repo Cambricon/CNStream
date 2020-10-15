@@ -1,0 +1,349 @@
+body {
+    display: flex;
+    display: -webkit-flex;
+    flex-direction: column;
+}
+
+.cnstream-head-container {
+    width: 100%;
+    height: 80px;
+    position: relative;
+ }
+ .ai-module-header {
+    width: 100%;
+    position: absolute;
+    bottom: 0px;
+    line-height: 46px;
+    font-size: 32px;
+    color: #000;
+    letter-spacing: 0;
+    text-align: center;
+}
+ .cnstream-settings {
+    display: flex;
+    display: -webkit-flex;
+    flex-direction: row;
+    align-items: flex-end;
+}
+
+.cnstream-setting-container {
+    display: inline-block;
+    width: 300px;
+    position: relative;
+    vertical-align: middle;
+    padding: 0;
+    margin-right: 5px;
+    margin-top: 30px;
+    overflow: hidden;
+    background-color: #fff;
+    color: #555;
+    border: 1px solid #aaa;
+    text-shadow: none;
+    border-radius: 4px; 
+    transition: box-shadow 0.25s ease;
+    z-index: 2;
+}
+
+.cnstream-setting-container:before {
+    content: "";
+    position: absolute;
+    width: 0;
+    height: 0;
+    border: 10px solid transparent;
+    border-top-color: #ccc;
+    top: 14px;
+    right: 10px;
+    cursor: pointer;
+    z-index: -2;
+}
+.cnstream-setting-container select {
+    cursor: pointer;
+    padding: 10px;
+    width: 100%;
+    border: none;
+    background: transparent;
+    background-image: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    font-size: 16px; 
+}
+
+#upload-file-name {
+    margin-left: auto;
+    min-width: 150px;
+    border: 2px solid #99D3F5;
+    border-radius: 8px;
+    height: 25px;
+    color: #004974;
+    padding-left: 10px;
+    padding-right: 15px;
+    padding-top: 5px;
+    font-weight: bold;
+}
+
+.choose-file {
+    margin-left: 20px;
+    height: 25px;
+    position: relative;
+    display: inline-block;
+    background: #D0EEFF;
+    border: 1px solid #99D3F5;
+    border-radius: 8px;
+    padding: 5px 12px;
+    overflow: hidden;
+    color: #1E88C7;
+    line-height: 20px;
+    font-size: 18px;
+    font-weight: bold;
+}
+.choose-file input {
+    position: absolute;
+    font-size: 100px;
+    right: 0;
+    top: 0;
+    opacity: 0;
+}
+.choose-file:hover {
+    background: #AADFFD;
+    border-color: #78C3F3;
+    color: #004974;
+    text-decoration: none;
+}
+
+#prompt-message {
+    width: 100%;
+    text-align: center;
+    font-size: 22px;
+    font-weight: bold;
+    background-color: rgba(255, 145, 1, 0.89);
+    color: white;
+}
+
+.ai-demo-tab {
+    display: flex;
+    display: -webkit-flex;
+    flex-direction: row;
+    align-items: flex-start;
+    margin-top: 40px;
+    height: 100%;
+}
+.demo-preview,
+.demo-status {
+    width: 290px;
+    height: 40px;
+    text-align: center;
+    cursor: pointer;
+
+}
+
+.preview-title,
+.status-title {
+    font-weight: bold;
+    font-size: 20px;
+    font-family: Arial, Helvetica, sans-serif;
+    padding: 10px;
+    padding-bottom: 6px;
+    text-align: center;
+}
+
+.demo-status,
+.demo-preview {
+    border-top-left-radius: 20px;
+    background-color: rgb(186, 216, 213);
+    border-top: 2px solid rgb(186, 216, 213);
+    border-left: 2px solid rgb(186, 216, 213);
+    border-right: 2px solid rgb(186, 216, 213);
+}
+
+.demo-preview :hover,
+.demo-status :hover{
+    border-top-left-radius: 20px;
+    background-color: rgb(233, 241, 241);
+}
+
+.demo-preview :active,
+.demo-status :active{
+    background-color: rgb(104, 148, 148);
+    transition: 100ms;
+
+}
+
+.demo-status {
+    background-color: white;
+}
+
+
+.btn-design {
+    width:170px;
+    height:42px;
+    border: 1px solid #3D9DF0;
+    color: #fff;
+    background: #2196f3;
+    text-align:center;
+    font-size: 16px;
+    border-radius: 15px;
+    outline: 0;
+    cursor: pointer;
+    font-weight: bold;
+    margin-left: 20px;
+}
+
+.button-design button:hover {
+  background: #0960a5;
+    font-size: 18px;
+    transition: 200ms;
+}
+.button-design button:active {
+  background: #042844;
+    font-size: 18px;
+    transition: 200ms;
+}
+
+.btn-run,
+.btn-stop {
+    width:100px;
+    height:42px;
+    color: #fff;
+    background: #8ec725d0;
+    border: 1px solid #8ec725d0;
+    text-align:center;
+    font-size: 17px;
+    border-radius: 15px;
+    outline: 0;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: -5px;
+}
+
+.button-run {
+    margin-left: auto;
+}
+
+.button-run button:hover{
+    background: #519115d0;
+    font-size: 20px;
+    transition: 200ms;
+}
+
+.button-run button:active {
+  background: #003300;
+    font-size: 20px;
+    transition: 200ms;
+}
+
+.btn-stop {
+    background: rgb(211, 80, 80);
+    border: 1px solid rgb(211, 80, 80);
+}
+
+.button-stop {
+    margin-left: 20px;
+    margin-right: 5px;
+}
+
+.button-stop button:hover{
+    background: rgb(160, 17, 17);
+    font-size: 20px;
+    transition: 200ms;
+}
+
+.button-stop button:active {
+    background: #003300;
+    font-size: 20px;
+    transition: 200ms;
+}
+
+.ai-module-demo {
+    margin-left: 50px;
+    margin-right: 50px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+.ai-module-demo-container {
+    display: flex;
+    display: -webkit-flex;
+    flex-direction: row;
+    align-items: flex-start;
+    height: 100%;
+}
+
+.demo-json {
+    float: left;
+    width: 600px;
+    height: 100%;
+    word-wrap: break-word;
+    word-break: break-all;
+    background-color: #fafafa;
+    margin-right: 20px;
+}
+
+.demo-json-title {
+    font-size: 16px
+}
+
+.demo-json-text {
+    width: 100%;
+    margin-top: 10px;
+    color: #666;
+    line-height: 21px
+}
+
+.demo-json-content {
+    white-space: pre-wrap;
+    font-size: 14px;
+    color: #404040;
+    line-height: 24px;
+    margin-top: 8px
+}
+
+
+.preview-container {
+    display: block;
+}
+
+#json {
+    width: 98%;
+    height: 90%;
+    display: none;
+    font-size: 12px;
+}
+
+.preview-container {
+    position: relative;
+    width: 1080px;
+    height: 620px;
+    background: #343434;
+}
+
+#demo-result {
+    margin-top: 0px;
+    width: 100%;
+    height: 100%;
+}
+
+/*
+#demo-source-image {
+    position: absolute;
+    max-width: 100%;
+    max-height: 100%;
+    margin: auto;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: none;
+}
+
+#demo-source-video {
+    margin-top: -20px;
+    width: 100%;
+    height: 100%;
+    display: none;
+}
+*/
+.footer-container {
+    position: absolute;
+    bottom: 10px;
+    left: 20px;
+}
