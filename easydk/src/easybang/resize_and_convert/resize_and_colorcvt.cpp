@@ -43,7 +43,7 @@ void FreeKernelParam(KernelParam* param);
 
 extern
 float ResizeAndConvert(void* dst, void** y_plane_addrs, void** uv_plane_addrs,
-                       int **src_whs, int** src_rois,
+                       int **src_whs, int** src_rois_mlu, int* src_rois_cpu,
                        KernelParam* kparam, cnrtFunctionType_t func_type,
                        cnrtDim3_t dim, cnrtQueue_t queue, int dev_type,
                        string* estr);
@@ -153,20 +153,13 @@ bool MluResizeConvertOp::Init(const MluResizeConvertOp::Attr& attr) {
   delete[] wh_mlu_ptrs_tmp;
   delete[] roi_mlu_ptrs_tmp;
 
-  int core_number = attr.core_number == 0 ? attr.batch_size : attr.core_number;
+  int core_number = attr.core_number == 0 ? 4 : attr.core_number;
 
   switch (core_number) {
     case 1:
-      d_ptr_->ftype_ = CNRT_FUNC_TYPE_BLOCK;
-      break;
     case 4:
-      d_ptr_->ftype_ = CNRT_FUNC_TYPE_UNION1;
-      break;
     case 8:
-      d_ptr_->ftype_ = CNRT_FUNC_TYPE_UNION2;
-      break;
     case 16:
-      d_ptr_->ftype_ = CNRT_FUNC_TYPE_UNION4;
       break;
     default:
       d_ptr_->estr_ = "Unsupport core number. Only support 1, 4, 8, 16";
@@ -254,22 +247,6 @@ void MluResizeConvertOp::BatchingUp(const InputData& input_data) {
   t.planes[0] = input_data.planes[0];
   t.planes[1] = input_data.planes[1];
 
-  /**
-   * check unsupported situations
-   * case 1: width is greater than MAXIMUM_WIDTH
-   * case 2: scale-up factor is greater than MAXIMUM_SCALE_UP_FACTOR
-   **/
-  if (t.crop_w > MAXIMUM_WIDTH) {
-    throw RCOpWidthOverLimitError(GetAttr(), t);
-  }
-
-  float scale_factor = GetAttr().keep_aspect_ratio ?
-                       std::min(1.0f * GetAttr().dst_w / t.crop_w, 1.0f * GetAttr().dst_h / t.crop_h) :
-                       1.0f * GetAttr().dst_w / t.crop_w;
-  if (scale_factor > MAXIMUM_SCALE_UP_FACTOR) {
-    throw RCOpScaleUpError(GetAttr(), t);
-  }
-
   d_ptr_->input_datas_cache_.push_back(t);
 }
 
@@ -322,15 +299,16 @@ bool MluResizeConvertOp::SyncOneOutput(void* dst) {
                      CNRT_MEM_TRANS_DIR_HOST2DEV);
   CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy rois failed. Error code:" + std::to_string(cnret), {}, false);
   cnrtDim3_t dim;
-  dim.x = d_ptr_->attr_.core_number;
-  dim.y = 1;
+  dim.x = 4;
+  dim.y = d_ptr_->attr_.core_number >= 4 ? d_ptr_->attr_.core_number / 4 : 1;
   dim.z = 1;
 
   VLOG(5) << "Do resize and convert process, dst: " << dst;
   bool ret =
       -1 != ::ResizeAndConvert(dst, d_ptr_->y_ptrs_mlu_, d_ptr_->uv_ptrs_mlu_,
                                d_ptr_->src_whs_mlu_, d_ptr_->src_rois_mlu_,
-                               d_ptr_->kparam_, d_ptr_->ftype_, dim,
+                               d_ptr_->src_rois_cpu_,
+                               d_ptr_->kparam_, CNRT_FUNC_TYPE_UNION1, dim,
                                d_ptr_->queue_->queue,
                                static_cast<int>(d_ptr_->attr_.core_version),
                                &d_ptr_->estr_);

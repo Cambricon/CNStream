@@ -372,7 +372,7 @@ void EncodeHandler::InitVideoEncode() {
 void EncodeHandler::InitJpegEncode() {
   // 1. create params
   jcreate_params_.deviceId = attr_.dev_id;
-  jcreate_params_.instance = CNVIDEOENC_INSTANCE_AUTO;
+  jcreate_params_.instance = CNJPEGENC_INSTANCE_AUTO;
   jcreate_params_.pixelFmt = pixel_fmt_info_->cncodec_fmt;
   jcreate_params_.colorSpace = ColorStdCast(attr_.color_std);
   jcreate_params_.width = attr_.frame_geometry.w;

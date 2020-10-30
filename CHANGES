@@ -1,3 +1,5 @@
+changes for 5.1.1
+* cpu decoder support all pixel formats
 changes for 5.1.0
 * fix memory leak in inferencer module.(both mlu memory and cpu memory)
 * inferencer module support dump resized images.
