@@ -1,3 +1,9 @@
+changes for 5.2.0
+* cnencode support JPEG encode
+* add web visualization tool
+* static link sqlite
+* remove threadsafe_vector and threadsafe_map
+
 changes for 5.1.0
 * fix memory leak in inferencer module.(both mlu memory and cpu memory)
 * inferencer module support dump resized images.
