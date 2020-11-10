@@ -59,8 +59,7 @@ class ImageReceiver : public cnstream::Module, public cnstream::ModuleCreator<Im
   void Close() override {}
 
   int Process(std::shared_ptr<cnstream::CNFrameInfo> data) override {
-    cnstream::CNDataFramePtr frame =
-      cnstream::any_cast<cnstream::CNDataFramePtr>(data->datas[cnstream::CNDataFramePtrKey]);
+    cnstream::CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
     frames.push_back(frame);
     return 0;
   }

@@ -37,7 +37,7 @@
 
 static constexpr int CNDataFramePtrKey = 0;
 struct CNDataFrame {
-  int frame_id;
+  uint64_t frame_id;
 };
 
 class ExampleModuleSource : public cnstream::SourceModule, public cnstream::ModuleCreator<ExampleModuleSource> {
@@ -53,10 +53,6 @@ class ExampleModuleSource : public cnstream::SourceModule, public cnstream::Modu
     return true;
   }
   void Close() override { std::cout << this->GetName() << " Close called" << std::endl; }
-
- private:
-  ExampleModuleSource(const ExampleModuleSource &) = delete;
-  ExampleModuleSource &operator=(ExampleModuleSource const &) = delete;
 };
 
 class ExampleSourceHandler : public cnstream::SourceHandler {
@@ -64,26 +60,40 @@ class ExampleSourceHandler : public cnstream::SourceHandler {
   explicit ExampleSourceHandler(cnstream::SourceModule *source, const std::string &stream_id)
       : cnstream::SourceHandler(source, stream_id) {}
   bool Open() override {
-    thread_id_ = std::thread([&]() {
-      std::string stream_id = this->GetStreamId();
-      for (int i = 0; i < 10; i++) {
+    thread_id_ = std::thread([=]() {
+      uint64_t i = 0;
+      while (!exit_flag_) {
         auto data = this->CreateFrameInfo();
         // user-defined data structure CNFrameData instance to cnstream::any...
         std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame);
-        frame->frame_id = i;
+        frame->frame_id = i++;
         data->datas[CNDataFramePtrKey] = frame;
-        this->SendData(data);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        data->timestamp = frame->frame_id;  // for debug ...
+        data->SetStreamIndex(stream_index_);
+        if (this->SendData(data) != true) {
+          break;
+        }
+        std::this_thread::yield();
       }
+      LOG(INFO) << "Source Send EOS..." << GetStreamId();
       auto data_eos = this->CreateFrameInfo(true);
+      data_eos->SetStreamIndex(stream_index_);
       this->SendData(data_eos);
+      LOG(INFO) << "Source Send EOS..." << GetStreamId() << " Done";
     });
     return true;
   }
-  void Close() override { thread_id_.join(); }
+  void Close() override {
+    // LOG(INFO) << "ExampleSourceHandler::Close() called..." << GetStreamId();
+    exit_flag_ = 1;
+    if (thread_id_.joinable()) {
+      thread_id_.join();
+    }
+  }
 
  private:
   std::thread thread_id_;
+  volatile int exit_flag_ = 0;
 };
 
 class ExampleModule : public cnstream::Module, public cnstream::ModuleCreator<ExampleModule> {
@@ -100,15 +110,23 @@ class ExampleModule : public cnstream::Module, public cnstream::ModuleCreator<Ex
   }
   void Close() override { std::cout << this->GetName() << " Close called" << std::endl; }
   int Process(std::shared_ptr<cnstream::CNFrameInfo> data) override {
-    auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data->datas[CNDataFramePtrKey]);
-    std::cout << this->GetName() << " process: " << data->stream_id << "********anycast********* " << frame->frame_id;
-    std::cout << std::endl;
+    // auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data->datas[CNDataFramePtrKey]);
+    // std::cout << this->GetName() << " process: " << data->stream_id
+    // std::cout << "********anycast********* " << frame->frame_id;
+    // std::cout << std::endl;
+    if (cnstream::IsStreamRemoved(data->stream_id)) {
+      LOG(ERROR) << "SHOULD NOT BE SHOWN_____Process ---- stream removed";
+      return 0;
+    }
+    // LOG(INFO) << "Process  ...Done" << GetName() << ": " << data->stream_id << ", " << data->timestamp;
+    usleep(1000 * 1000);
+    // LOG(INFO) << "Process  ...Done" << GetName() << ": " << data->stream_id << ", " << data->timestamp;
     return 0;
   }
 
- private:
-  ExampleModule(const ExampleModule &) = delete;
-  ExampleModule &operator=(ExampleModule const &) = delete;
+  void OnEos(const std::string &stream_id) override {
+    LOG(INFO) << this->GetName() << " OnEos flow-EOS arrived:  " << stream_id;
+  }
 };
 
 class ExampleModuleEx : public cnstream::ModuleEx, public cnstream::ModuleCreator<ExampleModuleEx> {
@@ -131,17 +149,19 @@ class ExampleModuleEx : public cnstream::ModuleEx, public cnstream::ModuleCreato
     for (auto &thread : threads_) {
       thread.join();
     }
-    std::cout << this->GetName() << " Close called" << std::endl;
+    LOG(INFO) << this->GetName() << " Close called";
   }
   int Process(FrameInfoPtr data) override {
-    {
-      if (data->IsEos()) {
-        std::cout << this->GetName() << " process: " << data->stream_id << "--EOS" << std::endl;
-      } else {
-        auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data->datas[CNDataFramePtrKey]);
-        std::cout << this->GetName() << " process: " << data->stream_id << "--" << frame->frame_id;
+    if (data->IsEos()) {
+      LOG(INFO) << this->GetName() << " process: " << data->stream_id << "--EOS";
+    } else {
+      // auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data->datas[CNDataFramePtrKey]);
+      // std::cout << this->GetName() << " process: " << data->stream_id << "--" << frame->frame_id;
+     // std::cout << " : " << std::this_thread::get_id() << std::endl;
+
+      if (data->IsRemoved()) {
+        return 0;
       }
-      std::cout << " : " << std::this_thread::get_id() << std::endl;
     }
     // handle data in background threads...
     q_.Push(data);
@@ -151,14 +171,20 @@ class ExampleModuleEx : public cnstream::ModuleEx, public cnstream::ModuleCreato
  private:
   void BackgroundProcess() {
     /*NOTE: EOS data has no invalid context,
-     *    All data recevied including EOS must be forwarded.i
+     *    All data recevied including EOS must be forwarded.
      */
     std::vector<FrameInfoPtr> eos_datas;
     std::vector<FrameInfoPtr> datas;
-    FrameInfoPtr data;
     while (running_.load()) {
-      bool value = q_.WaitAndTryPop(data, std::chrono::milliseconds(100));
-      if (!value) continue;
+      FrameInfoPtr data = nullptr;  // NOTE: FrameInfoPtr is shared_ptr !!!
+      bool value = q_.WaitAndTryPop(data, std::chrono::milliseconds(20));
+      if (!value) {
+        continue;
+      }
+
+      if (data->IsEos()) {
+        LOG(INFO) << this->GetName() << " BackgroundProcess: " << data->stream_id << "--EOS";
+      }
 
       /*gather data*/
       if (!(data->IsEos())) {
@@ -167,14 +193,20 @@ class ExampleModuleEx : public cnstream::ModuleEx, public cnstream::ModuleCreato
         eos_datas.push_back(data);
       }
 
-      if (datas.size() == 4 || (data->flags & cnstream::CN_FRAME_FLAG_EOS)) {
+      // drop packets for removed-stream
+      //    flush the buffered packets
+      if (cnstream::IsStreamRemoved(data->stream_id)) {
+        datas.clear();
+      }
+
+      if (datas.size() == 4 || (data->IsEos())) {
         /*process data...and then forward
          */
         for (auto &v : datas) {
           this->TransmitData(v);
-          auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(v->datas[CNDataFramePtrKey]);
-          std::cout << this->GetName() << " forward: " << v->stream_id << "--" << frame->frame_id;
-          std::cout << " : " << std::this_thread::get_id() << std::endl;
+          // auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(v->datas[CNDataFramePtrKey]);
+          // std::cout << this->GetName() << " forward: " << v->stream_id << "--" << frame->frame_id;
+          // std::cout << " : " << std::this_thread::get_id() << std::endl;
         }
         datas.clear();
       }
@@ -182,8 +214,7 @@ class ExampleModuleEx : public cnstream::ModuleEx, public cnstream::ModuleCreato
       /*forward EOS*/
       for (auto &v : eos_datas) {
         this->TransmitData(v);
-        std::cout << this->GetName() << " forward: " << v->stream_id << "--EOS ";
-        std::cout << " : " << std::this_thread::get_id() << std::endl;
+        LOG(INFO) << this->GetName() << " forward: " << v->stream_id << "--EOS " << " : " << std::this_thread::get_id();
       }
       eos_datas.clear();
     }  // while
@@ -193,10 +224,6 @@ class ExampleModuleEx : public cnstream::ModuleEx, public cnstream::ModuleCreato
   cnstream::ThreadSafeQueue<FrameInfoPtr> q_;
   std::vector<std::thread> threads_;
   std::atomic<int> running_{0};
-
- private:
-  ExampleModuleEx(const ExampleModuleEx &) = delete;
-  ExampleModuleEx &operator=(ExampleModuleEx const &) = delete;
 };
 
 #endif  // EXAMPLE_MODULES_HPP_

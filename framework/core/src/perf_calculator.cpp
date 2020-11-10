@@ -342,7 +342,18 @@ PerfStats PerfCalculatorForModule::CalcThroughput(const std::string &sql_name, c
   if (print_throughput_) {
     uint32_t max_digit = PerfUtils::Max(latest_frame_cnt_digit);
     for (auto& it : latest_fps) {
-      std::cout << std::left << std::setw(15) << std::setfill(' ') << it.first;
+      std::string thread_name = it.first;
+      if (std::all_of(thread_name.begin(), thread_name.end(), ::isdigit)) {
+        if (thread_name.length() >= 6) {
+          thread_name = thread_name.substr(thread_name.length() - 6, thread_name.length());
+        }
+        thread_name = "th_" + thread_name;
+      } else {
+        if (thread_name.length() >= 15) {
+          thread_name = thread_name.substr(thread_name.length() - 15, thread_name.length());
+        }
+      }
+      std::cout << std::left << std::setw(15) << std::setfill(' ') << thread_name;
       PrintThroughput(it.second, max_digit);
     }
   }

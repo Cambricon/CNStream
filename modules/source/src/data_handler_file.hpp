@@ -21,36 +21,27 @@
 #ifndef MODULES_SOURCE_HANDLER_FILE_HPP_
 #define MODULES_SOURCE_HANDLER_FILE_HPP_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-#ifdef __cplusplus
-}
-#endif
-
 #include <chrono>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <thread>
 
-#include "data_source.hpp"
-#include "device/mlu_context.h"
-#include "ffmpeg_decoder.hpp"
 #include "cnstream_logging.hpp"
+#include "data_handler_util.hpp"
+#include "data_source.hpp"
+#include "util/video_parser.hpp"
+#include "util/video_decoder.hpp"
 
-#define DEFAULT_MODULE_CATEGORY SOURCE
 
 namespace cnstream {
 
-class FileHandlerImpl : public IHandler {
+class FileHandlerImpl : public IParserResult, public IDecodeResult, public SourceRender {
  public:
   explicit FileHandlerImpl(DataSource *module, const std::string &filename, int framerate, bool loop,
-                           FileHandler &handler)  // NOLINT
-      : module_(module), filename_(filename), framerate_(framerate), loop_(loop), handler_(handler) {
+                           FileHandler *handler)  // NOLINT
+      :SourceRender(handler), module_(module), filename_(filename),
+       framerate_(framerate), loop_(loop), handler_(*handler) {
     stream_id_ = handler_.GetStreamId();
   }
   ~FileHandlerImpl() {}
@@ -74,8 +65,16 @@ class FileHandlerImpl : public IHandler {
   bool PrepareResources(bool demux_only = false);
   void ClearResources(bool demux_only = false);
   bool Process();
-  bool Extract();
   void Loop();
+
+  // IParserResult methods
+  void OnParserInfo(VideoInfo *info) override;
+  void OnParserFrame(VideoEsFrame *frame) override;
+
+  // IDecodeResult methods
+  void OnDecodeError(DecodeErrorCode error_code) override;
+  void OnDecodeFrame(DecodeFrame *frame) override;
+  void OnDecodeEos() override;
 
   /**/
   std::atomic<int> running_{0};
@@ -83,40 +82,12 @@ class FileHandlerImpl : public IHandler {
   bool eos_sent_ = false;
 
  private:
-  // ffmpeg demuxer
-  AVFormatContext *p_format_ctx_ = nullptr;
-  AVBitStreamFilterContext *bitstream_filter_ctx_ = nullptr;
-  AVDictionary *options_ = NULL;
-  AVPacket packet_;
-  int video_index_ = -1;
-  bool first_frame_ = true;
-  bool find_pts_ = true;  // set it to true by default!
-  uint64_t pts_ = 0;
+  FFParser parser_;
   std::shared_ptr<Decoder> decoder_ = nullptr;
+  bool dec_create_failed_ = false;
+  bool decode_failed_ = false;
+  bool eos_reached_ = false;
 
- public:
-  void SendFlowEos() override {
-    if (eos_sent_) return;
-    auto data = CreateFrameInfo(true);
-    if (!data) {
-      MLOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
-      return;
-    }
-    SendFrameInfo(data);
-    eos_sent_ = true;
-  }
-
-  std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) override {
-    return handler_.CreateFrameInfo(eos);
-  }
-
-  bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) override {
-    return handler_.SendData(data);
-  }
-
-  const DataSourceParam& GetDecodeParam() const override {
-    return param_;
-  }
 #ifdef UNIT_TEST
  public:  // NOLINT
   void SetDecodeParam(const DataSourceParam &param) { param_ = param; }
@@ -157,5 +128,4 @@ class FrController {
 
 }  // namespace cnstream
 
-#undef DEFAULT_MODULE_CATEGORY
 #endif  // MODULES_SOURCE_HANDLER_FILE_HPP_

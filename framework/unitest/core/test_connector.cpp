@@ -39,14 +39,14 @@ TEST(CoreConnector, SetGetParams) {
   EXPECT_EQ(conveyor_capacity, connector.GetConveyorCapacity());
 }
 
-TEST(CoreConnectorDeathTest, GetConveyor) {
-  size_t conveyor_count = 10;
-  Connector connector(conveyor_count);
-  int idx = rand_r(&seed) % conveyor_count;
-  EXPECT_NE(nullptr, connector.GetConveyor(idx));
-  EXPECT_DEATH(connector.GetConveyor(conveyor_count + 1), "") << "conveyor vector out of range not reported";
-  EXPECT_DEATH(connector.GetConveyor(-1), "") << "conveyor vector out of range not reported";
-}
+// TEST(CoreConnectorDeathTest, GetConveyor) {
+//   size_t conveyor_count = 10;
+//   Connector connector(conveyor_count);
+//   int idx = rand_r(&seed) % conveyor_count;
+//   EXPECT_NE(nullptr, connector.GetConveyor(idx));
+//   EXPECT_DEATH(connector.GetConveyor(conveyor_count + 1), "") << "conveyor vector out of range not reported";
+//   EXPECT_DEATH(connector.GetConveyor(-1), "") << "conveyor vector out of range not reported";
+// }
 
 TEST(CoreConnector, PushPopDataBuffer) {
   size_t conveyor_count = 1;
@@ -64,6 +64,28 @@ TEST(CoreConnector, StartStop) {
   EXPECT_FALSE(connector.IsStopped());
   connector.Stop();
   EXPECT_TRUE(connector.IsStopped());
+}
+
+TEST(CoreConnector, GetConveyorSize) {
+  size_t conveyor_count = 1;
+  Connector connector(conveyor_count);
+  CNFrameInfoPtr data = CNFrameInfo::Create("stream_id_0");
+  connector.PushDataBufferToConveyor(0, data);
+  EXPECT_EQ(connector.GetConveyorSize(0), conveyor_count);
+}
+
+TEST(CoreConnector, FullEmpty) {
+  size_t conveyor_count = 1;
+  size_t conveyor_capacity = 2;
+  Connector connector(conveyor_count, conveyor_capacity);
+  EXPECT_TRUE(connector.IsConveyorEmpty(0));
+  EXPECT_FALSE(connector.IsConveyorFull(0));
+  CNFrameInfoPtr data = CNFrameInfo::Create("stream_id_0");
+  connector.PushDataBufferToConveyor(0, data);
+  CNFrameInfoPtr data1 = CNFrameInfo::Create("stream_id_0");
+  connector.PushDataBufferToConveyor(0, data1);
+  EXPECT_FALSE(connector.IsConveyorEmpty(0));
+  EXPECT_TRUE(connector.IsConveyorFull(0));
 }
 
 }  // namespace cnstream

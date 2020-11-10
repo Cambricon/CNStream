@@ -41,7 +41,7 @@ bool ImagePreproc::Init() {
   if (preproc_param_.dst_stride == 0) preproc_param_.dst_stride = preproc_param_.dst_width;
   if (preproc_param_.src_stride == 0) preproc_param_.src_stride = preproc_param_.src_width;
   if (preproc_param_.dst_stride != preproc_param_.dst_width) {
-    dst_align_ = JEPG_ENC_ALIGNMENT;
+    dst_align_ = JPEG_ENC_ALIGNMENT;
   }
   if (preproc_param_.src_stride != preproc_param_.src_width) {
     src_align_ = DEC_ALIGNMENT;
@@ -53,8 +53,8 @@ bool ImagePreproc::Init() {
         edk::MluContext context;
         try {
           context.SetDeviceId(preproc_param_.device_id);
-          context.ConfigureForThisThread();
-        } catch (edk::MluContextError &err) {
+          context.BindDevice();
+        } catch (edk::Exception &err) {
           LOG(ERROR) << "[ImagePreproc] set mlu env failed.";
           return false;
         }
@@ -435,11 +435,11 @@ bool ImagePreproc::ConvertWithFFmpeg(const uint8_t *src_buffer, const size_t src
     LOG(ERROR) << "[ImagePreproc][ConvertWithFFmpeg] src stride or src height is odd number.";
     return false;
   }
-  size_t insize =
+  size_t in_size =
       av_image_get_buffer_size(src_pix_fmt_, preproc_param_.src_width, preproc_param_.src_height, src_align_);
-  if (insize != src_buffer_size) {
+  if (in_size != src_buffer_size) {
     LOG(ERROR) << "[ImagePreproc][ConvertWithFFmpeg] The input buffer size does not match the expected size. Required:"
-               << insize << " Available: " << src_buffer_size;
+               << in_size << " Available: " << src_buffer_size;
     return false;
   }
 

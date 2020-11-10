@@ -33,8 +33,8 @@ TimeoutHelper::TimeoutHelper() { handle_th_ = std::thread(&TimeoutHelper::Handle
 TimeoutHelper::~TimeoutHelper() {
   std::unique_lock<std::mutex> lk(mtx_);
   state_ = STATE_EXIT;
-  cond_.notify_all();
   lk.unlock();
+  cond_.notify_all();
   if (handle_th_.joinable()) handle_th_.join();
 }
 

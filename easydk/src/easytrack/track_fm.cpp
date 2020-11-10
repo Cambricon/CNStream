@@ -26,9 +26,9 @@
 #include <vector>
 
 #include "easytrack/easy_track.h"
-#include "cxxutil/matrix.h"
 #include "kalmanfilter.h"
 #include "match.h"
+#include "matrix.h"
 #include "track_data_type.h"
 
 #define CLIP(x) ((x) < 0 ? 0 : ((x) > 1 ? 1 : (x)))
@@ -260,7 +260,7 @@ void FeatureMatchPrivate::MarkMiss(FeatureMatchTrackObject *track) {
 
 void FeatureMatchTrack::UpdateFrame(const TrackFrame &frame, const Objects &detects, Objects *tracks) {
   if (tracks == nullptr) {
-    throw EasyTrackError("parameter 'tracks' is nullptr");
+    THROW_EXCEPTION(Exception::INVALID_ARG, "parameter 'tracks' is nullptr");
   }
 
   // guard track state

@@ -29,7 +29,7 @@ class ModelLoader;
 
 namespace cnstream {
 
-struct CNFrameInfo;
+class CNFrameInfo;
 struct CNInferObject;
 class InferTask;
 struct IOResValue;

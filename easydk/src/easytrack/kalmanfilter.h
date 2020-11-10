@@ -1,8 +1,8 @@
 #ifndef EASYTRACK_KALMANFILTER_H
 #define EASYTRACK_KALMANFILTER_H
 
-#include "cxxutil/matrix.h"
 #include "easytrack/easy_track.h"
+#include "matrix.h"
 
 namespace edk {
 

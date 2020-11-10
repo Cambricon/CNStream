@@ -84,7 +84,7 @@ void CnOsd::DrawLogo(cv::Mat* image, std::string logo) const {
   cv::putText(*image, logo, logo_pos, font_, scale, color, thickness);
 }
 
-void CnOsd::DrawLabel(cv::Mat* image, const cnstream::CNObjsVec& objects,
+void CnOsd::DrawLabel(cv::Mat* image, const CNInferObjsPtr& objs_holder,
                       std::vector<std::string> attr_keys) const {
   // check input data
   if (image->cols * image->rows == 0) {
@@ -92,8 +92,8 @@ void CnOsd::DrawLabel(cv::Mat* image, const cnstream::CNObjsVec& objects,
     return;
   }
 
-  for (uint32_t i = 0; i < objects.size(); ++i) {
-    std::shared_ptr<cnstream::CNInferObject> object = objects[i];
+  for (uint32_t i = 0; i < objs_holder->objs_.size(); ++i) {
+    std::shared_ptr<cnstream::CNInferObject> object = objs_holder->objs_[i];
     if (!object) continue;
     std::pair<cv::Point, cv::Point> corner = GetBboxCorner(*object.get(), image->cols, image->rows);
     cv::Point top_left = corner.first;
@@ -124,22 +124,22 @@ void CnOsd::DrawLabel(cv::Mat* image, const cnstream::CNObjsVec& objects,
     }
     DrawText(image, bottom_left, text, color);
 
-    // draw secondary inference infomation
+    // draw secondary inference information
     int label_bottom_y = 0;
     int text_height = 0;
     for (auto& key : attr_keys) {
-      cnstream::CNInferAttr infer_attr = object->GetAttribute(key);
+      CNInferAttr infer_attr = object->GetAttribute(key);
       if (infer_attr.value < 0 || infer_attr.value > static_cast<int>(secondary_labels_.size()) - 1) continue;
-      std::string secondary_lable = secondary_labels_[infer_attr.value];
+      std::string secondary_label = secondary_labels_[infer_attr.value];
       std::string secondary_score = std::to_string(infer_attr.score);
-      std::string secondary_text = secondary_lable + " : " + secondary_score;
+      std::string secondary_text = secondary_label + " : " + secondary_score;
       DrawText(image, top_left + cv::Point(0, label_bottom_y), secondary_text, color, 0.5, &text_height);
       label_bottom_y += text_height;
     }
   }
 }
 
-std::pair<cv::Point, cv::Point> CnOsd::GetBboxCorner(const cnstream::CNInferObject &object,
+std::pair<cv::Point, cv::Point> CnOsd::GetBboxCorner(const CNInferObject &object,
                                                      int img_width, int img_height) const {
   float x = CLIP(object.bbox.x);
   float y = CLIP(object.bbox.y);

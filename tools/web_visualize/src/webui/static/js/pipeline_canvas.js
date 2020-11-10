@@ -39,6 +39,9 @@ ChartNode.prototype.getId = function() {
     return this._id;
 };
 
+ChartNode.prototype.getName = function() {
+    return this._name;
+};
 
 ChartNode.prototype.getRemovable = function() {
     return this._removable;
@@ -148,6 +151,7 @@ let Chart = function(container, options) {
     this._container = container;
     this._nodes = [];
     this._seed_id = 0;
+    this._max_node_num = 0;
     this._js_plumb = null;
 
     this.init(options);
@@ -229,6 +233,19 @@ Chart.prototype.createNodeId = function() {
     return this._seed_id++;
 };
 
+Chart.prototype.setMaxNodeNum = function(num) {
+    return this._max_node_num = num;
+};
+
+Chart.prototype.isUniqueName = function(name) {
+    let nodes = this._nodes;
+    for (let i = 0, len = nodes.length; i < len; i++) {
+        if (nodes[i].getName() === name) {
+            return false;
+        }
+    }
+    return true;
+}
 
 /**
  * Add node to chart
@@ -238,9 +255,18 @@ Chart.prototype.createNodeId = function() {
  * @param {Object} options node parameter，refer to class ChartNode
  */
 Chart.prototype.addNode = function(name, x, y, options) {
-    let node = new ChartNode(this.createNodeId(), name, x, y, options);
+    if (this._max_node_num > 0 && this._nodes.length >= this._max_node_num) {
+        alert("only support max nodes number: " + this._max_node_num);
+        return;
+    }
+    let id = this.createNodeId();
+    if (!this.isUniqueName(name)) {
+        name = name + '-' + id;
+    }
+    let node = new ChartNode(id , name, x, y, options);
     node.setPlumb(this._js_plumb);
     node.appendTo(this._container);
+    node._data.name = node._name;
     this._nodes.push(node);
     return node;
 };
@@ -283,11 +309,10 @@ Chart.prototype.getRemovable = function(node_id) {
     }
 };
 
-function isDAG(names, node, nodes) {
+function isDAG(names, node, nodes, valid_nodes_name) {
     var ret = true;
     if (node.hasOwnProperty("next_modules")) {
         node["next_modules"].forEach( next_name => {
-            console.log(names ,next_name);
             names.forEach( name => {
                 if (next_name === name) {
                     ret = false;
@@ -297,8 +322,10 @@ function isDAG(names, node, nodes) {
             if (!ret) {
                 return;
             }
+            valid_nodes_name.add(next_name);
             names.push(next_name);
-            ret = isDAG(names, nodes[next_name], nodes);
+            ret = isDAG(names, nodes[next_name], nodes, valid_nodes_name);
+            names.pop();
         });
     }
     return ret;
@@ -363,8 +390,13 @@ Chart.prototype.toJson = function() {
         }
     });
 
-    if(!isDAG(["source"], nodes["source"], nodes)) {
-        return false;
+    let node_set = new Set();
+    node_set.add("source");
+    if(!isDAG(["source"], nodes["source"], nodes, node_set)) {
+        return {graph: "notDAG"};
+    }
+    if (node_set.size != this._nodes.length) {
+        return {graph: "invalid"};
     }
 
     $.each(nodes, function(key, value) {

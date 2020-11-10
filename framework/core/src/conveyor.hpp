@@ -23,9 +23,10 @@
 
 #include <memory>
 #include <vector>
+#include <queue>
+#include <condition_variable>
 
 #include "cnstream_frame.hpp"
-#include "util/cnstream_queue.hpp"
 
 namespace cnstream {
 
@@ -48,25 +49,26 @@ class Connector;
  */
 class Conveyor : private NonCopyable {
  public:
-  friend class Connector;
-
+  Conveyor(size_t max_size);
   ~Conveyor() = default;
-  void PushDataBuffer(CNFrameInfoPtr data);
+  bool PushDataBuffer(CNFrameInfoPtr data);
   CNFrameInfoPtr PopDataBuffer();
   std::vector<CNFrameInfoPtr> PopAllDataBuffer();
   uint32_t GetBufferSize();
+  uint64_t GetFailTime();
 
  private:
 #ifdef UNIT_TEST
  public:
 #endif
-  Conveyor(Connector* container, size_t max_size, bool enable_drop = false);
 
  private:
-  ThreadSafeQueue<CNFrameInfoPtr> dataq_;
-  Connector* container_;
+  std::queue<CNFrameInfoPtr> dataq_;
   size_t max_size_;
-  bool enable_drop_;
+  uint64_t fail_time_ = 0;
+  std::mutex data_mutex_;
+  std::condition_variable notempty_cond_;
+  const std::chrono::milliseconds rel_time_{20};
 };  // class Conveyor
 
 }  // namespace cnstream

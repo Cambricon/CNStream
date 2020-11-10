@@ -27,8 +27,6 @@
 
 #include "data_handler_file.hpp"
 
-#define DEFAULT_MODULE_CATEGORY SOURCE
-
 namespace cnstream {
 
 std::shared_ptr<SourceHandler> FileHandler::Create(DataSource *module, const std::string &stream_id,
@@ -43,7 +41,7 @@ std::shared_ptr<SourceHandler> FileHandler::Create(DataSource *module, const std
 FileHandler::FileHandler(DataSource *module, const std::string &stream_id, const std::string &filename, int framerate,
                          bool loop)
     : SourceHandler(module, stream_id) {
-  impl_ = new (std::nothrow) FileHandlerImpl(module, filename, framerate, loop, *this);
+  impl_ = new (std::nothrow) FileHandlerImpl(module, filename, framerate, loop, this);
 }
 
 FileHandler::~FileHandler() {
@@ -54,16 +52,16 @@ FileHandler::~FileHandler() {
 
 bool FileHandler::Open() {
   if (!this->module_) {
-    MLOG(ERROR) << "module_ null";
+    LOGE(SOURCE) << "module_ null";
     return false;
   }
   if (!impl_) {
-    MLOG(ERROR) << "impl_ null";
+    LOGE(SOURCE) << "impl_ null";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    MLOG(ERROR) << "invalid stream_idx";
+    LOGE(SOURCE) << "invalid stream_idx";
     return false;
   }
 
@@ -77,15 +75,13 @@ void FileHandler::Close() {
 }
 
 bool FileHandlerImpl::Open() {
-  // updated with paramSet
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
-  this->interval_ = param_.interval_;
 
   SetPerfManager(source->GetPerfManager(stream_id_));
   SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
 
-  // start demuxer
+  // start separate thread
   running_.store(1);
   thread_ = std::thread(&FileHandlerImpl::Loop, this);
   return true;
@@ -101,20 +97,10 @@ void FileHandlerImpl::Close() {
 }
 
 void FileHandlerImpl::Loop() {
-  /*meet cnrt requirement*/
-  if (param_.device_id_ >= 0) {
-    try {
-      edk::MluContext mlu_ctx;
-      mlu_ctx.SetDeviceId(param_.device_id_);
-      // mlu_ctx.SetChannelId(dev_ctx_.ddr_channel);
-      mlu_ctx.ConfigureForThisThread();
-    } catch (edk::Exception &e) {
-      if (nullptr != module_)
-        module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup dev/channel.");
-      MLOG(DEBUG) << "Init MLU context failed.";
-      return;
-    }
-  }
+  /*meet cnrt requirement,
+   *  for cpu case(device_id < 0), MluDeviceGuard will do nothing
+   */
+  MluDeviceGuard guard(param_.device_id_);
 
   if (!PrepareResources()) {
     ClearResources();
@@ -127,14 +113,14 @@ void FileHandlerImpl::Loop() {
       e.thread_id = std::this_thread::get_id();
       module_->PostEvent(e);
     }
-    MLOG(DEBUG) << "PrepareResources failed.";
+    LOGE(SOURCE) << "PrepareResources failed.";
     return;
   }
 
   FrController controller(framerate_);
   if (framerate_ > 0) controller.Start();
 
-  MLOG(DEBUG) << "File handler DecodeLoop";
+  LOGD(SOURCE) << "File handler DecodeLoop";
   while (running_.load()) {
     if (!Process()) {
       break;
@@ -142,163 +128,32 @@ void FileHandlerImpl::Loop() {
     if (framerate_ > 0) controller.Control();
   }
 
-  MLOG(DEBUG) << "File handler DecoderLoop Exit.";
+  LOGD(SOURCE) << "File handler DecoderLoop Exit.";
   ClearResources();
 }
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-//
-// FFMPEG use AVCodecParameters instead of AVCodecContext
-// since from version 3.1(libavformat/version:57.40.100)
-//
-#define FFMPEG_VERSION_3_1 AV_VERSION_INT(57, 40, 100)
-
 bool FileHandlerImpl::PrepareResources(bool demux_only) {
-  // format context
-  p_format_ctx_ = avformat_alloc_context();
-
-  // options
-  av_dict_set(&options_, "buffer_size", "1024000", 0);
-  av_dict_set(&options_, "max_delay", "500000", 0);
-  // open input
-  int ret_code = avformat_open_input(&p_format_ctx_, filename_.c_str(), NULL, &options_);
-  if (0 != ret_code) {
-    MLOG(ERROR) << "Couldn't open input stream.";
+  int ret = parser_.Open(filename_, this);
+  if (ret < 0) {
     return false;
   }
-  // find video stream information
-  ret_code = avformat_find_stream_info(p_format_ctx_, NULL);
-  if (ret_code < 0) {
-    MLOG(ERROR) << "Couldn't find stream information.";
-    return false;
-  }
-  video_index_ = -1;
-  AVStream *vstream = nullptr;
-  for (uint32_t loop_i = 0; loop_i < p_format_ctx_->nb_streams; loop_i++) {
-    vstream = p_format_ctx_->streams[loop_i];
-#if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
-    if (vstream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-#else
-    if (vstream->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-#endif
-      video_index_ = loop_i;
-      break;
-    }
-  }
-  if (video_index_ == -1) {
-    MLOG(ERROR) << "Didn't find a video stream.";
-    return false;
-  }
-  // p_codec_ctx_ = vstream->codec;
-#if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
-  AVCodecID codec_id = vstream->codecpar->codec_id;
-#else
-  AVCodecID codec_id = vstream->codec->codec_id;
-#endif
-  // bitstream filter
-  bitstream_filter_ctx_ = nullptr;
-  if (strstr(p_format_ctx_->iformat->name, "mp4") || strstr(p_format_ctx_->iformat->name, "flv") ||
-      strstr(p_format_ctx_->iformat->name, "matroska")) {
-    if (AV_CODEC_ID_H264 == codec_id) {
-      bitstream_filter_ctx_ = av_bitstream_filter_init("h264_mp4toannexb");
-    } else if (AV_CODEC_ID_HEVC == codec_id) {
-      bitstream_filter_ctx_ = av_bitstream_filter_init("hevc_mp4toannexb");
-    } else {
-    }
-  }
-
-  av_init_packet(&packet_);
-  packet_.data = NULL;
-  packet_.size = 0;
-
-  if (demux_only) return true;
-
-  if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
-    decoder_ = std::make_shared<MluDecoder>(this);
-  } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
-    decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
-  } else {
-    MLOG(ERROR) << "unsupported decoder_type";
-    return false;
-  }
-  if (decoder_.get()) {
-    return decoder_->Create(vstream, interval_);
-  }
-  return false;
+  return true;
 }
 
 void FileHandlerImpl::ClearResources(bool demux_only) {
-  if (!demux_only && decoder_.get()) {
+  if (!demux_only && decoder_) {
     decoder_->Destroy();
+    decoder_.reset();
   }
-  if (p_format_ctx_) {
-    avformat_close_input(&p_format_ctx_);
-    avformat_free_context(p_format_ctx_);
-    av_dict_free(&options_);
-    options_ = nullptr;
-    p_format_ctx_ = nullptr;
-  }
-  if (bitstream_filter_ctx_) {
-    av_bitstream_filter_close(bitstream_filter_ctx_);
-    bitstream_filter_ctx_ = nullptr;
-  }
-  video_index_ = -1;
-  first_frame_ = true;
-}
-
-bool FileHandlerImpl::Extract() {
-  while (true) {
-    if (av_read_frame(p_format_ctx_, &packet_) < 0) {
-      return false;
-    }
-
-    if (packet_.stream_index != video_index_) {
-      av_packet_unref(&packet_);
-      continue;
-    }
-
-    AVStream *vstream = p_format_ctx_->streams[video_index_];
-    if (first_frame_) {
-      if (packet_.flags & AV_PKT_FLAG_KEY) {
-        first_frame_ = false;
-      } else {
-        av_packet_unref(&packet_);
-        continue;
-      }
-    }
-
-    if (bitstream_filter_ctx_) {
-      av_bitstream_filter_filter(bitstream_filter_ctx_, vstream->codec, NULL, &packet_.data, &packet_.size,
-                                 packet_.data, packet_.size, 0);
-    }
-    // find pts information
-    if (AV_NOPTS_VALUE == packet_.pts && find_pts_) {
-      find_pts_ = false;
-      MLOG(WARNING) << "Didn't find pts informations, "
-                   << "use ordered numbers instead. "
-                   << "stream url: " << filename_.c_str();
-    } else if (AV_NOPTS_VALUE != packet_.pts) {
-      find_pts_ = true;
-      packet_.pts = av_rescale_q(packet_.pts, vstream->time_base, {1, 90000});
-    }
-
-    if (!find_pts_) {
-      packet_.pts = pts_++;
-    }
-    return true;
-  }
+  parser_.Close();
 }
 
 bool FileHandlerImpl::Process() {
-  bool ret = Extract();
-
-  if (!ret) {
-    MLOG(INFO) << "Read EOS from file";
+  parser_.Parse();
+  if (eos_reached_) {
+    LOGI(SOURCE) << "Read EOS from file stream_id: " << stream_id_;
     if (this->loop_) {
-      MLOG(INFO) << "Clear resources and restart";
+      LOGI(SOURCE) << "Clear resources and restart";
       ClearResources(true);
       if (!PrepareResources(true)) {
         ClearResources();
@@ -311,32 +166,110 @@ bool FileHandlerImpl::Process() {
           e.thread_id = std::this_thread::get_id();
           module_->PostEvent(e);
         }
-        MLOG(DEBUG) << "PrepareResources failed.";
+        LOGE(SOURCE) << "PrepareResources failed.";
         return false;
       }
-      MLOG(INFO) << "Loop...";
+      LOGI(SOURCE) << "Loop...";
+      eos_reached_ = false;
       return true;
     } else {
-      decoder_->Process(nullptr, true);
+      if (decoder_) decoder_->Process(nullptr);
       return false;
     }
-  }  // if (!ret)
-
-  RecordStartTime(module_->GetName(), packet_.pts);
-
-  if (!decoder_->Process(&packet_, false)) {
-    if (bitstream_filter_ctx_) {
-      av_freep(&packet_.data);
-    }
-    av_packet_unref(&packet_);
     return false;
   }
-
-  if (bitstream_filter_ctx_) {
-    av_freep(&packet_.data);
+  if (decode_failed_ || dec_create_failed_) {
+    LOGE(SOURCE) << "Decode failed.";
+    return false;
   }
-  av_packet_unref(&packet_);
   return true;
+}
+
+// IParserResult methods
+void FileHandlerImpl::OnParserInfo(VideoInfo *info) {
+  if (decoder_) {
+    return;  // for the case:  loop and reset demux only
+  }
+  dec_create_failed_ = false;
+  if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
+    decoder_ = std::make_shared<MluDecoder>(this);
+  } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
+    decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
+  } else {
+    LOGE(SOURCE) << "unsupported decoder_type";
+    dec_create_failed_ = true;
+  }
+  if (decoder_) {
+    ExtraDecoderInfo extra;
+    extra.apply_stride_align_for_scaler = param_.input_buf_number_;
+    extra.device_id = param_.device_id_;
+    extra.input_buf_num = param_.input_buf_number_;
+    extra.output_buf_num = param_.output_buf_number_;
+    extra.max_width = 7680;  // FIXME
+    extra.max_height = 4320;  // FIXME
+    bool ret = decoder_->Create(info, &extra);
+    if (ret != true) {
+      LOGE(SOURCE) << "dec_create_failed_";
+      return;
+    }
+    if (info->extra_data.size()) {
+      VideoEsPacket pkt;
+      pkt.data = info->extra_data.data();
+      pkt.len = info->extra_data.size();
+      pkt.pts = 0;
+      if (!decoder_->Process(&pkt)) {
+        decode_failed_ = true;
+        LOGE(SOURCE) << "decode_failed_";
+      }
+    }
+  }
+}
+
+void FileHandlerImpl::OnParserFrame(VideoEsFrame *frame) {
+  if (!frame) {
+    eos_reached_ = true;
+    return;  // EOS will be handled in Process()
+  }
+  VideoEsPacket pkt;
+  pkt.data = frame->data;
+  pkt.len = frame->len;
+  pkt.pts = frame->pts;
+
+  RecordStartTime(module_->GetName(), pkt.pts);
+
+  decode_failed_ = true;
+  if (decoder_  && decoder_->Process(&pkt) == true) {
+    decode_failed_ = false;
+  }
+}
+
+// IDecodeResult methods
+void FileHandlerImpl::OnDecodeError(DecodeErrorCode error_code) {
+  // FIXME,  handle decode error ...
+  LOGI("FileHandlerImpl::OnDecodeError() called");
+  interrupt_.store(true);
+}
+
+void FileHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
+  if (frame_count_++ % param_.interval_ != 0) {
+    return;  // discard frames
+  }
+  if (!frame) return;
+  if (!frame->valid) return;
+
+  std::shared_ptr<CNFrameInfo> data = this->CreateFrameInfo();
+  if (!data) {
+    return;
+  }
+  data->timestamp = frame->pts;  // FIXME
+  int ret = SourceRender::Process(data, frame, frame_id_++, param_);
+  if (ret < 0) {
+    return;
+  }
+  this->SendFrameInfo(data);
+}
+void FileHandlerImpl::OnDecodeEos() {
+  this->SendFlowEos();
 }
 
 }  // namespace cnstream

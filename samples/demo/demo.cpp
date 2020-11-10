@@ -39,9 +39,6 @@
 #endif
 
 #include "cnstream_core.hpp"
-#include "data_handler_file.hpp"
-#include "data_handler_mem.hpp"
-#include "data_handler_rtsp.hpp"
 #include "data_source.hpp"
 #include "displayer.hpp"
 #include "util.hpp"
@@ -67,8 +64,15 @@ std::atomic<bool> thread_running{true};
 
 class UserLogSink: public cnstream::LogSink {
  public:
-  void Send(const std::string& message) override {
-    std::cout << "UserLogSink: " << message << std::endl;
+  void Send(cnstream::LogSeverity severity, const char* category,
+            const char* filename, int line,
+            const struct ::tm* tm_time, int32_t usecs,
+            const char* message, size_t message_len) override {
+    std::cout << "UserLogSink: " << ToString(severity, category,
+                                             filename, line,
+                                             tm_time, usecs,
+                                             message, message_len)
+      << std::endl;
   }
 };
 
@@ -155,7 +159,7 @@ int AddSourceForUsbCam(cnstream::DataSource* source, const std::string &stream_i
                        const int &frame_rate, const bool &loop) {
   int ret = -1;
 #ifdef HAVE_FFMPEG_AVDEVICE
-  auto handler = cnstream::UsbHandler::Create(source, stream_id, filename, frame_rate, loop);
+  auto handler = cnstream::FileHandler::Create(source, stream_id, filename, frame_rate, loop);
   ret = source->AddSource(handler);
 #endif  // HAVE_FFMPEG_AVDEVICE
   return ret;
@@ -315,7 +319,7 @@ int AddSourceForFile(cnstream::DataSource* source, const std::string &stream_id,
 
 int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, false);
-  cnstream::InitCNStreamLogging(argv[0], nullptr);
+  cnstream::InitCNStreamLogging(nullptr);
 #if 0
   UserLogSink log_listener;
   cnstream::AddLogSink(&log_listener);
@@ -477,5 +481,7 @@ int main(int argc, char** argv) {
       }
     }
   }
+
+  cnstream::ShutdownCNStreamLogging();
   return EXIT_SUCCESS;
 }

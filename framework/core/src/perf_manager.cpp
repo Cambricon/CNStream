@@ -20,6 +20,7 @@
 
 #include "perf_manager.hpp"
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 
@@ -204,39 +205,120 @@ bool PerfManager::PrepareDbFileDir(std::string file_path) {
 
   int fd = open(file_path.c_str(), O_RDONLY);
   if (fd < 0) {
-    // LOG(INFO) << "File [" << file_path << "] not exist";
-    return CreateDir(file_path);
-  }
-  if (fcntl(fd, F_SETLEASE, F_WRLCK) && EAGAIN == errno) {
-    close(fd);
-    LOG(ERROR) << "File [" << file_path << "] is opened";
-    return false;
-  } else {
-    fcntl(fd, F_SETLEASE, F_UNLCK);
-    close(fd);
-    // LOG(INFO) << "File [" << file_path << "] exist, but not opened. Remove file.";
-    if (remove(file_path.c_str()) != 0) {
-      return false;
+    if (file_path.length() > file_path.find_last_of("/")) {
+      std::string dir = file_path.substr(0, file_path.find_last_of("/") + 1);
+      if (!DirectoryExists(dir)) {
+        return CreateDir(dir);
+      }
     }
-    return true;
-  }
-}
-
-bool PerfManager::CreateDir(std::string dir) {
-  if (!access(dir.c_str(), 0)) {
-    // LOG(INFO) << "Directory [" << dir << "] exists.";
-    return true;
-  }
-  std::string path;
-  int success = 0;
-  for (uint32_t i = 0; i < dir.size(); i++) {
-    path.push_back(dir[i]);
-    if (dir[i] == '/' && access(path.c_str(), 0) != success && mkdir(path.c_str(), 00700) != success) {
-      LOG(ERROR) << "Failed at create directory";
+  } else {
+    LOG(WARNING) << "File [" << file_path << "] is existed. Remove file.";
+    if (remove(file_path.c_str()) != 0) {
+      LOG(ERROR) << "File [" << file_path << "] is existed. Remove file failed. Error code: " << errno;
       return false;
     }
   }
   return true;
+}
+
+bool PerfManager::CreateDir(std::string dir) {
+  if (dir.empty()) {
+    LOG(ERROR) << "CreateDir failed. The directory is empty string.";
+    return false;
+  }
+  if (DirectoryExists(dir)) {
+    LOG(INFO) << "Directory [" << dir << "] exists.";
+    return true;
+  }
+  dir += "/";
+  std::string path;
+  for (uint32_t i = 0; i < dir.size(); i++) {
+    path.push_back(dir[i]);
+    if (dir[i] == '/' && !DirectoryExists(path) && mkdir(path.c_str(), 00700) != 0) {
+      if (DirectoryExists(path)) {
+        LOG(WARNING) << "Failed at create directory. [" << path << "] Error code: " << errno << " Directory exists.";
+      } else {
+        LOG(ERROR) << "Failed at create directory. [" << path << "] Error code: " << errno;
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool PerfManager::DirectoryExists(std::string dir) {
+  if (dir.empty()) return false;
+  DIR* dirp = opendir(dir.c_str());
+  if (dirp == nullptr) {
+    return false;
+  }
+  closedir(dirp);
+  return true;
+}
+
+void PerfManager::ClearDbFiles(std::string dir) {
+  std::vector<std::string> files = GetFilesInDir(dir);
+  std::vector<std::string> db_files = FilterFiles(files);
+  ClearFiles(dir, db_files);
+}
+
+std::vector<std::string> PerfManager::GetFilesInDir(std::string dir) {
+  std::vector<std::string> file_names = {};
+  if (dir.empty()) return file_names;
+
+  DIR* dirp = opendir(dir.c_str());
+  if (dirp == nullptr) return file_names;
+
+  dirent* dp = nullptr;
+  while ((dp = readdir(dirp)) != nullptr) {
+    file_names.push_back(dp->d_name);
+  }
+  closedir(dirp);
+  return file_names;
+}
+
+std::vector<std::string> PerfManager::FilterFiles(std::vector<std::string> files) {
+  std::vector<std::string> file_names = {};
+  std::string prefix = GetDbFileNamePrefix();
+  size_t prefix_len = prefix.length();
+  for (auto &file_name : files) {
+    if (file_name.length() >= prefix_len && file_name.length() > file_name.find_last_of(".")) {
+      std::string file_prefix = file_name.substr(0, prefix_len);
+      std::string extension = file_name.substr(file_name.find_last_of(".") + 1);
+      if (file_prefix == prefix && (extension == "db" || extension == "db-journal")) {
+        file_names.push_back(file_name);
+      }
+    }
+  }
+  return file_names;
+}
+
+void PerfManager::ClearFiles(std::string dir, std::vector<std::string> files) {
+  for (auto & file_name : files) {
+    std::string file_path = dir + "/" + file_name;
+    if (CheckFileStatus(file_path) == EXIST && remove(file_path.c_str()) != 0) {
+      LOG(WARNING) << "Remove file [" << file_path << "] failed. Error code: " << errno;
+    }
+  }
+}
+
+int PerfManager::CheckFileStatus(std::string file_path) {
+  if (file_path.empty()) {
+    LOG(WARNING) << "file path is empty.";
+    return INVALID_FILE_NAME;
+  }
+  int fd = open(file_path.c_str(), O_RDONLY);
+  if (fd < 0) {
+    return NOT_EXIST;
+  }
+  if (fcntl(fd, F_SETLEASE, F_WRLCK) && EAGAIN == errno) {
+    close(fd);
+    return OPENED;
+  } else {
+    fcntl(fd, F_SETLEASE, F_UNLCK);
+    close(fd);
+    return EXIST;
+  }
 }
 
 bool PerfManager::DeletePreviousData(int previous_time) {

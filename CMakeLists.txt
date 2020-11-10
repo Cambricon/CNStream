@@ -46,6 +46,7 @@ option(WITH_FFMPEG_AVDEVICE "with ffmpeg avdevice" OFF)
 option(WITH_OPENCV "with opencv" ON)
 option(WITH_FREETYPE "with freetype" OFF)
 option(WITH_RTSP "with rtsp" ON)
+option(WITH_LIBYUV "with libyuv" ON)
 
 # To use sanitizers, the version of GCC is required to be no less than 4.9
 option(SANITIZE_MEMORY "Enable MemorySanitizer for sanitized targets." OFF)
@@ -130,6 +131,14 @@ if(WITH_RTSP)
   link_directories(${PROJECT_SOURCE_DIR}/3rdparty/live555/lib)
   set(Live555_LIBS liveMedia UsageEnvironment BasicUsageEnvironment groupsock)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_LIVE555")
+endif()
+
+set(LIBYUV_LIBS "")
+if(WITH_LIBYUV)
+  include_directories(${PROJECT_SOURCE_DIR}/3rdparty/libyuv/include)
+  link_directories(${PROJECT_SOURCE_DIR}/3rdparty/libyuv/lib)
+  set(LIBYUV_LIBS yuv)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_LIBYUV")
 endif()
 
 ##OpenCV

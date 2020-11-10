@@ -32,17 +32,37 @@
 
 namespace edk {
 
-TOOLKIT_REGISTER_EXCEPTION(MluContext);
-
+/**
+ * @brief Enumeration to describe MLU core version
+ */
 enum class CoreVersion {
-  MLU100 = 0,
-  MLU220,
-  MLU270,
+  MLU220 = 1,  ///< MLU220 platform
+  MLU270 = 2,  ///< MLU270 platform
 };
 
+/**
+ * @brief encapsulation of cnrtQueue
+ */
 struct MluTaskQueue;
+
+/**
+ * @brief convience alias of shared pointer to MluTaskQueue
+ */
 using MluTaskQueue_t = std::shared_ptr<MluTaskQueue>;
+
+/**
+ * @brief Create a MluTaskQueue
+ *
+ * @return a MluTaskQueue_t
+ */
 MluTaskQueue_t CreateTaskQueue();
+
+/**
+ * @brief Sync MluTaskQueue
+ *
+ * @param queue[in]: MLU task queue
+ */
+void Sync(MluTaskQueue_t queue);
 
 /**
  * @brief MLU environment helper class
@@ -64,6 +84,13 @@ class MluContext {
   inline void SetDeviceId(int id) { dev_id_ = id; }
 
   /**
+   * @brief Get available device number
+   *
+   * @return Available device number
+   */
+  static uint32_t GetDeviceNum();
+
+  /**
    * @brief Check whether device exists
    *
    * @param id[in] Device id
@@ -73,6 +100,7 @@ class MluContext {
 
   /**
    * @brief Get the MLU channel id
+   * @deprecated
    *
    * @return MLU Channel id
    */
@@ -80,23 +108,35 @@ class MluContext {
 
   /**
    * @brief Set the MLU channel id in range [0, 3]
+   * @deprecated
    *
    * @param id[in] MLU channel id
    */
   inline void SetChannelId(int id) { channel_id_ = id; }
 
   /**
-   * @brief Bind MLU environment for this thread
+   * @brief Bind MLU environment for this thread, use BindDevice instead
    * @note Each thread processing MLU memory or task need to set MLU environment
+   * @deprecated
    */
   void ConfigureForThisThread();
 
-  inline CoreVersion GetCoreVersion() const { return version_; }
+  /**
+   * @brief Bind MLU device
+   * @note Any process on MLU need to bind MLU device
+   */
+  void BindDevice();
+
+  /**
+   * @brief Get MLU core version
+   *
+   * @return MLU core version
+   */
+  CoreVersion GetCoreVersion();
 
  private:
   int dev_id_ = 0;
   int channel_id_ = -1;
-  CoreVersion version_ = CoreVersion::MLU270;
 };  // class MluContext
 
 }  // namespace edk

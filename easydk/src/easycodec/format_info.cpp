@@ -50,7 +50,7 @@ const FormatInfo* FormatInfo::GetFormatInfo(PixelFmt fmt) {
   auto fmt_pair = kFrameFormatMap.find(fmt);
   if (fmt_pair == kFrameFormatMap.end()) {
     LOG(ERROR) << "Unsupport pixel format";
-    throw edk::EasyDecodeError("Unsupport pixel format");
+    THROW_EXCEPTION(Exception::UNSUPPORTED, "Unsupport pixel format");
   }
   return &(fmt_pair->second);
 }
@@ -91,7 +91,7 @@ cncodecType CodecTypeCast(CodecType type) {
     case CodecType::JPEG:
       return CNCODEC_JPEG;
     default:
-      throw edk::EasyDecodeError("Unsupport codec type");
+      THROW_EXCEPTION(Exception::UNSUPPORTED, "Unsupport codec type");
   }
   return CNCODEC_H264;
 }
@@ -109,7 +109,7 @@ cncodecColorSpace ColorStdCast(ColorStd color_std) {
     case ColorStd::ITU_BT_709_ER:
       return CNCODEC_COLOR_SPACE_BT_709_ER;
     default:
-      throw EasyDecodeError("Unsupport color space standard");
+      THROW_EXCEPTION(Exception::UNSUPPORTED, "Unsupport color space standard");
   }
 }
 

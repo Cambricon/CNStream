@@ -18,6 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include <glog/logging.h>
+
 #include <algorithm>
 #include <memory>
 #include <vector>
@@ -45,8 +47,7 @@ class PreprocYolov3 : public cnstream::Preproc {
       LOG(ERROR) << "[PreprocCpu] model input shape not supported";
       return -1;
     }
-    cnstream::CNDataFramePtr frame =
-        cnstream::any_cast<cnstream::CNDataFramePtr>(package->datas[cnstream::CNDataFramePtrKey]);
+    cnstream::CNDataFramePtr frame = cnstream::GetCNDataFramePtr(package);
 
     int width = frame->width;
     int height = frame->height;

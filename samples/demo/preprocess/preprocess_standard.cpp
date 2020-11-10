@@ -18,6 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include <glog/logging.h>
+
 #include <memory>
 #include <utility>
 #include <vector>
@@ -73,8 +75,7 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
 
   DLOG(INFO) << "[PreprocCpu] do preproc...";
 
-  cnstream::CNDataFramePtr frame =
-      cnstream::any_cast<cnstream::CNDataFramePtr>(package->datas[cnstream::CNDataFramePtrKey]);
+  cnstream::CNDataFramePtr frame = cnstream::GetCNDataFramePtr(package);
 
   int width = frame->width;
   int height = frame->height;
@@ -153,8 +154,7 @@ IMPLEMENT_REFLEX_OBJECT_EX(ObjPreprocCpu, cnstream::ObjPreproc)
 int ObjPreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
                            const cnstream::CNFrameInfoPtr& finfo,
                            const std::shared_ptr<cnstream::CNInferObject>& pobj) {
-  cnstream::CNDataFramePtr frame =
-      cnstream::any_cast<cnstream::CNDataFramePtr>(finfo->datas[cnstream::CNDataFramePtrKey]);
+  cnstream::CNDataFramePtr frame = cnstream::GetCNDataFramePtr(finfo);
   // origin frame
   cv::Mat frame_bgr = *frame->ImageBGR();
 

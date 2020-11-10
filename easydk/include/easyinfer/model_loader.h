@@ -34,8 +34,6 @@
 
 namespace edk {
 
-TOOLKIT_REGISTER_EXCEPTION(ModelLoader);
-
 /**
  * @brief Enumeration to specify data type of model input and output
  */
@@ -50,8 +48,8 @@ enum class DimOrder { NCHW, NHWC, HWCN, TNC, NTC };
  * @brief Describe data layout on MLU or CPU
  */
 struct DataLayout {
-  DataType dtype;  ///< @see DataType
-  DimOrder order;  ///< @see DimOrder
+  DataType dtype;  ///< @see edk::DataType
+  DimOrder order;  ///< @see edk::DimOrder
 };
 
 class ModelLoaderPrivate;
@@ -209,8 +207,6 @@ class ModelLoader {
   int64_t GetOutputDataBatchAlignSize(int data_index) const;
 
  private:
-  void ReleaseModel();
-
   ModelLoaderPrivate* d_ptr_ = nullptr;
 
   ModelLoader(const ModelLoader&) = delete;

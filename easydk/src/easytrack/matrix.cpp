@@ -1,4 +1,4 @@
-#include "cxxutil/matrix.h"
+#include "matrix.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -12,7 +12,8 @@ const Matrix &Matrix::operator=(std::vector<std::vector<float>> init_list) {
 }
 
 const Matrix &Matrix::operator+=(const Matrix &m) {
-  if (Rows() != m.Rows() || Cols() != m.Cols()) throw MatrixError("Matrices of two different shape cannot be added");
+  if (Rows() != m.Rows() || Cols() != m.Cols())
+    THROW_EXCEPTION(Exception::INVALID_ARG, "Matrices of two different shape cannot be added");
 
   int r = Rows();
   int c = Cols();
@@ -26,7 +27,7 @@ const Matrix &Matrix::operator+=(const Matrix &m) {
 
 const Matrix &Matrix::operator-=(const Matrix &m) {
   if (Rows() != m.Rows() || Cols() != m.Cols())
-    throw MatrixError("Matrices of two different shape cannot be subtracted");
+    THROW_EXCEPTION(Exception::INVALID_ARG, "Matrices of two different shape cannot be subtracted");
 
   int r = Rows();
   int c = Cols();
@@ -40,7 +41,7 @@ const Matrix &Matrix::operator-=(const Matrix &m) {
 }
 
 const Matrix &Matrix::operator*=(const Matrix &m) {
-  if (Cols() != m.Rows() || !m.Square()) throw MatrixError("Matrices can not be multiplied");
+  if (Cols() != m.Rows() || !m.Square()) THROW_EXCEPTION(Exception::INVALID_ARG, "Matrices can not be multiplied");
 
   Matrix ret(Rows(), Cols());
 
@@ -63,7 +64,7 @@ const Matrix &Matrix::operator*=(const Matrix &m) {
 const Matrix operator+(const Matrix &lhs, const Matrix &rhs) {
   Matrix m;
   if (lhs.Rows() != rhs.Rows() || lhs.Cols() != rhs.Cols())
-    throw MatrixError("Matrices of two different shape cannot be added");
+    THROW_EXCEPTION(Exception::INVALID_ARG, "Matrices of two different shape cannot be added");
 
   m = lhs;
   m += rhs;
@@ -73,7 +74,7 @@ const Matrix operator+(const Matrix &lhs, const Matrix &rhs) {
 
 const Matrix operator-(const Matrix &lhs, const Matrix &rhs) {
   if (lhs.Rows() != rhs.Rows() || lhs.Cols() != rhs.Cols())
-    throw MatrixError("Matrices of two different shape cannot be subtracted");
+    THROW_EXCEPTION(Exception::INVALID_ARG, "Matrices of two different shape cannot be subtracted");
 
   Matrix m = lhs;
   m = lhs;
@@ -83,7 +84,7 @@ const Matrix operator-(const Matrix &lhs, const Matrix &rhs) {
 }
 
 const Matrix operator*(const Matrix &lhs, const Matrix &rhs) {
-  if (lhs.Cols() != rhs.Rows()) throw MatrixError("Matrices can not be multiplied");
+  if (lhs.Cols() != rhs.Rows()) THROW_EXCEPTION(Exception::INVALID_ARG, "Matrices can not be multiplied");
 
   Matrix m(lhs.Rows(), rhs.Cols());
 
@@ -104,7 +105,7 @@ const Matrix operator*(const Matrix &lhs, const Matrix &rhs) {
 }
 
 const Matrix Matrix::Trans() const {
-  if (Empty()) throw("Empty Matrix do not have transpose");
+  if (Empty()) THROW_EXCEPTION(Exception::INVALID_ARG, "Empty Matrix do not have transpose");
 
   int row = Cols();
   int col = Rows();
@@ -122,7 +123,7 @@ static void SolveInverse(float *A, int n, float *m_inv);
 
 const Matrix Matrix::Inv() const {
   if (!Square()) {
-    throw MatrixError("Non-square matrix do not have inverse");
+    THROW_EXCEPTION(Exception::INVALID_ARG, "Non-square matrix do not have inverse");
   }
   int n = Rows();
   float *m = new float[n * n];

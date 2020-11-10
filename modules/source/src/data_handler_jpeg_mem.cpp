@@ -30,14 +30,12 @@
 #include "perf_manager.hpp"
 #include "data_handler_jpeg_mem.hpp"
 
-#define DEFAULT_MODULE_CATEGORY SOURCE
-
 namespace cnstream {
 
 std::shared_ptr<SourceHandler> ESJpegMemHandler::Create(DataSource *module, const std::string &stream_id, int max_width,
                                                         int max_height) {
   if (!module || stream_id.empty()) {
-    MLOG(ERROR) << "source module or stream id must not be empty";
+    LOGE(SOURCE) << "source module or stream id must not be empty";
     return nullptr;
   }
   std::shared_ptr<ESJpegMemHandler> handler(new (std::nothrow)
@@ -47,7 +45,7 @@ std::shared_ptr<SourceHandler> ESJpegMemHandler::Create(DataSource *module, cons
 
 ESJpegMemHandler::ESJpegMemHandler(DataSource *module, const std::string &stream_id, int max_width, int max_height)
     : SourceHandler(module, stream_id) {
-  impl_ = new (std::nothrow) ESJpegMemHandlerImpl(module, *this, max_width, max_height);
+  impl_ = new (std::nothrow) ESJpegMemHandlerImpl(module, this, max_width, max_height);
 }
 
 ESJpegMemHandler::~ESJpegMemHandler() {
@@ -58,16 +56,16 @@ ESJpegMemHandler::~ESJpegMemHandler() {
 
 bool ESJpegMemHandler::Open() {
   if (!this->module_) {
-    MLOG(ERROR) << "module_ null";
+    LOGE(SOURCE) << "module_ null";
     return false;
   }
   if (!impl_) {
-    MLOG(ERROR) << "impl_ null";
+    LOGE(SOURCE) << "impl_ null";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    MLOG(ERROR) << "invalid stream_idx";
+    LOGE(SOURCE) << "invalid stream_idx";
     return false;
   }
 
@@ -88,200 +86,111 @@ int ESJpegMemHandler::Write(ESPacket *pkt) {
 }
 
 bool ESJpegMemHandlerImpl::Open() {
-  // updated with paramSet
   DataSource *source = dynamic_cast<DataSource *>(module_);
   if (nullptr != source) {
     param_ = source->GetSourceParam();
   } else {
-    MLOG(ERROR) << "source module is null";
+    LOGE(SOURCE) << "source module is null";
     return false;
   }
 
-  this->interval_ = param_.interval_;
   SetPerfManager(source->GetPerfManager(stream_id_));
   SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
-
-  size_t MaxSize = 60;  // FIXME
-  queue_ = new (std::nothrow) cnstream::BoundedQueue<std::shared_ptr<EsPacket>>(MaxSize);
-  if (!queue_) {
-    return false;
-  }
-
-  // start demuxer
-  running_.store(1);
-  thread_ = std::thread(&ESJpegMemHandlerImpl::DecodeLoop, this);
-  return true;
+  return InitDecoder();
 }
 
 void ESJpegMemHandlerImpl::Close() {
-  if (running_.load()) {
-    running_.store(0);
-    if (thread_.joinable()) {
-      thread_.join();
-    }
-  }
-
-  std::lock_guard<std::mutex> lk(queue_mutex_);
-  if (queue_) {
-    delete queue_;
-    queue_ = nullptr;
-  }
-
-  if (parser_) {
-    parser_->Free();
-    delete parser_;
-    parser_ = nullptr;
-  }
-}
-
-int ESJpegMemHandlerImpl::Write(ESPacket *pkt) {
-  if (pkt && pkt->data && pkt->size && parser_) {
-    if (parser_->Parse(pkt->data, pkt->size) < 0) {
-      return -2;
-    }
-  }
-  std::lock_guard<std::mutex> lk(queue_mutex_);
-  int timeoutMs = 1000;
-  while (running_.load() && queue_) {
-    if (queue_->Push(timeoutMs, std::make_shared<EsPacket>(pkt))) {
-      return 0;
-    }
-  }
-  return -1;
-}
-
-void ESJpegMemHandlerImpl::DecodeLoop() {
-  /*meet cnrt requirement*/
-  if (param_.device_id_ >= 0) {
-    try {
-      edk::MluContext mlu_ctx;
-      mlu_ctx.SetDeviceId(param_.device_id_);
-      // mlu_ctx.SetChannelId(dev_ctx_.ddr_channel);
-      mlu_ctx.ConfigureForThisThread();
-    } catch (edk::Exception &e) {
-      if (nullptr != module_)
-        module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup mlu dev.");
-      MLOG(DEBUG) << "Init MLU context failed.";
-      return;
-    }
-  }
-
-  if (!PrepareResources()) {
-    ClearResources();
-    if (nullptr != module_) {
-      Event e;
-      e.type = EventType::EVENT_STREAM_ERROR;
-      e.module_name = module_->GetName();
-      e.message = "Prepare codec resources failed.";
-      e.stream_id = stream_id_;
-      e.thread_id = std::this_thread::get_id();
-      module_->PostEvent(e);
-    }
-    MLOG(DEBUG) << "PrepareResources failed.";
-    return;
-  }
-
-  MLOG(DEBUG) << "Jpeg Mem handler DecodeLoop.";
-  while (running_.load()) {
-    if (!Process()) {
-      break;
-    }
-  }
-
-  ClearResources();
-  MLOG(DEBUG) << "Jpeg Mem handler DecodeLoop Exit.";
-}
-
-bool ESJpegMemHandlerImpl::PrepareResources() {
-  VideoStreamInfo info;
-  if (!running_.load()) {
-    return false;
-  }
-
-  if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
-    info.codec_id = AV_CODEC_ID_MJPEG;
-    info.codec_width = max_width_;
-    info.codec_height = max_height_;
-    decoder_ = std::make_shared<MluDecoder>(this);
-  } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
-    if (parser_) {
-      parser_->Free();
-      delete parser_;
-      parser_ = nullptr;
-    }
-    parser_ = new (std::nothrow) ParserHelper;
-    parser_->Init("mjpeg");
-
-    while (running_.load()) {
-      int ret = parser_->GetInfo(info);
-      if (-1 == ret) {
-        return false;
-      } else if (0 == ret) {
-        usleep(1000 * 10);
-      } else {
-        break;
-      }
-    }
-
-    if (!running_.load()) {
-      return false;
-    }
-    decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
-  } else {
-    MLOG(ERROR) << "unsupported decoder_type";
-    return false;
-  }
-
-  if (!decoder_) {
-    return false;
-  }
-
-  bool ret = decoder_->Create(&info, interval_);
-  if (!ret) {
-    return false;
-  }
-
-  return true;
-}
-
-void ESJpegMemHandlerImpl::ClearResources() {
   if (decoder_.get()) {
     decoder_->Destroy();
   }
 }
 
-bool ESJpegMemHandlerImpl::Process() {
-  using EsPacketPtr = std::shared_ptr<EsPacket>;
-
-  EsPacketPtr in;
-  int timeoutMs = 1000;
-  bool ret = this->queue_->Pop(timeoutMs, in);
-
-  if (!ret) {
-    // continue.. not exit
-    return true;
+int ESJpegMemHandlerImpl::Write(ESPacket *pkt) {
+  if (pkt && decoder_) {
+    ProcessImage(pkt);
+    return 0;
   }
 
-  if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-    ESPacket pkt;
-    pkt.flags = ESPacket::FLAG_EOS;
-    MLOG(DEBUG) << "Jpeg Mem handler stream id: " << stream_id_ << " Eos reached";
-    decoder_->Process(&pkt);
+  return -1;
+}
+
+bool ESJpegMemHandlerImpl::ProcessImage(ESPacket *in_pkt) {
+  if (in_pkt->flags & ESPacket::FLAG_EOS) {
+    decoder_->Process(nullptr);
     return false;
-  }  // if (!ret)
+  }
 
-  ESPacket pkt;
-  pkt.data = in->pkt_.data;
-  pkt.size = in->pkt_.size;
-  pkt.pts = in->pkt_.pts;
-  pkt.flags &= ~ESPacket::FLAG_EOS;
-
-  RecordStartTime(module_->GetName(), pkt.pts);
-
+  VideoEsPacket pkt;
+  pkt.data = in_pkt->data;
+  pkt.len = in_pkt->size;
+  pkt.pts = in_pkt->pts;
+  RecordStartTime(module_->GetName(), in_pkt->pts);
   if (!decoder_->Process(&pkt)) {
     return false;
   }
+
   return true;
+}
+
+bool ESJpegMemHandlerImpl::InitDecoder() {
+  if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
+    decoder_ = std::make_shared<MluDecoder>(this);
+  } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
+    decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
+  } else {
+    LOGE(SOURCE) << "unsupported decoder_type";
+    return false;
+  }
+  if (!decoder_) {
+    return false;
+  }
+
+  // FIXME, fill info, a parser is needed?
+  VideoInfo info;
+  info.codec_id = AV_CODEC_ID_MJPEG;
+
+  ExtraDecoderInfo extra;
+  extra.apply_stride_align_for_scaler = param_.apply_stride_align_for_scaler_;
+  extra.device_id = param_.device_id_;
+  extra.input_buf_num = param_.input_buf_number_;
+  extra.output_buf_num = param_.output_buf_number_;
+  extra.max_width = max_width_;
+  extra.max_height = max_height_;
+  bool ret = decoder_->Create(&info, &extra);
+  if (!ret) {
+    return false;
+  }
+
+  MluDeviceGuard guard(param_.device_id_);
+  return true;
+}
+
+// IDecodeResult methods
+void ESJpegMemHandlerImpl::OnDecodeError(DecodeErrorCode error_code) {
+  // FIXME,  handle decode error ...
+  interrupt_.store(true);
+}
+
+void ESJpegMemHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
+  if (frame_count_++ % param_.interval_ != 0) {
+    return;  // discard frames
+  }
+  if (!frame) return;
+  if (!frame->valid) return;
+
+  std::shared_ptr<CNFrameInfo> data = this->CreateFrameInfo();
+  if (!data) {
+    return;
+  }
+  data->timestamp = frame->pts;  // FIXME
+  int ret = SourceRender::Process(data, frame, frame_id_++, param_);
+  if (ret < 0) {
+    return;
+  }
+  this->SendFrameInfo(data);
+}
+void ESJpegMemHandlerImpl::OnDecodeEos() {
+  this->SendFlowEos();
 }
 
 }  // namespace cnstream

@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2020] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,40 +17,46 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+#ifndef CNSTREAM_RTSP_CLIENT_H_
+#define CNSTREAM_RTSP_CLIENT_H_
 
-/**
- * @file toolkit_error.h
- *
- * This file contains a declaration of the ToolkitError class and helper register macro
- */
-
-#ifndef CXXUTIL_TOOLKIT_ERROR_H_
-#define CXXUTIL_TOOLKIT_ERROR_H_
-
-#include <stdexcept>
 #include <string>
+#include "video_parser.hpp"
 
-/**
- * @brief Register exception class derived from ToolkitError
- * @param CNAME Corresponding class name
- * @see ToolkitError
- */
-#define TOOLKIT_REGISTER_EXCEPTION(CNAME)                         \
-  class CNAME##Error : public edk::ToolkitError {                 \
-   public:                                                        \
-    explicit CNAME##Error(std::string msg) : ToolkitError(msg) {} \
-  };
+namespace cnstream {
 
-namespace edk {
+struct IRtspCB {
+  virtual void OnRtspInfo(VideoInfo *info) = 0;
+  virtual void OnRtspFrame(VideoEsFrame *frame) = 0;
+  virtual void OnRtspEvent(int type) = 0;
+  virtual ~IRtspCB() {}
+};
 
-/**
- * @brief Toolkit base exception class, derived from runtime_error.
- */
-class ToolkitError : public std::runtime_error {
+struct OpenParam {
+  std::string url; /*rtsp://ip[:port]/stream_id
+                    * rtsp://username:password@ip[:port]/stream_id
+                    */
+  bool streammingPreferTcp = true;
+  int reconnect = 0;
+  int livenessTimeoutMs = 2000;
+  IRtspCB *cb = nullptr;
+};
+
+class RtspSessionImpl;
+class RtspSession {
  public:
-  explicit ToolkitError(std::string msg) : std::runtime_error(msg) {}
-};  // class ToolkitError
+  RtspSession();
+  ~RtspSession();
 
-}  // namespace edk
+  int Open(const OpenParam &param);
+  void Close();
 
-#endif  // CXXUTIL_TOOLKIT_ERROR_H_
+ private:
+  RtspSession(const RtspSession &) = delete;
+  RtspSession &operator=(const RtspSession &) = delete;
+  RtspSessionImpl *impl_ = nullptr;
+};
+
+}  // namespace cnstream
+
+#endif  // CNSTREAM_RTSP_CLIENT_H_

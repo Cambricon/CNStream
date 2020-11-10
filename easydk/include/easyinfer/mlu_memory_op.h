@@ -33,8 +33,6 @@
 
 namespace edk {
 
-TOOLKIT_REGISTER_EXCEPTION(MluMemoryOp);
-
 /**
  * @brief MluMemoryOp is a MLU memory helper class.
  * @note It provides a easy way to manage memory on MLU.
@@ -52,7 +50,7 @@ class MluMemoryOp {
    * @note model loader is used for manage model's input and output memory easily,
    *       do not need to set if this feature is not used.
    * @param ploader[in] Model loader
-   * @see ModelLoader
+   * @see edk::ModelLoader
    */
   void SetLoader(std::shared_ptr<ModelLoader> ploader);
 
@@ -65,6 +63,7 @@ class MluMemoryOp {
 
   /**
    * @brief Alloc memory on CPU for model input
+   * @deprecated use AllocCpuInput(void) instead
    *
    * @note Input data shape is described by input_shapes from ModelLoader
    * @attention Ensure SetLoader has been called once
@@ -74,7 +73,17 @@ class MluMemoryOp {
   void **AllocCpuInput(uint32_t batch_size) const;
 
   /**
+   * @brief Alloc memory on CPU for model input
+   *
+   * @note Input data shape is described by input_shapes from ModelLoader
+   * @attention Ensure SetLoader has been called once
+   * @return Alloced CPU memory
+   */
+  void **AllocCpuInput() const;
+
+  /**
    * @brief Alloc memory on CPU for model output
+   * @deprecated use AllocCpuOutput(void) instead
    *
    * @note Output data shape is described by output_shapes from ModelLoader
    * @attention Ensure SetLoader has been called once
@@ -84,7 +93,17 @@ class MluMemoryOp {
   void **AllocCpuOutput(uint32_t batch_size) const;
 
   /**
+   * @brief Alloc memory on CPU for model output
+   *
+   * @note Output data shape is described by output_shapes from ModelLoader
+   * @attention Ensure SetLoader has been called once
+   * @return Alloced CPU memory
+   */
+  void **AllocCpuOutput() const;
+
+  /**
    * @brief Alloc memory on MLU according to nBytes.
+   * @deprecated use AllocMlu(size_t) instead
    *
    * @param nBytes Alloced memory size in bytes
    * @param batch_size Batch size
@@ -93,7 +112,16 @@ class MluMemoryOp {
   void *AllocMlu(size_t nBytes, uint32_t batch_size) const;
 
   /**
+   * @brief Alloc memory on MLU according to nBytes.
+   *
+   * @param nBytes Alloced memory size in bytes
+   * @return Alloced MLU memory
+   */
+  void *AllocMlu(size_t nBytes) const;
+
+  /**
    * @brief Alloc memory on MLU for model input
+   * @deprecated use AllocMluInput(void) instead
    *
    * @note Input data shape is described by input_data_descs from ModelLoader
    * @attention Ensure SetLoader has been called once
@@ -103,7 +131,17 @@ class MluMemoryOp {
   void **AllocMluInput(uint32_t batch_size) const;
 
   /**
+   * @brief Alloc memory on MLU for model input
+   *
+   * @note Input data shape is described by input_data_descs from ModelLoader
+   * @attention Ensure SetLoader has been called once
+   * @return Alloced MLU memory
+   */
+  void **AllocMluInput() const;
+
+  /**
    * @brief Alloc memory on MLU for model output
+   * @deprecated use AllocMluOutput(void) instead
    *
    * @note Input data shape is described by output_data_descs from ModelLoader
    * @attention Ensure SetLoader has been called once
@@ -111,6 +149,15 @@ class MluMemoryOp {
    * @return Alloced MLU memory
    */
   void **AllocMluOutput(uint32_t batch_size) const;
+
+  /**
+   * @brief Alloc memory on MLU for model output
+   *
+   * @note Input data shape is described by output_data_descs from ModelLoader
+   * @attention Ensure SetLoader has been called once
+   * @return Alloced MLU memory
+   */
+  void **AllocMluOutput() const;
 
   /**
    * @brief Free input memory on CPU.
@@ -145,6 +192,7 @@ class MluMemoryOp {
 
   /**
    * @brief Copy model input data, from host(CPU) to device(MLU)
+   * @deprecated use MemcpyInputH2D(void**, void**) instead
    *
    * @attention Ensure SetLoader has been called once
    * @param mlu_dst[in] Copy destination, memory on MLU
@@ -154,7 +202,17 @@ class MluMemoryOp {
   void MemcpyInputH2D(void **mlu_dst, void **cpu_src, uint32_t batch_size) const;
 
   /**
+   * @brief Copy model input data, from host(CPU) to device(MLU)
+   *
+   * @attention Ensure SetLoader has been called once
+   * @param mlu_dst[in] Copy destination, memory on MLU
+   * @param cpu_src[in] Copy source, data on CPU
+   */
+  void MemcpyInputH2D(void **mlu_dst, void **cpu_src) const;
+
+  /**
    * @brief Copy model output data, from device to host
+   * @deprecated use MemcpyOutputD2H(void**, void**) instead
    *
    * @attention Ensure SetLoader has been called once
    * @param cpu_dst[in] Copy destination, memory on CPU
@@ -164,7 +222,17 @@ class MluMemoryOp {
   void MemcpyOutputD2H(void **cpu_dst, void **mlu_src, uint32_t batch_size) const;
 
   /**
+   * @brief Copy model output data, from device to host
+   *
+   * @attention Ensure SetLoader has been called once
+   * @param cpu_dst[in] Copy destination, memory on CPU
+   * @param mlu_src[in] Copy source, data on MLU
+   */
+  void MemcpyOutputD2H(void **cpu_dst, void **mlu_src) const;
+
+  /**
    * @brief Copy data from host to device
+   * @deprecated use MemcpyH2D(void**, void**, size_t) instead
    *
    * @param mlu_dst[in] Copy destination, memory on MLU
    * @param cpu_src[in] Copy source, data on CPU
@@ -174,7 +242,17 @@ class MluMemoryOp {
   void MemcpyH2D(void *mlu_dst, void *cpu_src, size_t nBytes, uint32_t batch_size) const;
 
   /**
+   * @brief Copy data from host to device
+   *
+   * @param mlu_dst[in] Copy destination, memory on MLU
+   * @param cpu_src[in] Copy source, data on CPU
+   * @param nBytes[in] Memory size in bytes
+   */
+  void MemcpyH2D(void *mlu_dst, void *cpu_src, size_t nBytes) const;
+
+  /**
    * @brief Copy data from device to host
+   * @deprecated use MemcpyD2H(void**, void**, size_t) instead
    *
    * @param cpu_dst[in] Copy destination, memory on CPU
    * @param mlu_src[in] Copy source, data on MLU
@@ -182,6 +260,15 @@ class MluMemoryOp {
    * @param batch_size[in] Batch size
    */
   void MemcpyD2H(void *cpu_dst, void *mlu_src, size_t nBytes, uint32_t batch_size) const;
+
+  /**
+   * @brief Copy data from device to host
+   *
+   * @param cpu_dst[in] Copy destination, memory on CPU
+   * @param mlu_src[in] Copy source, data on MLU
+   * @param nBytes[in] Memory size in bytes
+   */
+  void MemcpyD2H(void *cpu_dst, void *mlu_src, size_t nBytes) const;
 
   /**
    * @brief Copy data from device to device

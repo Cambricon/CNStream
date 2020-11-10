@@ -44,8 +44,9 @@ class Pipeline;
  * An enumerated type that specifies the mask of CNDataFrame.
  */
 enum CNFrameFlag {
-  CN_FRAME_FLAG_EOS = 1 << 0,     ///< Identifies the end of data stream.
-  CN_FRAME_FLAG_INVALID = 1 << 1  ///< Identifies the invalid of frame.
+  CN_FRAME_FLAG_EOS = 1 << 0,      ///< Identifies the end of data stream.
+  CN_FRAME_FLAG_INVALID = 1 << 1,  ///< Identifies the invalid of frame.
+  CN_FRAME_FLAG_REMOVED = 2 << 1   ///< Identifies the stream has been removed.
 };
 
 /**
@@ -65,7 +66,8 @@ class CNFrameInfo : private NonCopyable {
    *
    * @return Returns ``shared_ptr`` of ``CNFrameInfo`` if this function has run successfully. Otherwise, returns NULL.
    */
-  static std::shared_ptr<CNFrameInfo> Create(const std::string& stream_id, bool eos = false);
+  static std::shared_ptr<CNFrameInfo> Create(const std::string& stream_id, bool eos = false,
+                                            std::shared_ptr<CNFrameInfo> payload = nullptr);
   ~CNFrameInfo();
   /**
    * Whether DataFrame is end of stream (EOS) or not. 
@@ -73,6 +75,7 @@ class CNFrameInfo : private NonCopyable {
    * @return Returns true if the frame is EOS. Returns false if the frame is not EOS.
    */
   bool IsEos() { return (flags & cnstream::CN_FRAME_FLAG_EOS) ? true : false; }
+  bool IsRemoved() { return (flags & cnstream::CN_FRAME_FLAG_REMOVED) ? true : false; }
 
    /**
    * Whether DataFrame is availability or not.
@@ -99,6 +102,10 @@ class CNFrameInfo : private NonCopyable {
 
   // user-defined DataFrame，InferResult etc...
   std::unordered_map<int, any> datas;
+  cnstream::SpinLock datas_lock_;
+
+  // CNFrameInfo instance of parent pipeine
+  std::shared_ptr<cnstream::CNFrameInfo> payload = nullptr;
 
  private:
   /**
@@ -106,18 +113,12 @@ class CNFrameInfo : private NonCopyable {
    */
   friend class Pipeline;
   mutable uint32_t channel_idx = INVALID_STREAM_IDX;        ///< The index of the channel, stream_index
-  uint64_t SetModuleMask(Module* module, Module* current);  // return changed mask
-  uint64_t GetModulesMask(Module* module);
-  void ClearModuleMask(Module* module);
-  uint64_t AddEOSMask(Module* module);
+  uint64_t MarkPassed(Module* current);  // return changed mask
+  uint64_t GetModulesMask();
 
  private:
   SpinLock mask_lock_;
-  /*The mask map of the module. It identifies which modules the data can already be processed by.*/
-  std::unordered_map<unsigned int, uint64_t> module_mask_map_;
-
-  SpinLock eos_lock_;
-  uint64_t eos_mask = 0;
+  uint64_t modules_mask_ = 0;
 
  private:
   CNFrameInfo() {}

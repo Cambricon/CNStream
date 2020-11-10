@@ -25,15 +25,18 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <chrono>
 #include <mutex>
 #include <queue>
 #include <memory>
 #include <iostream>
 #include <thread>
-#include <chrono>
+#include <string>
 
-#include "ffmpeg_parser.hpp"
+#include "cnstream_frame_va.hpp"
+#include "cnstream_logging.hpp"
 #include "data_source.hpp"
+#include "util/video_decoder.hpp"
 
 namespace cnstream {
 
@@ -84,6 +87,7 @@ class BoundedQueue {
     std::unique_lock<std::mutex> lk(mutex_);
     notFull_.wait(lk, [this]() {return queue_.size() < maxSize_; });
     queue_.push(x);
+    lk.unlock();
     notEmpty_.notify_one();
   }
 
@@ -94,6 +98,7 @@ class BoundedQueue {
       return false;
     }
     queue_.push(x);
+    lk.unlock();
     notEmpty_.notify_one();
     return true;
   }
@@ -103,6 +108,7 @@ class BoundedQueue {
     notEmpty_.wait(lk, [this]() {return !queue_.empty(); });
     T front(queue_.front());
     queue_.pop();
+    lk.unlock();
     notFull_.notify_one();
     return front;
   }
@@ -113,6 +119,7 @@ class BoundedQueue {
     if (queue_.empty()) return false;
     out = queue_.front();
     queue_.pop();
+    lk.unlock();
     notFull_.notify_one();
     return true;
   }
@@ -138,32 +145,84 @@ class BoundedQueue {
   size_t maxSize_;
   std::queue<T> queue_;
 };
-
 using FrameQueue = BoundedQueue<std::shared_ptr<EsPacket>>;
-class IDemuxer {
+
+class SourceRender {
  public:
-  virtual ~IDemuxer() {}
-  virtual bool PrepareResources(std::atomic<int> &exit_flag) = 0;  // NOLINT
-  virtual void ClearResources(std::atomic<int> &exit_flag) = 0;   // NOLINT
-  virtual bool Process() = 0;  // process one frame
-  bool GetInfo(VideoStreamInfo &info) {  // NOLINT
-    std::unique_lock<std::mutex> lk(mutex_);
-    if (info_set_) {
-      info = info_;
-      return true;
+  explicit SourceRender(SourceHandler *handler) : handler_(handler) {}
+  virtual ~SourceRender() = default;
+
+  virtual bool CreateInterrupt() { return interrupt_.load(); }
+  std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) {
+    std::shared_ptr<CNFrameInfo> data;
+    while (1) {
+      data = handler_->CreateFrameInfo(eos);
+      if (data != nullptr) break;
+      if (CreateInterrupt()) break;
+      std::this_thread::sleep_for(std::chrono::microseconds(5));
     }
-    return false;
-  }
- protected:
-  void SetInfo(VideoStreamInfo &info) {  // NOLINT
-    std::unique_lock<std::mutex> lk(mutex_);
-    info_ = info;
-    info_set_ = true;
+    auto dataframe = std::make_shared<CNDataFrame>();
+    if (!dataframe) {
+      return nullptr;
+    }
+    auto inferobjs = std::make_shared<CNInferObjs>();
+    if (!inferobjs) {
+      return nullptr;
+    }
+    auto inferdata =  std::make_shared<CNInferData>();
+    if (!inferdata) {
+      return nullptr;
+    }
+    data->datas[CNDataFramePtrKey] = dataframe;
+    data->datas[CNInferObjsPtrKey] = inferobjs;
+    data->datas[CNInferDataPtrKey] = inferdata;
+    return data;
   }
 
-  std::mutex mutex_;
-  VideoStreamInfo info_;
-  bool info_set_ = false;
+  void SendFlowEos() {
+    if (eos_sent_) return;
+    auto data = CreateFrameInfo(true);
+    if (!data) {
+      LOGE("SOURCE") << "SendFlowEos: Create CNFrameInfo failed";
+      return;
+    }
+    SendFrameInfo(data);
+    eos_sent_ = true;
+  }
+
+  bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) {
+    return handler_->SendData(data);
+  }
+
+  //
+  void SetPerfManager(std::shared_ptr<PerfManager> perf_manager) {
+    perf_manager_ = perf_manager;
+  }
+  void SetThreadName(std::string module_name, uint64_t stream_idx) {
+    thread_name_ = "cn-" + module_name + "-" + NumToFormatStr(stream_idx, 2);
+  }
+  void RecordStartTime(const std::string &module_name, int64_t pts) {
+    if (perf_manager_ != nullptr) {
+      perf_manager_->Record(false, PerfManager::GetDefaultType(), module_name, pts);
+      perf_manager_->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(pts),
+                            module_name + PerfManager::GetThreadSuffix(), "'" + thread_name_ + "'");
+    }
+  }
+
+ protected:
+  SourceHandler *handler_;
+  bool eos_sent_ = false;
+  std::shared_ptr<PerfManager> perf_manager_;
+  std::string thread_name_;
+
+ protected:
+  std::atomic<bool> interrupt_{false};
+  uint64_t frame_count_ = 0;
+  uint64_t frame_id_ = 0;
+
+ public:
+  static int Process(std::shared_ptr<CNFrameInfo> frame_info,
+                     DecodeFrame *frame, uint64_t frame_id, const DataSourceParam &param_);
 };
 
 }  // namespace cnstream

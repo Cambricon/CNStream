@@ -74,11 +74,12 @@ Osd::Osd(const std::string& name) : Module(name) {
   param_register_.Register("label_size", " The size of the label, support value: "
                            "normal, large, larger, small, smaller and number. The default value is normal");
   param_register_.Register("text_scale", "The scale of the text, which can change the size of text put on image. "
-                           "The default value is 1.");
-  param_register_.Register("text_thickness", "The thickness of the text, which can change "
-                           "the thickness of text put on image. The default value is 1.");
-  param_register_.Register("box_thickness", "The thickness of the box drawed on the image.");
-  param_register_.Register("secondary_label_path", "The path of the secondary inference file");
+                           "The default value is 1. scale = label_size * text_scale");
+  param_register_.Register("text_thickness", "The thickness of the text, which can change the thickness of text put on "
+                           "image. The default value is 1. thickness = label_size * text_thickness");
+  param_register_.Register("box_thickness", "The thickness of the box drawn on the image. "
+                           "thickness = label_size * box_thickness");
+  param_register_.Register("secondary_label_path", "The path of the secondary label file");
   param_register_.Register("attr_keys", "The keys of attribute which you want to draw on image");
   param_register_.Register("logo", "draw 'logo' on each frame");
 }
@@ -200,7 +201,7 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
     return -1;
   }
 
-  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
   if (frame->width < 0 || frame->height < 0) {
     LOG(ERROR) << "OSD module processed illegal frame: width or height may < 0.";
     return -1;
@@ -211,15 +212,15 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
     return -1;
   }
 
-  CNObjsVec input_objs;
-  if (data->datas.find(CNObjsVecKey) != data->datas.end()) {
-    input_objs = (cnstream::any_cast<CNObjsVec>(data->datas[CNObjsVecKey]));
+  CNInferObjsPtr objs_holder = nullptr;
+  if (data->datas.find(CNInferObjsPtrKey) != data->datas.end()) {
+    objs_holder = cnstream::GetCNInferObjsPtr(data);
   }
 
   if (!logo_.empty()) {
     ctx->DrawLogo(frame->ImageBGR(), logo_);
   }
-  ctx->DrawLabel(frame->ImageBGR(), input_objs, attr_keys_);
+  ctx->DrawLabel(frame->ImageBGR(), objs_holder, attr_keys_);
   return 0;
 }
 

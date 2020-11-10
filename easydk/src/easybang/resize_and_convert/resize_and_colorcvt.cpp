@@ -125,19 +125,19 @@ bool MluResizeConvertOp::Init(const MluResizeConvertOp::Attr& attr) {
   d_ptr_->y_ptrs_cpu_ = new void*[batchsize];
   d_ptr_->uv_ptrs_cpu_ = new void*[batchsize];
   cnrtRet_t cnret = cnrtMalloc(reinterpret_cast<void**>(&d_ptr_->y_ptrs_mlu_), sizeof(void*) * batchsize);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. cnrt error code:" + std::to_string(cnret), {}, false);
   cnret = cnrtMalloc(reinterpret_cast<void**>(&d_ptr_->uv_ptrs_mlu_), sizeof(void*) * batchsize);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. cnrt error code:" + std::to_string(cnret), {}, false);
   cnret = cnrtMalloc(reinterpret_cast<void**>(&d_ptr_->src_whs_mlu_tmp_), sizeof(int) * batchsize * 2);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. cnrt error code:" + std::to_string(cnret), {}, false);
   d_ptr_->src_whs_cpu_ = new int[batchsize * 2];
   cnret = cnrtMalloc(reinterpret_cast<void**>(&d_ptr_->src_rois_mlu_tmp_), sizeof(int) * batchsize * 4);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. cnrt error code:" + std::to_string(cnret), {}, false);
   d_ptr_->src_rois_cpu_ = new int[batchsize * 4];
   cnret = cnrtMalloc(reinterpret_cast<void**>(&d_ptr_->src_whs_mlu_), sizeof(int*) * batchsize);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. cnrt error code:" + std::to_string(cnret), {}, false);
   cnret = cnrtMalloc(reinterpret_cast<void**>(&d_ptr_->src_rois_mlu_), sizeof(int*) * batchsize);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Malloc mlu buffer failed. cnrt error code:" + std::to_string(cnret), {}, false);
   int **wh_mlu_ptrs_tmp = new int*[batchsize];
   int **roi_mlu_ptrs_tmp = new int*[batchsize];
   for (int i = 0; i < batchsize; ++i) {
@@ -146,10 +146,10 @@ bool MluResizeConvertOp::Init(const MluResizeConvertOp::Attr& attr) {
   }
   cnret = cnrtMemcpy(reinterpret_cast<void*>(d_ptr_->src_whs_mlu_), reinterpret_cast<void*>(wh_mlu_ptrs_tmp),
       sizeof(int*) * batchsize, CNRT_MEM_TRANS_DIR_HOST2DEV);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy h2d failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy h2d failed. cnrt error code:" + std::to_string(cnret), {}, false);
   cnret = cnrtMemcpy(reinterpret_cast<void*>(d_ptr_->src_rois_mlu_), reinterpret_cast<void*>(roi_mlu_ptrs_tmp),
       sizeof(int*) * batchsize, CNRT_MEM_TRANS_DIR_HOST2DEV);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy h2d failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy h2d failed. cnrt error code:" + std::to_string(cnret), {}, false);
   delete[] wh_mlu_ptrs_tmp;
   delete[] roi_mlu_ptrs_tmp;
 
@@ -192,51 +192,6 @@ bool MluResizeConvertPrivate::PrepareTaskQueue() {
   return true;
 }
 
-int MluResizeConvertOp::InvokeOp(void* dst, void* srcY, void* srcUV) {
-  if (nullptr == d_ptr_->queue_ || nullptr == d_ptr_->queue_->queue) {
-    LOG(INFO) << "MluTaskQueue has not been set, MluResizeConvertOp will create a new one";
-    if (!d_ptr_->PrepareTaskQueue()) {
-      return -1;
-    }
-  }
-  if (d_ptr_->attr_.batch_size != 1) {
-    throw MluResizeConvertOpError(
-        "InvokeOp is vaild only if the batchsize is 1. Please Use BatchingUp "
-        "and SyncOneOutput to replase InvokeOp.",
-        GetAttr(), {});
-  }
-  InputData input_data;
-  input_data.src_w = d_ptr_->attr_.src_w;
-  input_data.src_h = d_ptr_->attr_.src_h;
-  input_data.src_stride = d_ptr_->attr_.src_stride;
-  input_data.crop_x = d_ptr_->attr_.crop_x;
-  input_data.crop_y = d_ptr_->attr_.crop_y;
-  input_data.crop_w = d_ptr_->attr_.crop_w;
-  input_data.crop_h = d_ptr_->attr_.crop_h;
-  input_data.planes[0] = srcY;
-  input_data.planes[1] = srcUV;
-  BatchingUp(input_data);
-  if (!SyncOneOutput(dst)) {
-    return -1;
-  }
-  return 0;
-}
-
-void MluResizeConvertOp::BatchingUp(void* src_y, void* src_uv) {
-  InputData input_data;
-  input_data.src_w = d_ptr_->attr_.src_w;
-  input_data.src_h = d_ptr_->attr_.src_h;
-  input_data.src_stride = d_ptr_->attr_.src_stride;
-  input_data.crop_x = d_ptr_->attr_.crop_x;
-  input_data.crop_y = d_ptr_->attr_.crop_y;
-  input_data.crop_w = d_ptr_->attr_.crop_w;
-  input_data.crop_h = d_ptr_->attr_.crop_h;
-  input_data.planes[0] = src_y;
-  input_data.planes[1] = src_uv;
-
-  BatchingUp(input_data);
-}
-
 void MluResizeConvertOp::BatchingUp(const InputData& input_data) {
   VLOG(5) << "Store resize and convert operator input for batching, "
              << input_data.planes[0] << ", " << input_data.planes[1];
@@ -260,14 +215,22 @@ void MluResizeConvertOp::BatchingUp(const InputData& input_data) {
    * case 2: scale-up factor is greater than MAXIMUM_SCALE_UP_FACTOR
    **/
   if (t.crop_w > MAXIMUM_WIDTH) {
-    throw RCOpWidthOverLimitError(GetAttr(), t);
+    throw MluResizeConvertOpError(Exception::Code::INVALID_ARG, __FILE__, __LINE__, __func__,
+                                  "Maximum input width limit exceeded. Maximum input width: " +
+                                      std::to_string(MluResizeConvertOp::MAXIMUM_WIDTH) +
+                                      ". Current input width: " + std::to_string(t.crop_w) + ".",
+                                  GetAttr(), t);
   }
 
   float scale_factor = GetAttr().keep_aspect_ratio ?
                        std::min(1.0f * GetAttr().dst_w / t.crop_w, 1.0f * GetAttr().dst_h / t.crop_h) :
                        1.0f * GetAttr().dst_w / t.crop_w;
   if (scale_factor > MAXIMUM_SCALE_UP_FACTOR) {
-    throw RCOpScaleUpError(GetAttr(), t);
+    throw MluResizeConvertOpError(Exception::Code::INVALID_ARG, __FILE__, __LINE__, __func__,
+                                  "Maximum magnification limit exceeded. Maximum magnification: " +
+                                      std::to_string(MluResizeConvertOp::MAXIMUM_SCALE_UP_FACTOR) +
+                                      ". Current magnification: " + std::to_string(scale_factor) + ".",
+                                  GetAttr(), t);
   }
 
   d_ptr_->input_datas_cache_.push_back(t);
@@ -304,23 +267,25 @@ bool MluResizeConvertOp::SyncOneOutput(void* dst) {
                                reinterpret_cast<void*>(d_ptr_->y_ptrs_cpu_),
                                sizeof(void*) * d_ptr_->attr_.batch_size,
                                CNRT_MEM_TRANS_DIR_HOST2DEV);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy host to device failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy host to device failed. cnrt error code:" + std::to_string(cnret), {},
+                 false);
   cnret = cnrtMemcpy(reinterpret_cast<void*>(d_ptr_->uv_ptrs_mlu_),
                      reinterpret_cast<void*>(d_ptr_->uv_ptrs_cpu_),
                      sizeof(void*) * d_ptr_->attr_.batch_size,
                      CNRT_MEM_TRANS_DIR_HOST2DEV);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy host to device failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy host to device failed. cnrt error code:" + std::to_string(cnret), {},
+                 false);
   cnret = cnrtMemcpy(reinterpret_cast<void*>(d_ptr_->src_whs_mlu_tmp_),
                      reinterpret_cast<void*>(d_ptr_->src_whs_cpu_),
                      sizeof(int) * 2 * d_ptr_->attr_.batch_size,
                      CNRT_MEM_TRANS_DIR_HOST2DEV);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_,
-                 "Memcpy width and height failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy width and height failed. cnrt error code:" + std::to_string(cnret), {},
+                 false);
   cnret = cnrtMemcpy(reinterpret_cast<void*>(d_ptr_->src_rois_mlu_tmp_),
                      reinterpret_cast<void*>(d_ptr_->src_rois_cpu_),
                      sizeof(int) * d_ptr_->attr_.batch_size * 4,
                      CNRT_MEM_TRANS_DIR_HOST2DEV);
-  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy rois failed. Error code:" + std::to_string(cnret), {}, false);
+  CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Memcpy rois failed. cnrt error code:" + std::to_string(cnret), {}, false);
   cnrtDim3_t dim;
   dim.x = d_ptr_->attr_.core_number;
   dim.y = 1;
@@ -350,7 +315,8 @@ bool MluResizeConvertOp::SyncOneOutput(void* dst) {
   }
   /* if (!d_ptr_->shared_queue_ && ret) { */
   /*   cnrtRet_t cnrt_ret = cnrtSyncQueue(d_ptr_->queue_->queue); */
-  /*   CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Sync queue failed. Error code:" + std::to_string(cnret), {}, false); */
+  /*   CHECK_CNRT_RET(cnret, d_ptr_->estr_, "Sync queue failed. cnrt error code:" + std::to_string(cnret), {}, false);
+   */
   /* } */
   return ret;
 }

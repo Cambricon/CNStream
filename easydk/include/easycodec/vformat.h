@@ -114,7 +114,7 @@ struct CnFrame {
   uint32_t width;
   /// Frame data size, unit: byte
   uint64_t frame_size;
-  /// Frame color space, @see PixelFmt
+  /// Frame color space, @see edk::PixelFmt
   PixelFmt pformat;
   /// Color standard
   ColorStd color_std;
@@ -122,6 +122,8 @@ struct CnFrame {
   int device_id;
   /// MLU channel in which memory stored
   int channel_id;
+  /// If use cpu decode
+  bool cpu_decode = false;
   /// Plane count for this frame
   uint32_t n_planes;
   /// Frame strides for each plane
@@ -154,9 +156,9 @@ struct CnPacket {
   uint64_t length;
   /// Presentation time stamp
   uint64_t pts;
-  /// Video codec type, @see CodecType
+  /// Video codec type, @see edk::CodecType
   CodecType codec_type;
-  /// Bitstream slice type, only used in EasyEncode, @see BitStreamSliceType
+  /// Bitstream slice type, only used in EasyEncode, @see edk::BitStreamSliceType
   BitStreamSliceType slice_type;
 };
 

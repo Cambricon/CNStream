@@ -56,13 +56,7 @@ bool CNEncode::Init() {
     return false;
   }
   if (cnencode_param_.output_dir.empty()) {
-    char *path;
-    path = getcwd(NULL, 0);
-    if (path) {
-      cnencode_param_.output_dir = path;
-      free(path);
-    }
-    cnencode_param_.output_dir += "./output";
+    cnencode_param_.output_dir = "./output";
   }
   if (!CreateDir(cnencode_param_.output_dir + "/")) {
     LOG(ERROR) << "[CNEncode] Create output dir " << cnencode_param_.output_dir << " failed.";
@@ -73,8 +67,8 @@ bool CNEncode::Init() {
       edk::MluContext context;
       try {
         context.SetDeviceId(cnencode_param_.device_id);
-        context.ConfigureForThisThread();
-      } catch (edk::MluContextError &err) {
+        context.BindDevice();
+      } catch (edk::Exception &err) {
         LOG(ERROR) << "CNEncode: set mlu env failed";
         return false;
       }
@@ -168,7 +162,7 @@ bool CNEncode::CreateMluEncoder() {
 
   try {
     mlu_encoder_ = edk::EasyEncode::Create(attr);
-  } catch (edk::EasyEncodeError &err) {
+  } catch (edk::Exception &err) {
     LOG(ERROR) << "[CNEncode] create mlu encode failed. error message:" << err.what();
     if (mlu_encoder_) {
       delete mlu_encoder_;
@@ -237,8 +231,8 @@ CNEncode::~CNEncode() {
     edk::MluContext context;
     try {
       context.SetDeviceId(cnencode_param_.device_id);
-      context.ConfigureForThisThread();
-    } catch (edk::MluContextError &err) {
+      context.BindDevice();
+    } catch (edk::Exception &err) {
       LOG(ERROR) << "[CNEncode][Close] set mlu env failed";
     }
     if (mlu_encoder_) {
@@ -299,7 +293,7 @@ bool CNEncode::Update(uint8_t* src_y, uint8_t* src_uv, int64_t timestamp, bool e
       delete cnframe;
       return false;
     }
-  } catch (edk::EasyEncodeError &err) {
+  } catch (edk::Exception &err) {
     LOG(ERROR) << "EncoderError: send data to mlu encoder" << err.what();
     delete cnframe;
     return false;
@@ -328,8 +322,8 @@ void CNEncode::PacketCallback(const edk::CnPacket &packet) {
   try {
     edk::MluContext context;
     context.SetDeviceId(cnencode_param_.device_id);
-    context.ConfigureForThisThread();
-  } catch (edk::MluContextError &err) {
+    context.BindDevice();
+  } catch (edk::Exception &err) {
     LOG(ERROR) << "[CNEncode][PacketCallback] set mlu env faild";
     mlu_encoder_->ReleaseBuffer(packet.buf_id);
     return;

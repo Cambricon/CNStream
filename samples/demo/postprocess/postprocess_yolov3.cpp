@@ -18,6 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include <glog/logging.h>
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -53,7 +55,8 @@ class PostprocYolov3 : public cnstream::Postproc {
     const int box_num = static_cast<int>(net_output[0]);
     int box_step = 7;
     auto range_0_1 = [](float num) { return std::max(.0f, std::min(1.0f, num)); };
-    cnstream::CNObjsVec objs;
+    cnstream::CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(package);
+    cnstream::CNObjsVec &objs = objs_holder->objs_;
     for (int box_idx = 0; box_idx < box_num; ++box_idx) {
       float left = range_0_1(net_output[64 + box_idx * box_step + 3]);
       float right = range_0_1(net_output[64 + box_idx * box_step + 5]);
@@ -83,7 +86,6 @@ class PostprocYolov3 : public cnstream::Postproc {
 
       objs.push_back(obj);
     }
-    package->datas[cnstream::CNObjsVecKey] = objs;
 
     return 0;
   }

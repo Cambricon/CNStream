@@ -37,8 +37,6 @@
 
 namespace edk {
 
-TOOLKIT_REGISTER_EXCEPTION(MluMemory);
-
 /**
  * @brief MluMemory is a MLU memory helper class.
  * @note It provides a easy way to manage memory on MLU.
@@ -145,10 +143,10 @@ class MluMemoryPool {
    * @brief Construct a new Mlu Memory Pool object
    *
    * @param memory_size[in] Memory size in bytes
-   * @param buffer_num[in] number of memory cached in pool
+   * @param max_buffer_num[in] max number of memory cached in pool
    * @param device_id[in] memory on which device
    */
-  MluMemoryPool(size_t memory_size, size_t buffer_num, int device_id = 0);
+  MluMemoryPool(size_t memory_size, size_t max_buffer_num, int device_id = 0);
 
   /**
    * @brief A destructor
@@ -183,6 +181,7 @@ class MluMemoryPool {
   std::mutex q_mutex_;
   std::condition_variable empty_cond_;
   size_t memory_size_;
+  size_t max_buffer_num_;
   size_t buffer_num_;
   int device_id_;
   std::atomic<bool> running_{false};

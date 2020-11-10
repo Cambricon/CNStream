@@ -32,7 +32,6 @@
 #include "common.hpp"
 #include "easyinfer/mlu_memory_op.h"
 #include "encode.hpp"
-#include "test_base.hpp"
 
 namespace cnstream {
 static constexpr const char *gname = "encode";
@@ -45,7 +44,6 @@ TEST(EncodeModule, OpenClose) {
   EXPECT_TRUE(module.Open(params));
   module.Close();
 
-  params["output_dir"] = GetExePath();
   params["frame_rate"] = "25";
   params["kbit_rate"] = "0x100000";
   params["gop_size"] = "30";
@@ -115,6 +113,7 @@ TEST(EncodeModule, OpenCloseFailedCase) {
 TEST(EncodeModule, ProcessFailedCase) {
   std::shared_ptr<Module> module_ptr = std::make_shared<Encode>(gname);
   ModuleParamSet params;
+  params["output_dir"] = "./encode_output";
   EXPECT_TRUE(module_ptr->Open(params));
 
   // data should not be nullptr
@@ -126,8 +125,9 @@ TEST(EncodeModule, ProcessFailedCase) {
 
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
   std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+  frame->dst_device_id = g_device_id;
 
-  //unsupported frame format
+  // unsupported frame format
   frame->fmt = CN_PIXEL_FORMAT_ARGB32;
   data->datas[CNDataFramePtrKey] = frame;
   EXPECT_EQ(-1, module_ptr->Process(data));
@@ -167,7 +167,7 @@ TEST(EncodeModule, ProcessFailedCase) {
   size_t height = frame->height;
   size_t nbytes = ALIGN(width, DEC_ALIGNMENT) * height * 3 / 2;
   edk::MluMemoryOp mem_op;
-  void *src = mem_op.AllocMlu(nbytes, 1);
+  void *src = mem_op.AllocMlu(nbytes);
   frame->stride[0] = ALIGN(width, DEC_ALIGNMENT);
   frame->stride[1] = ALIGN(width, DEC_ALIGNMENT);
   frame->ptr_mlu[0] = src;
@@ -309,6 +309,7 @@ void TestFunc(const ModuleParamSet& params, std::vector<std::pair<uint32_t, uint
     frame->ctx.ddr_channel = g_channel_id;
     frame->ctx.dev_id = g_device_id;
     frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+    frame->dst_device_id = g_device_id;
     frame->CopyToSyncMem();
     if (src_bgr) {
       frame->ImageBGR();
@@ -328,7 +329,7 @@ void TestFunc(const ModuleParamSet& params, std::vector<std::pair<uint32_t, uint
   ptr->Close();
 }
 
-TEST(ModuleEncode, ProcessCpuEncode) {
+TEST(EncodeModule, ProcessCpuEncode) {
   std::vector<std::pair<uint32_t, uint32_t>> src_wh;
   src_wh.push_back({720, 480});
   src_wh.push_back({1200, 720});
@@ -340,7 +341,7 @@ TEST(ModuleEncode, ProcessCpuEncode) {
   std::vector<std::string> codec_type_vec = {"h264", "hevc", "jpeg"};
   std::vector<std::string> use_ffmpeg_vec = {"true", "false"};
   ModuleParamSet params;
-  params["output_dir"] = GetExePath() + "/encode_output";
+  params["output_dir"] = "./encode_output";
   params["encoder_type"] = "cpu";
   params["preproc_type"] = "cpu";
   params["device_id"] = "-1";
@@ -358,7 +359,7 @@ TEST(ModuleEncode, ProcessCpuEncode) {
   }
 }
 
-TEST(ModuleEncode, ProcessMluEncode) {
+TEST(EncodeModule, ProcessMluEncode) {
   std::vector<std::pair<uint32_t, uint32_t>> src_wh;
   src_wh.push_back({720, 480});
   src_wh.push_back({1200, 720});
@@ -370,7 +371,7 @@ TEST(ModuleEncode, ProcessMluEncode) {
   std::vector<std::string> codec_type_vec = {"h264", "hevc", "jpeg"};
   std::vector<std::string> use_ffmpeg_vec = {"true", "false"};
   ModuleParamSet params;
-  params["output_dir"] = GetExePath() + "/encode_output";
+  params["output_dir"] = "./encode_output";
   params["frame_rate"] = "25";
   params["kbit_rate"] = "0x100000";
   params["gop_size"] = "30";

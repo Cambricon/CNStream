@@ -81,7 +81,7 @@ TEST(Display, Process) {
   frame->stride[0] = width;
   frame->ctx.dev_type = DevContext::DevType::CPU;
   frame->fmt = CN_PIXEL_FORMAT_BGR24;
-  frame->CopyToSyncMem();
+  frame->CopyToSyncMem(false);
   data->datas[CNDataFramePtrKey] = frame;
   EXPECT_EQ(display->Process(data), 0);
   auto thread_loop = [&display]() { display->GUILoop(nullptr); };

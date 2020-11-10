@@ -23,6 +23,8 @@
 #include <string>
 #include <thread>
 
+#define HAVE_LIVE555 1 
+
 #ifdef HAVE_LIVE555
 
 #include "BasicUsageEnvironment.hh"
@@ -122,7 +124,7 @@ class ourRTSPClient : public RTSPClient {
 // "openRTSP" application). In this example code, however, we define a simple 'dummy' sink that receives incoming data,
 // but does nothing with it.
 
-class DummySink : public MediaSink {
+class DummySink : public MediaSink, public cnstream::IParserResult {
  public:
   static DummySink* createNew(UsageEnvironment& env,
                               MediaSubsession& subsession,   // identifies the kind of data that's being received
@@ -138,18 +140,24 @@ class DummySink : public MediaSink {
   void afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes, struct timeval presentationTime,
                          unsigned durationInMicroseconds);
 
+
+  void OnParserInfo(cnstream::VideoInfo *info) override;
+  void OnParserFrame(cnstream::VideoEsFrame *frame) override;
  private:
   // redefined virtual functions:
   virtual Boolean continuePlaying();
 
+  bool FindKeyFrame(unsigned char *buf, unsigned size, bool isH264);
  private:
-  u_int8_t* fReceiveBuffer = nullptr;
-  bool firstFrame = true;
+  std::unique_ptr<u_int8_t[]> fReceiveBuffer = nullptr;
   MediaSubsession& fSubsession;
-  char* fStreamId;
-  cnstream::FrameInfo frameInfo;
-  u_int8_t* paramset = nullptr;
-  int paramset_size = 0;
+  char* fStreamId = nullptr;
+  std::unique_ptr<u_int8_t[]> paramset = nullptr;
+  unsigned paramset_size = 0;
+  bool spropsSent = false;
+  uint64_t frameTimeStampBase = 0;
+  bool firstFrame = true;  
+  cnstream::EsParser parser_;
 };
 
 // Implementation of the RTSP 'response handlers':
@@ -491,7 +499,7 @@ StreamClientState::~StreamClientState() {
 
 // Even though we're not going to be doing anything with the incoming data, we still need to receive it.
 // Define the size of the buffer that we'll use:
-#define DUMMY_SINK_RECEIVE_BUFFER_SIZE 1000000
+#define DUMMY_SINK_RECEIVE_BUFFER_SIZE (1024 * 1024)
 
 DummySink* DummySink::createNew(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId) {
   return new DummySink(env, subsession, streamId);
@@ -500,24 +508,27 @@ DummySink* DummySink::createNew(UsageEnvironment& env, MediaSubsession& subsessi
 DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId)
     : MediaSink(env), fSubsession(subsession) {
   fStreamId = strDup(streamId);
-  fReceiveBuffer = new (std::nothrow) u_int8_t[DUMMY_SINK_RECEIVE_BUFFER_SIZE + 4];
+  fReceiveBuffer.reset(new u_int8_t[DUMMY_SINK_RECEIVE_BUFFER_SIZE + 4]);
 
+  AVCodecID codec_id;
   if (!strcmp(fSubsession.codecName(), "H264")) {
-    frameInfo.codec_type = cnstream::FrameInfo::H264;
+    codec_id = AV_CODEC_ID_H264;
   } else if (!strcmp(fSubsession.codecName(), "H265")) {
-    frameInfo.codec_type = cnstream::FrameInfo::H265;
+    codec_id = AV_CODEC_ID_HEVC;
   } else {
-    frameInfo.codec_type = cnstream::FrameInfo::INVALID;
+    throw std::runtime_error("Unsupported codec type");  // FIXME
   }
+  parser_.Open(codec_id, this);
+
   unsigned int num;
   SPropRecord* sps = parseSPropParameterSets(fSubsession.fmtp_spropparametersets(), num);
   paramset_size = 0;
   for (unsigned int i = 0; i < num; i++) {
     paramset_size += 4 + sps[i].sPropLength;
   }
-  paramset = new (std::nothrow) unsigned char[paramset_size];
+  paramset.reset(new u_int8_t[paramset_size]);
   if (paramset) {
-    unsigned char* tmp = paramset;
+    unsigned char* tmp = paramset.get();
     for (unsigned int i = 0; i < num; i++) {
       tmp[0] = 0x00;
       tmp[1] = 0x00;
@@ -530,9 +541,8 @@ DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char co
 }
 
 DummySink::~DummySink() {
-  delete[] fReceiveBuffer;
   delete[] fStreamId;
-  delete[] paramset;
+  parser_.Close();
 }
 
 void DummySink::afterGettingFrame(void* clientData, unsigned frameSize, unsigned numTruncatedBytes,
@@ -542,12 +552,11 @@ void DummySink::afterGettingFrame(void* clientData, unsigned frameSize, unsigned
 }
 
 // If you don't want to see debugging output for each received frame, then comment out the following line:
-#define DEBUG_PRINT_EACH_RECEIVED_FRAME 1
+// #define DEBUG_PRINT_EACH_RECEIVED_FRAME 1
 
 void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes, struct timeval presentationTime,
                                   unsigned /*durationInMicroseconds*/) {
   // We've just received a frame of data.  (Optionally) print out information about it:
-  /*
   #ifdef DEBUG_PRINT_EACH_RECEIVED_FRAME
     if (fStreamId != NULL) envir() << "Stream \"" << fStreamId << "\"; ";
     envir() << fSubsession.mediumName() << "/" << fSubsession.codecName() << ":\tReceived " << frameSize << " bytes";
@@ -563,27 +572,46 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
   #endif
     envir() << "\n";
   #endif
-  */
+
   ourRTSPClient* client = reinterpret_cast<ourRTSPClient*>(fSubsession.miscPtr);
   // start to check liveness for livestream, FIXME
   client->resetLivenessTimer();
 
-  if (client->cb_ && cnstream::FrameInfo::INVALID != frameInfo.codec_type) {
+  if (client->cb_ && frameSize) {
+    /*H264/H265, video frame*/
+    u_int8_t *buffer = fReceiveBuffer.get();
+    buffer[0] = 0x00;
+    buffer[1] = 0x00;
+    buffer[2] = 0x00;
+    buffer[3] = 0x01;
+
+    uint64_t ts = (presentationTime.tv_usec/1000 + presentationTime.tv_sec * 1000) * 90;
     if (firstFrame) {
-      client->cb_->OnFrame(paramset, paramset_size, &frameInfo);
+      frameTimeStampBase = ts;
       firstFrame = false;
     }
-    /*H264/H265, video frame*/
-    fReceiveBuffer[0] = 0x00;
-    fReceiveBuffer[1] = 0x00;
-    fReceiveBuffer[2] = 0x00;
-    fReceiveBuffer[3] = 0x01;
-    frameInfo.pts = fSubsession.getNormalPlayTime(presentationTime) * 90000;
-    client->cb_->OnFrame(fReceiveBuffer, frameSize + 4, &frameInfo);
+    cnstream::VideoEsPacket packet;
+    packet.data = buffer;
+    packet.len = frameSize + 4;
+    packet.pts = ts - frameTimeStampBase;
+    parser_.Parse(packet);
   }
 
   // Then continue, to request the next frame of data:
   continuePlaying();
+}
+
+void DummySink::OnParserInfo(cnstream::VideoInfo *info) {
+  ourRTSPClient* client = reinterpret_cast<ourRTSPClient*>(fSubsession.miscPtr);
+  if (client->cb_) {
+    client->cb_->OnRtspInfo(info);
+  }
+}
+void DummySink::OnParserFrame(cnstream::VideoEsFrame *frame) {
+  ourRTSPClient* client = reinterpret_cast<ourRTSPClient*>(fSubsession.miscPtr);
+  if (client->cb_) {
+    client->cb_->OnRtspFrame(frame);
+  }
 }
 
 Boolean DummySink::continuePlaying() {
@@ -591,7 +619,8 @@ Boolean DummySink::continuePlaying() {
 
   // Request the next frame of data from our input source.  "afterGettingFrame()" will get called later, when it
   // arrives:
-  fSource->getNextFrame(fReceiveBuffer + 4, DUMMY_SINK_RECEIVE_BUFFER_SIZE, afterGettingFrame, this, onSourceClosure,
+  u_int8_t *buffer = fReceiveBuffer.get();
+  fSource->getNextFrame(buffer + 4, DUMMY_SINK_RECEIVE_BUFFER_SIZE, afterGettingFrame, this, onSourceClosure,
                         this);
   return True;
 }
@@ -642,7 +671,7 @@ class RtspSessionImpl {
 
     std::cout << "TaskRoutine exit" << std::endl;
     if(param_.cb) {
-      param_.cb->OnFrame(nullptr, 0, nullptr);
+      param_.cb->OnRtspFrame(nullptr);
     }
   }
 

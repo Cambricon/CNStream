@@ -34,7 +34,7 @@ if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED
 endif()
 
 install(TARGETS cnstream_core LIBRARY DESTINATION lib)
-target_link_libraries(cnstream_core ${SOURCE_LINKER_LIBS} sqlite3)
+target_link_libraries(cnstream_core ${SOURCE_LINKER_LIBS} cnrt sqlite3)
 set_target_properties(cnstream_core PROPERTIES VERSION ${CNSTREAM_TARGET_VERSION})
 install(DIRECTORY core/include/ DESTINATION include)
 

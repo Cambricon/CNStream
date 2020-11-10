@@ -52,7 +52,7 @@ class ObjPreproc;
 class Postproc;
 class ObjPostproc;
 class InferThreadPool;
-struct CNFrameInfo;
+class CNFrameInfo;
 class PerfManager;
 
 class InferEngine {
@@ -74,9 +74,15 @@ class InferEngine {
               const std::shared_ptr<ObjFilter>& obj_filter = nullptr,
               std::string dump_resized_image_dir = "",
               CNDataFormat model_input_pixel_format = CN_PIXEL_FORMAT_RGBA32,
-              bool mem_on_mlu_for_postproc = false);
+              bool mem_on_mlu_for_postproc = false,
+              bool saving_infer_input = false,
+              std::string module_name = "");
   ~InferEngine();
   ResultWaitingCard FeedData(std::shared_ptr<CNFrameInfo> finfo);
+
+  void ForceBatchingDone() {
+    BatchingDone();
+  }
 
  private:
   void StageAssemble();
@@ -116,6 +122,8 @@ class InferEngine {
   CNDataFormat model_input_fmt_ = CN_PIXEL_FORMAT_RGBA32;
   uint32_t cached_frame_cnt_ = 0;
   bool mem_on_mlu_for_postproc_ = false;
+  bool saving_infer_input_ = false;
+  std::string module_name_ = "";
 };  // class InferEngine
 
 }  // namespace cnstream

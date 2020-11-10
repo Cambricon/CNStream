@@ -21,18 +21,18 @@
 # 1. build image
 # (1) build image without neuware and cnstream: docker build -f Dockerfile.16.04 -t ubuntu16_cnstream:v1 .
 # (2) build image with neuware installed and without cnstream:
-#   a. make sure the neuware_package is in your current directory
-#   b. docker build -f Dockerfile.16.04 --build-arg neuware_package=${neuware_package_name} -t ubuntu16_cnstream:v1 .
+#   a. make sure the toolkit_package is in your current directory
+#   b. docker build -f Dockerfile.16.04 --build-arg toolkit_package=${toolkit_package_name} -t ubuntu16_cnstream:v1 .
 # (3) build image with neuware installed and with cnstream code built:
-#   a. make sure the neuware_package is in your current directory
-#   b. docker build -f Dockerfile.16.04 --build-arg neuware_package=${neuware_package_name} --build-arg with_cnstream_code=yes -t ubuntu16_cnstream:v1 .
+#   a. make sure the toolkit_package is in your current directory
+#   b. docker build -f Dockerfile.16.04 --build-arg toolkit_package=${toolkit_package_name} --build-arg with_cnstream_code=yes -t ubuntu16_cnstream:v1 .
 # 2. start container: docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
 
 FROM ubuntu:16.04
 
 MAINTAINER <Cambricon, Inc.>
 
-ARG neuware_package=""
+ARG toolkit_package=""
 ARG mlu_platform=MLU270
 ARG with_cnstream_code=no
 
@@ -65,11 +65,11 @@ RUN echo deb http://mirrors.aliyun.com/ubuntu/ xenial main restricted  > /etc/ap
 
 COPY . /tmp/
 # install neuware, git clone cnstream from gitee and build
-RUN if [ -n "$neuware_package" ]; then \
-      dpkg -i /tmp/$neuware_package && \
+RUN if [ -n "$toolkit_package" ]; then \
+      dpkg -i /tmp/$toolkit_package && \
       apt -o Accquire::AllowInsecureRepositories=true update && \
-      apt install -y cndev cndrv cnrt cncodec cnml cnplugin && \
-      rm -rf /tmp/$neuware_package; \
+      apt install -y cndev cndrv cnrt cncodec && \
+      rm -rf /tmp/$toolkit_package; \
       if [ "$with_cnstream_code" = "yes" ]; then \
         cd /root && git clone https://gitee.com/SolutionSDK/CNStream.git CNStream && \
         cd /root/CNStream && mkdir build && cd build &&\

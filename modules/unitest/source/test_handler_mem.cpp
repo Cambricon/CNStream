@@ -57,6 +57,7 @@ TEST(DataHandlerMem, Write) {
   ASSERT_TRUE(handler != nullptr);
   EXPECT_TRUE(handler->GetStreamId() == std::to_string(0));
   auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+  EXPECT_EQ(memHandler->SetDataType(ESMemHandler::H264), 0);
   EXPECT_EQ(memHandler->Open(), true);
   std::string video_path = GetExePath() + gh264_path;
   FILE *fp = fopen(video_path.c_str(), "rb");

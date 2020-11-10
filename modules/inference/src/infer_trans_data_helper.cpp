@@ -39,8 +39,8 @@ InferTransDataHelper::InferTransDataHelper(Inferencer* infer, int batchsize) : i
 InferTransDataHelper::~InferTransDataHelper() {
   running_.store(false);
   {
-    std::lock_guard<std::mutex> lk(mtx_);
-    cond_.notify_all();
+    cond_not_empty_.notify_all();
+    cond_not_full_.notify_all();
   }
   if (th_.joinable()) th_.join();
 }
@@ -48,20 +48,30 @@ InferTransDataHelper::~InferTransDataHelper() {
 void InferTransDataHelper::SubmitData(
     const std::pair<std::shared_ptr<CNFrameInfo>, InferEngine::ResultWaitingCard>& data) {
   std::unique_lock<std::mutex> lk(mtx_);
-  cond_.wait(lk, [this] () { return running_ && queue_.size() < size_t(3 * batchsize_); });
+  cond_not_full_.wait(lk, [this] () { return !running_.load() || queue_.size() < size_t(3 * batchsize_); });
+  if (!running_.load()) return;
   queue_.push(data);
-  if (queue_.size() == 1) cond_.notify_one();
+  lk.unlock();
+  cond_not_empty_.notify_one();
 }
 
 void InferTransDataHelper::Loop() {
   while (running_.load()) {
     std::unique_lock<std::mutex> lk(mtx_);
-    cond_.wait(lk, [this]() { return !running_.load() || !queue_.empty(); });
+    cond_not_empty_.wait(lk, [this]() { return !running_.load() || !queue_.empty(); });
     if (!running_.load()) break;
     auto data = queue_.front();
     queue_.pop();
-    cond_.notify_one();
     lk.unlock();
+    cond_not_full_.notify_one();
+
+    if (cnstream::IsStreamRemoved(data.first->stream_id)) {
+      if (!data.first->IsEos()) {
+        // discard packet if stream has been removed
+        continue;
+      }
+    }
+
     auto finfo = data.first;
     auto card = data.second;
     card.WaitForCall();

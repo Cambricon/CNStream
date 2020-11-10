@@ -49,7 +49,7 @@ class TestEnvironment : public testing::Environment {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(0);
     mlu_ctx.SetChannelId(0);
-    mlu_ctx.ConfigureForThisThread();
+    mlu_ctx.BindDevice();
     LOG(INFO) << "Set Up global environment.";
   }
 };

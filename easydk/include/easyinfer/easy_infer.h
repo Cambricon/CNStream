@@ -33,8 +33,6 @@
 
 namespace edk {
 
-TOOLKIT_REGISTER_EXCEPTION(EasyInfer);
-
 struct MluTaskQueue;
 using MluTaskQueue_t = std::shared_ptr<MluTaskQueue>;
 
@@ -57,12 +55,21 @@ class EasyInfer {
 
   /**
    * @brief Initialize the inference helper class
+   * @deprecated use Init(std::shared_ptr<ModelLoader>, int) instead
    *
    * @param ploader[in] Model loader which contain neural network offline model and informations
    * @param batch_size[in] Batch size for inference, only supported on MLU100
    * @param dev_id[in] init cninfer in device with origin id dev_id. only supported on MLU270
    */
   void Init(std::shared_ptr<ModelLoader> ploader, int batch_size, int dev_id);
+
+  /**
+   * @brief Initialize the inference helper class
+   *
+   * @param ploader[in] Model loader which contain neural network offline model and informations
+   * @param dev_id[in] init cninfer in device with origin id dev_id. only supported on MLU270
+   */
+  void Init(std::shared_ptr<ModelLoader> ploader, int dev_id);
 
   /**
    * @brief Invoke inference function
@@ -76,13 +83,14 @@ class EasyInfer {
   /**
    * @brief Get the model loader
    *
-   * @see ModelLoader
+   * @see edk::ModelLoader
    * @return Model loader
    */
   std::shared_ptr<ModelLoader> Loader() const;
 
   /**
    * @brief Get the batch size
+   * @deprecated
    *
    * @return Batch size
    */

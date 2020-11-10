@@ -113,21 +113,21 @@ TEST(Osd, Process) {
   frame->stride[0] = width;
   frame->ctx.dev_type = DevContext::DevType::CPU;
   frame->fmt = CN_PIXEL_FORMAT_BGR24;
-  frame->CopyToSyncMem();
+  frame->CopyToSyncMem(false);
   data->datas[CNDataFramePtrKey] = frame;
 
-  CNObjsVec objs;
+  std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(11);
   CNInferBoundingBox bbox = {0.6, 0.4, 0.6, 0.3};
   obj->bbox = bbox;
-  objs.push_back(obj);
+  objs_holder->objs_.push_back(obj);
 
   auto obj2 = std::make_shared<CNInferObject>();
   obj2->id = std::to_string(12);
   bbox = {0.1, -0.2, 0.3, 0.4};
   obj2->bbox = bbox;
-  objs.push_back(obj2);
+  objs_holder->objs_.push_back(obj2);
 
   for (int i = 0; i < 5; ++i) {
     auto obj = std::make_shared<CNInferObject>();
@@ -135,10 +135,10 @@ TEST(Osd, Process) {
     float val = i * 0.1;
     CNInferBoundingBox bbox = {val, val, val, val};
     obj->bbox = bbox;
-    objs.push_back(obj);
+    objs_holder->objs_.push_back(obj);
   }
 
-  data->datas[cnstream::CNObjsVecKey] = objs;
+  data->datas[cnstream::CNInferObjsPtrKey] = objs_holder;
   EXPECT_EQ(osd->Process(data), 0);
   EXPECT_EQ(osd->Process(data), 0);
   frame->width = -1;
@@ -178,10 +178,10 @@ TEST(Osd, ProcessSecondary) {
   frame->stride[0] = width;
   frame->ctx.dev_type = DevContext::DevType::CPU;
   frame->fmt = CN_PIXEL_FORMAT_BGR24;
-  frame->CopyToSyncMem();
+  frame->CopyToSyncMem(false);
   data->datas[CNDataFramePtrKey] = frame;
 
-  CNObjsVec objs;
+  std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(11);
   CNInferBoundingBox bbox = {0.6, 0.4, 0.6, 0.3};
@@ -191,7 +191,7 @@ TEST(Osd, ProcessSecondary) {
   attr.value = -1;
   attr.score = -1;
   obj->AddAttribute("classification", attr);
-  objs.push_back(obj);
+  objs_holder->objs_.push_back(obj);
 
   auto obj2 = std::make_shared<CNInferObject>();
   obj2->id = std::to_string(12);
@@ -202,7 +202,7 @@ TEST(Osd, ProcessSecondary) {
   attr2.value = 2;
   attr2.score = 0.6;
   obj2->AddAttribute("classification", attr2);
-  objs.push_back(obj2);
+  objs_holder->objs_.push_back(obj2);
 
   for (int i = 0; i < 5; ++i) {
     auto obj = std::make_shared<CNInferObject>();
@@ -210,10 +210,10 @@ TEST(Osd, ProcessSecondary) {
     float val = i * 0.1;
     CNInferBoundingBox bbox = {val, val, val, val};
     obj->bbox = bbox;
-    objs.push_back(obj);
+    objs_holder->objs_.push_back(obj);
   }
 
-  data->datas[cnstream::CNObjsVecKey] = objs;
+  data->datas[cnstream::CNInferObjsPtrKey] = objs_holder;
   EXPECT_EQ(osd->Process(data), 0);
 }
 

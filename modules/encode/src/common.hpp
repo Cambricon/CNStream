@@ -21,7 +21,7 @@
 #ifndef MODULES_COMMON_HPP_
 #define MODULES_COMMON_HPP_
 
-#define JEPG_ENC_ALIGNMENT 64
+#define JPEG_ENC_ALIGNMENT 64
 #define DEC_ALIGNMENT 64
 #define ALIGN(size, alignment) (((uint32_t)(size) + (alignment)-1) & ~((alignment)-1))
 

@@ -154,7 +154,7 @@ class Pipeline : private NonCopyable {
    */
   explicit Pipeline(const std::string& name);
   ~Pipeline();
-
+  const std::string& GetName() const { return name_; }
   /**
    * Provides data for this pipeline that is used in source module or the module
    * transmission by itself.
@@ -456,16 +456,16 @@ class Pipeline : private NonCopyable {
  private:
   std::vector<std::string> GetModuleNames();
   void SetStartAndEndNodeNames();
-  bool CreatePerfCalculator(std::string db_dir, std::string node_name, bool is_module);
+  bool CreatePerfCalculator(std::string db_dir, std::string node_name, bool is_pipeline);
   PerfStats CalcLatestThroughput(std::string sql_name, std::string perf_type, std::vector<std::string> keys,
                                  std::shared_ptr<PerfCalculator> calculator, bool final_print);
 
  private:
   /* ------Internal methods------ */
-  void SetEOSMask();
-  void ClearEOSMask();
   void UpdateByStreamMsg(const StreamMsg& msg);
   void StreamMsgHandleFunc();
+  bool ShouldTransmit(std::shared_ptr<CNFrameInfo> finfo, Module* module) const;
+  bool ShouldTransmit(uint64_t passed_modules_mask, Module* module) const;
 
  private:
 #ifdef UNIT_TEST
@@ -513,7 +513,6 @@ class Pipeline : private NonCopyable {
     }
   }
 
-  const std::string& GetName() const { return name_; }
   void PerfDeleteDataLoop();
   /**
    * The module associated information.
@@ -543,7 +542,6 @@ class Pipeline : private NonCopyable {
   std::unordered_map<std::string, ModuleAssociatedInfo> modules_;
   std::unordered_map<std::string, CNModuleConfig> modules_config_;
   std::unordered_map<std::string, std::vector<std::string>> connections_config_;
-  uint64_t eos_mask_ = 0;
 
   std::vector<std::string> stream_ids_;
   std::string start_node_;
@@ -557,7 +555,18 @@ class Pipeline : private NonCopyable {
   uint32_t clear_data_interval_ = 10;
   RwLock perf_managers_lock_;
   std::mutex perf_calculation_lock_;
+  uint64_t all_modules_mask_ = 0;
 };  // class Pipeline
+
+inline bool Pipeline::ShouldTransmit(std::shared_ptr<CNFrameInfo> finfo, Module* module) const {
+  uint64_t passed_modules_mask = finfo->GetModulesMask();   // identifies which modules have passed this frame
+  return ShouldTransmit(passed_modules_mask, module);
+}
+
+inline bool Pipeline::ShouldTransmit(uint64_t passed_modules_mask, Module* module) const {
+  uint64_t modules_mask = module->GetModulesMask();  // identifies upstream nodes
+  return (passed_modules_mask & modules_mask) == modules_mask;
+}
 
 }  // namespace cnstream
 

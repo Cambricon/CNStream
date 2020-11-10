@@ -41,7 +41,9 @@
 #include <utility>
 #include <vector>
 
+#include "cnstream_allocator.hpp"
 #include "cnstream_common.hpp"
+#include "cnstream_frame.hpp"
 #include "cnstream_syncmem.hpp"
 #include "util/cnstream_any.hpp"
 
@@ -50,7 +52,7 @@
 #endif
 
 #ifndef ROUND_UP
-#define ROUND_UP(addr, boundary) (((u32_t)(addr) + (boundary)-1) & ~((boundary)-1))
+#define ROUND_UP(addr, boundary) (((uint64_t)(addr) + (boundary)-1) & ~((boundary)-1))
 #endif
 
 namespace cnstream {
@@ -126,7 +128,7 @@ class IDataDeallocator {
 };
 
 /**
- * ICNMediaImageMapper is an abstract class.
+ * ICNMediaImageMapper is an abstract class, for M220_SOC only.
  */
 class ICNMediaImageMapper {
  public:
@@ -162,25 +164,29 @@ class ICNMediaImageMapper {
 /**
  * The structure holding a data frame and the frame description.
  */
-struct CNDataFrame {
+class CNDataFrame : public NonCopyable {
+ public:
+  CNDataFrame() = default;
+  ~CNDataFrame();
+
   uint64_t frame_id = -1;  ///< The frame index that incremented from 0.
 
   /**
-   * The source data information. You need to set the information before calling CopyToSyncMem().
+   * The source data information. You need to set the information below before calling CopyToSyncMem().
    */
   CNDataFormat fmt;                                          ///< The format of the frame.
   int width;                                                 ///< The width of the frame.
   int height;                                                ///< The height of the frame.
   int stride[CN_MAX_PLANES];                                 ///< The strides of the frame.
-  DevContext ctx;                                            ///< The device context of this frame.
+  DevContext ctx;                                            ///< The device context of SOURCE data (ptr_mlu/ptr_cpu).
   void* ptr_mlu[CN_MAX_PLANES];                              ///< The MLU data addresses for planes.
   void* ptr_cpu[CN_MAX_PLANES];                              ///< The CPU data addresses for planes.
   std::unique_ptr<IDataDeallocator> deAllocator_ = nullptr;  ///< The dedicated deallocator for CNDecoder buffer.
   std::unique_ptr<ICNMediaImageMapper> mapper_ = nullptr;    ///< The dedicated Mapper for M220 CNDecoder.
 
-  CNDataFrame() {}
-
-  ~CNDataFrame();
+  /* The 'dst_device_id' is for SyncedMemory.
+  */
+  int dst_device_id = -1;                                    ///< The device context of SyncMemory.
 
   /**
    * Gets plane count for a specified frame.
@@ -206,10 +212,38 @@ struct CNDataFrame {
   size_t GetBytes() const;
 
   /**
-   * Synchronizes the source-data to CNSyncedMemory.
+   * Synchronizes the source-data to CNSyncedMemory, inside the mlu device only.
    */
-  void CopyToSyncMem();
+  void CopyToSyncMem(bool dst_mlu = true);
 
+ public:
+  std::shared_ptr<void> cpu_data = nullptr;  ///< CPU data pointer.
+  std::shared_ptr<void> mlu_data = nullptr;  ///< A pointer to the MLU data.
+  std::unique_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Synchronizes data helper.
+
+#ifdef HAVE_OPENCV
+  /**
+   * Converts data from RGB to BGR. Called after CopyToSyncMem() is invoked.
+   *
+   * If data is not RGB image but BGR, YUV420NV12 or YUV420NV21 image, its color mode will not be converted.
+   *
+   * @return Returns data with opencv mat type.
+   */
+  cv::Mat* ImageBGR();
+  bool HasBGRImage() {
+    if (bgr_mat) return true;
+    return false;
+  }
+
+ private:
+  cv::Mat* bgr_mat = nullptr;
+#else
+  bool HasBGRImage() {
+    return false;
+  }
+#endif
+
+ public:
   /**
    * @brief Synchronizes source data to specific device, and resets ctx.dev_id to device_id when synced, for multi-device
    * case.
@@ -247,33 +281,6 @@ struct CNDataFrame {
   void ReleaseSharedMem(MemMapType type, std::string stream_id);
 
   void* mlu_mem_handle = nullptr;  ///< The MLU memory handle for MLU data.
-
- public:
-  void* cpu_data = nullptr;  ///< CPU data pointer. You need to allocate it by calling CNStreamMallocHost().
-  void* mlu_data = nullptr;  ///< A pointer to the MLU data.
-  std::unique_ptr<CNSyncedMemory> data[CN_MAX_PLANES];  ///< Synchronizes data helper.
-
-#ifdef HAVE_OPENCV
-  /**
-   * Converts data from RGB to BGR. Called after CopyToSyncMem() is invoked.
-   *
-   * If data is not RGB image but BGR, YUV420NV12 or YUV420NV21 image, its color mode will not be converted.
-   *
-   * @return Returns data with opencv mat type.
-   */
-  cv::Mat* ImageBGR();
-  bool HasBGRImage() {
-    if (bgr_mat) return true;
-    return false;
-  }
-
- private:
-  cv::Mat* bgr_mat = nullptr;
-#else
-  bool HasBGRImage() {
-    return false;
-  }
-#endif
 
  private:
   void* shared_mem_ptr = nullptr;  ///< A pointer to the shared memory for MLU or CPU.
@@ -466,16 +473,67 @@ struct CNInferObject {
   std::mutex feature_mutex_;
 };
 
+struct CNInferObjs : public NonCopyable {
+  std::vector<std::shared_ptr<CNInferObject>> objs_;
+  std::mutex mutex_;
+};
+
+/**
+ * A structure holding the information for inference input & outputs(raw).
+ */
+struct InferData {
+  // infer input
+  CNDataFormat input_fmt_;
+  int input_width_;
+  int input_height_;
+  std::shared_ptr<void> input_cpu_addr_;  //< this pointer means one input, a frame may has many inputs for a model
+  size_t input_size_;
+
+  // infer output
+  std::vector<std::shared_ptr<void>> output_cpu_addr_;  //< many outputs for one input
+  size_t output_size_;
+  size_t output_num_;
+};
+
+struct CNInferData : public NonCopyable {
+  std::unordered_map<std::string, std::vector<std::shared_ptr<InferData>>> datas_map_;
+  std::mutex mutex_;
+};
+
 /*
  * user-defined data structure: Key-value
  *   key type-- int
- *   value type -- cnstream::any
+ *   value type -- cnstream::any, since we store it in an map, std::share_ptr<T> should be used
  */
 static constexpr int CNDataFramePtrKey = 0;
 using CNDataFramePtr = std::shared_ptr<CNDataFrame>;
 
-static constexpr int CNObjsVecKey = 1;
+static constexpr int CNInferObjsPtrKey = 1;
+using CNInferObjsPtr = std::shared_ptr<CNInferObjs>;
 using CNObjsVec = std::vector<std::shared_ptr<CNInferObject>>;
+
+static constexpr int CNInferDataPtrKey = 2;
+using CNInferDataPtr = std::shared_ptr<CNInferData>;
+
+
+// helpers
+static inline
+CNDataFramePtr GetCNDataFramePtr(std::shared_ptr<CNFrameInfo> frameInfo) {
+  SpinLockGuard guard(frameInfo->datas_lock_);
+  return cnstream::any_cast<CNDataFramePtr>(frameInfo->datas[CNDataFramePtrKey]);
+}
+
+static inline
+CNInferObjsPtr GetCNInferObjsPtr(std::shared_ptr<CNFrameInfo> frameInfo) {
+  SpinLockGuard guard(frameInfo->datas_lock_);
+  return cnstream::any_cast<CNInferObjsPtr>(frameInfo->datas[CNInferObjsPtrKey]);
+}
+
+static inline
+CNInferDataPtr GetCNInferDataPtr(std::shared_ptr<CNFrameInfo> frameInfo) {
+  SpinLockGuard guard(frameInfo->datas_lock_);
+  return cnstream::any_cast<CNInferDataPtr>(frameInfo->datas[CNInferDataPtrKey]);
+}
 
 }  // namespace cnstream
 

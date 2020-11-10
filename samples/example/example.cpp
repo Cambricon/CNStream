@@ -19,6 +19,8 @@
  *************************************************************************/
 
 #include <memory>
+#include <random>
+#include <string>
 
 #include "module_complex.hpp"
 #include "module_simple.hpp"
@@ -28,8 +30,7 @@
  *  ModuleA---->|                    |----> ModuleD
  *              |------ModuleC------>|
  *  Please be noted,
- *   ModuleA is a source module,
- *   ModuleD is a complex module (there is a pipeline inside)
+ *   ModuleA is a source module
  */
 
 class MyPipeline : public cnstream::Pipeline, public cnstream::StreamMsgObserver {
@@ -37,51 +38,22 @@ class MyPipeline : public cnstream::Pipeline, public cnstream::StreamMsgObserver
 
  public:
   explicit MyPipeline(const std::string &name) : super(name) {
-    exit_flag_ = 0;
     this->SetStreamMsgObserver(this);
   }
-  void WaitForStop() {
-    while (!exit_flag_.load()) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    this->Stop();
-  }
-
+  static const int TEST_STREAM_NUM = 64;
  private:
   /*StremMsgObserver*/
   void Update(const cnstream::StreamMsg &smsg) override {
     if (smsg.type == cnstream::StreamMsgType::EOS_MSG) {
-      /*when all stream eos reached, set exit_flag,
-       * we only have two channels for this example
-       */
-      if (smsg.stream_id == "stream_id_0") {
-        std::unique_lock<std::mutex> lock(count_mutex_);
-        count_mask_ |= 0x01;
-      }
-      if (smsg.stream_id == "stream_id_1") {
-        std::unique_lock<std::mutex> lock(count_mutex_);
-        count_mask_ |= 0x02;
-      }
-      {
-        std::unique_lock<std::mutex> lock(count_mutex_);
-        if ((count_mask_ & 0x03) == 0x03) {
-          exit_flag_.store(1);
-        }
-      }
-      std::cout << "[Observer] " << smsg.stream_id << " received EOS" << std::endl;
+      LOG(INFO) << "Update[Observer] " << smsg.stream_id << " received EOS";
     } else if (smsg.type == cnstream::StreamMsgType::ERROR_MSG) {
-      std::cout << "[Observer] " << smsg.stream_id << " received ERROR_MSG" << std::endl;
+      LOG(INFO) << "Update[Observer] " << smsg.stream_id << " received ERROR_MSG";
     }
   }
 
  private:
   MyPipeline(const MyPipeline &) = delete;
   MyPipeline &operator=(MyPipeline const &) = delete;
-
- private:
-  std::atomic<int> exit_flag_{0};
-  std::mutex count_mutex_;
-  uint32_t count_mask_ = 0;
 };
 
 class Observer : public cnstream::IModuleObserver {
@@ -91,11 +63,10 @@ class Observer : public cnstream::IModuleObserver {
   Observer() {}
   void notify(FrameInfoPtr data) override {
     if (data->IsEos()) {
-      std::cout << "*****Observer :" << data->stream_id << "---"
-                << "--EOS" << std::endl;
+      LOG(INFO) << "notify*****Observer :" << data->stream_id << "---" << "use_count = " << data.use_count() << "--EOS";
     } else {
-      auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data->datas[CNDataFramePtrKey]);
-      std::cout << "*****Observer :" << data->stream_id << "---" << frame->frame_id << std::endl;
+      // auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data->datas[CNDataFramePtrKey]);
+      // LOG(INFO) << "notify*****Observer :" << data->stream_id << "---" << frame->frame_id;
     }
   }
 };
@@ -103,6 +74,9 @@ class Observer : public cnstream::IModuleObserver {
 int main(int argc, char **argv) {
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, false);
+  FLAGS_stderrthreshold = google::INFO;
+  FLAGS_logbufsecs = 0;  // realtime
+
   std::cout << "\033[01;31m"
             << "CNSTREAM VERSION:" << cnstream::VersionString() << "\033[0m" << std::endl;
 
@@ -126,9 +100,10 @@ int main(int argc, char **argv) {
                                                   /*paramSet */
                                                   {"param", "B"},
                                               },
-                                              2,                 /*parallelism*/
+                                              8,                 /*parallelism*/
                                               20,                /*maxInputQueueSize*/
                                               "ExampleModuleEx", /*className*/
+                                              // "ExampleModule", /*className*/
                                               {
                                                   /* next, downstream module names */
                                                   "ModuleD",
@@ -138,9 +113,11 @@ int main(int argc, char **argv) {
                                                   /*paramSet */
                                                   {"param", "C"},
                                               },
-                                              2,               /*parallelism*/
+                                              8,               /*parallelism*/
                                               20,              /*maxInputQueueSize*/
-                                              "ExampleModule", /*className*/
+                                              "ComplexModule", /*className*/
+                                              // "ExampleModule", /*className*/
+                                              // "ExampleModuleEx", /*className*/
                                               {
                                                   /* next,*/
                                                   "ModuleD",
@@ -150,11 +127,12 @@ int main(int argc, char **argv) {
                                                   /*paramSet */
                                                   {"param", "D"},
                                               },
-                                              2,               /*parallelism*/
+                                              8,               /*parallelism*/
                                               20,              /*maxInputQueueSize*/
-                                              "ComplexModule", /*className*/
+                                              // "ComplexModule", /*className*/
+                                              "ExampleModule", /*className*/
                                               {
-                                                  /* next, the last stage */
+                                                  /* next,*/
                                               }};
 
   /*create pipeline*/
@@ -171,16 +149,45 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  /*send data to pipeline*/
   cnstream::Module *source = pipeline.GetModule(module_a_config.name);
   cnstream::SourceModule *source_ = dynamic_cast<cnstream::SourceModule *>(source);
-  std::shared_ptr<cnstream::SourceHandler> handler0(new (std::nothrow) ExampleSourceHandler(source_, "stream_id_0"));
-  source_->AddSource(handler0);
-  std::shared_ptr<cnstream::SourceHandler> handler1(new (std::nothrow) ExampleSourceHandler(source_, "stream_id_1"));
-  source_->AddSource(handler1);
 
-  /*close pipeline*/
-  pipeline.WaitForStop();
+  std::default_random_engine random_engine;
+  std::uniform_int_distribution<unsigned> u(0, 5);
+  /*send data to pipeline*/
+#if 1
+  for (int i = 0; i < 10; i++) {
+    LOG(INFO) << i << "test1_______add stream_id_0, feed data for random ms (0..10000), then remove it\n\n";
+    std::shared_ptr<cnstream::SourceHandler> handler(new (std::nothrow) ExampleSourceHandler(source_, "stream_id_0"));
+    source_->AddSource(handler);
+    unsigned int value = u(random_engine);
+    std::this_thread::sleep_for(std::chrono::milliseconds(value * 1000));
+    source_->RemoveSource(handler, true);  // block until stream_id_0 eos reached
+    LOG(INFO) << i << "________source stream_id_0 forced removed,  feed data for " << value * 1000 << "ms\n\n";
+  }
+#endif
+
+#if 1
+  for (int i = 0; i < 10; i++) {
+    std::string desc = std::to_string(i) + "________test2_______add stream_id_0..";
+    desc += std::to_string(MyPipeline::TEST_STREAM_NUM - 1);
+    desc += ", feed data for random ms (0 .. 5000), then remove them\n\n";
+    LOG(INFO) << desc;
+    for (int i = 0; i < MyPipeline::TEST_STREAM_NUM; i ++) {
+      std::string stream_id = "stream_id_" + std::to_string(i);
+      std::shared_ptr<cnstream::SourceHandler> handler(new (std::nothrow) ExampleSourceHandler(source_, stream_id));
+      source_->AddSource(handler);
+    }
+    unsigned int value = u(random_engine);
+    std::this_thread::sleep_for(std::chrono::milliseconds(value * 1000));
+    source_->RemoveSources(true);  // block until all stream eos reached
+    LOG(INFO) << i << "________source all streams removed (feeding data for " << value  * 1000 << " ms)\n\n";
+  }
+#endif
+
+  LOG(INFO) << "_______Press any key to exit ...";
+  getchar();
+  pipeline.Stop();
   google::ShutdownGoogleLogging();
   return EXIT_SUCCESS;
 }

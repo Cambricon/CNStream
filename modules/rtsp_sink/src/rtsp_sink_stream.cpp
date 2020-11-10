@@ -170,7 +170,7 @@ bool RtspSinkJoinStream::UpdateYUVs(void *y, void *uv, int64_t timestamp) {
 void RtspSinkJoinStream::RefreshLoop() {
   edk::MluContext context;
   context.SetDeviceId(rtsp_param_->device_id);
-  context.ConfigureForThisThread();
+  context.BindDevice();
 
   int64_t delay_us = 0;
   auto start = std::chrono::steady_clock::now();

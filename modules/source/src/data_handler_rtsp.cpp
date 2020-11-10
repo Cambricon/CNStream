@@ -36,8 +36,6 @@ extern "C" {
 
 #include "data_handler_rtsp.hpp"
 
-#define DEFAULT_MODULE_CATEGORY SOURCE
-
 namespace cnstream {
 
 std::shared_ptr<SourceHandler> RtspHandler::Create(DataSource *module, const std::string &stream_id,
@@ -50,190 +48,99 @@ std::shared_ptr<SourceHandler> RtspHandler::Create(DataSource *module, const std
   return handler;
 }
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-//
-// FFMPEG use AVCodecParameters instead of AVCodecContext
-// since from version 3.1(libavformat/version:57.40.100)
-//
-#define FFMPEG_VERSION_3_1 AV_VERSION_INT(57, 40, 100)
+namespace rtsp_detail {
+class IDemuxer {
+ public:
+  virtual ~IDemuxer() {}
+  virtual bool PrepareResources(std::atomic<int> &exit_flag) = 0;  // NOLINT
+  virtual void ClearResources(std::atomic<int> &exit_flag) = 0;   // NOLINT
+  virtual bool Process() = 0;  // process one frame
+  bool GetInfo(VideoInfo &info) {  // NOLINT
+    std::unique_lock<std::mutex> lk(mutex_);
+    if (info_set_) {
+      info = info_;
+      return true;
+    }
+    return false;
+  }
+ protected:
+  void SetInfo(VideoInfo &info) {  // NOLINT
+    std::unique_lock<std::mutex> lk(mutex_);
+    info_ = info;
+    info_set_ = true;
+  }
 
-static uint64_t GetTickCount() {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
-}
+  std::mutex mutex_;
+  VideoInfo info_;
+  bool info_set_ = false;
+};
+}  // namespace rtsp_detail
 
-class FFmpegDemuxer : public IDemuxer {
+class FFmpegDemuxer : public rtsp_detail::IDemuxer, public IParserResult {
  public:
   FFmpegDemuxer(FrameQueue *queue, const std::string &url)
-    :IDemuxer(), queue_(queue), url_name_(url) {
+    :rtsp_detail::IDemuxer(), queue_(queue), url_name_(url) {
   }
 
   ~FFmpegDemuxer() { }
 
-  static int InterruptCallBack(void* ctx) {
-    FFmpegDemuxer* demux = reinterpret_cast<FFmpegDemuxer*>(ctx);
-    if (demux->CheckTimeOut(GetTickCount())) {
-      return 1;
-    }
-    return 0;
-  }
-
-  bool CheckTimeOut(uint64_t ul_current_time) {
-    if ((ul_current_time - last_receive_frame_time_) / 1000 > max_receive_time_out_) {
+  bool PrepareResources(std::atomic<int> &exit_flag) override {
+    if (parser_.Open(url_name_, this) == 0) {
+      eos_reached_ = false;
       return true;
     }
     return false;
   }
 
-  bool PrepareResources(std::atomic<int> &exit_flag) override {
-    // format context
-    p_format_ctx_ = avformat_alloc_context();
-    if (!p_format_ctx_) {
-      return false;
-    }
-
-    int ret_code;
-    const char* p_rtsp_start_str = "rtsp://";
-    if (0 == strncasecmp(url_name_.c_str(), p_rtsp_start_str, strlen(p_rtsp_start_str))) {
-      AVIOInterruptCB intrpt_callback = {InterruptCallBack, this};
-      p_format_ctx_->interrupt_callback = intrpt_callback;
-      last_receive_frame_time_ = GetTickCount();
-    }
-    // options
-    av_dict_set(&options_, "buffer_size", "1024000", 0);
-    av_dict_set(&options_, "max_delay", "500000", 0);
-    av_dict_set(&options_, "stimeout", "20000000", 0);
-    av_dict_set(&options_, "rtsp_flags", "prefer_tcp", 0);
-    // open input
-    ret_code = avformat_open_input(&p_format_ctx_, url_name_.c_str(), NULL, &options_);
-    if (0 != ret_code) {
-      MLOG(ERROR) << "Couldn't open input stream.";
-      return false;
-    }
-
-    // find video stream information
-    ret_code = avformat_find_stream_info(p_format_ctx_, NULL);
-    if (ret_code < 0) {
-      MLOG(ERROR) << "Couldn't find stream information.";
-      return false;
-    }
-
-    VideoStreamInfo info;
-    if (!GetVideoStreamInfo(p_format_ctx_, video_index_, info)) {
-      return false;
-    }
-    this->SetInfo(info);
-
-    av_init_packet(&packet_);
-    packet_.data = NULL;
-    packet_.size = 0;
-    return true;
-  }
-
   void ClearResources(std::atomic<int> &exit_flag) override {
-    if (p_format_ctx_) {
-      avformat_close_input(&p_format_ctx_);
-      avformat_free_context(p_format_ctx_);
-      av_dict_free(&options_);
-      options_ = nullptr;
-      p_format_ctx_ = nullptr;
-    }
-    first_frame_ = true;
-  }
-
-  bool Extract() {
-    while (true) {
-      last_receive_frame_time_ = GetTickCount();
-
-      if (av_read_frame(p_format_ctx_, &packet_) < 0) {
-        return false;
-      }
-
-      if (packet_.stream_index != video_index_) {
-        av_packet_unref(&packet_);
-        continue;
-      }
-
-      if (first_frame_) {
-        if (packet_.flags & AV_PKT_FLAG_KEY) {
-          first_frame_ = false;
-        } else {
-          av_packet_unref(&packet_);
-          continue;
-        }
-      }
-
-      // find pts information
-      if (AV_NOPTS_VALUE == packet_.pts && find_pts_) {
-        find_pts_ = false;
-        MLOG(WARNING) << "Didn't find pts informations, "
-                     << "use ordered numbers instead. "
-                     << "stream url: " << url_name_.c_str();
-      } else if (AV_NOPTS_VALUE != packet_.pts) {
-        find_pts_ = true;
-        AVStream* vstream = p_format_ctx_->streams[video_index_];
-        packet_.pts = av_rescale_q(packet_.pts, vstream->time_base, {1, 90000});
-      }
-      if (!find_pts_) {
-        packet_.pts = pts_++;
-      }
-      return true;
-    }
+    parser_.Close();
   }
 
   bool Process() override {
-    bool ret = Extract();
-    if (!ret) {
-      MLOG(INFO) << "Read EOS";
-      ESPacket pkt;
-      pkt.flags = ESPacket::FLAG_EOS;
-      if (queue_) {
-        queue_->Push(std::make_shared<EsPacket>(&pkt));
-      }
+    parser_.Parse();
+    if (eos_reached_) {
       return false;
     }
+    return true;
+  }
+
+  // IParserResult methods
+  void OnParserInfo(VideoInfo *info) override {
+    this->SetInfo(*info);
+  }
+  void OnParserFrame(VideoEsFrame *frame) override {
     ESPacket pkt;
-    pkt.data = packet_.data;
-    pkt.size = packet_.size;
-    pkt.pts = packet_.pts;
-    pkt.flags = 0;
-    if (packet_.flags & AV_PKT_FLAG_KEY) {
-      pkt.flags |= ESPacket::FLAG_KEY_FRAME;
+    if (frame) {
+      pkt.data = frame->data;
+      pkt.size = frame->len;
+      pkt.pts = frame->pts;
+      pkt.flags = 0;
+      if (frame->flags & AV_PKT_FLAG_KEY) {
+        pkt.flags |= ESPacket::FLAG_KEY_FRAME;
+      }
+    } else {
+      pkt.flags = ESPacket::FLAG_EOS;
+      eos_reached_ = true;
     }
     if (queue_) {
       queue_->Push(std::make_shared<EsPacket>(&pkt));
     }
-    av_packet_unref(&packet_);
-    return true;
   }
 
  private:
-  AVFormatContext* p_format_ctx_ = nullptr;
-  AVDictionary* options_ = NULL;
-  AVPacket packet_;
-  bool first_frame_ = true;
-  int video_index_ = -1;
-  uint64_t last_receive_frame_time_ = 0;
-  uint8_t max_receive_time_out_ = 3;
-  bool find_pts_ = false;
-  uint64_t pts_ = 0;
   FrameQueue *queue_ = nullptr;
   std::string url_name_;
+  FFParser parser_;
+  bool eos_reached_ = false;
 };  // class FFmpegDemuxer
 
-class Live555Demuxer : public IDemuxer, public IRtspCB {
+class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
  public:
   Live555Demuxer(FrameQueue *queue, const std::string &url, int reconnect)
-    :IDemuxer(), queue_(queue), url_(url), reconnect_(reconnect) {
+    :rtsp_detail::IDemuxer(), queue_(queue), url_(url), reconnect_(reconnect) {
   }
 
-  virtual ~Live555Demuxer() {
-    parser_.Free();
-  }
+  virtual ~Live555Demuxer() {}
 
   bool PrepareResources(std::atomic<int> &exit_flag) override {
     // start rtsp_client
@@ -244,12 +151,8 @@ class Live555Demuxer : public IDemuxer, public IRtspCB {
     rtsp_session_.Open(param);
 
     // waiting for stream info...
-    VideoStreamInfo info;
     while (1) {
-      int ret = parser_.GetInfo(info);
-      if (-1 == ret) {
-        return false;
-      } else if (1 == ret) {
+      if (info_set_) {
         break;
       }
       if (exit_flag) {
@@ -262,8 +165,6 @@ class Live555Demuxer : public IDemuxer, public IRtspCB {
     if (exit_flag) {
       return false;
     }
-    this->SetInfo(info);
-    parser_.Free();
     return true;
   }
 
@@ -277,61 +178,50 @@ class Live555Demuxer : public IDemuxer, public IRtspCB {
   }
 
  private:
-  void OnFrame(unsigned char *data, size_t size, FrameInfo *frame_info)  override {
-    if (data && size && frame_info) {
-      switch (frame_info->codec_type) {
-      case FrameInfo::H264: parser_.Init("h264"); break;
-      case FrameInfo::H265: parser_.Init("h265"); break;
-      default: {
-          MLOG(ERROR) << "unsupported codec type";
-          return;
-        }
-      }
-      ESPacket pkt;
-      pkt.data = data;
-      pkt.size = size;
+  // IRtspCB methods
+  void OnRtspInfo(VideoInfo *info) override {
+    this->SetInfo(*info);
+    info_set_.store(true);
+  }
+  void OnRtspFrame(VideoEsFrame *frame) override {
+    ESPacket pkt;
+    if (frame) {
+      pkt.data = frame->data;
+      pkt.size = frame->len;
+      pkt.pts = frame->pts;
       pkt.flags = 0;
-      pkt.pts = frame_info->pts;
-      this->Write(&pkt);
+      if (frame->flags & AV_PKT_FLAG_KEY) {
+        pkt.flags |= ESPacket::FLAG_KEY_FRAME;
+      }
       if (!connect_done_) connect_done_.store(true);
     } else {
+      pkt.flags = ESPacket::FLAG_EOS;
       if (!connect_done_) {
         // Failed to connect server...
         connect_failed_.store(true);
-        return;
       }
-      ESPacket pkt;
-      pkt.flags = ESPacket::FLAG_EOS;
-      this->Write(&pkt);
-    }
-  }
-
-  void OnEvent(int type) override {}
-
-  int Write(ESPacket *pkt) {
-    if (pkt && pkt->data && pkt->size) {
-        parser_.Parse(pkt->data, pkt->size);
     }
     if (queue_) {
-      queue_->Push(std::make_shared<EsPacket>(pkt));
+      queue_->Push(std::make_shared<EsPacket>(&pkt));
     }
-    return 0;
   }
+
+  void OnRtspEvent(int type) override {}
 
  private:
   FrameQueue *queue_ = nullptr;
   std::string url_;
   int reconnect_ = 0;
-  ParserHelper parser_;
   RtspSession rtsp_session_;
   std::atomic<bool> connect_done_{false};
   std::atomic<bool> connect_failed_{false};
+  std::atomic<bool> info_set_{false};
 };  // class Live555Demuxer
 
 RtspHandler::RtspHandler(DataSource *module, const std::string &stream_id, const std::string &url_name, bool use_ffmpeg,
                          int reconnect)
     : SourceHandler(module, stream_id) {
-  impl_ = new (std::nothrow) RtspHandlerImpl(module, url_name, *this, use_ffmpeg, reconnect);
+  impl_ = new (std::nothrow) RtspHandlerImpl(module, url_name, this, use_ffmpeg, reconnect);
 }
 
 RtspHandler::~RtspHandler() {
@@ -342,16 +232,16 @@ RtspHandler::~RtspHandler() {
 
 bool RtspHandler::Open() {
   if (!this->module_) {
-    MLOG(ERROR) << "module_ null";
+    LOGE(SOURCE) << "module_ null";
     return false;
   }
   if (!impl_) {
-    MLOG(ERROR) << "impl_ null";
+    LOGE(SOURCE) << "impl_ null";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    MLOG(ERROR) << "invalid stream_idx";
+    LOGE(SOURCE) << "invalid stream_idx";
     return false;
   }
 
@@ -365,13 +255,11 @@ void RtspHandler::Close() {
 }
 
 bool RtspHandlerImpl::Open() {
-  // updated with paramSet
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
-  this->interval_ = param_.interval_;
 
   SetPerfManager(source->GetPerfManager(stream_id_));
-  SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
+  SetThreadName(module_->GetName(), handler_->GetStreamUniqueIdx());
 
   size_t maxSize = 60;  // FIXME
   queue_ = new FrameQueue(maxSize);
@@ -405,15 +293,15 @@ void RtspHandlerImpl::Close() {
 }
 
 void RtspHandlerImpl::DemuxLoop() {
-  MLOG(INFO) << "DemuxLoop Start...";
-  std::shared_ptr<IDemuxer> demuxer;
+  LOGD(SOURCE) << "DemuxLoop Start...";
+  std::unique_ptr<rtsp_detail::IDemuxer> demuxer;
   if (use_ffmpeg_) {
-    demuxer = std::make_shared<FFmpegDemuxer>(queue_, url_name_);
+    demuxer.reset(new FFmpegDemuxer(queue_, url_name_));
   } else {
-    demuxer = std::make_shared<Live555Demuxer>(queue_, url_name_, reconnect_);
+    demuxer.reset(new Live555Demuxer(queue_, url_name_, reconnect_));
   }
   if (!demuxer) {
-    MLOG(ERROR) << "Failed to create demuxer";
+    LOGE(SOURCE) << "Failed to create demuxer";
     return;
   }
   if (!demuxer->PrepareResources(demux_exit_flag_)) {
@@ -426,16 +314,19 @@ void RtspHandlerImpl::DemuxLoop() {
       e.thread_id = std::this_thread::get_id();
       module_->PostEvent(e);
     }
-    MLOG(DEBUG) << "PrepareResources failed.";
+    LOGI(SOURCE) << "PrepareResources failed.";
     return;
   }
-  {
+  do {
     std::unique_lock<std::mutex> lk(mutex_);
-    demuxer->GetInfo(stream_info_);
-    stream_info_set_ = true;
-  }
+    if (demuxer->GetInfo(stream_info_) == true) {
+      break;
+    }
+    usleep(1000);
+  }while(1);
+  stream_info_set_.store(true);
 
-  MLOG(DEBUG) << "RTSP handler DemuxLoop.";
+  LOGD(SOURCE) << "RTSP handler DemuxLoop.";
 
   while (!demux_exit_flag_) {
     if (demuxer->Process() != true) {
@@ -443,29 +334,18 @@ void RtspHandlerImpl::DemuxLoop() {
     }
   }
   demuxer->ClearResources(demux_exit_flag_);
-  MLOG(DEBUG) << "RTSP handler DemuxLoop Exit";
+  LOGD(SOURCE) << "RTSP handler DemuxLoop Exit";
 }
 
 void RtspHandlerImpl::DecodeLoop() {
-  MLOG(INFO) << "RTSP handler DecodeLoop Start...";
-  /*meet cnrt requirement*/
-  if (param_.device_id_ >=0) {
-    try {
-      edk::MluContext mlu_ctx;
-      mlu_ctx.SetDeviceId(param_.device_id_);
-      // mlu_ctx.SetChannelId(dev_ctx_.ddr_channel);
-      mlu_ctx.ConfigureForThisThread();
-    } catch (edk::Exception &e) {
-      if (nullptr != module_)
-        module_->PostEvent(EVENT_ERROR, \
-            "stream_id " + stream_id_ + " failed to setup dev/channel.");
-      MLOG(DEBUG) << "Init MLU context failed.";
-      return;
-    }
-  }
+  LOGD(SOURCE) << "RTSP handler DecodeLoop Start...";
+  /*meet cnrt requirement,
+   *  for cpu case(device_id < 0), MluDeviceGuard will do nothing
+   */
+  MluDeviceGuard guard(param_.device_id_);
+
   // wait stream_info
   while (!decode_exit_flag_) {
-    std::unique_lock<std::mutex> lk(mutex_);
     if (stream_info_set_) {
       break;
     }
@@ -475,34 +355,40 @@ void RtspHandlerImpl::DecodeLoop() {
     return;
   }
 
-  std::shared_ptr<Decoder> decoder_ = nullptr;
+  std::unique_ptr<Decoder> decoder_ = nullptr;
   if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
-    decoder_ = std::make_shared<MluDecoder>(this);
+    decoder_.reset(new MluDecoder(this));
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
-    decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
+    decoder_.reset(new FFmpegCpuDecoder(this));
   } else {
-    MLOG(ERROR) << "unsupported decoder_type";
+    LOGE(SOURCE) << "unsupported decoder_type";
     return;
   }
-  if (decoder_.get()) {
+  if (decoder_) {
+    ExtraDecoderInfo extra;
+    extra.device_id = param_.device_id_;
+    extra.input_buf_num = param_.input_buf_number_;
+    extra.output_buf_num = param_.output_buf_number_;
+    extra.apply_stride_align_for_scaler = param_.apply_stride_align_for_scaler_;
     std::unique_lock<std::mutex> lk(mutex_);
-    bool ret = decoder_->Create(&stream_info_, interval_);
+    bool ret = decoder_->Create(&stream_info_, &extra);
     if (!ret) {
-      MLOG(ERROR) << "Failed to create cndecoder";
+      LOGE(SOURCE) << "Failed to create cndecoder";
       decoder_->Destroy();
       return;
     }
   } else {
-    MLOG(ERROR) << "Failed to create decoder";
+    LOGE(SOURCE) << "Failed to create decoder";
     decoder_->Destroy();
     return;
   }
 
   // feed extradata first
   if (stream_info_.extra_data.size()) {
-    ESPacket pkt;
+    VideoEsPacket pkt;
     pkt.data = stream_info_.extra_data.data();
-    pkt.size = stream_info_.extra_data.size();
+    pkt.len = stream_info_.extra_data.size();
+    pkt.pts = 0;
     if (!decoder_->Process(&pkt)) {
       return;
     }
@@ -514,35 +400,62 @@ void RtspHandlerImpl::DecodeLoop() {
     int timeoutMs = 1000;
     bool ret = this->queue_->Pop(timeoutMs, in);
     if (!ret) {
-      MLOG(INFO) << "Read Timeout";
+      LOGD(SOURCE) << "Read Timeout";
       continue;
     }
 
     if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-      ESPacket pkt;
-      pkt.flags = ESPacket::FLAG_EOS;
-      MLOG(INFO) << "RTSP handler stream_id: " << stream_id_ << "EOS reached";
-      decoder_->Process(&pkt);
+      LOGI(SOURCE) << "RTSP handler stream_id: " << stream_id_ << " EOS reached";
+      decoder_->Process(nullptr);
       break;
     }  // if (eos)
 
-    ESPacket pkt;
+    VideoEsPacket pkt;
     pkt.data = in->pkt_.data;
-    pkt.size = in->pkt_.size;
+    pkt.len = in->pkt_.size;
     pkt.pts = in->pkt_.pts;
-    pkt.flags &= ~ESPacket::FLAG_EOS;
 
-    RecordStartTime(module_->GetName(), pkt.pts);
+    this->RecordStartTime(module_->GetName(), pkt.pts);
 
     if (!decoder_->Process(&pkt)) {
       break;
     }
+    std::this_thread::yield();
   }
 
   if (decoder_.get()) {
     decoder_->Destroy();
   }
-  MLOG(DEBUG) << "RTSP handler DecodeLoop Exit";
+  LOGD(SOURCE) << "RTSP handler DecodeLoop Exit";
+}
+
+// IDecodeResult methods
+void RtspHandlerImpl::OnDecodeError(DecodeErrorCode error_code) {
+  // FIXME,  handle decode error ...
+  interrupt_.store(true);
+}
+
+void RtspHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
+  if (frame_count_++ % param_.interval_ != 0) {
+    return;  // discard frames
+  }
+  if (!frame) return;
+  if (!frame->valid) return;
+
+  std::shared_ptr<CNFrameInfo> data = this->CreateFrameInfo();
+  if (!data) {
+    return;
+  }
+  data->timestamp = frame->pts;  // FIXME
+  int ret = SourceRender::Process(data, frame, frame_id_++, param_);
+  if (ret < 0) {
+    return;
+  }
+  this->SendFrameInfo(data);
+}
+
+void RtspHandlerImpl::OnDecodeEos() {
+  this->SendFlowEos();
 }
 
 }  // namespace cnstream

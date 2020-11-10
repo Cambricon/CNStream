@@ -77,7 +77,7 @@ void GetResult(std::shared_ptr<InferObserver> observer) {
     auto data = observer->GetOutputFrame();
     if (data != nullptr) {
       if (!data->IsEos()) {
-        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+        CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
         EXPECT_EQ(frame->frame_id, i);
         i++;
         std::cout << "Got data, frame id = " << frame->frame_id << std::endl;
@@ -118,7 +118,7 @@ TEST(Inferencer, Demo) {
   for (uint32_t i = 0; i < 32; i++) {
     // fake data
     void *frame_data = nullptr;
-    frame_data = mem_op.AllocMlu(nbytes, 1);
+    frame_data = mem_op.AllocMlu(nbytes);
     frame_data_vec.push_back(frame_data);
     void *planes[CN_MAX_PLANES] = {nullptr, nullptr};
     planes[0] = frame_data;                                                                        // y plane
@@ -137,8 +137,10 @@ TEST(Inferencer, Demo) {
     frame->ctx.dev_id = g_dev_id;
     frame->ctx.dev_type = DevContext::DevType::MLU;
     frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+    frame->dst_device_id = g_dev_id;
     frame->CopyToSyncMem();
     data->datas[CNDataFramePtrKey] = frame;
+    data->datas[CNInferObjsPtrKey] = std::make_shared<CNInferObjs>();
     int ret = infer->Process(data);
     EXPECT_EQ(ret, 1);
   }

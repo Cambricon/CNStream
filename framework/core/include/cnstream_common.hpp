@@ -33,8 +33,6 @@
 #include <string>
 #include <vector>
 
-#include "cnstream_logging.hpp"
-
 namespace cnstream {
 
 /**
@@ -103,6 +101,11 @@ uint32_t GetMaxStreamNumber();
  */
 void SetFlowDepth(int flow_depth);
 int GetFlowDepth();
+
+/*for force-remove-source*/
+bool CheckStreamEosReached(const std::string &stream_id, bool sync = true);
+void SetStreamRemoved(const std::string &stream_id, bool value = true);
+bool IsStreamRemoved(const std::string &stream_id);
 
 /**
  * @brief Converts number to string

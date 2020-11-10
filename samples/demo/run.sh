@@ -28,7 +28,7 @@ source $CURRENT_DIR/env.sh
 mkdir -p $CURRENT_DIR/output
 $CURRENT_DIR/../bin/demo  \
     --data_path $CURRENT_DIR/files.list_video \
-    --src_frame_rate 30   \
+    --src_frame_rate 300000   \
     --wait_time 0 \
     --loop=false \
     --raw_img_input=false \

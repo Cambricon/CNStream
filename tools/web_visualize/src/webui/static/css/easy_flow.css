@@ -112,12 +112,12 @@ body {
   position: relative;
 }
 .pipeline-panel .right .module-params .param-item input {
-  width: 200px;
+  width: 180px;
   padding: 1px 3px;
   border-radius: 8.5px;
   border: 1px solid lightblue;
   position: absolute;
-  right: 0;
+  right: 5px;
   outline: none;
   font-size: 16px;
 }

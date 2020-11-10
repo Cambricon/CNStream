@@ -122,7 +122,7 @@ int ModuleIPC::Process(std::shared_ptr<CNFrameInfo> data) {
 
   auto handler = std::dynamic_pointer_cast<IPCClientHandler>(ipc_handler_);
   if (!data->IsEos()) {
-    CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+    CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
     frame->CopyToSharedMem(handler->GetMemMapType(), data->stream_id);
     handler->CacheProcessedData(data);
   }
@@ -177,16 +177,14 @@ bool ModuleIPC::SendData(std::shared_ptr<CNFrameInfo> frame_data) {
     LOG(ERROR) << "CNFrameInfo->stream_idx not initialized";
     return false;
   }
-  if (container_) {
-    return container_->ProvideData(this, frame_data);
-  }
+  TransmitData(frame_data);
   return false;
 }
 
 void ModuleIPC::PostFrameToReleaseMem(std::shared_ptr<CNFrameInfo> data) {
   // post frame info to communicate process(client), to release shared memory
   if (IPC_SERVER == ipc_handler_->GetType() && !data->IsEos()) {
-    CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+    CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
     frame->UnMapSharedMem(ipc_handler_->GetMemMapType());
     ipc_handler_->PreparePackageToSend(PkgType::PKG_RELEASE_MEM, data);
   }

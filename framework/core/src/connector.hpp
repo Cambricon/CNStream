@@ -65,11 +65,14 @@ class Connector : private NonCopyable {
   ~Connector();
 
   const size_t GetConveyorCount() const;
-  Conveyor* GetConveyor(int conveyor_idx) const;
   size_t GetConveyorCapacity() const;
+  bool IsConveyorFull(int conveyor_idx) const;
+  bool IsConveyorEmpty(int conveyor_idx) const;
+  size_t GetConveyorSize(int conveyor_idx) const;
+  uint64_t GetFailTime(int conveyor_idx) const;
 
   CNFrameInfoPtr PopDataBufferFromConveyor(int conveyor_idx);
-  void PushDataBufferToConveyor(int conveyor_idx, CNFrameInfoPtr data);
+  bool PushDataBufferToConveyor(int conveyor_idx, CNFrameInfoPtr data);
 
   void Start();
   void Stop();
@@ -78,9 +81,11 @@ class Connector : private NonCopyable {
 
  private:
   Conveyor* GetConveyorByIdx(int idx) const;
+  Conveyor* GetConveyor(int conveyor_idx) const;
 
   std::vector<Conveyor*> conveyors_;
   size_t conveyor_capacity_ = 20;
+  std::vector<uint64_t> fail_times_;
   std::atomic<bool> stop_{false};
 };  // class Connector
 

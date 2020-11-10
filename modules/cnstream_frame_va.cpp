@@ -43,12 +43,8 @@
 namespace cnstream {
 
 CNDataFrame::~CNDataFrame() {
-  if (nullptr != mlu_data) {
-    CALL_CNRT_BY_CONTEXT(cnrtFree(mlu_data), ctx.dev_id, ctx.ddr_channel);
-  }
-  if (nullptr != cpu_data) {
-    CNStreamFreeHost(cpu_data), cpu_data = nullptr;
-  }
+  mlu_data.reset();
+  cpu_data.reset();
 
   if (nullptr != mapper_) {
     mapper_.reset();
@@ -138,7 +134,7 @@ size_t CNDataFrame::GetPlaneBytes(int plane_idx) const {
       if (0 == plane_idx)
         return height * stride[0];
       else if (1 == plane_idx)
-        return height * stride[1] / 2;
+        return std::ceil(1.0 * height * stride[1] / 2);
       else
         LOG(FATAL) << "plane index wrong.";
     default:
@@ -155,7 +151,7 @@ size_t CNDataFrame::GetBytes() const {
   return bytes;
 }
 
-void CNDataFrame::CopyToSyncMem() {
+void CNDataFrame::CopyToSyncMem(bool dst_mlu) {
   if (this->deAllocator_ != nullptr) {
 #ifdef CNS_MLU220_SOC
     if (this->ctx.dev_type == DevContext::MLU_CPU) {
@@ -164,60 +160,100 @@ void CNDataFrame::CopyToSyncMem() {
         this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
         this->data[i]->SetMluCpuData(this->ptr_mlu[i], this->ptr_cpu[i]);
       }
+      return;
     } else {
       LOG(FATAL) << " unsupported dev_type";
     }
 #else
     /*cndecoder buffer will be used to avoid dev2dev copy*/
-    for (int i = 0; i < GetPlanes(); i++) {
-      size_t plane_size = GetPlaneBytes(i);
-      this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
-      this->data[i]->SetMluData(this->ptr_mlu[i]);
+    if (dst_mlu) {
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
+        this->data[i]->SetMluData(this->ptr_mlu[i]);
+      }
+      return;
     }
 #endif
-    return;
   }
+
   /*deep copy*/
-  if (this->ctx.dev_type == DevContext::MLU) {
-    if (mlu_data != nullptr) {
-      LOG(FATAL) << "CopyToSyncMem should be called once for each frame";
-    }
+  if (this->ctx.dev_type == DevContext::MLU || this->ctx.dev_type == DevContext::CPU) {
+    bool src_mlu = (this->ctx.dev_type == DevContext::MLU);
     size_t bytes = GetBytes();
     bytes = ROUND_UP(bytes, 64 * 1024);
-    CALL_CNRT_BY_CONTEXT(cnrtMalloc(&mlu_data, bytes), ctx.dev_id, ctx.ddr_channel);
-    void* dst = mlu_data;
-    for (int i = 0; i < GetPlanes(); i++) {
-      size_t plane_size = GetPlaneBytes(i);
-      CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dst, ptr_mlu[i], plane_size, CNRT_MEM_TRANS_DIR_DEV2DEV), ctx.dev_id,
-                           ctx.ddr_channel);
-      this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, ctx.dev_id, ctx.ddr_channel));
-      this->data[i]->SetMluData(dst);
-      dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+    if (dst_mlu) {
+      if (dst_device_id < 0 || (ctx.dev_type == DevContext::MLU && ctx.dev_id != dst_device_id)) {
+        LOG(FATAL) << "CopyToSyncMem: dst_device_id not set, or ctx.dev_id != dst_device_id" << "," << dst_device_id;
+        std::terminate();
+        return;
+      }
+      mlu_data = cnMluMemAlloc(bytes, dst_device_id);
+      if (nullptr == mlu_data) {
+        LOG(FATAL) << "CopyToSyncMem: failed to alloc mlu memory";
+        std::terminate();
+      }
+    } else {
+      cpu_data = cnCpuMemAlloc(bytes);
+      if (nullptr == cpu_data) {
+        LOG(FATAL) << "CopyToSyncMem: failed to alloc cpu memory";
+        std::terminate();
+      }
     }
-  } else if (this->ctx.dev_type == DevContext::CPU) {
-    if (cpu_data != nullptr) {
-      LOG(FATAL) << "CopyToSyncMem should be called once for each frame";
+
+    if (src_mlu && dst_mlu) {
+      void* dst = mlu_data.get();
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        MluDeviceGuard guard(dst_device_id);  // dst_device_id is equal to ctx.devi_id
+        cnrtRet_t ret = cnrtMemcpy(dst, ptr_mlu[i], plane_size, CNRT_MEM_TRANS_DIR_DEV2DEV);
+        if (ret != CNRT_RET_SUCCESS) {
+          LOG(FATAL) << "CopyToSyncMem: failed to cnrtMemcpy(CNRT_MEM_TRANS_DIR_DEV2DEV)";
+        }
+        this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, dst_device_id));
+        this->data[i]->SetMluData(dst);
+        dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+      }
+    } else if (src_mlu && !dst_mlu) {
+      void* dst = cpu_data.get();
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        MluDeviceGuard guard(ctx.dev_id);
+        cnrtRet_t ret = cnrtMemcpy(dst, ptr_mlu[i], plane_size, CNRT_MEM_TRANS_DIR_DEV2HOST);
+        if (ret != CNRT_RET_SUCCESS) {
+          LOG(FATAL) << "CopyToSyncMem: failed to cnrtMemcpy(CNRT_MEM_TRANS_DIR_DEV2HOST)";
+        }
+        this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, dst_device_id));
+        this->data[i]->SetCpuData(dst);
+        dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+      }
+    } else if (!src_mlu && dst_mlu) {
+      void* dst = mlu_data.get();
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        MluDeviceGuard guard(dst_device_id);
+        cnrtRet_t ret = cnrtMemcpy(dst, ptr_cpu[i], plane_size, CNRT_MEM_TRANS_DIR_HOST2DEV);
+        if (ret != CNRT_RET_SUCCESS) {
+          LOG(FATAL) << "CopyToSyncMem: failed to cnrtMemcpy(CNRT_MEM_TRANS_DIR_HOST2DEV)";
+        }
+        this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, dst_device_id));
+        this->data[i]->SetMluData(dst);
+        dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+      }
+    } else {
+      void* dst = cpu_data.get();
+      for (int i = 0; i < GetPlanes(); i++) {
+        size_t plane_size = GetPlaneBytes(i);
+        memcpy(dst, ptr_cpu[i], plane_size);
+        this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, dst_device_id));
+        this->data[i]->SetCpuData(dst);
+        dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
+      }
     }
-    size_t bytes = GetBytes();
-    bytes = ROUND_UP(bytes, 64 * 1024);
-    CNStreamMallocHost(&cpu_data, bytes);
-    if (nullptr == cpu_data) {
-      LOG(FATAL) << "CopyToSyncMem: failed to alloc cpu memory";
-    }
-    void* dst = cpu_data;
-    for (int i = 0; i < GetPlanes(); i++) {
-      size_t plane_size = GetPlaneBytes(i);
-      memcpy(dst, ptr_cpu[i], plane_size);
-      this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size));
-      this->data[i]->SetCpuData(dst);
-      dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
-    }
-#ifdef CNS_MLU220_SOC
-  } else if (this->ctx.dev_type == DevContext::MLU_CPU) {
-    LOG(FATAL) << "MLU220_SOC: MLU_CPU deepCopy not supported yet";
-#endif
+    this->deAllocator_.reset();  // deep-copy is done, release dec-buf-ref
   } else {
-    LOG(FATAL) << "Device type not supported";
+    LOG(FATAL) << "CopyToSyncMem: Unsupported type";
+    std::terminate();
   }
 }
 
@@ -232,15 +268,18 @@ void CNDataFrame::CopyToSyncMemOnDevice(int device_id) {
     }
 
     // malloc memory on device_id
-    void* peerdev_data = nullptr;
+    std::shared_ptr<void> peerdev_data = nullptr;
     size_t bytes = GetBytes();
     bytes = ROUND_UP(bytes, 64 * 1024);
-    CALL_CNRT_BY_CONTEXT(cnrtMalloc(&peerdev_data, bytes), device_id, ctx.ddr_channel);
+    peerdev_data = cnMluMemAlloc(bytes, device_id);
+    if (nullptr == peerdev_data) {
+      LOG(FATAL) << "CopyToSyncMemOnDevice: failed to alloc mlu memory";
+    }
 
     // copy data to mlu memory on device_id
     if (deAllocator_ != nullptr) {
       mlu_data = peerdev_data;
-      void* dst = mlu_data;
+      void* dst = mlu_data.get();
       for (int i = 0; i < GetPlanes(); i++) {
         size_t plane_size = GetPlaneBytes(i);
         CNS_CNRT_CHECK(cnrtMemcpy(dst, ptr_mlu[i], plane_size, CNRT_MEM_TRANS_DIR_PEER2PEER));
@@ -249,10 +288,9 @@ void CNDataFrame::CopyToSyncMemOnDevice(int device_id) {
         dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
       }
     } else if (nullptr != mlu_data) {
-      CNS_CNRT_CHECK(cnrtMemcpy(peerdev_data, mlu_data, bytes, CNRT_MEM_TRANS_DIR_PEER2PEER));
-      CALL_CNRT_BY_CONTEXT(cnrtFree(mlu_data), this->ctx.dev_id, this->ctx.ddr_channel);
+      CNS_CNRT_CHECK(cnrtMemcpy(peerdev_data.get(), mlu_data.get(), bytes, CNRT_MEM_TRANS_DIR_PEER2PEER));
       mlu_data = peerdev_data;
-      void* dst = mlu_data;
+      void* dst = mlu_data.get();
       for (int i = 0; i < GetPlanes(); i++) {
         size_t plane_size = GetPlaneBytes(i);
         this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, device_id, ctx.ddr_channel));
@@ -308,10 +346,16 @@ void CNDataFrame::MmapSharedMem(MemMapType type, std::string stream_id) {
     } else if (this->ctx.dev_type == DevContext::MLU) {
       size_t bytes = GetBytes();
       bytes = ROUND_UP(bytes, 64 * 1024);
-      CALL_CNRT_BY_CONTEXT(cnrtMalloc(&mlu_data, bytes), ctx.dev_id, ctx.ddr_channel);
-      auto dst = reinterpret_cast<uint8_t*>(mlu_data);
-      CALL_CNRT_BY_CONTEXT(cnrtMemcpy(dst, map_mem_ptr, bytes, CNRT_MEM_TRANS_DIR_HOST2DEV), ctx.dev_id,
-                           ctx.ddr_channel);
+      mlu_data = cnMluMemAlloc(bytes, ctx.dev_id);
+      if (nullptr == mlu_data) {
+        LOG(FATAL) << "MmapSharedMem: failed to alloc mlu memory";
+      }
+
+      auto dst = reinterpret_cast<uint8_t*>(mlu_data.get());
+      cnrtRet_t ret = cnrtMemcpy(dst, map_mem_ptr, bytes, CNRT_MEM_TRANS_DIR_HOST2DEV);
+      if (ret != CNRT_RET_SUCCESS) {
+        LOG(ERROR) << "MmapSharedMem: failed to cnrtMemcpy, ret = " << ret;
+      }
 
       for (int i = 0; i < GetPlanes(); i++) {
         size_t plane_size = GetPlaneBytes(i);
@@ -330,14 +374,14 @@ void CNDataFrame::MmapSharedMem(MemMapType type, std::string stream_id) {
     if (this->ctx.dev_type == DevContext::CPU) {
       size_t bytes = GetBytes();
       bytes = ROUND_UP(bytes, 64 * 1024);
-      CNStreamMallocHost(&cpu_data, bytes);
-      if (nullptr == cpu_data) {
+      cpu_data = cnCpuMemAlloc(bytes);
+      if (nullptr == cpu_data.get()) {
         LOG(FATAL) << "MmapSharedMem: failed to alloc cpu memory";
       }
-      CALL_CNRT_BY_CONTEXT(cnrtMemcpy(cpu_data, map_mem_ptr, bytes, CNRT_MEM_TRANS_DIR_DEV2HOST), ctx.dev_id,
-                           ctx.ddr_channel);
+      MluDeviceGuard guard(ctx.dev_id);
+      cnrtMemcpy(cpu_data.get(), map_mem_ptr, bytes, CNRT_MEM_TRANS_DIR_DEV2HOST);
 
-      void* dst = cpu_data;
+      void* dst = cpu_data.get();
       for (int i = 0; i < GetPlanes(); i++) {
         size_t plane_size = GetPlaneBytes(i);
         this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size));
@@ -425,7 +469,7 @@ void CNDataFrame::CopyToSharedMem(MemMapType type, std::string stream_id) {
         dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
       }
     } else {
-      shared_mem_ptr = mlu_data;
+      shared_mem_ptr = mlu_data.get();
     }
 
     CALL_CNRT_BY_CONTEXT(cnrtAcquireMemHandle(&mlu_mem_handle, shared_mem_ptr), ctx.dev_id, ctx.ddr_channel);
@@ -450,7 +494,6 @@ void CNDataFrame::ReleaseSharedMem(MemMapType type, std::string stream_id) {
   } else {
     LOG(FATAL) << "Mem map type not supported";
   }
-
   return;
 }
 

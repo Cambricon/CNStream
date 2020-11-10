@@ -27,18 +27,18 @@
 #include "easyinfer/model_loader.h"
 #include "model_loader_internal.h"
 
-#define ONLY_SUPPORT_FLOAT32(layout)                                 \
-  do {                                                               \
-    if (layout.dtype != DataType::FLOAT32) {                         \
-      throw ModelLoaderError("Only support float32 for cpu layout"); \
-    }                                                                \
+#define ONLY_SUPPORT_FLOAT32(layout)                                                  \
+  do {                                                                                \
+    if (layout.dtype != DataType::FLOAT32) {                                          \
+      THROW_EXCEPTION(Exception::INVALID_ARG, "Only support float32 for cpu layout"); \
+    }                                                                                 \
   } while (0)
 
-#define CHECK_CONDITION(cond, msg) \
-  do {                             \
-    if (!(cond)) {                 \
-      throw ModelLoaderError(msg); \
-    }                              \
+#define CHECK_CONDITION(cond, msg)               \
+  do {                                           \
+    if (!(cond)) {                               \
+      THROW_EXCEPTION(Exception::INTERNAL, msg); \
+    }                                            \
   } while (0)
 
 #define CHECK_CNRT_RET(cnrt_ret, msg) CHECK_CONDITION((cnrt_ret == CNRT_RET_SUCCESS), msg)
@@ -58,7 +58,7 @@ cnrtDataType CastDataType(const DataType& type) {
     case DataType::INT32:
       return CNRT_INT32;
     default:
-      throw ModelLoaderError("Unsupported data type");
+      THROW_EXCEPTION(Exception::UNSUPPORTED, "Unsupported data type");
   }
 }
 
@@ -75,7 +75,7 @@ DataType CastDataType(const cnrtDataType& type) {
     case CNRT_INT32:
       return DataType::INT32;
     default:
-      throw ModelLoaderError("Unsupported data type");
+      THROW_EXCEPTION(Exception::UNSUPPORTED, "Unsupported data type");
   }
 }
 
@@ -88,7 +88,7 @@ cnrtDimOrder CastDimOrder(const DimOrder& order) {
     case DimOrder::NHWC:
       return CNRT_NHWC;
     default:
-      throw ModelLoaderError("Unsupported dimension order");
+      THROW_EXCEPTION(Exception::UNSUPPORTED, "Unsupported dimension order");
   }
 }
 
@@ -99,7 +99,7 @@ DimOrder CastDimOrder(const cnrtDimOrder& order) {
     case CNRT_NHWC:
       return DimOrder::NHWC;
     default:
-      throw ModelLoaderError("Unsupported dimension order");
+      THROW_EXCEPTION(Exception::UNSUPPORTED, "Unsupported dimension order");
   }
 }
 #endif
@@ -117,7 +117,7 @@ static const char* DataTypeStr(DataType type) {
     case DataType::INT32:
       return "DataType INT32";
     default:
-      throw ModelLoaderError("Unsupported data type");
+      THROW_EXCEPTION(Exception::UNSUPPORTED, "Unsupported data type");
   }
 }
 
@@ -128,7 +128,7 @@ static const char* DimOrderStr(DimOrder order) {
     case DimOrder::NHWC:
       return "DimOrder NHWC";
     default:
-      throw ModelLoaderError("Unsupported dimension order");
+      THROW_EXCEPTION(Exception::UNSUPPORTED, "Unsupported dimension order");
   }
 }
 
@@ -158,13 +158,13 @@ ModelLoader::ModelLoader(const char* model_path, const char* function_name) : d_
   } else {
     delete d_ptr_;
     d_ptr_ = nullptr;
-    throw ModelLoaderError("Model file not exist. Please check model path");
+    THROW_EXCEPTION(Exception::UNAVAILABLE, "Model file not exist. Please check model path");
   }
 
   VLOG(3) << "Load model from file: " << model_path;
   // 1. get cnrtModel and cnrtFunction
   cnrtRet_t error_code = cnrtLoadModel(&d_ptr_->model_, model_path);
-  CHECK_CNRT_RET(error_code, "Load model failed, error code : " + std::to_string(error_code));
+  CHECK_CNRT_RET(error_code, "Load model failed, cnrt error code : " + std::to_string(error_code));
 
   d_ptr_->LoadFunction(function_name);
 }
@@ -173,7 +173,7 @@ ModelLoader::ModelLoader(void* mem_ptr, const char* function_name) : d_ptr_(new 
   // 1. get cnrtModel and cnrtFunction
   LOG(INFO) << "Load model from memory, " << mem_ptr;
   cnrtRet_t error_code = cnrtLoadModelFromMem(&d_ptr_->model_, reinterpret_cast<char*>(mem_ptr));
-  CHECK_CNRT_RET(error_code, "Load model from memory failed, error code : " + std::to_string(error_code));
+  CHECK_CNRT_RET(error_code, "Load model from memory failed, cnrt error code : " + std::to_string(error_code));
 
   d_ptr_->LoadFunction(function_name);
 }
@@ -182,11 +182,11 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
   cnrtRet_t error_code;
 
   error_code = cnrtCreateFunction(&function_);
-  CHECK_CNRT_RET(error_code, "Create function failed, error code : " + std::to_string(error_code));
+  CHECK_CNRT_RET(error_code, "Create function failed, cnrt error code : " + std::to_string(error_code));
   error_code = cnrtExtractFunction(&function_, model_, function_name);
-  CHECK_CNRT_RET(error_code, "Extract function failed, error code : " + std::to_string(error_code));
+  CHECK_CNRT_RET(error_code, "Extract function failed, cnrt error code : " + std::to_string(error_code));
   error_code = cnrtQueryModelParallelism(model_, &model_parallelism_);
-  CHECK_CNRT_RET(error_code, "Query Model Parallelism failed, error code : " + std::to_string(error_code));
+  CHECK_CNRT_RET(error_code, "Query Model Parallelism failed, cnrt error code : " + std::to_string(error_code));
 
   LOG(INFO) << "Load function from offline model succeeded";
 
@@ -195,14 +195,14 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
   int64_t* input_sizes = nullptr;
   int input_num = 0;
   error_code = cnrtGetInputDataSize(&input_sizes, &input_num, function_);
-  CHECK_CNRT_RET(error_code, "Get input data size failed, error code : " + std::to_string(error_code));
+  CHECK_CNRT_RET(error_code, "Get input data size failed, cnrt error code : " + std::to_string(error_code));
   i_num_ = input_num;
   i_data_sizes_ = std::vector<int64_t>(input_sizes, input_sizes + input_num);
 
   int64_t* output_sizes = nullptr;
   int output_num = 0;
   error_code = cnrtGetOutputDataSize(&output_sizes, &output_num, function_);
-  CHECK_CNRT_RET(error_code, "Get output data size failed, error code : " + std::to_string(error_code));
+  CHECK_CNRT_RET(error_code, "Get output data size failed, cnrt error code : " + std::to_string(error_code));
   o_num_ = output_num;
   o_data_sizes_ = std::vector<int64_t>(output_sizes, output_sizes + output_num);
 
@@ -212,7 +212,7 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
   input_shapes_.clear();
   for (int i = 0; i < input_num; ++i) {
     error_code = cnrtGetInputDataShape(&input_dim_values, &dim_num, i, function_);
-    CHECK_CNRT_RET(error_code, "Get input data size failed, error code : " + std::to_string(error_code));
+    CHECK_CNRT_RET(error_code, "Get input data size failed, cnrt error code : " + std::to_string(error_code));
     CHECK_CONDITION(dim_num <= 4, "Unable to process a model of which input is greater than 4-dimensional.");
     // nhwc shape
     std::vector<uint32_t> dim_value(4, 1);
@@ -227,7 +227,7 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
   output_shapes_.clear();
   for (int i = 0; i < output_num; ++i) {
     error_code = cnrtGetOutputDataShape(&output_dim_values, &dim_num, i, function_);
-    CHECK_CNRT_RET(error_code, "Get output data shape failed, error code : " + std::to_string(error_code));
+    CHECK_CNRT_RET(error_code, "Get output data shape failed, cnrt error code : " + std::to_string(error_code));
     CHECK_CONDITION(dim_num <= 4, "Unable to process a model of which output is greater than 4-dimensional.");
     // nhwc shape
     Shape sp;
@@ -242,7 +242,7 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
   // 2.3 get mlu io data type
   cnrtDataType_t* input_dtypes = nullptr;
   error_code = cnrtGetInputDataType(&input_dtypes, &input_num, function_);
-  CHECK_CNRT_RET(error_code, "Get input data type failed, error code : " + std::to_string(error_code));
+  CHECK_CNRT_RET(error_code, "Get input data type failed, cnrt error code : " + std::to_string(error_code));
   CHECK_CONDITION(static_cast<size_t>(input_num) == i_data_sizes_.size(),
                   "Internel error, maybe input number from cnrtGetInputDataType is wrong.");
   i_mlu_layouts_.resize(i_num_);
@@ -253,7 +253,7 @@ void ModelLoaderPrivate::LoadFunction(const char* function_name) {
 
   cnrtDataType_t* output_dtypes = nullptr;
   error_code = cnrtGetOutputDataType(&output_dtypes, &output_num, function_);
-  CHECK_CNRT_RET(error_code, "Get output data type failed, error code : " + std::to_string(error_code));
+  CHECK_CNRT_RET(error_code, "Get output data type failed, cnrt error code : " + std::to_string(error_code));
   CHECK_CONDITION(static_cast<size_t>(output_num) == o_data_sizes_.size(),
                   "Internel error, maybe output number from cnrtGetOutputDataType is wrong.");
   o_mlu_layouts_.resize(o_num_);
@@ -336,7 +336,7 @@ void ModelLoader::InitLayout() {}
 
 void ModelLoader::SetCpuInputLayout(DataLayout layout, int data_index) {
   if (data_index < 0 || data_index >= d_ptr_->i_num_) {
-    throw ModelLoaderError("SetCpuInputLayout: Data index out of range");
+    THROW_EXCEPTION(Exception::INVALID_ARG, "SetCpuInputLayout: Data index out of range");
   }
   ONLY_SUPPORT_FLOAT32(layout);
 
@@ -348,7 +348,7 @@ void ModelLoader::SetCpuInputLayout(DataLayout layout, int data_index) {
 
 void ModelLoader::SetCpuOutputLayout(DataLayout layout, int data_index) {
   if (data_index < 0 || data_index >= d_ptr_->o_num_) {
-    throw ModelLoaderError("SetCpuOutputLayout: Data index out of range");
+    THROW_EXCEPTION(Exception::INVALID_ARG, "SetCpuOutputLayout: Data index out of range");
   }
   ONLY_SUPPORT_FLOAT32(layout);
 
@@ -373,16 +373,16 @@ bool ModelLoader::AdjustStackMemory() {
   uint32_t current_device_size;
 
   cnrtRet_t error_code = cnrtQueryModelStackSize(d_ptr_->model_, &stack_size);
-  CHECK_CNRT_RET(error_code, "Query model stack size failed. error_code : " + std::to_string(error_code));
+  CHECK_CNRT_RET(error_code, "Query model stack size failed. cnrt error_code : " + std::to_string(error_code));
   VLOG(3) << "Model stack size is " << stack_size << " MB";
 
   error_code = cnrtGetStackMem(&current_device_size);
-  CHECK_CNRT_RET(error_code, "Get current device stack size failed. error_code : " + std::to_string(error_code));
+  CHECK_CNRT_RET(error_code, "Get current device stack size failed. cnrt error_code : " + std::to_string(error_code));
   VLOG(3) << "Current MLU stack size is " << current_device_size << " MB";
 
   if (stack_size > current_device_size) {
     error_code = cnrtSetStackMem(stack_size + 50);
-    CHECK_CNRT_RET(error_code, "set stack size failed. error_code : " + std::to_string(error_code));
+    CHECK_CNRT_RET(error_code, "set stack size failed. cnrt error_code : " + std::to_string(error_code));
     LOG(INFO) << "Adjust stack memory to " << stack_size + 50 << " MB";
     return true;
   }
@@ -415,7 +415,7 @@ int64_t ModelLoader::GetOutputDataBatchAlignSize(int data_index) const {
   return size;
 }
 
-void ModelLoader::ReleaseModel() {
+ModelLoader::~ModelLoader() {
   LOG(INFO) << "Destroy neural network function";
   cnrtRet_t error_code = cnrtDestroyFunction(d_ptr_->function_);
   if (CNRT_RET_SUCCESS != error_code) {
@@ -426,10 +426,6 @@ void ModelLoader::ReleaseModel() {
   if (CNRT_RET_SUCCESS != error_code) {
     LOG(ERROR) << "Unload model failed. error_code : " << std::to_string(error_code).c_str();
   }
-}
-
-ModelLoader::~ModelLoader() {
-  ReleaseModel();
   delete d_ptr_;
   d_ptr_ = nullptr;
 }

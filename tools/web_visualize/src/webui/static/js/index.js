@@ -381,7 +381,7 @@ $(document).ready(function(){
             if (json) {
               $("#json").val(json);
             } else {
-              $("#json").val("Please click the 'Pipeline Design' button at the top right of the page to design your pipeline. ^_^");
+              $("#json").val("Please click the 'Pipeline Design' button at the top right of the page to design your pipeline.");
             }
             current_json = json;
         }

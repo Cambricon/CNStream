@@ -48,7 +48,9 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
                          const std::shared_ptr<ObjFilter>& obj_filter,
                          std::string dump_resized_image_dir,
                          CNDataFormat model_input_pixel_format,
-                         bool mem_on_mlu_for_postproc)
+                         bool mem_on_mlu_for_postproc,
+                         bool saving_infer_input,
+                         std::string module_name)
      :model_(model),
       preprocessor_(preprocessor),
       postprocessor_(postprocessor),
@@ -65,11 +67,13 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
       infer_thread_id_(infer_thread_id),
       dump_resized_image_dir_(dump_resized_image_dir),
       model_input_fmt_(model_input_pixel_format),
-      mem_on_mlu_for_postproc_(mem_on_mlu_for_postproc) {
+      mem_on_mlu_for_postproc_(mem_on_mlu_for_postproc),
+      saving_infer_input_(saving_infer_input),
+      module_name_(module_name) {
   try {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id);
-    mlu_ctx.ConfigureForThisThread();
+    mlu_ctx.BindDevice();
     tp_ = std::make_shared<InferThreadPool>();
     tp_->SetErrorHandleFunc(error_func);
     tp_->Init(dev_id, batchsize * 3 + 4);
@@ -113,7 +117,7 @@ InferEngine::~InferEngine() {
   try {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id_);
-    mlu_ctx.ConfigureForThisThread();
+    mlu_ctx.BindDevice();
     if (tp_)
       tp_->Destroy();
     if (cpu_input_res_)
@@ -149,11 +153,12 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
 
   auto auto_set_done = std::make_shared<AutoSetDone>(ret_promise);
   if (batching_by_obj_) {
-    if (finfo->datas.find(CNObjsVecKey) == finfo->datas.end()) {
+    if (finfo->datas.find(CNInferObjsPtrKey) == finfo->datas.end()) {
       timeout_helper_.UnlockOperator();
       return card;
     }
-    CNObjsVec objs = cnstream::any_cast<CNObjsVec>(finfo->datas[CNObjsVecKey]);
+    CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(finfo);
+    CNObjsVec &objs = objs_holder->objs_;
     for (size_t idx = 0; idx < objs.size(); ++idx) {
       auto& obj = objs[idx];
       if (obj_filter_) {
@@ -260,6 +265,7 @@ void InferEngine::StageAssemble() {
   batching_done_stages_.push_back(infer_stage);
   infer_stage->SetPerfContext(infer_perf_manager_, infer_thread_id_);
   infer_stage->SetDumpResizedImageDir(dump_resized_image_dir_);
+  infer_stage->SetSavingInputData(saving_infer_input_, module_name_);
 
   if (!mem_on_mlu_for_postproc_) {
     std::shared_ptr<BatchingDoneStage> d2h_stage =
