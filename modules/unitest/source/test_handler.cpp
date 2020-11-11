@@ -109,22 +109,6 @@ TEST(DataHandlerFile, OpenClose) {
   handler->Close();
 }
 
-#if 0
-TEST(RtspHandler, CheckTimeOut) {
-  const char *rtsp_path = "rtsp://";
-  DataSource src(gname);
-  auto handler = RtspHandler::Create(&src, std::to_string(0), rtsp_path);
-  auto rtspHandler = std::dynamic_pointer_cast<RtspHandler>(handler);
-  EXPECT_FALSE(rtspHandler->impl_->PrepareResources());
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  // less than 3 seconds, not timeout
-  EXPECT_FALSE(rtspHandler->impl_->CheckTimeOut(ts.tv_sec * 1000 + ts.tv_nsec / 1000000));
-  // greater than 3 seconds, timeout
-  EXPECT_TRUE(rtspHandler->impl_->CheckTimeOut(ts.tv_sec * 1000 + ts.tv_nsec / 1000000 + 5000));
-}
-#endif
-
 TEST(DataHandlerFile, PrepareResources) {
   DataSource src(gname);
   std::string h264_path = GetExePath() + "../../modules/unitest/source/data/img.h264";
@@ -185,21 +169,6 @@ TEST(DataHandlerFile, PrepareResources) {
   cpu_file_handler->Close();
   EXPECT_TRUE(cpu_file_handler->impl_->PrepareResources());
   cpu_file_handler->impl_->ClearResources();
-}
-
-TEST(DataHandlerFile, Extract) {
-  DataSource src(gname);
-  std::string h264_path = GetExePath() + "../../modules/unitest/source/data/img.h264";
-  // H264
-  auto handler = FileHandler::Create(&src, std::to_string(0), h264_path, 30, false);
-  auto file_handler = std::dynamic_pointer_cast<FileHandler>(handler);
-  EXPECT_TRUE(file_handler->impl_->PrepareResources());
-  // img.mp4 has 5 frames
-  for (uint32_t i = 0; i < 5; i++) {
-    EXPECT_TRUE(file_handler->impl_->Extract());
-  }
-  EXPECT_FALSE(file_handler->impl_->Extract());
-  file_handler->impl_->ClearResources();
 }
 
 TEST(DataHandlerFile, ProcessMlu) {

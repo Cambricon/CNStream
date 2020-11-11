@@ -18,6 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include <glog/logging.h>
+
 #include <fcntl.h>
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>
@@ -298,7 +300,7 @@ void IPCHandler::PreparePackageToSend(const PkgType& type, const std::shared_ptr
       send_pkg.timestamp = data->timestamp;
       send_pkg.mem_map_type = memmap_type_;
       if (!data->IsEos()) {
-        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+        CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
         send_pkg.frame_id = frame->frame_id;
         send_pkg.fmt = frame->fmt;
         send_pkg.width = frame->width;
@@ -323,7 +325,7 @@ void IPCHandler::PreparePackageToSend(const PkgType& type, const std::shared_ptr
       send_pkg.stream_idx = data->GetStreamIndex();
       send_pkg.stream_id = data->stream_id;
       if (!data->IsEos()) {
-        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+        CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
         send_pkg.frame_id = frame->frame_id;
       }
     } break;

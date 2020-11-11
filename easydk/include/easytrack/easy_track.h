@@ -35,8 +35,6 @@
 
 namespace edk {
 
-TOOLKIT_REGISTER_EXCEPTION(EasyTrack);
-
 /**
  * @brief Struct of BoundingBox
  */
@@ -210,7 +208,7 @@ class KcfTrack : public EasyTrack {
 
   /**
    * @brief Update result of objects tracking after kcf and IOU matching.
-   * @see EasyTrack::UpdateFrame
+   * @see edk::EasyTrack::UpdateFrame
    */
   void UpdateFrame(const TrackFrame &frame, const Objects &detects, Objects *tracks) override;
 

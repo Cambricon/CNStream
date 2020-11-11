@@ -27,6 +27,7 @@
  * This file contains a declaration of the CNModuleConfig class.
  */
 #include <unistd.h>
+#include <string.h>
 
 #include <list>
 #include <memory>

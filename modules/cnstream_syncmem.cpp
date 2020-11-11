@@ -35,13 +35,27 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace cnstream {
 
-void CNStreamMallocHost(void** ptr, size_t size) {
+/**
+ * Allocates data on a host.
+ *
+ * @param ptr Outputs data pointer.
+ * @param size The size of the data to be allocated.
+ */
+static void CNStreamMallocHost(void** ptr, size_t size) {
   void* __ptr = malloc(size);
   LOG_IF(FATAL, nullptr == __ptr) << "Malloc memory on CPU failed, malloc size:" << size;
   *ptr = __ptr;
 }
 
-CNSyncedMemory::CNSyncedMemory() {}
+
+/**
+ * Frees the data allocated by ``CNStreamMallocHost``.
+ *
+ * @param ptr The data address to be freed.
+ */
+static void CNStreamFreeHost(void* ptr) {
+  free(ptr);
+}
 
 CNSyncedMemory::CNSyncedMemory(size_t size) : size_(size) {}
 
@@ -171,7 +185,7 @@ void CNSyncedMemory::SetMluDevContext(int dev_id, int ddr_chn) {
    */
   cnrtDev_t dev;
   LOG_IF(FATAL, CNRT_RET_SUCCESS != cnrtGetDeviceHandle(&dev, dev_id)) << "Can not find device by id: " << dev_id;
-  LOG_IF(FATAL, ddr_chn < 0 || ddr_chn >= 4) << "Invalid ddr channel [0,4) :" << ddr_chn;
+  // LOG_IF(FATAL, ddr_chn < 0 || ddr_chn >= 4) << "Invalid ddr channel [0,4) :" << ddr_chn;
 
   dev_id_ = dev_id;
   ddr_chn_ = ddr_chn;

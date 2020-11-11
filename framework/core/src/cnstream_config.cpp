@@ -23,6 +23,8 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include <glog/logging.h>
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>

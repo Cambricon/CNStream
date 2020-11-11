@@ -30,11 +30,14 @@
 #ifndef CNSTREAM_SYNCMEM_HPP_
 #define CNSTREAM_SYNCMEM_HPP_
 
+#include "cnrt.h"
 /**
  * @file cnstream_syncmem.hpp
  *
  * This file contains a declaration of the CNSyncedMemory class.
  */
+
+#include <glog/logging.h>
 
 #include <cstddef>
 #include <mutex>
@@ -60,21 +63,6 @@
 namespace cnstream {
 
 /**
- * Allocates data on a host.
- *
- * @param ptr Outputs data pointer.
- * @param size The size of the data to be allocated.
- */
-void CNStreamMallocHost(void** ptr, size_t size);
-
-/**
- * Frees the data allocated by ``CNStreamMallocHost``.
- *
- * @param ptr The data address to be freed.
- */
-inline void CNStreamFreeHost(void* ptr) { free(ptr); }
-
-/**
  * @brief Synchronizes memory between CPU and MLU.
  *
  * If the data on MLU is the latest, the data on CPU should be synchronized before processing the data on CPU.
@@ -85,10 +73,6 @@ inline void CNStreamFreeHost(void* ptr) { free(ptr); }
  */
 class CNSyncedMemory : private NonCopyable {
  public:
-  /**
-   * Constructor.
-   */
-  CNSyncedMemory();
   /**
    * Constructor.
    *
@@ -103,7 +87,7 @@ class CNSyncedMemory : private NonCopyable {
    * @param mlu_ddr_chn The MLU DDR channel that is greater than or equal to 0, and is less
    *                    than 4. It specifies which piece of DDR channel the memory allocated on.
    */
-  CNSyncedMemory(size_t size, int mlu_dev_id, int mlu_ddr_chn);
+  explicit CNSyncedMemory(size_t size, int mlu_dev_id, int mlu_ddr_chn = -1);
   ~CNSyncedMemory();
   /**
    * Gets the CPU data.
@@ -144,7 +128,7 @@ class CNSyncedMemory : private NonCopyable {
    *
    * @note You need to call this API before all getters and setters.
    */
-  void SetMluDevContext(int dev_id, int ddr_chn = 0);
+  void SetMluDevContext(int dev_id, int ddr_chn = -1);
   /**
    * Gets the MLU device ID.
    *
@@ -233,8 +217,8 @@ class CNSyncedMemory : private NonCopyable {
   SyncedHead head_ = UNINITIALIZED;  ///< Identifies which device data is synchronized on.
   size_t size_ = 0;                  ///< The data size.
 
-  int dev_id_ = 0;   ///< Ordinal MLU device ID.
-  int ddr_chn_ = 0;  ///< Ordinal MLU DDR channel ID. The value should be [0, 4).
+  int dev_id_ = -1;   ///< Ordinal MLU device ID.
+  int ddr_chn_ = -1;  ///< Ordinal MLU DDR channel ID. The value should be [0, 4).
 
   mutable std::mutex mutex_;
 };  // class CNSyncedMemory

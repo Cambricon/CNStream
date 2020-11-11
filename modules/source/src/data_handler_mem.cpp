@@ -17,16 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-#ifdef __cplusplus
-}
-#endif
+#include "data_handler_mem.hpp"
 
 #include <condition_variable>
 #include <mutex>
@@ -36,11 +27,9 @@ extern "C" {
 #include <thread>
 #include <utility>
 #include <memory>
+#include <vector>
 
 #include "perf_manager.hpp"
-#include "data_handler_mem.hpp"
-
-#define DEFAULT_MODULE_CATEGORY SOURCE
 
 namespace cnstream {
 
@@ -53,7 +42,7 @@ std::shared_ptr<SourceHandler> ESMemHandler::Create(DataSource *module, const st
 }
 
 ESMemHandler::ESMemHandler(DataSource *module, const std::string &stream_id) : SourceHandler(module, stream_id) {
-  impl_ = new (std::nothrow) ESMemHandlerImpl(module, *this);
+  impl_ = new (std::nothrow) ESMemHandlerImpl(module, this);
 }
 
 ESMemHandler::~ESMemHandler() {
@@ -64,16 +53,16 @@ ESMemHandler::~ESMemHandler() {
 
 bool ESMemHandler::Open() {
   if (!this->module_) {
-    MLOG(ERROR) << "module_ null";
+    LOGE(SOURCE) << "module_ null";
     return false;
   }
   if (!impl_) {
-    MLOG(ERROR) << "impl_ null";
+    LOGE(SOURCE) << "impl_ null";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    MLOG(ERROR) << "invalid stream_idx";
+    LOGE(SOURCE) << "invalid stream_idx";
     return false;
   }
 
@@ -108,16 +97,14 @@ int ESMemHandler::Write(unsigned char *data, int len) {
 }
 
 bool ESMemHandlerImpl::Open() {
-  // updated with paramSet
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
-#if 0
+  /*
   if (param_.decoder_type_ != DECODER_MLU) {
-    MLOG(ERROR) << "decoder_type not supported:" << param_.decoder_type_;
+    LOGE(SOURCE) << "decoder_type not supported:" << param_.decoder_type_;
     return false;
   }
-#endif
-  this->interval_ = param_.interval_;
+  */
 
   SetPerfManager(source->GetPerfManager(stream_id_));
   SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
@@ -128,94 +115,194 @@ bool ESMemHandlerImpl::Open() {
     return false;
   }
 
-  // start demuxer
-  running_.store(1);
+  // start decode Loop
+  running_.store(true);
   thread_ = std::thread(&ESMemHandlerImpl::DecodeLoop, this);
   return true;
 }
 
 void ESMemHandlerImpl::Close() {
   if (running_.load()) {
-    running_.store(0);
+    running_.store(false);
     if (thread_.joinable()) {
       thread_.join();
     }
   }
 
-  std::lock_guard<std::mutex> lk(queue_mutex_);
-  if (queue_) {
-    delete queue_;
-    queue_ = nullptr;
+  {
+    std::lock_guard<std::mutex> lk(queue_mutex_);
+    if (queue_) {
+      delete queue_;
+      queue_ = nullptr;
+    }
   }
-  parser_.Free();
+  parser_.Close();
 }
 
 int ESMemHandlerImpl::Write(ESPacket *pkt) {
-  if (pkt && pkt->data && pkt->size) {
-    if (parser_.Parse(pkt->data, pkt->size) < 0) {
-      return -2;
-    }
+  if (!pkt || eos_reached_ || !running_.load()) {
+    return -1;
   }
-  std::lock_guard<std::mutex> lk(queue_mutex_);
-  int timeoutMs = 1000;
-  while (running_.load() && queue_) {
-    if (queue_->Push(timeoutMs, std::make_shared<EsPacket>(pkt))) {
-      return 0;
-    }
-  }
-  return -1;
-}
-
-int ESMemHandlerImpl::SplitterOnNal(NalDesc &desc, bool eos) {
-  if (!eos) {
-    if (parser_.Parse(desc.nal, desc.len) < 0) {
-      return -2;
-    }
-  }
-  std::lock_guard<std::mutex> lk(queue_mutex_);
-  if (queue_) {
-    ESPacket pkt;
-    if (eos) {
-      pkt.flags = ESPacket::FLAG_EOS;
-    } else {
-      pkt.data = desc.nal;
-      pkt.size = desc.len;
-      pkt.pts = pts_++;
-    }
-    int timeoutMs = 1000;
-    while (running_.load()) {
-      if (queue_->Push(timeoutMs, std::make_shared<EsPacket>(&pkt))) {
-        return 0;
-      }
-    }
-  }
-  return -1;
-}
-
-int ESMemHandlerImpl::Write(unsigned char *data, int len) {
-  if (data && len) {
-    return this->SplitterWriteChunk(data, len);
-  } else {
-    return this->SplitterWriteChunk(nullptr, 0);
+  VideoEsPacket packet;
+  packet.data = pkt->data;
+  packet.len = pkt->size;
+  packet.pts = pkt->pts;
+  if (parser_.Parse(packet) < 0) {
+    eos_reached_ = true;
+    return -1;
   }
   return 0;
 }
 
-void ESMemHandlerImpl::DecodeLoop() {
-  /*meet cnrt requirement*/
-  if (param_.device_id_ >= 0) {
-    try {
-      edk::MluContext mlu_ctx;
-      mlu_ctx.SetDeviceId(param_.device_id_);
-      // mlu_ctx.SetChannelId(dev_ctx_.ddr_channel);
-      mlu_ctx.ConfigureForThisThread();
-    } catch (edk::Exception &e) {
-      if (nullptr != module_)
-        module_->PostEvent(EVENT_ERROR, "stream_id " + stream_id_ + " failed to setup dev/channel.");
-      MLOG(DEBUG) << "Init MLU context failed.";
+struct NalDesc {
+  unsigned char *nal = nullptr;
+  int len = 0;
+};
+
+static int FindStartCode(unsigned char *buf) {
+  if (buf[0] == 0 && buf[1] == 0 && buf[2] == 0 && buf[3] == 1) {
+    return 4;
+  }
+  if (buf[0] == 0 && buf[1] == 0 && buf[2] == 1) {
+    return 3;
+  }
+  return 0;
+}
+
+static int GetNaluH2645(unsigned char *buf, int len, std::vector<NalDesc> &vec_desc) {  // NOLINT
+  std::vector<int> vec_pos;
+  for (int i = 0; i < len - 4; i++) {
+    int size = FindStartCode(buf + i);
+    if (!size) {
+      continue;
+    }
+    vec_pos.push_back(i);
+    i += size - 1;
+  }
+  if (vec_pos.empty()) {
+    return 0;
+  }
+
+  int num = vec_pos.size();
+  for (int i = 0; i < num - 1; i++) {
+    NalDesc desc;
+    desc.nal = buf + vec_pos[i];
+    desc.len = vec_pos[i + 1] - vec_pos[i];
+    int type_idx = (desc.nal[2] == 1) ? 3 : 4;
+    if (desc.len < type_idx) {
+      // "INVALID nal size"
+      return -1;
+    }
+    vec_desc.push_back(desc);
+  }
+
+  // handle the last nal
+  if (vec_pos[num - 1]) {
+    NalDesc desc;
+    desc.nal = buf + vec_pos[num - 1];
+    desc.len = len - vec_pos[num - 1];
+    vec_desc.push_back(desc);
+  }
+  return 0;
+}
+
+static const size_t max_frame_bits_size = 2 * 1024 * 1024;
+int ESMemHandlerImpl::Write(unsigned char *data, int len) {
+  if (eos_reached_ || !running_.load()) {
+    return -1;
+  }
+
+  if (!frame_bits_buf_) {
+    std::unique_ptr<unsigned char[]> ptr(new unsigned char[max_frame_bits_size]);
+    frame_bits_buf_ = std::move(ptr);
+    if (!frame_bits_buf_) {
+      return -1;
+    }
+    frame_bits_size_ = 0;
+  }
+  generate_pts_ = true;
+
+  if (!data || !len) {
+    // eos reached
+    VideoEsPacket packet;
+    parser_.Parse(packet);
+    eos_reached_ = true;
+    return 0;
+  }
+
+  if (frame_bits_size_ + len <= max_frame_bits_size) {
+    memcpy(frame_bits_buf_.get() + frame_bits_size_, data, len);
+    frame_bits_size_ += len;
+
+    std::vector<NalDesc> vec_desc;
+    GetNaluH2645(frame_bits_buf_.get(), frame_bits_size_, vec_desc);
+
+    size_t parsed_len = 0;
+    if (vec_desc.size() > 1) {
+      for (size_t i = 0; i < vec_desc.size() - 1; i++) {
+        VideoEsPacket packet;
+        packet.data = vec_desc[i].nal;
+        packet.len = vec_desc[i].len;
+        packet.pts = 0;
+        if (parser_.Parse(packet) < 0) {
+          eos_reached_ = true;
+          return -1;
+        }
+        parsed_len += packet.len;
+      }
+    }
+    if (parsed_len) {
+      if (frame_bits_size_ - parsed_len) {
+        memmove(frame_bits_buf_.get(), frame_bits_buf_.get() + parsed_len, frame_bits_size_ - parsed_len);
+      }
+    }
+    frame_bits_size_ -= parsed_len;
+  } else {
+    // FIXME
+    LOGW(SOURCE) << " parse es failed, discard data";
+    frame_bits_size_ = 0;
+  }
+  return 0;
+}
+
+void ESMemHandlerImpl::OnParserInfo(VideoInfo *video_info) {
+  // FIXME
+  if (!video_info) {
+    LOGE(SOURCE) << "ESMemHandlerImpl::OnParserInfo null info ";
+    return;
+  }
+  std::unique_lock<std::mutex> lk(info_mutex_);
+  info_ = *video_info;
+  info_set_.store(true);
+}
+
+void ESMemHandlerImpl::OnParserFrame(VideoEsFrame *frame) {
+  ESPacket pkt;
+  if (frame) {
+    pkt.data = frame->data;
+    pkt.size = frame->len;
+    pkt.pts = generate_pts_ ? (fake_pts_ ++) : frame->pts;
+    pkt.flags = frame->flags ? ESPacket::FLAG_KEY_FRAME : 0;
+  } else {
+    pkt.flags = ESPacket::FLAG_EOS;
+  }
+  while (running_) {
+    int timeoutMs = 1000;
+    std::lock_guard<std::mutex> lk(queue_mutex_);
+    if (queue_ && queue_->Push(timeoutMs, std::make_shared<EsPacket>(&pkt))) {
+      break;
+    }
+    if (!queue_) {
       return;
     }
   }
+}
+
+void ESMemHandlerImpl::DecodeLoop() {
+  /*meet cnrt requirement,
+   *  for cpu case(device_id < 0), MluDeviceGuard will do nothing
+   */
+  MluDeviceGuard guard(param_.device_id_);
 
   if (!PrepareResources()) {
     ClearResources();
@@ -228,11 +315,11 @@ void ESMemHandlerImpl::DecodeLoop() {
       e.thread_id = std::this_thread::get_id();
       module_->PostEvent(e);
     }
-    MLOG(DEBUG) << "PrepareResources failed.";
+    LOGE(SOURCE) << "PrepareResources failed.";
     return;
   }
 
-  MLOG(DEBUG) << "Mem handler DecodeLoop.";
+  LOGD(SOURCE) << "Mem handler DecodeLoop.";
   while (running_.load()) {
     if (!Process()) {
       break;
@@ -240,20 +327,18 @@ void ESMemHandlerImpl::DecodeLoop() {
   }
 
   ClearResources();
-  MLOG(DEBUG) << "Mem handler DecodeLoop Exit.";
+  LOGD(SOURCE) << "Mem handler DecodeLoop Exit.";
 }
 
 bool ESMemHandlerImpl::PrepareResources() {
-  VideoStreamInfo info;
+  VideoInfo info;
   while (running_.load()) {
-    int ret = parser_.GetInfo(info);
-    if (-1 == ret) {
-      return false;
-    } else if (0 == ret) {
-      usleep(1000 * 10);
-    } else {
+    if (info_set_.load()) {
+      std::unique_lock<std::mutex> lk(info_mutex_);
+      info = info_;
       break;
     }
+    usleep(1000);
   }
 
   if (!running_.load()) {
@@ -265,20 +350,27 @@ bool ESMemHandlerImpl::PrepareResources() {
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
     decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
   } else {
-    MLOG(ERROR) << "unsupported decoder_type";
+    LOGE(SOURCE) << "unsupported decoder_type";
     return false;
   }
   if (!decoder_) {
     return false;
   }
-  bool ret = decoder_->Create(&info, interval_);
+
+  ExtraDecoderInfo extra;
+  extra.device_id = param_.device_id_;
+  extra.input_buf_num = param_.input_buf_number_;
+  extra.output_buf_num = param_.output_buf_number_;
+  extra.apply_stride_align_for_scaler = param_.apply_stride_align_for_scaler_;
+  bool ret = decoder_->Create(&info, &extra);
   if (!ret) {
     return false;
   }
   if (info.extra_data.size()) {
-    ESPacket pkt;
+    VideoEsPacket pkt;
     pkt.data = info.extra_data.data();
-    pkt.size = info.extra_data.size();
+    pkt.len = info.extra_data.size();
+    pkt.pts = 0;
     if (!decoder_->Process(&pkt)) {
       return false;
     }
@@ -305,18 +397,15 @@ bool ESMemHandlerImpl::Process() {
   }
 
   if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-    ESPacket pkt;
-    pkt.flags = ESPacket::FLAG_EOS;
-    MLOG(DEBUG) << "Mem handler stream id: " << stream_id_ << "EOS reached";
-    decoder_->Process(&pkt);
+    LOGI(SOURCE) << "Mem handler stream id: " << stream_id_ << " EOS reached";
+    decoder_->Process(nullptr);
     return false;
   }  // if (!ret)
 
-  ESPacket pkt;
+  VideoEsPacket pkt;
   pkt.data = in->pkt_.data;
-  pkt.size = in->pkt_.size;
+  pkt.len = in->pkt_.size;
   pkt.pts = in->pkt_.pts;
-  pkt.flags &= ~ESPacket::FLAG_EOS;
 
   RecordStartTime(module_->GetName(), pkt.pts);
 
@@ -324,6 +413,35 @@ bool ESMemHandlerImpl::Process() {
     return false;
   }
   return true;
+}
+
+// IDecodeResult methods
+void ESMemHandlerImpl::OnDecodeError(DecodeErrorCode error_code) {
+  // FIXME,  handle decode error ...
+  interrupt_.store(true);
+}
+
+void ESMemHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
+  if (frame_count_++ % param_.interval_ != 0) {
+    return;  // discard frames
+  }
+  if (!frame) return;
+  if (!frame->valid) return;
+
+  std::shared_ptr<CNFrameInfo> data = this->CreateFrameInfo();
+  if (!data) {
+    return;
+  }
+  data->timestamp = frame->pts;  // FIXME
+  int ret = SourceRender::Process(data, frame, frame_id_++, param_);
+  if (ret < 0) {
+    return;
+  }
+  this->SendFrameInfo(data);
+}
+
+void ESMemHandlerImpl::OnDecodeEos() {
+  this->SendFlowEos();
 }
 
 }  // namespace cnstream

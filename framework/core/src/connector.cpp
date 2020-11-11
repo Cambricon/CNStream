@@ -20,8 +20,11 @@
 
 #include "connector.hpp"
 
+#include <glog/logging.h>
+
 #include <atomic>
 #include <vector>
+
 #include "conveyor.hpp"
 
 namespace cnstream {
@@ -29,8 +32,9 @@ namespace cnstream {
 Connector::Connector(const size_t conveyor_count, size_t conveyor_capacity) {
   conveyor_capacity_ = conveyor_capacity;
   conveyors_.reserve(conveyor_count);
+  fail_times_.reserve(conveyor_count);
   for (size_t i = 0; i < conveyor_count; ++i) {
-    Conveyor* conveyor = new (std::nothrow) Conveyor(this, conveyor_capacity);
+    Conveyor* conveyor = new (std::nothrow) Conveyor(conveyor_capacity);
     LOG_IF(FATAL, nullptr == conveyor) << "Connector::Connector()  new Conveyor failed.";
     conveyors_.push_back(conveyor);
   }
@@ -54,12 +58,32 @@ size_t Connector::GetConveyorCapacity() const {
   return conveyor_capacity_;
 }
 
-CNFrameInfoPtr Connector::PopDataBufferFromConveyor(int conveyor_idx) {
-  return GetConveyor(conveyor_idx)->PopDataBuffer();
+size_t Connector::GetConveyorSize(int conveyor_idx) const {
+  return GetConveyor(conveyor_idx)->GetBufferSize();
 }
 
-void Connector::PushDataBufferToConveyor(int conveyor_idx, CNFrameInfoPtr data) {
-  GetConveyor(conveyor_idx)->PushDataBuffer(data);
+bool Connector::IsConveyorEmpty(int conveyor_idx) const {
+  return GetConveyor(conveyor_idx)->GetBufferSize() == 0;
+}
+
+bool Connector::IsConveyorFull(int conveyor_idx) const {
+  return GetConveyor(conveyor_idx)->GetBufferSize() >= conveyor_capacity_;
+}
+
+CNFrameInfoPtr Connector::PopDataBufferFromConveyor(int conveyor_idx) {
+  CNFrameInfoPtr data = nullptr;
+  if (!IsConveyorEmpty(conveyor_idx)) {
+    data  = GetConveyor(conveyor_idx)->PopDataBuffer();
+  }
+  return data;
+}
+
+bool Connector::PushDataBufferToConveyor(int conveyor_idx, CNFrameInfoPtr data) {
+  return GetConveyor(conveyor_idx)->PushDataBuffer(data);
+}
+
+uint64_t Connector::GetFailTime(int conveyor_idx) const {
+  return GetConveyor(conveyor_idx)->GetFailTime();
 }
 
 bool Connector::IsStopped() {

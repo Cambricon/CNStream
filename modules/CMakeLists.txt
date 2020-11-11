@@ -81,7 +81,7 @@ if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED
 endif()
 
 install(TARGETS cnstream_va LIBRARY DESTINATION lib)
-target_link_libraries(cnstream_va ${SOURCE_LINKER_LIBS} ${Live555_LIBS} sqlite3)
+target_link_libraries(cnstream_va ${SOURCE_LINKER_LIBS} ${Live555_LIBS} ${LIBYUV_LIBS} sqlite3)
 set_target_properties(cnstream_va PROPERTIES VERSION ${CNSTREAM_TARGET_VERSION})
 
 if(NOT Live555_LIBS STREQUAL "")
@@ -93,6 +93,17 @@ if(NOT Live555_LIBS STREQUAL "")
     add_custom_target(live555 sh ${PROJECT_SOURCE_DIR}/tools/build_live555.sh)
   endif()
   add_dependencies(cnstream_va live555)
+endif()
+
+if(NOT LIBYUV_LIBS STREQUAL "")
+  set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES ${PROJECT_SOURCE_DIR}/3rdparty/libyuv)
+  if(CMAKE_TOOLCHAIN_FILE)
+    message(STATUS ${CROSS_PREFIX})
+    add_custom_target(cnstream_libyuv sh ${PROJECT_SOURCE_DIR}/tools/build_libyuv.sh ${CROSS_PREFIX})
+  else()
+    add_custom_target(cnstream_libyuv sh ${PROJECT_SOURCE_DIR}/tools/build_libyuv.sh)
+  endif()
+  add_dependencies(cnstream_va cnstream_libyuv)
 endif()
 
 if(build_tests)

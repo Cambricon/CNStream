@@ -25,17 +25,6 @@
  *
  *  This file contains a declaration of struct DataSource and DataSourceParam
  */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-#ifdef __cplusplus
-}
-#endif
-
 #ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
@@ -165,7 +154,7 @@ struct ESPacket {
 };  // struct ESPacket
 
 /**
- * @brief Source handler for video with format mp4, flv, matroska and etc.
+ * @brief Source handler for video with format mp4, flv, matroska and USBCamera("/dev/videoxxx") etc.
  */
 class FileHandlerImpl;
 class FileHandler : public SourceHandler {
@@ -422,19 +411,6 @@ class RawImgMemHandler : public SourceHandler {
 
 #ifdef HAVE_OPENCV
   /**
-   * @Note This function will deprecate, use Write(cv::Mat *mat_data, uint64_t pts) instead.
-   * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
-   *
-   * @param mat_data The bgr24 format image data.
-   *
-   * @retval 0: The data is write successfully,
-   * @retval -1: Write failed, maybe eos got or handler is closed.
-   * @retval -2: Invalid data.
-   *
-   * @note Sends nullptr after all data are sent.
-   */
-  int Write(cv::Mat *mat_data);
-  /**
    * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
    *
    * @param mat_data The bgr24 format image data.
@@ -446,26 +422,8 @@ class RawImgMemHandler : public SourceHandler {
    *
    * @note Sends nullptr after all data are sent.
    */
-  int Write(cv::Mat *mat_data, uint64_t pts);
+  int Write(const cv::Mat *mat_data, const uint64_t pts);
 #endif
-  /**
-   * @Note This function will deprecate, use Write(unsigned char *data, int size, uint64_t pts,
-   int width, int height, CNDataFormat pixel_fmt) instead.
-   * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
-   *
-   * @param data The data of the image, which is a continuous buffer.
-   * @param size The size of the data.
-   * @param width The width of the image.
-   * @param height The height of the image.
-   * @param pixel_fmt The pixel format of the image. These formats are supported, bgr24, rgb24, nv21 and nv12.
-   *
-   * @retval 0: The data is write successfully,
-   * @retval -1: Write failed, maybe eos got or handler is closed.
-   * @retval -2: Invalid data.
-   *
-   * @note Sends nullptr as data and passes 0 as size after all data are sent.
-   */
-  int Write(unsigned char *data, int size, int width = 0, int height = 0, CNDataFormat pixel_fmt = CN_INVALID);
   /**
    * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
    *
@@ -482,8 +440,8 @@ class RawImgMemHandler : public SourceHandler {
    *
    * @note Sends nullptr as data and passes 0 as size after all data are sent.
    */
-  int Write(unsigned char *data, int size, uint64_t pts, int width = 0,
-          int height = 0, CNDataFormat pixel_fmt = CN_INVALID);
+  int Write(const uint8_t *data, const int size, const uint64_t pts, const int width = 0,
+      const int height = 0, const CNDataFormat pixel_fmt = CN_INVALID);
 
  private:
   explicit RawImgMemHandler(DataSource *module, const std::string &stream_id);
@@ -494,27 +452,6 @@ class RawImgMemHandler : public SourceHandler {
 #endif
   RawImgMemHandlerImpl *impl_ = nullptr;
 };  // class RawImgMemHandler
-
-class UsbHandlerImpl;
-class UsbHandler : public SourceHandler {
- public:
-  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
-                                               const std::string &filename, int framerate, bool loop = false);
-  ~UsbHandler();
-  /**/
-  bool Open() override;
-  void Close() override;
-
- private:
-  explicit UsbHandler(DataSource *module, const std::string &stream_id, const std::string &filename, int framerate,
-                      bool loop);
-
- private:
-#ifdef UNIT_TEST
- public:
-#endif
-  UsbHandlerImpl *impl_ = nullptr;
-};  // class UsbHandler
 
 }  // namespace cnstream
 

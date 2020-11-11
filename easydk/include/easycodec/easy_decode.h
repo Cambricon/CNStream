@@ -46,8 +46,6 @@ using DecodeEOSCallback = std::function<void()>;
 
 class DecodeHandler;
 
-TOOLKIT_REGISTER_EXCEPTION(EasyDecode);
-
 /**
  * @brief Easy decode class, provide a fast and easy API to decode on MLU platform
  */

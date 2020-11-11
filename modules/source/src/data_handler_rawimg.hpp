@@ -35,34 +35,16 @@
 #endif
 #endif
 
+#include "cnstream_logging.hpp"
 #include "data_handler_util.hpp"
 #include "data_source.hpp"
-#include "ffmpeg_decoder.hpp"
-#include "cnstream_logging.hpp"
-
-#define DEFAULT_MODULE_CATEGORY SOURCE
 
 namespace cnstream {
 
-/*raw image packet struct
- */
-typedef struct {
-  unsigned char *data = nullptr;
-  CNDataFormat pixel_fmt = CN_INVALID;
-  int size = 0;
-  int width = 0;
-  int height = 0;
-  uint64_t pts = 0;
-  uint32_t flags = 0;
-  enum {
-    FLAG_EOS = 0x01,
-  };
-} ImagePacket;
-
-class RawImgMemHandlerImpl : public IHandler {
+class RawImgMemHandlerImpl : public SourceRender {
  public:
-  explicit RawImgMemHandlerImpl(DataSource *module, RawImgMemHandler &handler)  // NOLINT
-      : module_(module), handler_(handler) {
+  explicit RawImgMemHandlerImpl(DataSource *module, RawImgMemHandler *handler)  // NOLINT
+      : SourceRender(handler), module_(module), handler_(*handler) {
     stream_id_ = handler_.GetStreamId();
   }
 
@@ -73,16 +55,6 @@ class RawImgMemHandlerImpl : public IHandler {
 
 #ifdef HAVE_OPENCV
   /**
-   * @Note This function will deprecate, use Write(cv::Mat *mat_data, uint64_t pts) instead.
-   * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
-   * @param
-         - mat_data: cv::Mat pointer with bgr24 format image data, feed mat_data as nullptr when feed data end.
-   * @retval 0: The data is write successfully,
-   * @retval -1: Write failed, maybe eos got or handler is closed.
-   * @retval -2: Invalid data.
-   */
-  int Write(cv::Mat *mat_data);
-  /**
    * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
    * @param
          - mat_data: cv::Mat pointer with bgr24 format image data, feed mat_data as nullptr when feed data end.
@@ -91,24 +63,8 @@ class RawImgMemHandlerImpl : public IHandler {
    * @retval -1: Write failed, maybe eos got or handler is closed.
    * @retval -2: Invalid data.
    */
-  int Write(cv::Mat *mat_data, uint64_t pts);
+  int Write(const cv::Mat *mat_data, const uint64_t pts = 0);
 #endif
-  /**
-   * @Note This function will deprecate, use Write(unsigned char *data, int size, uint64_t pts,
-   int width, int height, CNDataFormat pixel_fmt) instead.
-   * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
-   bgr24/rgb24/nv21/nv12 format).
-   * @param
-          - data: image data pointer(one continuous buffer), feed data as nullptr and size as 0 when feed data end
-          - size: image data size
-          - w: image width
-          - h: image height
-          - pixel_fmt: image pixel format, support bgr24/rgb24/nv21/nv12 format.
-   * @retval 0: The data is write successfully,
-   * @retval -1: Write failed, maybe eos got or handler is closed.
-   * @retval -2: Invalid data.
-   */
-  int Write(unsigned char *data, int size, int w = 0, int h = 0, CNDataFormat pixel_fmt = CN_INVALID);
   /**
    * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
    bgr24/rgb24/nv21/nv12 format).
@@ -116,14 +72,15 @@ class RawImgMemHandlerImpl : public IHandler {
           - data: image data pointer(one continuous buffer), feed data as nullptr and size as 0 when feed data end
           - size: image data size
           - pts: pts for image, should be different for each image
-          - w: image width
-          - h: image height
+          - width: image width
+          - height: image height
           - pixel_fmt: image pixel format, support bgr24/rgb24/nv21/nv12 format.
    * @retval 0: The data is write successfully,
    * @retval -1: Write failed, maybe eos got or handler is closed.
    * @retval -2: Invalid data.
    */
-  int Write(unsigned char *data, int size, uint64_t pts, int w = 0, int h = 0, CNDataFormat pixel_fmt = CN_INVALID);
+  int Write(const uint8_t *data, const int size, const uint64_t pts = 0, const int width = 0,
+      const int height = 0, const CNDataFormat pixel_fmt = CN_INVALID);
 
  private:
   DataSource *module_ = nullptr;
@@ -136,26 +93,20 @@ class RawImgMemHandlerImpl : public IHandler {
 #ifdef UNIT_TEST
  public:  // NOLINT
 #endif
-  bool CheckRawImageParams(unsigned char *data, int size, int w, int h, CNDataFormat pixel_fmt);
-  bool PrepareConvertCtx(ImagePacket *img_pkt);
-  bool CvtColorWithStride(ImagePacket *img_pkt, uint8_t *dst_nv12, int dst_stride);
+  bool CheckRawImageParams(const uint8_t *data, const int size, const int width,
+      const int height, const CNDataFormat pixel_fmt);
 
-  bool Process();
-  void ProcessLoop();
-  bool ProcessOneFrame(ImagePacket *img_pkt);
+  bool PrepareConvertCtx(const uint8_t *data, const int size, const int width,
+      const int height, const CNDataFormat pixel_fmt);
+
+  bool CvtColorWithStride(const uint8_t *data, const int size, const int width,
+      const int height, const CNDataFormat pixel_fmt, uint8_t *dst_nv12, const int dst_stride);
+
+  bool ProcessImage(const uint8_t *data, const int size, const int width,
+      const int height, const CNDataFormat pixel_fmt, const uint64_t pts);
 
  private:
-  std::atomic<int> running_{0};
-  std::thread thread_;
-  bool eos_sent_ = false;
   std::atomic<bool> eos_got_{false};
-  BoundedQueue<ImagePacket> *img_pktq_ = nullptr;
-  /**
-   * Ensure that the img_pktq_ is not deleted when the push is blocked.
-   */
-  std::mutex img_pktq_mutex_;
-
-  uint64_t pts_ = 0;
   uint64_t frame_id_ = 0;
 
 #ifdef HAVE_OPENCV
@@ -166,26 +117,12 @@ class RawImgMemHandlerImpl : public IHandler {
   int src_height_ = 0;
   CNDataFormat src_fmt_ = CNDataFormat::CN_INVALID;
 
- public:
-  void SendFlowEos() {
-    if (eos_sent_) return;
-    auto data = CreateFrameInfo(true);
-    if (!data) {
-      MLOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
-      return;
-    }
-    SendFrameInfo(data);
-    eos_sent_ = true;
-  }
-
-  std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) { return handler_.CreateFrameInfo(eos); }
-
-  bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) { return handler_.SendData(data); }
-
-  const DataSourceParam &GetDecodeParam() const { return param_; }
+#ifdef UNIT_TEST
+ public:  // NOLINT
+  void SetDecodeParam(const DataSourceParam &param) { param_ = param; }
+#endif
 };  // class RawImgMemHandlerImpl
 
 }  // namespace cnstream
 
-#undef DEFAULT_MODULE_CATEGORY
 #endif  // MODULES_SOURCE_HANDLER_RAWIMGMEM_HPP_

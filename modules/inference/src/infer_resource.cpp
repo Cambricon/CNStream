@@ -47,7 +47,7 @@ IOResValue CpuInputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, u
   mem_op.SetLoader(model);
   IOResValue value;
   value.datas.resize(input_num);
-  value.ptrs = mem_op.AllocCpuInput(1);
+  value.ptrs = mem_op.AllocCpuInput();
   for (int input_idx = 0; input_idx < input_num; ++input_idx) {
     value.datas[input_idx].ptr = value.ptrs[input_idx];
     value.datas[input_idx].shape = model->InputShapes()[input_idx];
@@ -75,7 +75,7 @@ IOResValue CpuOutputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, 
   mem_op.SetLoader(model);
   IOResValue value;
   value.datas.resize(output_num);
-  value.ptrs = mem_op.AllocCpuOutput(1);
+  value.ptrs = mem_op.AllocCpuOutput();
   for (int output_idx = 0; output_idx < output_num; ++output_idx) {
     value.datas[output_idx].ptr = value.ptrs[output_idx];
     value.datas[output_idx].shape = model->OutputShapes()[output_idx];
@@ -104,7 +104,7 @@ IOResValue MluInputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, u
   mem_op.SetLoader(model);
   IOResValue value;
   value.datas.resize(input_num);
-  value.ptrs = mem_op.AllocMluInput(1);
+  value.ptrs = mem_op.AllocMluInput();
   for (int input_idx = 0; input_idx < input_num; ++input_idx) {
     value.datas[input_idx].ptr = value.ptrs[input_idx];
     value.datas[input_idx].shape = model->InputShapes()[input_idx];
@@ -133,7 +133,7 @@ IOResValue MluOutputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, 
   mem_op.SetLoader(model);
   IOResValue value;
   value.datas.resize(output_num);
-  value.ptrs = mem_op.AllocMluOutput(1);
+  value.ptrs = mem_op.AllocMluOutput();
   for (int output_idx = 0; output_idx < output_num; ++output_idx) {
     value.datas[output_idx].ptr = value.ptrs[output_idx];
     value.datas[output_idx].shape = model->OutputShapes()[output_idx];

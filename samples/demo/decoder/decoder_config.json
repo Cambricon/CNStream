@@ -3,7 +3,7 @@
     "class_name" : "cnstream::DataSource",
     "parallelism" : 0,
     "custom_params" : {
-      "reuse_cndec_buf" : "true",
+      "reuse_cndec_buf" : "false",
       "input_buf_number" : "3",
       "output_buf_number":"3",
       "output_type" : "mlu",

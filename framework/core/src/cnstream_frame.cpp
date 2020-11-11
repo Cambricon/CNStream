@@ -29,12 +29,75 @@ namespace cnstream {
 
 SpinLock CNFrameInfo::spinlock_;
 std::unordered_map<std::string, int> CNFrameInfo::stream_count_map_;
+
+static SpinLock s_eos_spinlock_;
+static std::unordered_map<std::string, std::atomic<bool>> s_stream_eos_map_;
+
+static SpinLock s_remove_spinlock_;
+static std::unordered_map<std::string, bool> s_stream_removed_map_;
+
 int CNFrameInfo::flow_depth_ = 0;
 
 void SetFlowDepth(int flow_depth) { CNFrameInfo::flow_depth_ = flow_depth; }
 int GetFlowDepth() { return CNFrameInfo::flow_depth_; }
 
-std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, bool eos) {
+bool CheckStreamEosReached(const std::string &stream_id, bool sync) {
+  if (sync) {
+    while (1) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+      SpinLockGuard guard(s_eos_spinlock_);
+      auto iter = s_stream_eos_map_.find(stream_id);
+      if (iter != s_stream_eos_map_.end()) {
+        if (iter->second == true) {
+          s_stream_eos_map_.erase(iter);
+          // LOG(INFO) << "check stream eos reached, stream_id =  " << stream_id;
+          return true;
+        }
+      } else {
+        return false;
+      }
+    }
+    return false;
+  } else {
+    SpinLockGuard guard(s_eos_spinlock_);
+    auto iter = s_stream_eos_map_.find(stream_id);
+    if (iter != s_stream_eos_map_.end()) {
+      if (iter->second == true) {
+        s_stream_eos_map_.erase(iter);
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+void SetStreamRemoved(const std::string &stream_id, bool value) {
+  SpinLockGuard guard(s_remove_spinlock_);
+  auto iter = s_stream_removed_map_.find(stream_id);
+  if (iter != s_stream_removed_map_.end()) {
+    if (value != true) {
+      s_stream_removed_map_.erase(iter);
+      return;
+    }
+    iter->second = true;
+  } else {
+    s_stream_removed_map_[stream_id] = value;
+  }
+  // LOG(INFO) << "_____SetStreamRemoved " << stream_id << ":" << s_stream_removed_map_[stream_id];
+}
+
+bool IsStreamRemoved(const std::string &stream_id) {
+  SpinLockGuard guard(s_remove_spinlock_);
+  auto iter = s_stream_removed_map_.find(stream_id);
+  if (iter != s_stream_removed_map_.end()) {
+    // LOG(INFO) << "_____IsStreamRemoved " << stream_id << ":" << s_stream_removed_map_[stream_id];
+    return s_stream_removed_map_[stream_id];
+  }
+  return false;
+}
+
+std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, bool eos,
+                                                 std::shared_ptr<CNFrameInfo> payload) {
   if (stream_id == "") {
     LOG(ERROR) << "CNFrameInfo::Create() stream_id is empty string.";
     return nullptr;
@@ -45,8 +108,13 @@ std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, b
     return nullptr;
   }
   ptr->stream_id = stream_id;
+  ptr->payload = payload;
   if (eos) {
     ptr->flags |= cnstream::CN_FRAME_FLAG_EOS;
+    if (!ptr->payload) {
+      SpinLockGuard guard(s_eos_spinlock_);
+      s_stream_eos_map_[stream_id] = false;
+    }
     return ptr;
   }
 
@@ -69,7 +137,11 @@ std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, b
 }
 
 CNFrameInfo::~CNFrameInfo() {
-  if (flags & CN_FRAME_FLAG_EOS) {
+  if (this->IsEos()) {
+    if (!this->payload) {
+      SpinLockGuard guard(s_eos_spinlock_);
+      s_stream_eos_map_[stream_id] = true;
+    }
     return;
   }
   /*if (frame.ctx.dev_type == DevContext::INVALID) {
@@ -94,38 +166,15 @@ CNFrameInfo::~CNFrameInfo() {
   }
 }
 
-uint64_t CNFrameInfo::SetModuleMask(Module* module, Module* current) {
+uint64_t CNFrameInfo::MarkPassed(Module* module) {
   SpinLockGuard guard(mask_lock_);
-  auto iter = module_mask_map_.find(module->GetId());
-  if (iter != module_mask_map_.end()) {
-    iter->second |= (uint64_t)1 << current->GetId();
-  } else {
-    module_mask_map_[module->GetId()] = (uint64_t)1 << current->GetId();
-  }
-  return module_mask_map_[module->GetId()];
+  modules_mask_ |= (uint64_t)1 << module->GetId();
+  return modules_mask_;
 }
 
-uint64_t CNFrameInfo::GetModulesMask(Module* module) {
+uint64_t CNFrameInfo::GetModulesMask() {
   SpinLockGuard guard(mask_lock_);
-  auto iter = module_mask_map_.find(module->GetId());
-  if (iter != module_mask_map_.end()) {
-    return iter->second;
-  }
-  return 0;
-}
-
-void CNFrameInfo::ClearModuleMask(Module* module) {
-  SpinLockGuard guard(mask_lock_);
-  auto iter = module_mask_map_.find(module->GetId());
-  if (iter != module_mask_map_.end()) {
-    iter->second = 0;
-  }
-}
-
-uint64_t CNFrameInfo::AddEOSMask(Module* module) {
-  SpinLockGuard guard(eos_lock_);
-  eos_mask |= (uint64_t)1 << module->GetId();
-  return eos_mask;
+  return modules_mask_;
 }
 
 }  // namespace cnstream

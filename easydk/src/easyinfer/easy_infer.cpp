@@ -20,6 +20,7 @@
 #include <glog/logging.h>
 
 #include <memory>
+#include <utility>
 
 #include "easyinfer/easy_infer.h"
 #include "internal/mlu_task_queue.h"
@@ -27,13 +28,13 @@
 
 namespace edk {
 
-#define CALL_CNRT_FUNC(func, msg)                                       \
-  do {                                                                  \
-    int ret = (func);                                                   \
-    if (0 != ret) {                                                     \
-      LOG(ERROR) << (msg) << " error code: " << ret;                    \
-      throw EasyInferError(msg " error code : " + std::to_string(ret)); \
-    }                                                                   \
+#define CALL_CNRT_FUNC(func, msg)                                                            \
+  do {                                                                                       \
+    int ret = (func);                                                                        \
+    if (0 != ret) {                                                                          \
+      LOG(ERROR) << (msg) << " error code: " << ret;                                         \
+      THROW_EXCEPTION(Exception::INTERNAL, msg " cnrt error code : " + std::to_string(ret)); \
+    }                                                                                        \
   } while (0)
 
 class EasyInferPrivate {
@@ -71,11 +72,11 @@ EasyInfer::~EasyInfer() {
   delete d_ptr_;
 }
 
-void EasyInfer::Init(std::shared_ptr<ModelLoader> ploader, int batch_size, int dev_id) {
+void EasyInfer::Init(std::shared_ptr<ModelLoader> ploader, int dev_id) {
   d_ptr_->ploader_ = ploader;
   ModelLoaderInternalInterface interface(d_ptr_->ploader_.get());
 
-  LOG(INFO) << "Init inference context, batch size: " << batch_size << " device id: " << dev_id;
+  LOG(INFO) << "Init inference context, device id: " << dev_id;
 
   // init function
   CALL_CNRT_FUNC(cnrtCreateFunction(&d_ptr_->function_), "Create function failed.");
@@ -101,6 +102,9 @@ void EasyInfer::Init(std::shared_ptr<ModelLoader> ploader, int batch_size, int d
   // create event for hardware time
   CALL_CNRT_FUNC(cnrtCreateNotifier(&d_ptr_->notifier_start_), "Create notifier failed");
   CALL_CNRT_FUNC(cnrtCreateNotifier(&d_ptr_->notifier_end_), "Create notifier failed");
+}
+void EasyInfer::Init(std::shared_ptr<ModelLoader> ploader, int batch_size, int dev_id) {
+  Init(std::move(ploader), dev_id);
 }
 
 void EasyInfer::Run(void** input, void** output, float* hw_time) const {

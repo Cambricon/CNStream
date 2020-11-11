@@ -62,10 +62,6 @@ bool CreateParam(const edk::MluResizeAttr& attr, ResizeYuv2Rgba* yuv2rgba, strin
     return false;
   }
   switch (attr.core_version) {
-    case edk::CoreVersion::MLU100:
-      yuv2rgba->version = CNML_MLU100;
-      LOG(INFO) << "core version MLU100";
-      break;
     case edk::CoreVersion::MLU220:
       yuv2rgba->version = CNML_MLU220;
       LOG(INFO) << "core version MLU220";

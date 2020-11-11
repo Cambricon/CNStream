@@ -169,7 +169,7 @@ CNVideoEncoder::CNVideoEncoder(const RtspParam &rtsp_param) : VideoEncoder(OUTPU
   */
   try {
     encoder_ = edk::EasyEncode::Create(attr);
-  } catch (edk::EasyEncodeError &err) {
+  } catch (edk::Exception &err) {
     LOG(INFO) << "CnEncodeError: " << err.what();
     Destroy();
     return;
@@ -180,8 +180,8 @@ CNVideoEncoder::~CNVideoEncoder() {
   try {
     edk::MluContext context;
     context.SetDeviceId(rtsp_param_.device_id);
-    context.ConfigureForThisThread();
-  } catch (edk::MluContextError &err) {
+    context.BindDevice();
+  } catch (edk::Exception &err) {
     LOG(ERROR) << "CNEncoderStream: set mlu env failed";
   }
   Stop();
@@ -208,7 +208,7 @@ void CNVideoEncoder::EncodeFrame(VideoFrame *frame) {
   edk::CnFrame *cnframe = cnpic->Get();
   try {
     encoder_->SendDataCPU(*cnframe, false);
-  } catch (edk::EasyEncodeError &err) {
+  } catch (edk::Exception &err) {
     LOG(INFO) << "CnEncodeError: " << err.what();
     return;
   }
@@ -239,7 +239,7 @@ void CNVideoEncoder::EncodeFrame(void *y, void *uv, int64_t timestamp) {
   cnframe->mlu_ptrs[1] = reinterpret_cast<void*>(mlu_output_uv);
   try {
     encoder_->SendData(*cnframe, false);
-  } catch (edk::EasyEncodeError &err) {
+  } catch (edk::Exception &err) {
     LOG(INFO) << "CnEncodeError: " << err.what();
     return;
   }

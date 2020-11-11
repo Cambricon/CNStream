@@ -34,7 +34,7 @@
 namespace cnstream {
 
 class Inferencer;
-struct CNFrameInfo;
+class CNFrameInfo;
 
 class InferTransDataHelper {
  public:
@@ -46,7 +46,8 @@ class InferTransDataHelper {
  private:
   void Loop();
   std::mutex mtx_;
-  std::condition_variable cond_;
+  std::condition_variable cond_not_full_;
+  std::condition_variable cond_not_empty_;
   std::queue<std::pair<std::shared_ptr<CNFrameInfo>, InferEngine::ResultWaitingCard>> queue_;
   Inferencer* infer_ = nullptr;
   std::thread th_;

@@ -68,6 +68,8 @@ void InferThreadPool::SubmitTask(const InferTaskSptr& task) {
   if (!running_) return;
 
   task_q_.push(task);
+
+  lk.unlock();
   q_pop_cond_.notify_one();
 }
 
@@ -85,6 +87,8 @@ InferTaskSptr InferThreadPool::PopTask() {
 
   auto task = task_q_.front();
   task_q_.pop();
+
+  lk.unlock();
   q_push_cond_.notify_one();
   return task;
 }
@@ -97,7 +101,7 @@ void InferThreadPool::SetErrorHandleFunc(const std::function<void(const std::str
 void InferThreadPool::TaskLoop() {
   edk::MluContext context;
   context.SetDeviceId(dev_id_);
-  context.ConfigureForThisThread();
+  context.BindDevice();
   while (running_) {
     InferTaskSptr task = PopTask();
     if (task.get() == nullptr) {

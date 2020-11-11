@@ -106,6 +106,7 @@ int SourceModule::AddSource(std::shared_ptr<SourceHandler> handler) {
   handler->SetStreamUniqueIdx(source_idx_);
   source_idx_++;
 
+  SetStreamRemoved(stream_id, false);
   if (handler->Open() != true) {
     LOG(ERROR) << "source Open failed";
     return -1;
@@ -114,11 +115,11 @@ int SourceModule::AddSource(std::shared_ptr<SourceHandler> handler) {
   return 0;
 }
 
-int SourceModule::RemoveSource(std::shared_ptr<SourceHandler> handler) {
+int SourceModule::RemoveSource(std::shared_ptr<SourceHandler> handler, bool force) {
   if (!handler) {
     return -1;
   }
-  return RemoveSource(handler->GetStreamId());
+  return RemoveSource(handler->GetStreamId(), force);
 }
 
 std::shared_ptr<SourceHandler> SourceModule::GetSourceHandler(const std::string &stream_id) {
@@ -129,36 +130,58 @@ std::shared_ptr<SourceHandler> SourceModule::GetSourceHandler(const std::string 
   return source_map_[stream_id];
 }
 
-int SourceModule::RemoveSource(const std::string &stream_id) {
-  std::unique_lock<std::mutex> lock(mutex_);
-  auto iter = source_map_.find(stream_id);
-  if (iter == source_map_.end()) {
-    LOG(WARNING) << "source does not exist\n";
-    return 0;
+int SourceModule::RemoveSource(const std::string &stream_id, bool force) {
+  SetStreamRemoved(stream_id, force);
+  // Close handler first
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    auto iter = source_map_.find(stream_id);
+    if (iter == source_map_.end()) {
+      LOG(WARNING) << "source does not exist\n";
+      return 0;
+    }
+    iter->second->Close();
   }
-  iter->second->Close();
-  source_map_.erase(iter);
+  // wait for eos reached
+  CheckStreamEosReached(stream_id, force);
+  SetStreamRemoved(stream_id, false);
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    auto iter = source_map_.find(stream_id);
+    source_map_.erase(iter);
+  }
   return 0;
 }
 
-int SourceModule::RemoveSources() {
-  std::vector<std::future<int>> future_vec;
+int SourceModule::RemoveSources(bool force) {
   {
     std::unique_lock<std::mutex> lock(mutex_);
-    std::unordered_map<std::string, std::shared_ptr<SourceHandler>>::iterator iter;
-    for (iter = source_map_.begin(); iter != source_map_.end();) {
-      std::shared_ptr<SourceHandler> handler = iter->second;
-      future_vec.push_back(std::async(std::launch::async, [handler]() {
-        handler->Close();
-        return 0;
-      }));
-      source_map_.erase(iter++);
+    for (auto &iter : source_map_) {
+      SetStreamRemoved(iter.first, force);
     }
   }
-  for (auto &f : future_vec) {
-    f.wait();
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    for (auto &iter : source_map_) {
+      iter.second->Close();
+    }
+  }
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    for (auto &iter : source_map_) {
+      CheckStreamEosReached(iter.first, force);
+      SetStreamRemoved(iter.first, false);
+    }
+    source_map_.clear();
   }
   return 0;
+}
+
+bool SourceModule::SendData(std::shared_ptr<CNFrameInfo> data) {
+  if (!data->IsEos() && IsStreamRemoved(data->stream_id)) {
+    return false;
+  }
+  return this->TransmitData(data);
 }
 
 }  // namespace cnstream

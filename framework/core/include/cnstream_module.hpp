@@ -26,6 +26,8 @@
 #include <cxxabi.h>
 #include <unistd.h>
 
+#include <glog/logging.h>
+
 #include <atomic>
 #include <functional>
 #include <list>
@@ -38,8 +40,8 @@
 #include <vector>
 
 #include "cnstream_common.hpp"
-#include "cnstream_eventbus.hpp"
 #include "cnstream_config.hpp"
+#include "cnstream_eventbus.hpp"
 #include "cnstream_frame.hpp"
 #include "perf_manager.hpp"
 #include "util/cnstream_queue.hpp"
@@ -133,6 +135,14 @@ class Module : private NonCopyable {
   virtual int Process(std::shared_ptr<CNFrameInfo> data) = 0;
 
   /**
+   * Notify flow-EOS arrives, the module should reset internal status if needed.
+   *
+   * Please be noted:
+   *   this function will be invoked when flow-EOS is forwarded by the framework
+   */
+  virtual void OnEos(const std::string &stream_id) {}
+
+  /**
    * Gets the name of this module.
    *
    * @return Returns the name of this module.
@@ -218,6 +228,7 @@ class Module : private NonCopyable {
 #endif
 
   friend class Pipeline;
+  friend class CNFrameInfo;
   /**
    * Sets a container to this module and identifies which pipeline the module is added to.
    *
@@ -308,6 +319,7 @@ class Module : private NonCopyable {
       observer_->notify(data);
     }
   }
+  int DoTransmitData(std::shared_ptr<CNFrameInfo> data);
 
  protected:
   std::atomic<bool> showPerfInfo_{false};

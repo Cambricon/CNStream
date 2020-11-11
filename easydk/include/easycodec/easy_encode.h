@@ -151,8 +151,6 @@ using EncodePacketCallback = std::function<void(const CnPacket&)>;
 /// Encode EOS callback function type
 using EncodeEosCallback = std::function<void()>;
 
-TOOLKIT_REGISTER_EXCEPTION(EasyEncode);
-
 class EncodeHandler;
 
 /**
@@ -214,7 +212,7 @@ class EasyEncode {
     /// Slice max MB count, default 0
     uint32_t max_mb_per_slice = 0;
 
-    /// GOP type, @see GopType
+    /// GOP type, @see edk::GopType
     GopType gop_type = GopType::BIDIRECTIONAL;
 
     /// Init table for CABAC, 0,1,2 for H264 and 0,1 for HEVC, default 0

@@ -1,28 +1,24 @@
 /*************************************************************************
- * Copyright (C) [2020] by Cambricon, Inc. All rights reserved
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *************************************************************************/
+* Copyright (C) 2019 by Cambricon, Inc. All rights reserved
+*
+* This source code is licensed under the Apache-2.0 license found in the
+* LICENSE file in the root directory of this source tree.
+*
+* A part of this source code is referenced from glog project.
+* https://github.com/google/glog/blob/master/src/logging.cc
+*
+* Copyright (c) 1999, Google Inc.
+*
+* This source code is licensed under the BSD 3-Clause license found in the
+* LICENSE file in the root directory of this source tree.
+*
+*************************************************************************/
 
 #ifndef CNSTREAM_CORE_LOGGING_HPP_
 #define CNSTREAM_CORE_LOGGING_HPP_
 
-#include <glog/logging.h>
 #include <gflags/gflags.h>
+#include <time.h>
 
 #include <string>
 
@@ -36,118 +32,174 @@
 DECLARE_string(log_filter);
 
 /**
- * @brief Min module log level.
+ * @brief Min category log level, default LOG_INFO
  */
-DECLARE_int32(minmloglevel);
+DECLARE_int32(min_log_level);
 
-#define MLOG_IS_ON(module, severity)            \
-  ::cnstream::ModuleActivated(#module, severity)
+/**
+ * @brief Flush log file time, in second, default 30s
+ */
+DECLARE_int32(flush_log_file_secs);
 
-#define GLOG_STREAM_FATAL()                                                                     \
-  google::LogMessageFatal(__FILE__, google::LogMessage::kNoLogPrefix).stream()
+/**
+ * @brief Log messages go to stderr, default true
+ */
+DECLARE_bool(log_to_stderr);
 
-#define GLOG_STREAM_ERROR()                                                                     \
-  google::LogMessage(__FILE__, google::LogMessage::kNoLogPrefix, google::GLOG_ERROR).stream()
-
-#define GLOG_STREAM_WARNING()                                                                   \
-  google::LogMessage(__FILE__, google::LogMessage::kNoLogPrefix, google::GLOG_WARNING).stream()
-
-#define GLOG_STREAM_INFO()                                                                      \
-  google::LogMessage(__FILE__, google::LogMessage::kNoLogPrefix).stream()
+/**
+ * @brief Log messages go to log file, default true
+ */
+DECLARE_bool(log_to_file);
 
 #define STR(src) #src
 
-#define COMPACT_LOG_FATAL(module)                                                             \
-  !(MLOG_IS_ON(module, 1)) ? (void) 0 :                                                       \
-  google::LogMessageVoidify() & GLOG_STREAM_FATAL() << cnstream::LogPrefix(STR(module), 1)
+#define LOGF(category)                                                                   \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_FATAL).stream()
 
-#define COMPACT_LOG_ERROR(module)                                                             \
-  !(MLOG_IS_ON(module, 2)) ? (void) 0 :                                                       \
-  google::LogMessageVoidify() & GLOG_STREAM_ERROR() << cnstream::LogPrefix(STR(module), 2)
+#define LOGF_IF(category, condition)                                                     \
+  !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGF(category)
 
-#define COMPACT_LOG_WARNING(module)                                                           \
-  !(MLOG_IS_ON(module, 3)) ? (void) 0 :                                                       \
-  google::LogMessageVoidify() & GLOG_STREAM_WARNING() << cnstream::LogPrefix(STR(module), 3)
+#define LOGE(category)                                                                   \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_ERROR).stream()
+#define LOGE_IF(category, condition)                                                     \
+  !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGE(category)
 
-#define COMPACT_LOG_INFO(module)                                                              \
-  !(MLOG_IS_ON(module, 4)) ? (void) 0 :                                                       \
-  google::LogMessageVoidify() & GLOG_STREAM_INFO() << cnstream::LogPrefix(STR(module), 4)
+#define LOGW(category)                                                                   \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_WARNING).stream()
 
-#define COMPACT_LOG_DEBUG(module)                                                             \
-  !(MLOG_IS_ON(module, 5)) ? (void) 0 :                                                       \
-  google::LogMessageVoidify() & GLOG_STREAM_INFO() << cnstream::LogPrefix(STR(module), 5)
+#define LOGW_IF(category, condition)                                                     \
+  !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGW(category)
 
-#define COMPACT_LOG_TRACE(module)                                                             \
-  !(MLOG_IS_ON(module, 6)) ? (void) 0 :                                                       \
-  google::LogMessageVoidify() & GLOG_STREAM_INFO() << cnstream::LogPrefix(STR(module), 6)
+#define LOGI(category)                                                                   \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_INFO).stream()
 
-#define COMPACT_LOG_ALL(module)                                                               \
-  !(MLOG_IS_ON(module, 7)) ? (void) 0 :                                                       \
-  google::LogMessageVoidify() & GLOG_STREAM_INFO() << cnstream::LogPrefix(STR(module), 7)
+#define LOGI_IF(category, condition)                                                     \
+  !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGI(category)
 
-/*
- * @brief Before using MLOG, you should define DEFAULT_MODULE_CATEGORY your own module.
- *       If DEFAULT_MODULE_CATEGORY is not defined, MLOG will print to the default module.
- *
- * Usage:
- * #define DEFAULT_MODULE_CATEGORY mymodule
- */
+#define LOGD(category)                                                                   \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_DEBUG).stream()
 
-#define MLOG(severity) COMPACT_LOG_ ## severity(DEFAULT_MODULE_CATEGORY)
+#define LOGD_IF(category, condition)                                                     \
+  !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGD(category)
 
-#define MLOG_IF(severity, condition)            \
-  !(condition) ? (void) 0 : COMPACT_LOG_ ## severity(DEFAULT_MODULE_CATEGORY)
+#define LOGT(category)                                                                   \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_TRACE).stream()
 
+#define LOGT_IF(category, condition)                                                     \
+  !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGT(category)
+
+#define LOGA(category)                                                                   \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_ALL).stream()
+
+#define LOGA_IF(category, condition)                                                     \
+  !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGA(category)
 
 namespace cnstream {
 
-class LogPrefix {
- public:
-  LogPrefix(const char* module, int severity);
-  friend std::ostream& operator<<(std::ostream& os, const LogPrefix& log);
-
- private:
-  std::string module_;
-  int severity_;
-  struct ::tm tm_time_;
-  int32_t usecs_;
-};
-
 /**
  * @brief log severity
- * 1, FATAL
- * 2, ERROR
- * 3, WARNING
- * 4, INFO
- * 5, DEBUG
- * 6, TRACE
- * 7, ALL
+ * 0, FATAL
+ * 1, ERROR
+ * 2, WARNING
+ * 3, INFO
+ * 4, DEBUG
+ * 5, TRACE
+ * 6, ALL
  */
+enum LogSeverity {
+  LOG_FATAL = 0,
+  LOG_ERROR,
+  LOG_WARNING,
+  LOG_INFO,
+  LOG_DEBUG,
+  LOG_TRACE,
+  LOG_ALL
+};
 
-using LogSeverity = google::LogSeverity;
-
-class LogSink : public google::LogSink {
+class LogSink {
  public:
-  virtual ~LogSink() = default;
-  virtual void Send(const std::string& message_string) = 0;
-  void WaitTillSent() override {}
+  virtual ~LogSink() { }
+  virtual void Send(LogSeverity severity, const char* category,
+                    const char* filename, int line,
+                    const struct ::tm* tm_time, int32_t usecs,
+                    const char* message, size_t message_len) = 0;
 
- protected:
-  void send(LogSeverity severity, const char* full_filename,
-            const char* base_filename, int line,
-            const struct ::tm* tm_time, const char* message,
-            size_t message_len) override {
-    Send(this->ToString(severity, base_filename, line, tm_time, message, message_len));
-  }
+  virtual void WaitTillSent() { }  // noop default
+  static std::string ToString(LogSeverity severity, const char* category,
+                              const char* filename, int line,
+                              const struct ::tm* tm_time, int32_t usecs,
+                              const char* message, size_t message_len);
 };  // class LogSink
 
-void InitCNStreamLogging(const char* user_program, const char* log_dir);
+class LogMessageVoidify {
+ public:
+  LogMessageVoidify() { }
+  // This has to be an operator with a precedence lower than << but
+  // higher than ?:
+  void operator&(std::ostream&) { }
+};
+
+class LogMessage {
+ public:
+  class LogStreamBuf : public std::streambuf {
+   public:
+    // REQUIREMENTS: "len" must be >= 2 to account for the '\n' and '\0'.
+    LogStreamBuf(char *buf, int len) {
+      setp(buf, buf + len - 2);
+    }
+
+    // This effectively ignores overflow.
+    virtual int_type overflow(int_type ch) {
+      return ch;
+    }
+
+    // Legacy public ostrstream method.
+    size_t pcount() const { return pptr() - pbase(); }
+    char* pbase() const { return std::streambuf::pbase(); }
+  };  // class LogStreamBuf
+
+  class LogStream : public std::ostream {
+   public:
+    LogStream(char *buf, int len)
+        : std::ostream(NULL),
+          streambuf_(buf, len) {
+      rdbuf(&streambuf_);
+    }
+
+    // Legacy std::streambuf methods.
+    size_t pcount() const { return streambuf_.pcount(); }
+    char* pbase() const { return streambuf_.pbase(); }
+    char* str() const { return pbase(); }
+
+   private:
+    LogStream(const LogStream&) = delete;
+    LogStream& operator=(const LogStream&) = delete;
+    LogStreamBuf streambuf_;
+  };  // class LogStream
+
+  LogMessage(const char* category, const char* file, int line, LogSeverity severity);
+  ~LogMessage();
+  void Init(const char* category, const char* file, int line, LogSeverity severity);
+  std::ostream& stream();
+  struct LogMessageData;
+
+ private:
+  LogMessage(const LogMessage&) = delete;
+  LogMessage& operator=(const LogMessage&) = delete;
+  void Flush();
+  void SendToLog();
+  LogMessageData* data_;
+  LogMessageData* allocated_;
+  static const size_t MaxLogMsgLen;
+};  // class LogMessage
+
+void InitCNStreamLogging(const char* log_dir);
 
 void AddLogSink(LogSink* log_sink);
 
 void RemoveLogSink(LogSink* log_sink);
 
-bool ModuleActivated(const char* module, int severity);
+void ShutdownCNStreamLogging();
 
 }  // namespace cnstream
 

@@ -156,12 +156,12 @@ bool MluResizeYuv2Yuv::Init(const MluResizeAttr& attr) {
 
 int MluResizeYuv2Yuv::InvokeOp(void* dst_y, void* dst_uv, void* src_y, void* src_uv) {
   if (nullptr == d_ptr_->queue_) {
-    throw MluResizeYuv2YuvError("cnrt queue is null.");
+    THROW_EXCEPTION(Exception::INTERNAL, "cnrt queue is null.");
   }
   if (d_ptr_->attr_.batch_size != 1) {
-    throw MluResizeYuv2YuvError(
-        "InvokeOp is vaild only if the batchsize is 1. Please Use BatchingUp "
-        "and SyncOneOutput to replace InvokeOp.");
+    THROW_EXCEPTION(Exception::INVALID_ARG,
+                    "InvokeOp is vaild only if the batchsize is 1. Please Use BatchingUp "
+                    "and SyncOneOutput to replace InvokeOp.");
   }
   SrcBatchingUp(src_y, src_uv);
   DstBatchingUp(dst_y, dst_uv);
@@ -183,7 +183,7 @@ void MluResizeYuv2Yuv::DstBatchingUp(void* y, void* uv) {
 
 bool MluResizeYuv2Yuv::SyncOneOutput() {
   if (nullptr == d_ptr_->queue_) {
-    throw MluResizeYuv2YuvError("cnrt queue is null.");
+    THROW_EXCEPTION(Exception::INTERNAL, "cnrt queue is null.");
   }
   if (static_cast<int>(d_ptr_->src_yuv_ptrs_cache_.size()) < d_ptr_->attr_.batch_size ||
       static_cast<int>(d_ptr_->dst_yuv_ptrs_cache_.size()) < d_ptr_->attr_.batch_size) {

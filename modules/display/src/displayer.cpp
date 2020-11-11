@@ -87,7 +87,7 @@ void Displayer::Close() {
 int Displayer::Process(CNFrameInfoPtr data) {
   if (show_) {
     UpdateData ud;
-    CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+    CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
     ud.img = *frame->ImageBGR();
     ud.chn_idx = data->GetStreamIndex();
     ud.stream_id = data->stream_id;
@@ -154,8 +154,11 @@ void Displayer::RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished) 
     manager->Record(is_finished, PerfManager::GetDefaultType(), this->GetName(), data->timestamp);
   }
   if (!is_finished) {
+    std::stringstream ss;
+    ss << std::this_thread::get_id();
+    std::string thread_id_str = ss.str();
     manager->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(data->timestamp),
-                    this->GetName() + "_th", "'" + GetThreadName(pthread_self()) + "'");
+                    this->GetName() + PerfManager::GetThreadSuffix(), thread_id_str);
   }
 }
 

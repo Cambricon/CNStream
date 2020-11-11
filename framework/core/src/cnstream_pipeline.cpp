@@ -100,14 +100,6 @@ void IdxManager::ReturnModuleIdx(size_t id_) {
   module_id_mask_ &= ~(1 << id_);
 }
 
-void Pipeline::SetEOSMask() {
-  for (const std::pair<std::string, std::shared_ptr<Module>> module_info : modules_map_) {
-    auto instance = module_info.second;
-    eos_mask_ |= (uint64_t)1 << instance->GetId();
-  }
-}
-void Pipeline::ClearEOSMask() { eos_mask_ = 0; }
-
 void Pipeline::UpdateByStreamMsg(const StreamMsg& msg) {
   LOG(INFO) << "[" << GetName() << "] "
             << "stream: " << msg.stream_id << " got message: " << msg.type;
@@ -262,6 +254,8 @@ bool Pipeline::AddModule(std::shared_ptr<Module> module) {
   associated_info.connector = std::make_shared<Connector>(associated_info.parallelism);
   modules_.insert(std::make_pair(moduleName, associated_info));
   modules_map_[moduleName] = module;
+
+  all_modules_mask_ |= (uint64_t)1 << module->GetId();
   return true;
 }
 
@@ -330,7 +324,7 @@ bool Pipeline::QueryLinkStatus(LinkStatus* status, const std::string& link_id) {
   }
   status->stopped = con->IsStopped();
   for (uint32_t i = 0; i < con->GetConveyorCount(); ++i) {
-    status->cache_size.emplace_back(con->GetConveyor(i)->GetBufferSize());
+    status->cache_size.emplace_back(con->GetConveyorSize(i));
   }
   return true;
 }
@@ -338,8 +332,6 @@ bool Pipeline::QueryLinkStatus(LinkStatus* status, const std::string& link_id) {
 bool Pipeline::Start() {
   if (IsRunning()) return true;
 
-  // set eos mask
-  SetEOSMask();
   // open modules
   std::vector<std::shared_ptr<Module>> opened_modules;
   bool open_module_failed = false;
@@ -355,7 +347,6 @@ bool Pipeline::Start() {
 
   if (open_module_failed) {
     for (auto it : opened_modules) it->Close();
-    ClearEOSMask();
     return false;
   }
 
@@ -458,7 +449,6 @@ bool Pipeline::Stop() {
     stream_ids_.clear();
     end_nodes_.clear();
   }
-  ClearEOSMask();
   LOG(INFO) << "[" << GetName() << "] " << "Stop";
   return true;
 }
@@ -467,6 +457,9 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
   LOG_IF(FATAL, modules_.find(moduleName) == modules_.end());
 
   const ModuleAssociatedInfo& module_info = modules_[moduleName];
+  Module* module = modules_map_[moduleName].get();
+
+  uint64_t changed_mask = data->MarkPassed(module);
 
   if (data->IsEos()) {
     LOG(INFO) << "[" << moduleName << "]"
@@ -477,17 +470,21 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     e.stream_id = data->stream_id;
     e.thread_id = std::this_thread::get_id();
     event_bus_->PostEvent(e);
-    const uint64_t eos_mask = data->AddEOSMask(modules_map_[moduleName].get());
-    if (eos_mask == eos_mask_) {
+    if (changed_mask == all_modules_mask_) {
+      // passed by all modules
       StreamMsg msg;
       msg.type = StreamMsgType::EOS_MSG;
       msg.stream_id = data->stream_id;
       msg.module_name = moduleName;
       UpdateByStreamMsg(msg);
     }
+  } else {
+    /* For the stream is removed, do not pass the packet on */
+    if (IsStreamRemoved(data->stream_id)) {
+      return;
+    }
   }
 
-  Module* module = modules_map_[moduleName].get();
   // If data is invalid
   if (data->IsInvalid()) {
     StreamMsg msg;
@@ -506,19 +503,23 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     assert(down_node_info.connector);
     assert(0 < down_node_info.input_connectors.size());
     Module* down_node = modules_map_[down_node_name].get();
-    uint64_t frame_mask = data->SetModuleMask(down_node, module);
 
     // case 1: down_node has only 1 input node: current node
     // case 2: down_node has >1 input nodes, current node has brother nodes
     // the processing data frame will not be pushed into down_node Connector
     // until processed by all brother nodes, the last node responds to transmit
-    bool processed_by_all_modules = (frame_mask == down_node->GetModulesMask());
+    bool processed_by_all_modules = ShouldTransmit(changed_mask, down_node);
 
     if (processed_by_all_modules) {
       std::shared_ptr<Connector> connector = down_node_info.connector;
-      const uint32_t chn_idx = data->channel_idx;
-      int conveyor_idx = chn_idx % connector->GetConveyorCount();
-      connector->PushDataBufferToConveyor(conveyor_idx, data);
+      int conveyor_idx = data->GetStreamIndex() % connector->GetConveyorCount();
+      while (!connector->IsStopped() && connector->PushDataBufferToConveyor(conveyor_idx, data) == false) {
+        if (connector->GetFailTime(conveyor_idx) % 50 == 0) {
+          // Show infomation when conveyor is full in every second
+          // LOG(INFO) << "[" << down_node->name_  << " " << conveyor_idx << "] " << "Input buffer is full";
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+      }
     }
   }
 
@@ -543,23 +544,23 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
   SetThreadName(thread_name, pthread_self());
 
   std::shared_ptr<Module> instance = modules_map_[node_name];
-  bool has_data = true;
-  while (has_data) {
-    has_data = false;
-    std::shared_ptr<CNFrameInfo> data;
+  while (1) {
+    std::shared_ptr<CNFrameInfo> data = nullptr;
     // sync data
-    data = connector->PopDataBufferFromConveyor(conveyor_idx);
-    if (nullptr == data.get()) {
-      /*
-         nullptr will be received when connector stops.
-         maybe only part of the connectors stopped.
-         */
+    while (!connector->IsStopped() && data == nullptr) {
+      // LOG(INFO) << "[" << instance->name_ << "]" << " There is no avaiable input data"; 
+      data = connector->PopDataBufferFromConveyor(conveyor_idx);
+    }
+    if (connector->IsStopped()) {
+      // when connector stops, break taskloop
+      break;
+    }
+
+    if (data == nullptr) {
       continue;
     }
 
-    has_data = true;
-    assert(data->GetModulesMask(instance.get()) == instance->GetModulesMask());
-    data->ClearModuleMask(instance.get());
+    assert(ShouldTransmit(data, instance.get()));
 
     int ret = instance->DoProcess(data);
 
@@ -683,13 +684,15 @@ bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::strin
   if (perf_running_) return false;
   if (db_dir.empty()) db_dir = "perf_database";
   PerfManager::CreateDir(db_dir + "/");
+  PerfManager::ClearDbFiles(db_dir);
 
   SetStartAndEndNodeNames();
   std::vector<std::string> module_names = GetModuleNames();
 
   // Create PerfManager for all streams
   for (auto& stream_id : stream_ids) {
-    std::string db_name = db_dir + "/stream_" + stream_id + "_" + TimeStamp::CurrentToDate() + ".db";
+    std::string db_name = db_dir + "/" + PerfManager::GetDbFileNamePrefix() + "stream_" + stream_id + "_" +
+                          TimeStamp::CurrentToDate() + ".db";
     std::shared_ptr<PerfManager> manager = PerfManager::CreateDefaultManager(db_name, module_names);
     if (manager == nullptr) {
       LOG(ERROR) << stream_id << "Failed to create PerfManager";
@@ -699,16 +702,15 @@ bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::strin
   }
 
   // Create PerfCalculators for each module and pipeline
-  bool is_pipeline = true;
   for (auto& module_it : modules_map_) {
     std::string node_name = module_it.first;
     std::shared_ptr<Module> instance = module_it.second;
     if (instance && instance->ShowPerfInfo()) {
-      if (!CreatePerfCalculator(db_dir, node_name, !is_pipeline)) { return false; }
+      if (!CreatePerfCalculator(db_dir, node_name, false)) { return false; }
     }
   }
   for (auto& end_node : end_nodes_) {
-    if (!CreatePerfCalculator(db_dir, end_node, is_pipeline)) { return false; }
+    if (!CreatePerfCalculator(db_dir, end_node, true)) { return false; }
   }
 
   stream_ids_ = stream_ids;
@@ -960,7 +962,8 @@ bool Pipeline::AddPerfManager(std::string stream_id, std::string db_dir) {
 
     if (db_dir.empty()) db_dir = "perf_database";
     std::vector<std::string> module_names = GetModuleNames();
-    std::string db_name = db_dir + "/stream_" + stream_id + "_" + TimeStamp::CurrentToDate() + ".db";
+    std::string db_name = db_dir + "/" + PerfManager::GetDbFileNamePrefix() + "stream_" + stream_id + "_" +
+                          TimeStamp::CurrentToDate() + ".db";
 
     manager = PerfManager::CreateDefaultManager(db_name, module_names);
     if (manager == nullptr) { return false; }
@@ -1020,7 +1023,8 @@ bool Pipeline::CreatePerfCalculator(std::string db_dir, std::string node_name, b
       return false;
     }
   }
-  std::string db_name = db_dir + "/" + name + "_tmp_" + TimeStamp::CurrentToDate() + ".db";
+  std::string db_name = db_dir + "/" + PerfManager::GetDbFileNamePrefix() +
+                        name + "_tmp_" + TimeStamp::CurrentToDate() + ".db";
   if (!calculator->CreateDbForStoreUnprocessedData(db_name, PerfManager::GetDefaultType(), node_name, keys)) {
     return false;
   }

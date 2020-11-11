@@ -36,36 +36,38 @@ extern "C" {
 #include <string>
 #include <thread>
 
-#include "data_source.hpp"
-#include "device/mlu_context.h"
-#include "ffmpeg_decoder.hpp"
 #include "cnstream_logging.hpp"
-#include "rtsp_client.hpp"
 #include "data_handler_util.hpp"
+#include "data_source.hpp"
+#include "util/rtsp_client.hpp"
 #include "util/cnstream_queue.hpp"
-
-#define DEFAULT_MODULE_CATEGORY SOURCE
+#include "util/video_decoder.hpp"
 
 namespace cnstream {
 
-class RtspHandlerImpl : public IHandler {
+class RtspHandlerImpl : public IDecodeResult, public SourceRender {
  public:
-  explicit RtspHandlerImpl(DataSource *module, const std::string &url_name, RtspHandler &handler, // NOLINT
+  explicit RtspHandlerImpl(DataSource *module, const std::string &url_name, RtspHandler *handler,
                            bool use_ffmpeg, int reconnect)
-      : module_(module), url_name_(url_name), handler_(handler), use_ffmpeg_(use_ffmpeg), reconnect_(reconnect) {
-    stream_id_ = handler_.GetStreamId();
+      : SourceRender(handler), module_(module), url_name_(url_name), handler_(handler),
+        use_ffmpeg_(use_ffmpeg), reconnect_(reconnect) {
+    stream_id_ = handler_->GetStreamId();
   }
   ~RtspHandlerImpl() {}
   bool Open();
   void Close();
 
+  // IDecodeResult methods
+  void OnDecodeError(DecodeErrorCode error_code) override;
+  void OnDecodeFrame(DecodeFrame *frame) override;
+  void OnDecodeEos() override;
+
  private:
   DataSource *module_ = nullptr;
   std::string url_name_;
-  RtspHandler &handler_;
+  RtspHandler *handler_;
   std::string stream_id_;
   DataSourceParam param_;
-  size_t interval_ = 1;
   bool use_ffmpeg_ = false;
   int reconnect_ = 0;
 
@@ -76,38 +78,12 @@ class RtspHandlerImpl : public IHandler {
   std::atomic<int> decode_exit_flag_{0};
   std::thread decode_thread_;
   bool eos_sent_ = false;
-
- private:
+  std::atomic<bool> stream_info_set_{false};
   std::mutex mutex_;
-  bool stream_info_set_ = false;
-  VideoStreamInfo stream_info_;
+  VideoInfo stream_info_;
   BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
   void DemuxLoop();
   void DecodeLoop();
-
- public:
-  void SendFlowEos() override {
-    if (eos_sent_) return;
-    auto data = CreateFrameInfo(true);
-    if (!data) {
-      MLOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
-      return;
-    }
-    SendFrameInfo(data);
-    eos_sent_ = true;
-  }
-
-  std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) override {
-    return handler_.CreateFrameInfo(eos);
-  }
-
-  bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) override {
-    return handler_.SendData(data);
-  }
-
-  const DataSourceParam& GetDecodeParam() const override {
-    return param_;
-  }
 
 #ifdef UNIT_TEST
  public:  // NOLINT
@@ -117,5 +93,4 @@ class RtspHandlerImpl : public IHandler {
 
 }  // namespace cnstream
 
-#undef DEFAULT_MODULE_CATEGORY
 #endif  // MODULES_SOURCE_HANDLER_RTSP_HPP_

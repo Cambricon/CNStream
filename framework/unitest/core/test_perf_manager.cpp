@@ -340,13 +340,6 @@ TEST(PerfManager, PrepareDbFileDirFailedCase) {
   std::string db_path = gTestPerfDir + kDbName;
   remove(db_path.c_str());
   EXPECT_FALSE(manager.PrepareDbFileDir(""));
-  manager.sql_ = std::make_shared<Sqlite>(db_path);
-  auto sql = manager.sql_;
-  EXPECT_TRUE(manager.PrepareDbFileDir(db_path));
-  sql->Connect();
-  EXPECT_FALSE(manager.PrepareDbFileDir(db_path));
-  sql->Close();
-  EXPECT_TRUE(manager.PrepareDbFileDir(db_path));
 }
 
 }  // namespace cnstream

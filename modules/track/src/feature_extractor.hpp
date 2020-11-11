@@ -54,14 +54,14 @@ class FeatureExtractor {
    * @return return a 128 dimension vector as feature of
    *         object.
    * *****************************************************/
-  void ExtractFeature(const cv::Mat& image, const cnstream::CNObjsVec& inputs,
+  void ExtractFeature(const cv::Mat& image, const CNInferObjsPtr& objs_holder,
                       std::vector<std::vector<float>>* features);
 
 
  private:
-  void ExtractFeatureOnMlu(const cv::Mat& image, const cnstream::CNObjsVec& inputs,
+  void ExtractFeatureOnMlu(const cv::Mat& image, const CNInferObjsPtr& objs_holder,
                            std::vector<std::vector<float>>* features);
-  void ExtractFeatureOnCpu(const cv::Mat& image, const std::vector<std::shared_ptr<CNInferObject>>& inputs,
+  void ExtractFeatureOnCpu(const cv::Mat& image, const CNInferObjsPtr& objs_holder,
                            std::vector<std::vector<float>>* features);
   int RunBatch(const std::vector<std::vector<float*>>& inputs,
                                std::vector<std::vector<float>>* outputs);

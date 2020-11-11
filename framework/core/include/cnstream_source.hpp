@@ -63,16 +63,15 @@ class SourceModule : public Module {
    * @return
    *    0: success (always success by now)
    */
-  int RemoveSource(std::shared_ptr<SourceHandler> handler);
-  int RemoveSource(const std::string &stream_id);
-
+  int RemoveSource(std::shared_ptr<SourceHandler> handler, bool force = false);
+  int RemoveSource(const std::string &stream_id, bool force = false);
   /**
    * @hidebrief Remove all streams from DataSource module
    * @param
    * @return
    *    0: success (always success by now)
    */
-  int RemoveSources();
+  int RemoveSources(bool force = false);
 
   int Process(std::shared_ptr<CNFrameInfo> data) override {
     (void)data;
@@ -89,6 +88,14 @@ class SourceModule : public Module {
 
   uint32_t GetStreamIndex(const std::string &stream_id);
   void ReturnStreamIndex(const std::string &stream_id);
+  /**
+   * @brief Transmit data to next stage(s) of the pipeline
+   * @param
+   *   data[in]: data to be transmitted.
+   * @return
+   *   true if data is transmitted successfully,othersize false
+   */
+  bool SendData(std::shared_ptr<CNFrameInfo> data);
 
  private:
   uint64_t source_idx_ = 0;
@@ -96,7 +103,7 @@ class SourceModule : public Module {
   std::unordered_map<std::string /*stream_id*/, std::shared_ptr<SourceHandler>> source_map_;
 };
 
-class SourceHandler {
+class SourceHandler : private NonCopyable {
  public:
   explicit SourceHandler(SourceModule *module, const std::string &stream_id) : module_(module), stream_id_(stream_id) {
     if (module_) {
@@ -117,8 +124,8 @@ class SourceHandler {
   uint64_t GetStreamUniqueIdx() const { return stream_unique_idx_; }
 
  public:
-  std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) {
-    std::shared_ptr<CNFrameInfo> data = CNFrameInfo::Create(stream_id_, eos);
+  std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false, std::shared_ptr<CNFrameInfo> payload = nullptr) {
+    std::shared_ptr<CNFrameInfo> data = CNFrameInfo::Create(stream_id_, eos, payload);
     if (data) {
       data->SetStreamIndex(stream_index_);
     }
@@ -126,7 +133,7 @@ class SourceHandler {
   }
   bool SendData(std::shared_ptr<CNFrameInfo> data) {
     if (this->module_) {
-      return this->module_->TransmitData(data);
+      return this->module_->SendData(data);
     }
     return false;
   }

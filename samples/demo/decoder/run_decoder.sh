@@ -5,6 +5,8 @@
 # data_path: Video or image list path
 # wait_time: When set to 0, it will automatically exit after the eos signal arrives
 # loop = true: loop through video
+# jpeg_from_mem :  feed esjpeg to source, when input-file's ext is "jpg"
+# raw_img_input :  feed cv::Mat(or raw image) to source, when input-file's ext is "jpg"
 #
 # @notice: other flags see ../../bin/demo --help
 #*************************************************************************#

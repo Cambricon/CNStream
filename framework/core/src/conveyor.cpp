@@ -20,6 +20,8 @@
 
 #include "conveyor.hpp"
 
+#include <glog/logging.h>
+
 #include <chrono>
 #include <memory>
 #include <thread>
@@ -29,47 +31,49 @@
 
 namespace cnstream {
 
-Conveyor::Conveyor(Connector* container, size_t max_size, bool enable_drop)
-    : container_(container), max_size_(max_size), enable_drop_(enable_drop) {
-  LOG_IF(FATAL, nullptr == container) << "container should not be nullptr.";
+Conveyor::Conveyor(size_t max_size) : max_size_(max_size) {
 }
 
 uint32_t Conveyor::GetBufferSize() {
-  return dataq_.Size();
+  std::unique_lock<std::mutex> lk(data_mutex_);
+  return dataq_.size();
 }
 
-void Conveyor::PushDataBuffer(CNFrameInfoPtr data) {
-  while (!container_->IsStopped() && dataq_.Size() >= max_size_) {
-    if (enable_drop_) {
-      CNFrameInfoPtr drop;
-      dataq_.TryPop(drop);
-      break;
-    } else {
-      std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
+bool Conveyor::PushDataBuffer(CNFrameInfoPtr data) {
+  std::unique_lock<std::mutex> lk(data_mutex_);
+  if (dataq_.size() < max_size_) {
+    dataq_.push(data);
+    notempty_cond_.notify_one();
+    fail_time_ = 0;
+    return true;
   }
-  if (container_->IsStopped()) return;
-  dataq_.Push(data);
+  fail_time_ += 1;
+  return false;
+}
+
+uint64_t Conveyor::GetFailTime() {
+  std::unique_lock<std::mutex> lk(data_mutex_);
+  return fail_time_;
 }
 
 CNFrameInfoPtr Conveyor::PopDataBuffer() {
-  CNFrameInfoPtr data;
-  while (!container_->IsStopped()) {
-    if (dataq_.WaitAndTryPop(data, std::chrono::milliseconds(20))) {
-      break;
-    }
-  }
-  if (container_->IsStopped()) {
-    return nullptr;
+  std::unique_lock<std::mutex> lk(data_mutex_);
+  CNFrameInfoPtr data = nullptr;
+  if (notempty_cond_.wait_for(lk, rel_time_, [&] { return !dataq_.empty(); })) {
+    data = dataq_.front();
+    dataq_.pop();
+    return data;
   }
   return data;
 }
 
 std::vector<CNFrameInfoPtr> Conveyor::PopAllDataBuffer() {
+  std::unique_lock<std::mutex> lk(data_mutex_);
   std::vector<CNFrameInfoPtr> vec_data;
-  CNFrameInfoPtr data;
-  while (!dataq_.Empty()) {
-    dataq_.TryPop(data);
+  CNFrameInfoPtr data = nullptr;
+  while (!dataq_.empty()) {
+    data = dataq_.front();
+    dataq_.pop();
     vec_data.push_back(data);
   }
   return vec_data;

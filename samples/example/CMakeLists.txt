@@ -8,7 +8,7 @@ list(APPEND Example_INCLUDE_DIRS "${Example_DIR}/../include")
 list(APPEND Example_INCLUDE_DIRS "${Example_DIR}/../framework/core/include")
 
 list(APPEND Example_LINKER_LIBS cnstream_core)
-list(APPEND Example_LINKER_LIBS dl ${3RDPARTY_LIBS} pthread)
+list(APPEND Example_LINKER_LIBS dl ${3RDPARTY_LIBS} cnrt pthread)
 
 include_directories("${Example_INCLUDE_DIRS}")
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR} srcs)

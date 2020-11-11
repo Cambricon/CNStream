@@ -186,7 +186,7 @@ std::shared_ptr<CNFrameInfo> GenTestData(ColorFormat cmode, int width, int heigh
   void *frame_data = nullptr;
   void *planes[CN_MAX_PLANES] = {nullptr, nullptr, nullptr};
   edk::MluMemoryOp mem_op;
-  frame_data = mem_op.AllocMlu(nbytes, 1);
+  frame_data = mem_op.AllocMlu(nbytes);
   planes[0] = frame_data;                                                                            // 0 plane
   planes[1] = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(frame_data) + width * height);      // 1 plane
   planes[2] = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(frame_data) + 2 * width * height);  // 2 plane
@@ -223,7 +223,7 @@ std::shared_ptr<CNFrameInfo> GenTestData(ColorFormat cmode, int width, int heigh
   frame->ctx.dev_id = g_dev_id;
   frame->ctx.ddr_channel = g_channel_id;
   frame->ctx.dev_type = DevContext::DevType::MLU;
-
+  frame->dst_device_id = g_dev_id;
   frame->CopyToSyncMem();
   data->datas[CNDataFramePtrKey] = frame;
   g_channel_id++;

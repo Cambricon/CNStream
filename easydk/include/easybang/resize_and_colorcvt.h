@@ -91,12 +91,8 @@ class MluResizeConvertOp {
     ColorMode color_mode = ColorMode::YUV2RGBA_NV21;
     /// Data type transform mode
     DataMode data_mode = DataMode::UINT8ToUINT8;
-    /// Input image resolution @deprecated set input image resolution in InputData
-    uint32_t src_w = 0, src_h = 0, src_stride = 0;
     /// Output image resolution
     uint32_t dst_w, dst_h;
-    /// Crop rectangle (top-left coordinate, width, height) @deprecated set crop rectangle in InputData
-    uint32_t crop_x = 0, crop_y = 0, crop_w = 0, crop_h = 0;
     /// Kernel batch size
     int batch_size = 1;
     /// device id
@@ -159,17 +155,6 @@ class MluResizeConvertOp {
   const Attr& GetAttr();
 
   /**
-   * @brief Excute operator, use BatchingUp and SyncOneOutput instead
-   * @deprecated
-   *
-   * @param dst[out] Operator output MLU memory
-   * @param src_y[in] Operator input y plane in MLU memory
-   * @param src_uv[in] Operator input uv plane in MLU memory
-   * @return Return 0 if invoke succeeded, otherwise return -1
-   */
-  attribute_deprecated int InvokeOp(void* dst, void* src_y, void* src_uv);
-
-  /**
    * @brief Deinitialize resources
    */
   void Destroy();
@@ -182,25 +167,14 @@ class MluResizeConvertOp {
   std::string GetLastError() const;
 
   /**
-   * @deprecated Use void BatchingUp(InputData) instead
-   * @brief Batching up one yuv image
-   *
-   * @param src_y[in] input y plane in MLU memory
-   * @param src_uv[in] input uv plane in MLU memory
-   *
-   * @attention image size set when Init called. support YUV420SP NV21/NV12
-   */
-  attribute_deprecated void BatchingUp(void* src_y, void* src_uv);
-
-  /**
    * @brief Batching up one yuv image
    *
    * @param input_data[in] yuv data (YUV420SP NV21/NV12)
    *
    * @attention input_data.crop_w will be set to input_data.src_w when input_data.crop_w is zero.
    *            input_data.crop_h will be sett to input_data.src_h when input_data.crop_h is zero.
-   *            RCOpScaleUpError will be thrown when scale-up factor is greater than `MAXIMUM_SCALE_UP_FACTOR`.
-   *            RCOpWidthOverLimitError will be thrown when input_data.crop_w is greater than `MAXIMUM_INPUT_WIDTH`.
+   *            MluResizeConvertOpError will be thrown when scale-up factor is greater than `MAXIMUM_SCALE_UP_FACTOR`
+   *            or input_data.crop_w is greater than `MAXIMUM_INPUT_WIDTH`.
    **/
   void BatchingUp(const InputData& input_data);
 
@@ -229,20 +203,16 @@ class MluResizeConvertOp {
 /**
  * @brief Exception throwed by MluResizeConvertOp
  *
- * @see MluResizeConvertOp
+ * @see edk::MluResizeConvertOp
  **/
 class MluResizeConvertOpError : public Exception {
  public:
   using Attr = MluResizeConvertOp::Attr;
   using InputData = MluResizeConvertOp::InputData;
 
-  MluResizeConvertOpError(const Attr& attr,
-                                   const InputData& input_data)
-      : Exception("Mlu resize convert error."), attr_(attr), data_(input_data) {}
-
-  MluResizeConvertOpError(const std::string& err_str, const Attr& attr,
-                          const InputData& input_data)
-      : Exception(err_str), err_str_(err_str), attr_(attr), data_(input_data) {}
+  MluResizeConvertOpError(Code code, const std::string& file, int line, const std::string& func, const std::string& msg,
+                          const Attr& attr, const InputData& input_data)
+      : Exception(code, file, line, func, msg), attr_(attr), data_(input_data) {}
 
   /**
    * @brief Get operator attribute
@@ -258,65 +228,10 @@ class MluResizeConvertOpError : public Exception {
    **/
   const InputData& GetInputData() const { return data_; }
 
-  /**
-   * @brief Returns the explanatory string
-   *
-   * @return Returns the explanatory string
-   **/
-  const char* what() const noexcept override { return err_str_.c_str(); }
-
- protected:
-  std::string err_str_ = "";
-
  private:
   Attr attr_;
   InputData data_;
 };  // class MluResizeConvertOpError
-
-/**
- * @brief Exception class for scale-up
- *
- * @see MluResizeConvertOp::BatchingUp(const InputData&)
- **/
-class RCOpScaleUpError : public MluResizeConvertOpError {
- public:
-  explicit RCOpScaleUpError(const Attr& attr, const InputData& input_data) :
-      MluResizeConvertOpError(attr, input_data) {
-    err_str_ = "Maximum magnification limit exceeded. Maximum magnification: "
-               + std::to_string(MluResizeConvertOp::MAXIMUM_SCALE_UP_FACTOR) + ". Current magnification: "
-               + std::to_string(ScaleUpFactor()) + ".";
-  }
-
-  /**
-   * @brief Get scale-up factor
-   **/
-  inline float ScaleUpFactor() const {
-    float scale_w = 1.0f * GetRCOpAttr().dst_w / GetInputData().crop_w;
-    float scale_h = 1.0f * GetRCOpAttr().dst_h / GetInputData().crop_h;
-    if (GetRCOpAttr().keep_aspect_ratio) {
-      return std::min(scale_w, scale_h);
-    }
-    return scale_w;
-  }
-};  // class ScaleUpError
-
-/**
- * @brief Exception class for the width of the input image
- *        exceeds the maximum width supported by the operator
- *
- * @see MluResizeConvertOp::BatchingUp(const InputData&)
- **/
-class RCOpWidthOverLimitError : public MluResizeConvertOpError {
- public:
-  explicit RCOpWidthOverLimitError(const Attr& attr, const InputData& input_data) :
-      MluResizeConvertOpError(attr, input_data) {
-    err_str_ = "Maximum input width limit exceeded. Maximum input width: "
-               + std::to_string(MluResizeConvertOp::MAXIMUM_WIDTH) + ". Current input width: "
-               + std::to_string(GetWidth()) + ".";
-  }
-
-  inline uint32_t GetWidth() const { return GetInputData().crop_w; }
-};  // class WidthOverLimitError
 
 }  // namespace edk
 

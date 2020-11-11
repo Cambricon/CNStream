@@ -162,12 +162,12 @@ bool MluResizeYuv2Rgba::Init(const MluResizeAttr& attr) {
 
 int MluResizeYuv2Rgba::InvokeOp(void* dst, void* srcY, void* srcUV) {
   if (nullptr == d_ptr_->queue_) {
-    throw MluResizeYuv2RgbaError("cnrt queue is null.");
+    THROW_EXCEPTION(Exception::INTERNAL, "cnrt queue is null.");
   }
   if (d_ptr_->attr_.batch_size != 1) {
-    throw MluResizeYuv2RgbaError(
-        "InvokeOp is vaild only if the batchsize is 1. Please Use BatchingUp "
-        "and SyncOneOutput to replase InvokeOp.");
+    THROW_EXCEPTION(Exception::INVALID_ARG,
+                    "InvokeOp is vaild only if the batchsize is 1. Please Use BatchingUp "
+                    "and SyncOneOutput to replase InvokeOp.");
   }
   BatchingUp(srcY, srcUV);
   if (!SyncOneOutput(dst)) {
@@ -183,7 +183,7 @@ void MluResizeYuv2Rgba::BatchingUp(void* src_y, void* src_uv) {
 
 bool MluResizeYuv2Rgba::SyncOneOutput(void* dst) {
   if (nullptr == d_ptr_->queue_) {
-    throw MluResizeYuv2RgbaError("cnrt queue is null.");
+    THROW_EXCEPTION(Exception::INTERNAL, "cnrt queue is null.");
   }
   if (static_cast<int>(d_ptr_->yuv_ptrs_cache_.size()) < d_ptr_->attr_.batch_size) {
     d_ptr_->estr_ = "Batchsize is " + std::to_string(d_ptr_->attr_.batch_size) + ", but only has" +

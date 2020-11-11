@@ -24,8 +24,8 @@
  * This file contains a declaration of the Matrix class and overload operators.
  */
 
-#ifndef CXXUTIL_MATRIX_H_
-#define CXXUTIL_MATRIX_H_
+#ifndef EASYTRACK_MATRIX_H_
+#define EASYTRACK_MATRIX_H_
 
 #include <iostream>
 #include <string>
@@ -235,8 +235,6 @@ class Matrix : public MatrixPrototype<float> {
   void Show() const;
 };
 
-TOOLKIT_REGISTER_EXCEPTION(Matrix);
-
 /**
  * Overload equal comparison operator.
  * @param lhs[in] Left hand side matrix
@@ -283,4 +281,4 @@ const Matrix operator*(const Matrix& lhs, const Matrix& rhs);
 
 }  // namespace edk
 
-#endif  // CXXUTIL_MATRIX_H_
+#endif  // EASYTRACK_MATRIX_H_

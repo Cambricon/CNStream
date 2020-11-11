@@ -30,10 +30,6 @@ class ModulePipeline : public cnstream::Pipeline {
 
  public:
   explicit ModulePipeline(const std::string &name) : super(name) {}
-
- private:
-  ModulePipeline(const ModulePipeline &) = delete;
-  ModulePipeline &operator=(ModulePipeline const &) = delete;
 };
 
 class ComplexModule : public cnstream::ModuleEx,
@@ -49,34 +45,33 @@ class ComplexModule : public cnstream::ModuleEx,
     for (auto &v : paramSet) {
       std::cout << "\t" << v.first << " : " << v.second << std::endl;
     }
-
     cnstream::CNModuleConfig s_config = {"InnerFakeSource", /*name*/
                                          {
                                              {"param", "fakeSource"},
                                          },
-                                         0,                     /*parallelism*/
-                                         0,                     /*maxInputQueueSize*/
+                                         0,               /*parallelism*/
+                                         0,               /*maxInputQueueSize*/
                                          "ExampleModuleSource", /*className*/
                                          {
                                              /* next,*/
-                                             "ModuleInnerA",
+                                             "InnerA",
                                          }};
-    cnstream::CNModuleConfig a_config = {"ModuleInnerA", /*name*/
+    cnstream::CNModuleConfig a_config = {"InnerA", /*name*/
                                          {
                                              {"param", "innerA"},
                                          },
-                                         2,               /*parallelism*/
+                                         8,               /*parallelism*/
                                          20,              /*maxInputQueueSize*/
                                          "ExampleModule", /*className*/
                                          {
                                              /* next,*/
-                                             "ModuleInnerB",
+                                             "InnerB",
                                          }};
-    cnstream::CNModuleConfig b_config = {"ModuleInnerB", /*name*/
+    cnstream::CNModuleConfig b_config = {"InnerB", /*name*/
                                          {
                                              {"param", "innerB"},
                                          },
-                                         2,               /*parallelism*/
+                                         8,               /*parallelism*/
                                          20,              /*maxInputQueueSize*/
                                          "ExampleModule", /*className*/
                                          {
@@ -99,7 +94,7 @@ class ComplexModule : public cnstream::ModuleEx,
     return true;
   }
   void Close() override {
-    std::cout << this->GetName() << " Close called" << std::endl;
+    LOG(INFO) << this->GetName() << " Close called";
     if (pipeline_) {
       sink_->SetObserver(nullptr);
       pipeline_->Stop();
@@ -107,29 +102,37 @@ class ComplexModule : public cnstream::ModuleEx,
   }
   int Process(FrameInfoPtr data) override {
     if (pipeline_) {
-      /*use the same datastructure, so just forward data to inner-pipeline*/
-      pipeline_->ProvideData(source_, data);
+      // create "data" for the inner pipeline
+      std::string inner_stream_id = pipeline_->GetName() + "_" + data->stream_id;
+      auto data_inner = cnstream::CNFrameInfo::Create(inner_stream_id, data->IsEos(), data);
+      data_inner->SetStreamIndex(data->GetStreamIndex());
+      data_inner->timestamp = data->timestamp;  // for debug ...
+      if (!data->IsEos()) {
+        // datas used in inner-pipeline
+        auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data->datas[CNDataFramePtrKey]);
+        data_inner->datas[CNDataFramePtrKey] = frame;
+      } else {
+        // LOG(INFO) << this->GetName() << " Module(InnerPipeline) Process: " << data->stream_id << "--EOS";
+      }
+      pipeline_->ProvideData(source_, data_inner);
+    } else {
+      this->TransmitData(data);
     }
     /*notify that data handle by the module*/
     return 1;
   }
 
   void notify(FrameInfoPtr data) override {
-    if (data->IsEos()) {
-      std::cout << "*****inner Observer :" << data->stream_id << "---"
-                << "--EOS" << std::endl;
+    // update data of outer-pipeline and forward...
+    auto data_ = data->payload;
+    if (data_->IsEos()) {
+      // LOG(INFO) << "*****inner Observer :" << data_->stream_id << "---" << "--EOS";
     } else {
-      auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data->datas[CNDataFramePtrKey]);
-      std::cout << "*****inner Observer :" << data->stream_id << "---" << frame->frame_id << std::endl;
+      // auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data_->datas[CNDataFramePtrKey]);
+      // LOG(INFO) << "*****inner Observer :" << data_->stream_id << "---" << frame->frame_id;
     }
-
-    /*use the same datastructure, so just forward data downstream modules*/
-    this->TransmitData(data);
+    this->TransmitData(data_);
   }
-
- private:
-  ComplexModule(const ComplexModule &) = delete;
-  ComplexModule &operator=(ComplexModule const &) = delete;
 
  private:
   std::shared_ptr<ModulePipeline> pipeline_;

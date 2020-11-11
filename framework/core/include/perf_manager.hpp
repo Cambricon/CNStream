@@ -196,13 +196,11 @@ class PerfManager {
    */
   static inline std::string GetDefaultType() { return "PROCESS"; }
   /**
-   * @brief Prepares database file directory.
+   * @brief Gets the database file prefix.
    *
-   * @param file_dir The file directory
-   *
-   * @return Returns true if the file directory is prepared successfully, otherwise returns false.
+   * @return Returns the database file prefix.
    */
-  static bool PrepareDbFileDir(std::string file_dir);
+  static inline std::string GetDbFileNamePrefix() { return "perf_"; }
   /**
    * @brief Creates directory.
    *
@@ -219,6 +217,14 @@ class PerfManager {
    * @return Returns true if the data is deleted successfully, otherwise returns false.
    */
   bool DeletePreviousData(int previous_time);
+  /**
+   * @brief Clears database files in specified directory.
+   *
+   * @param dir The directory will be cleared.
+   *
+   * @return Returns void.
+   */
+  static void ClearDbFiles(std::string dir);
 
  private:
 #ifdef UNIT_TEST
@@ -232,8 +238,29 @@ class PerfManager {
     std::string value;
   };  // struct PerfInfo
 
+  enum FileStatus {
+    INVALID_FILE_NAME = -1,
+    NOT_EXIST = 0,
+    EXIST = 1,
+    OPENED = 2,
+  };  // enum FileStatus
+
   void PopInfoFromQueue();
   void InsertInfoToDb(const PerfInfo& info);
+
+  /**
+   * @brief Prepares database file directory.
+   *
+   * @param file_dir The file directory
+   *
+   * @return Returns true if the file directory is prepared successfully, otherwise returns false.
+   */
+  static bool PrepareDbFileDir(std::string file_dir);
+  static bool DirectoryExists(std::string dir);
+  static std::vector<std::string> GetFilesInDir(std::string dir);
+  static std::vector<std::string> FilterFiles(std::vector<std::string> files);
+  static void ClearFiles(std::string dir, std::vector<std::string> files);
+  static int CheckFileStatus(std::string file_path);
 
   bool is_initialized_ = false;
   std::unordered_set<std::string> perf_type_;

@@ -18,6 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include <glog/logging.h>
+
 #include <array>
 #include <cassert>
 #include <functional>
@@ -274,6 +276,15 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
   param.type = "bool";
   param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
     return STR2BOOL(value, &param_set->mem_on_mlu_for_postproc);
+  };
+  ASSERT(RegisterParam(pregister, param));
+
+  param.name = "saving_infer_input";
+  param.desc_str = "Optional. Save the data close to inferencing ";
+  param.default_value = "false";
+  param.type = "bool";
+  param.parser = [](const std::string &value, InferParams *param_set) -> bool {
+    return STR2BOOL(value, &param_set->saving_infer_input);
   };
   ASSERT(RegisterParam(pregister, param));
 }

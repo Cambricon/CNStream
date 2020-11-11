@@ -30,7 +30,6 @@
 #include "cnencode.hpp"
 #include "cnstream_frame_va.hpp"
 #include "encode.hpp"
-#include "test_base.hpp"
 
 namespace cnstream {
 
@@ -47,6 +46,7 @@ TEST(CNEncodeTest, InitFailedCase) {
   cnencode_param.gop = 30;
   cnencode_param.stream_id = "0";
   cnencode_param.device_id = 0;
+  cnencode_param.output_dir = "./encode_output";
 
   cnencode_param.dst_pix_fmt = NV12;
   CNEncode cpu_encode(cnencode_param);
@@ -84,6 +84,7 @@ TEST(CNEncodeTest, UpdateFailedCase) {
   cnencode_param.dst_pix_fmt = NV12;
   cnencode_param.encoder_type = "mlu";
   cnencode_param.device_id = 0;
+  cnencode_param.output_dir = "./encode_output";
   CNEncode mlu_encode(cnencode_param);
 
   EXPECT_TRUE(mlu_encode.Init());

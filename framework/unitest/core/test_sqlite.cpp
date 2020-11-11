@@ -26,11 +26,10 @@
 #include <vector>
 
 #include "sqlite_db.hpp"
-#include "test_base.hpp"
 
 namespace cnstream {
 
-std::string gTestPerfDir = GetExePath() + "../test_perf_tmp";  // NOLINT
+std::string gTestPerfDir = "./test_perf_tmp";  // NOLINT
 std::string gTestPerfFile = gTestPerfDir + "/test.db";           // NOLINT
 
 bool CreateDir(std::string path) { return access(path.c_str(), 0) == 0 || mkdir(path.c_str(), 00700) == 0; }

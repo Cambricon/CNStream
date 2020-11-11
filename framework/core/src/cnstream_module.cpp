@@ -114,49 +114,76 @@ bool Module::PostEvent(Event e) {
   }
 }
 
+int Module::DoTransmitData(std::shared_ptr<CNFrameInfo> data) {
+  if (data->IsEos() && data->payload && IsStreamRemoved(data->stream_id)) {
+    // FIMXE
+    SetStreamRemoved(data->stream_id, false);
+  }
+  if (!data->IsEos() && !data->IsRemoved() && !IsStreamRemoved(data->stream_id)) {
+    RecordTime(data, true);
+  }
+  RwLockReadGuard guard(container_lock_);
+  if (container_) {
+    return container_->ProvideData(this, data);
+  } else {
+    if (HasTransmit()) NotifyObserver(data);
+    return 0;
+  }
+}
+
 int Module::DoProcess(std::shared_ptr<CNFrameInfo> data) {
+  bool removed = IsStreamRemoved(data->stream_id);
+  if (!removed) {
+    // For the case that module is implememted by a pipeline
+    if (data->payload && IsStreamRemoved(data->payload->stream_id)) {
+      SetStreamRemoved(data->stream_id, true);
+      removed = true;
+    }
+  }
+
   RecordTime(data, false);
   if (!HasTransmit()) {
-    int ret = 0;
-    /* Process() for normal module does not need to handle EOS*/
     if (!data->IsEos()) {
-      ret = Process(data);
-      RecordTime(data, true);
-    }
-    RwLockReadGuard guard(container_lock_);
-    if (container_) {
-      if (container_->ProvideData(this, data) != true) {
-        return -1;
+      if (!removed) {
+        int ret = Process(data);
+        if (ret != 0) {
+          return ret;
+        }
       }
+      return DoTransmitData(data);
+    } else {
+      this->OnEos(data->stream_id);
+      return DoTransmitData(data);
     }
-    return ret;
+  } else {
+      if (removed) {
+        data->flags |= CN_FRAME_FLAG_REMOVED;
+      }
+    return Process(data);
   }
-  return Process(data);
+  return -1;
 }
 
 bool Module::TransmitData(std::shared_ptr<CNFrameInfo> data) {
   if (!HasTransmit()) {
     return true;
   }
-  RecordTime(data, true);
-
-  RwLockReadGuard guard(container_lock_);
-  if (container_) {
-    return container_->ProvideData(this, data);
-  } else {
-    NotifyObserver(data);
+  if (!DoTransmitData(data)) {
+    return true;
   }
-
   return false;
 }
 
 void Module::RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished) {
   std::shared_ptr<PerfManager> manager = GetPerfManager(data->stream_id);
   if (!data->IsEos() && manager) {
-    manager->Record(is_finished, PerfManager::GetDefaultType(), this->GetName(), data->timestamp);
+    manager->Record(is_finished, PerfManager::GetDefaultType(), GetName(), data->timestamp);
     if (!is_finished) {
+      std::stringstream ss;
+      ss << std::this_thread::get_id();
+      std::string thread_id_str = ss.str();
       manager->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(data->timestamp),
-                      this->GetName() + "_th", "'" + GetThreadName(pthread_self()) + "'");
+                      GetName() + PerfManager::GetThreadSuffix(), thread_id_str);
     }
   }
 }

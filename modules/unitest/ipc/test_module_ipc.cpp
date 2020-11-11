@@ -91,6 +91,7 @@ static void ClientProcess(ModuleParamSet param) {
   frame->ctx.dev_id = g_dev_id;
   frame->ctx.dev_type = DevContext::DevType::MLU;
   frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+  frame->dst_device_id = g_dev_id;
   frame->CopyToSyncMem();
   data->datas[CNDataFramePtrKey] = frame;
 
@@ -153,7 +154,7 @@ static void ServerProcess(ModuleParamSet param, std::string* recvd_string) {
 
     if (data) {
       if (!data->IsEos()) {
-        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+        CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
         CALL_CNRT_BY_CONTEXT(
             cnrtMemcpy(frame_data, frame->data[0]->GetMutableMluData(), strlen(fake_str), CNRT_MEM_TRANS_DIR_DEV2HOST),
             g_dev_id, g_ddr_channel);

@@ -62,7 +62,8 @@ void InitFrame(CNDataFrame* frame, int image_type) {
 }
 
 void RunConvertImageTest(CNDataFrame* frame, int image_type) {
-  frame->CopyToSyncMem();
+  frame->dst_device_id = g_dev_id;
+  frame->CopyToSyncMem(true);
   EXPECT_NE(frame->ImageBGR(), nullptr);
   free(frame->ptr_cpu[0]);
   if (image_type == 1 || image_type == 2) {  // YUV
@@ -125,7 +126,7 @@ TEST(CoreFrame, ConvertImageToBGRFailed) {
   CNDataFrame frame;
   InitFrame(&frame, 1);
   frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
-
+  frame.dst_device_id = g_dev_id;
   frame.CopyToSyncMem();
   frame.fmt = CN_INVALID;
   EXPECT_EQ(frame.ImageBGR(), nullptr);
@@ -138,12 +139,9 @@ TEST(CoreFrameDeathTest, CopyToSyncMemFailed) {
   CNDataFrame frame;
   InitFrame(&frame, 0);
   frame.fmt = CN_PIXEL_FORMAT_BGR24;
-
-  frame.CopyToSyncMem();
-
-  EXPECT_DEATH(frame.CopyToSyncMem(), "");
+  EXPECT_DEATH(frame.CopyToSyncMem(true), "");
   frame.ctx.dev_type = DevContext::INVALID;
-  EXPECT_DEATH(frame.CopyToSyncMem(), "");
+  EXPECT_DEATH(frame.CopyToSyncMem(false), "");
 
   free(frame.ptr_cpu[0]);
 }
@@ -156,8 +154,7 @@ TEST(CoreFrameDeathTest, CopyToSyncMemOnDevice) {
   size_t nbytes = width * height * 3;
   size_t boundary = 1 << 16;
   nbytes = (nbytes + boundary - 1) & ~(boundary - 1);
-  void* frame_data = nullptr;
-  CALL_CNRT_BY_CONTEXT(cnrtMalloc(&frame_data, nbytes), g_dev_id, 0);
+  std::shared_ptr<void> frame_data = cnMluMemAlloc(nbytes, g_dev_id);
   // fake frame data
   std::shared_ptr<CNDataFrame> frame = std::make_shared<CNDataFrame>();
   if (frame == nullptr) {

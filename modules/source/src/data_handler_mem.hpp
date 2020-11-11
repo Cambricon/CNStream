@@ -21,37 +21,24 @@
 #ifndef MODULES_SOURCE_HANDLER_MEM_HPP_
 #define MODULES_SOURCE_HANDLER_MEM_HPP_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-#ifdef __cplusplus
-}
-#endif
-
 #include <memory>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <mutex>
 
-#include "data_source.hpp"
-#include "device/mlu_context.h"
-#include "ffmpeg_decoder.hpp"
 #include "cnstream_logging.hpp"
-#include "ffmpeg_parser.hpp"
 #include "data_handler_util.hpp"
-
-#define DEFAULT_MODULE_CATEGORY SOURCE
+#include "data_source.hpp"
+#include "util/video_decoder.hpp"
+#include "util/video_parser.hpp"
 
 namespace cnstream {
 
-class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
+class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public SourceRender {
  public:
-  explicit ESMemHandlerImpl(DataSource *module, ESMemHandler &handler)  // NOLINT
-    : module_(module), handler_(handler) {
+  explicit ESMemHandlerImpl(DataSource *module, ESMemHandler *handler)  // NOLINT
+    : SourceRender(handler), module_(module), handler_(*handler) {
       stream_id_ = handler_.GetStreamId();
   }
 
@@ -64,12 +51,11 @@ class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
     data_type_ = data_type;
     int ret = -1;
     if (data_type_ == ESMemHandler::H264) {
-      ret = parser_.Init("h264");
-      this->SplitterInit(true);
+      ret = parser_.Open(AV_CODEC_ID_H264, this);
     } else if (data_type_ == ESMemHandler::H265) {
-      ret = parser_.Init("h265");
-      this->SplitterInit(false);
+      ret = parser_.Open(AV_CODEC_ID_HEVC, this);
     } else {
+      LOGF(SOURCE) << "Unsupported data type " << data_type;
       ret = -1;
     }
     return ret;
@@ -77,7 +63,15 @@ class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
 
   int Write(ESPacket *pkt);
   int Write(unsigned char *data, int len);
-  int SplitterOnNal(NalDesc &desc, bool eos) override;
+
+  // IParserResult methods
+  void OnParserInfo(VideoInfo *info) override;
+  void OnParserFrame(VideoEsFrame *frame) override;
+
+  // IDecodeResult methods
+  void OnDecodeError(DecodeErrorCode error_code) override;
+  void OnDecodeFrame(DecodeFrame *frame) override;
+  void OnDecodeEos() override;
 
  private:
   DataSource *module_ = nullptr;
@@ -86,6 +80,11 @@ class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
   DataSourceParam param_;
   size_t interval_ = 1;
   ESMemHandler::DataType data_type_ = ESMemHandler::INVALID;
+  bool first_frame_ = true;
+
+  std::mutex info_mutex_;
+  VideoInfo info_;
+  std::atomic<bool> info_set_{false};
 
  private:
 #ifdef UNIT_TEST
@@ -99,11 +98,13 @@ class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
 
  private:
   /**/
-  std::atomic<int> running_{0};
+  std::atomic<bool> running_{false};
   std::thread thread_;
   bool eos_sent_ = false;
+  std::atomic<bool> generate_pts_{false};
+  uint64_t fake_pts_ = 0;
 
-  ParserHelper parser_;
+  EsParser parser_;
   BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
   /*
    * Ensure that the queue_ is not deleted when the push is blocked.
@@ -113,29 +114,10 @@ class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
   std::shared_ptr<Decoder> decoder_ = nullptr;
   uint64_t pts_ = 0;
 
- public:
-  void SendFlowEos() override {
-    if (eos_sent_) return;
-    auto data = CreateFrameInfo(true);
-    if (!data) {
-      MLOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
-      return;
-    }
-    SendFrameInfo(data);
-    eos_sent_ = true;
-  }
-
-  std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) override {
-    return handler_.CreateFrameInfo(eos);
-  }
-
-  bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) override {
-    return handler_.SendData(data);
-  }
-
-  const DataSourceParam& GetDecodeParam() const override {
-    return param_;
-  }
+  // for parsing es-block
+  std::unique_ptr<unsigned char[]> frame_bits_buf_ = nullptr;
+  size_t frame_bits_size_ = 0;
+  bool eos_reached_ = false;
 
 #ifdef UNIT_TEST
  public:  // NOLINT
@@ -145,5 +127,4 @@ class ESMemHandlerImpl : public IHandler, public H2645NalSplitter {
 
 }  // namespace cnstream
 
-#undef DEFAULT_MODULE_CATEGORY
 #endif  // MODULES_SOURCE_HANDLER_MEM_HPP_

@@ -2,14 +2,58 @@ var chart;
 var current_item = 0;
 
 function checkDAG(json) {
-    if (json == "false") {
-        alert("Json config is invalid\nThe pipeline must be a DAG.")
-        return false;
+    if (json.hasOwnProperty("graph")) {
+        if (json["graph"] == "notDAG") {
+            alert("Json config is invalid\nThe pipeline must be a DAG.");
+            return false;
+        } else if (json["graph"] == "invalid") {
+            alert("Json config is invalid\nPlease make sure all modules are linked and the pipeline must be a DAG.");
+            return false;
+        }
     }
     return true;
 }
 
-function showMessage(index){
+function showJsonConfig() {
+    var json = chart.toJson();
+    if (checkDAG(json) == false) {
+        return false;
+    }
+    var json_str = JSON.stringify(chart.toJson(), null, 4);
+    function showJson(callback) {
+        callback = callback.replace(/[EIW][0-9]+.*:.*:.*:[0-9]+\]/gi, "")
+        let callback_lines = callback.split(/[\n]/)
+        if (callback_lines[0] === "Check module config file successfully!") {
+            $('#json-output').val(json_str);
+        } else {
+            $('#json-output').val("Json config is invalid.\nPlease click 'Check Result' to check.\nAnd modify your configuration.");
+        }
+    }
+    postData("./checkJson", json_str, showJson, function() { console.log("Check Json error"); }, 'application/json; charset=UTF-8');
+    return true;
+}
+
+function showCheckJsonConfigResult() {
+    var json = chart.toJson();
+    if (checkDAG(json) == false) {
+        return false;
+    }
+    var json_str = JSON.stringify(chart.toJson(), null, 4);
+    function showCheckJsonResult(callback) {
+        callback = callback.replace(/[EIW][0-9]+.*:.*:.*:[0-9]+\]/gi, "")
+        let callback_lines = callback.split(/[\n]/)
+        document.getElementById("check-result").innerHTML = "";
+        callback_lines.forEach(v => {
+            document.getElementById("check-result").innerHTML += v + "<br>";
+        });
+    }
+    postData("./checkJson", json_str, showCheckJsonResult, function() { console.log("Check Json error"); }, 'application/json; charset=UTF-8');
+    return true;
+}
+
+function showMessage(index) {
+    if (index == 2 && !showJsonConfig()) return false;
+    if (index == 3 && !showCheckJsonConfigResult()) return false;
     var cnodes = document.getElementsByClassName("demo-collapse-item-cnt");
     var otmp = cnodes[current_item].style.opacity;
     cnodes[current_item].style.height = cnodes[index].style.height;
@@ -21,40 +65,16 @@ function showMessage(index){
     var qtmp = req.className;
     req.className = res.className;
     res.className = qtmp;
-    var json = JSON.stringify(chart.toJson(), null, 4);
-    function showJson(callback) {
-        callback = callback.replace(/[EIW][0-9]+.*:.*:.*:[0-9]+\]/gi, "")
-        let callback_lines = callback.split(/[\n]/)
-        if (callback_lines[0] === "Check module config file successfully!") {
-            $('#json-output').val(json);
-        } else {
-            $('#json-output').val("Json config is invalid.\nPlease click 'Check Result' to check.\nAnd modify your configuration.");
-        }
-    }
-    function showCheckJsonResult(callback) {
-        callback = callback.replace(/[EIW][0-9]+.*:.*:.*:[0-9]+\]/gi, "")
-        let callback_lines = callback.split(/[\n]/)
-        document.getElementById("check-result").innerHTML = "";
-        callback_lines.forEach(v => {
-            document.getElementById("check-result").innerHTML += v + "<br>";
-        });
-    }
-    if (checkDAG(json) == true) {
-        if (index == 2) {
-            postData("./checkJson", json, showJson, function() { console.log("Check Json error"); }, 'application/json; charset=UTF-8');
-        } else if (index == 3) {
-            postData("./checkJson", json, showCheckJsonResult, function() { console.log("Check Json error"); }, 'application/json; charset=UTF-8');
-        }
-    } 
     current_item = index;
+    return true;
 };
 
 function showJson() {
-    showMessage(2);
+    return showMessage(2);
 }
 
-function showCheckJsonResult() {
-    showMessage(3);
+function showCheckResult() {
+    return showMessage(3);
 }
 
 Chart.ready(() => {
@@ -107,7 +127,6 @@ Chart.ready(() => {
             },
             delNode(data) {
                 hideNodeInfo();
-                UpdateJson();
             },
             dblClickNode(data) {
                 if (!data) return;
@@ -122,12 +141,6 @@ Chart.ready(() => {
                 input_text.val(org_name);
                 $("#" + data.node_id).append(input_text);
                 $('#txt_' + data.node_id).focus();
-            },
-            connNode() {
-                UpdateJson();
-            },
-            disconnNode() {
-                UpdateJson();
             }
         })
     };
@@ -151,9 +164,10 @@ Chart.ready(() => {
 
         let position = getPosition();
         let node = chart.addNode(name, position[0], position[1], params);
-        node.addPort({ is_source: true });
-        node.addPort({ is_target: true, position: 'Top' });
-        UpdateJson();
+        if (node) {
+          node.addPort({ is_source: true });
+          node.addPort({ is_target: true, position: 'Top' });
+        }
     };
 
 
@@ -166,7 +180,6 @@ Chart.ready(() => {
 
     let showNodeInfo = (data) => {
         if (!data) return;
-
         $('.module-name')[0].style.display = 'block';
         $('.module-desc')[0].style.display = 'block';
         $('.module-params')[0].style.display = 'block';
@@ -270,7 +283,11 @@ Chart.ready(() => {
 
     downloadFile = function() {
         let elementA = document.createElement('a');
-        elementA.setAttribute('href', 'data:text/plain;charset=utf-8,' + JSON.stringify(chart.toJson(), null, 4));
+        var json = chart.toJson();
+        if (checkDAG(json) == false) {
+            return;
+        }
+        elementA.setAttribute('href', 'data:text/plain;charset=utf-8,' + JSON.stringify(json, null, 4));
         elementA.setAttribute('download', "config.json");
         elementA.style.display = 'none';
         document.body.appendChild(elementA);
@@ -284,18 +301,11 @@ Chart.ready(() => {
         } else if (current_item == 2) {
             showJson();
         } else if (current_item == 3) {
-            showCheckJsonResult();
+            showCheckResult();
         } else {
             showMessage(current_item);
         }
     }
-
-    function UpdateJson() {
-        if (current_item == 2) {
-            showJson();
-        }
-    }
-
 
     const bindEvent = () => {
         $(".pipeline-panel").on('click', '.btn-add', function(event) {
@@ -311,8 +321,7 @@ Chart.ready(() => {
         });
 
         $(".btn-save").click(() => {
-            showJson();
-            downloadFile();
+            if (showJson()) downloadFile();
         });
 
         $(".btn-clear").click(() => {
@@ -327,6 +336,7 @@ Chart.ready(() => {
         });
 
         $(".btn-return").click(() => {
+	    alert("Current pipeline will be cleared!");
             window.location.href="/home";
         });
 
@@ -340,7 +350,7 @@ Chart.ready(() => {
                     window.location.href="/home";
                 } else {
                     showMessage(2);
-                    $('#json-output').val("Json config is invalid.\nPlease click 'check' button or 'Check Result' to check.\nAnd modify your configuration.\n\nAnd Try again");
+                    $('#json-output').val("Json config is invalid.\nPlease click 'check' button or 'Check Result' to check.\nAnd modify your configuration.\n\nAnd try again");
                 }
             }
             if (checkDAG(json) == true) {
@@ -352,6 +362,7 @@ Chart.ready(() => {
 
     // chart begin here
     chart = createChart();
+    chart.setMaxNodeNum(64);
     let start_node = createStartNode();
     bindEvent();
 

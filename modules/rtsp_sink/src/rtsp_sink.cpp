@@ -82,7 +82,7 @@ RtspSinkContext* RtspSink::CreateRtspSinkContext(CNFrameInfoPtr data) {
 }
 
 RtspParam RtspSink::GetRtspParam(CNFrameInfoPtr data) {
-  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
   switch (frame->fmt) {
     case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
       params_.color_format = BGR24;
@@ -185,7 +185,7 @@ void RtspSink::Close() {
 int RtspSink::Process(CNFrameInfoPtr data) {
   RtspSinkContext* ctx = GetRtspSinkContext(data);
   if (!ctx) return -1;
-  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
   if ("cpu" == params_.preproc_type) {
     if ("bgr" == params_.color_mode || params_.color_format == BGR24) {
       cv::Mat image = *frame->ImageBGR();

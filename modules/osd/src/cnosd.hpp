@@ -49,7 +49,7 @@ class CnOsd {
   inline void SetSecondaryLabels(std::vector<std::string> labels) { secondary_labels_ = labels; }
   inline void SetCnFont(std::shared_ptr<CnFont> cn_font) { cn_font_ = cn_font; }
 
-  void DrawLabel(cv::Mat *image, const CNObjsVec& objects, std::vector<std::string> attr_keys = {}) const;
+  void DrawLabel(cv::Mat *image, const CNInferObjsPtr& objects, std::vector<std::string> attr_keys = {}) const;
   void DrawLogo(cv::Mat *image, std::string logo) const;
 
  private:

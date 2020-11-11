@@ -18,6 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include <glog/logging.h>
+
 #include <memory>
 #include <string>
 #include <utility>
@@ -65,9 +67,8 @@ int PostprocClassification::Execute(const std::vector<float*>& net_outputs,
   obj->id = std::to_string(label);
   obj->score = mscore;
 
-  cnstream::CNObjsVec objs;
-  objs.push_back(obj);
-  package->datas[cnstream::CNObjsVecKey] = objs;
+  cnstream::CNInferObjsPtr objs_ptr = cnstream::GetCNInferObjsPtr(package);
+  objs_ptr->objs_.push_back(obj);
   return 0;
 }
 

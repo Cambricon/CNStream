@@ -35,8 +35,6 @@ struct ResizeYuv2Rgba;
 
 namespace edk {
 
-TOOLKIT_REGISTER_EXCEPTION(MluResizeYuv2Rgba);
-
 class MluResizeYuv2RgbaPrivate;
 
 /**

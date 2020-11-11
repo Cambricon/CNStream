@@ -40,6 +40,7 @@
 #include "infer_params.hpp"
 #include "perf_calculator.hpp"
 #include "perf_manager.hpp"
+#include "util/cnstream_time_utility.hpp"
 
 namespace cnstream {
 
@@ -66,6 +67,7 @@ class InferencerPrivate {
   std::shared_ptr<ObjFilter> obj_filter_ = nullptr;
   int bsize_ = 0;
   std::string dump_resized_image_dir_ = "";
+  std::string module_name_ = "";
 
   std::shared_ptr<PerfManager> infer_perf_manager_ = nullptr;
   std::unordered_map<std::string, std::shared_ptr<PerfCalculator>> perf_calculator_;
@@ -81,9 +83,10 @@ class InferencerPrivate {
 
   bool InitByParams(const InferParams &params, const ModuleParamSet &param_set) {
     params_ = params;
+    module_name_ = q_ptr_->GetName();
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(params.device_id);
-    mlu_ctx.ConfigureForThisThread();
+    mlu_ctx.BindDevice();
 
     std::string model_path = GetPathRelativeToTheJSONFile(params.model_path, param_set);
     try {
@@ -160,10 +163,24 @@ class InferencerPrivate {
     if (params.show_stats) {
       infer_perf_manager_ = std::make_shared<PerfManager>();
 
-      std::string stats_db_path = "perf_database/" + q_ptr_->GetName() + ".db";
+      std::string stats_db_dir = "perf_database/";
+      std::string stats_db_path = stats_db_dir + PerfManager::GetDbFileNamePrefix() +
+                                  q_ptr_->GetName() + "_" + TimeStamp::CurrentToDate() + ".db";
       if (!params.stats_db_name.empty()) {
-        stats_db_path = GetPathRelativeToTheJSONFile(params.stats_db_name, param_set);
+        std::string db_name = params.stats_db_name;
+        if (db_name.length() > db_name.find_last_of(".") && db_name.substr(db_name.find_last_of(".") + 1) == "db") {
+          size_t dir_pos = db_name.length() > db_name.find_last_of("/") ? db_name.find_last_of("/") + 1 : 0;
+          db_name.insert(dir_pos, PerfManager::GetDbFileNamePrefix());
+          stats_db_dir = db_name.substr(0, dir_pos);
+          stats_db_path = db_name;
+        } else {
+          LOG(WARNING) << "[Inferencer]: parameter stats_db_name should end with '.db'."
+                       << " Database file will be stored at [perf_database] directory instead.";
+        }
       }
+      stats_db_path = GetPathRelativeToTheJSONFile(stats_db_path, param_set);
+      PerfManager::ClearDbFiles(GetPathRelativeToTheJSONFile(stats_db_dir, param_set));
+
       LOG(INFO) << "[" << q_ptr_->GetName() << "] save performance info database file to : " << stats_db_path;
       if (!infer_perf_manager_->Init(stats_db_path)) {
         LOG(ERROR) << "[" << q_ptr_->GetName() << "] Init infer perf manager failed.";
@@ -223,7 +240,9 @@ class InferencerPrivate {
           obj_filter_,
           dump_resized_image_dir_,
           params_.model_input_pixel_format,
-          params_.mem_on_mlu_for_postproc);
+          params_.mem_on_mlu_for_postproc,
+          params_.saving_infer_input,
+          module_name_);
       ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_, bsize_);
       ctxs_[tid] = ctx;
       if (infer_perf_manager_) {
@@ -399,7 +418,11 @@ int Inferencer::Process(CNFrameInfoPtr data) {
   bool drop_data = d_ptr_->params_.infer_interval > 0 && pctx->drop_count++ % d_ptr_->params_.infer_interval != 0;
 
   if (!eos) {
-    CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+    if (data->IsRemoved()) {
+      // discard packets from removed-stream
+      return 0;
+    }
+    CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
     if (static_cast<uint32_t>(frame->ctx.dev_id) != d_ptr_->params_.device_id &&
         frame->ctx.dev_type == DevContext::MLU) {
       frame->CopyToSyncMemOnDevice(d_ptr_->params_.device_id);
@@ -411,6 +434,10 @@ int Inferencer::Process(CNFrameInfoPtr data) {
   }
 
   if (eos || drop_data) {
+    if (eos && IsStreamRemoved(data->stream_id)) {
+      // minimize batch_timeout delay
+      pctx->engine->ForceBatchingDone();
+    }
     if (drop_data) pctx->drop_count %= d_ptr_->params_.infer_interval;
     std::shared_ptr<std::promise<void>> promise = std::make_shared<std::promise<void>>();
     promise->set_value();

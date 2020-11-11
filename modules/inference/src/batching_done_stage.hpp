@@ -44,7 +44,7 @@ class MluInputResource;
 class MluOutputResource;
 class RCOpResource;
 class InferTask;
-struct CNFrameInfo;
+class CNFrameInfo;
 struct CNInferObject;
 class FrameInfoResource;
 class PerfManager;
@@ -73,13 +73,20 @@ class BatchingDoneStage {
      dump_resized_image_dir_ = dir;
   }
 
+  void SetSavingInputData(const bool& saving_infer_input, const std::string& module_name) {
+    saving_infer_input_ = saving_infer_input;
+    module_name_ = module_name;
+  }
+
  protected:
   std::shared_ptr<edk::ModelLoader> model_;
   uint32_t batchsize_ = 0;
   int dev_id_ = -1;  // only for EasyInfer::Init
   std::string dump_resized_image_dir_ = "";
+  bool saving_infer_input_ = false;
   std::shared_ptr<PerfManager> perf_manager_ = nullptr;
   std::string perf_type_;
+  std::string module_name_ = "";
 };  // class BatchingDoneStage
 
 class H2DBatchingDoneStage : public BatchingDoneStage {

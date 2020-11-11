@@ -79,13 +79,20 @@ ResizeConvertBatchingStage::ResizeConvertBatchingStage(std::shared_ptr<edk::Mode
 ResizeConvertBatchingStage::~ResizeConvertBatchingStage() {}
 
 std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<CNFrameInfo> finfo) {
-  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(finfo->datas[CNDataFramePtrKey]);
+  if (cnstream::IsStreamRemoved(finfo->stream_id)) {
+    return NULL;
+  }
+  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(finfo);
   if (frame->fmt != CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 &&
       frame->fmt != CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) {
     throw CnstreamError("Can not handle this frame with format :" + std::to_string(static_cast<int>(frame->fmt)));
   }
-  void* src_y = frame->data[0]->GetMutableMluData();
-  void* src_uv = frame->data[1]->GetMutableMluData();
+
+  // make sure device_id set
+  frame->data[0]->SetMluDevContext(dev_id_);
+  frame->data[1]->SetMluDevContext(dev_id_);
+  void* src_y = const_cast<void*>(frame->data[0]->GetMluData());
+  void* src_uv = const_cast<void*>(frame->data[1]->GetMluData());
   QueuingTicket ticket = rcop_res_->PickUpTicket();
   std::shared_ptr<RCOpValue> value = rcop_res_->WaitResourceByTicket(&ticket);
   if (!rcop_res_->Initialized()) {
@@ -93,7 +100,7 @@ std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<
     uint32_t dst_h = model_->InputShapes()[0].h;
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id_);
-    mlu_ctx.ConfigureForThisThread();
+    mlu_ctx.BindDevice();
     edk::CoreVersion core_ver = mlu_ctx.GetCoreVersion();
     rcop_res_->Init(dst_w, dst_h, frame->fmt, core_ver);
   } else {
@@ -128,9 +135,13 @@ ScalerBatchingStage::~ScalerBatchingStage() {}
 
 void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx,
                                           const IOResValue& value) {
-  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(finfo->datas[CNDataFramePtrKey]);
-  void* src_y = frame->data[0]->GetMutableMluData();
-  void* src_uv = frame->data[1]->GetMutableMluData();
+  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(finfo);
+
+  // make sure device_id set
+  frame->data[0]->SetMluDevContext(0);
+  frame->data[1]->SetMluDevContext(0);
+  void* src_y = const_cast<void*>(frame->data[0]->GetMluData());
+  void* src_uv = const_cast<void*>(frame->data[1]->GetMluData());
   void* dst = value.datas[0].Offset(batch_idx);
   cncodecWorkInfo work_info;
   cncodecFrame src_frame;

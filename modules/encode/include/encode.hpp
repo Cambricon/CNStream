@@ -68,7 +68,7 @@ class Encode : public Module, public ModuleCreator<Encode> {
    *                 Supported values are ``mlu`` and ``cpu``.
    *   codec_type:   Optional. The codec type. The default codec_type is h264.
    *                 Supported values are ``jpeg``, ``h264`` and ``hevc``.
-   *   preproc_type: Optional. Preprocessing data on cpu or mlu(mlu is not supported yet). The default preproc_type is cpu.
+   *   preproc_type: Optional. Preprocess data on cpu or mlu(mlu is not supported yet). The default preproc_type is cpu.
    *                 Supported value is ``cpu``.
    * 
    *   use_ffmpeg:   Optional.Do resize and color space convert using ffmpeg. The default use_ffmpeg is false.

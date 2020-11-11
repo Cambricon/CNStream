@@ -56,7 +56,7 @@ std::vector<std::shared_ptr<InferTask>> H2DBatchingDoneStage::BatchingDone(const
     edk::MluMemoryOp mem_op;
     mem_op.SetLoader(this->model_);
 
-    mem_op.MemcpyInputH2D(mlu_value.ptrs, cpu_value.ptrs, 1);
+    mem_op.MemcpyInputH2D(mlu_value.ptrs, cpu_value.ptrs);
 
     this->cpu_input_res_->DeallingDone();
     this->mlu_input_res_->DeallingDone();
@@ -84,7 +84,7 @@ std::vector<std::shared_ptr<InferTask>> ResizeConvertBatchingDoneStage::Batching
     if (perf_manager_) {
       info = finfos.back().first;
       if (!info->IsEos()) {
-        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(info->datas[CNDataFramePtrKey]);
+        CNDataFramePtr frame = cnstream::GetCNDataFramePtr(info);;
         pts_str = std::to_string(frame->frame_id * 100 + info->GetStreamIndex());
         perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_start_time");
         perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_cnt",
@@ -120,10 +120,10 @@ InferBatchingDoneStage::InferBatchingDoneStage(std::shared_ptr<edk::ModelLoader>
     : BatchingDoneStage(model, batchsize, dev_id), model_input_fmt_(model_input_fmt),
       mlu_input_res_(mlu_input_res), mlu_output_res_(mlu_output_res) {
   easyinfer_ = std::make_shared<edk::EasyInfer>();
-#ifdef CNS_MLU100
-  easyinfer_->Init(model_, batchsize_, dev_id);
-#elif defined(CNS_MLU270) || defined(CNS_MLU220_SOC)
+#if defined(CNS_MLU270) || defined(CNS_MLU220_SOC)
   easyinfer_->Init(model_, 1, dev_id);
+#else
+    #error "Platform not supported yet";
 #endif
 }
 
@@ -147,7 +147,7 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
     if (perf_manager_) {
       info = finfos.back().first;
       if (!info->IsEos()) {
-        CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(info->datas[CNDataFramePtrKey]);
+        CNDataFramePtr frame = cnstream::GetCNDataFramePtr(info);
         pts_str = std::to_string(frame->frame_id * 100 + info->GetStreamIndex());
         perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_start_time");
         perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_cnt",
@@ -163,7 +163,7 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
         cnrtMemcpy(reinterpret_cast<void*>(cpu_input_value.data()), data.ptr, len, CNRT_MEM_TRANS_DIR_DEV2HOST);
         for (int  i = 0; i < frame_num; i++) {
           info = finfos[i].first;
-          CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(info->datas[CNDataFramePtrKey]);
+          CNDataFramePtr frame = cnstream::GetCNDataFramePtr(info);
           char *img = reinterpret_cast<char*>(cpu_input_value.data()) + batch_offset * i;
           cv::Mat bgr(data.shape.h, data.shape.w, CV_8UC3);
           cv::Mat bgra(data.shape.h, data.shape.w, CV_8UC4, img);
@@ -212,12 +212,61 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
     }
     this->easyinfer_->Run(mlu_input_value.ptrs, mlu_output_value.ptrs);
 
+    if (saving_infer_input_) {
+      int frame_num = finfos.size();
+
+      //alloc cpu memory to save model output
+      CpuOutputResource alloc_cpu_output_mem(this->easyinfer_->Loader(), batchsize_);
+      alloc_cpu_output_mem.Init();
+      IOResValue cpu_output_value = alloc_cpu_output_mem.GetDataDirectly();
+      edk::MluMemoryOp mem_op;
+      mem_op.SetLoader(this->easyinfer_->Loader());
+      mem_op.MemcpyOutputD2H(cpu_output_value.ptrs, mlu_output_value.ptrs);
+
+      for (size_t i = 0; i < mlu_input_value.datas.size(); ++i) {
+        for (int j = 0; j < frame_num; ++j) {
+          std::shared_ptr<InferData> iodata(new (std::nothrow) InferData);
+          iodata->input_height_ = mlu_input_value.datas[i].shape.h;
+          iodata->input_width_ = mlu_input_value.datas[i].shape.w;
+
+          //infer model input_fmt only support RBGA32, ARGB32, BGRA32, ABGR32
+          iodata->input_size_ = iodata->input_height_ * iodata->input_width_ * 4;
+          iodata->input_fmt_ = model_input_fmt_;
+          iodata->output_num_ = cpu_output_value.datas.size();
+          iodata->output_size_ = cpu_output_value.datas[0].shape.hwc();
+
+          // save model input 
+          iodata->input_cpu_addr_ = cnCpuMemAlloc(iodata->input_size_);
+          cnrtMemcpy(iodata->input_cpu_addr_.get(), mlu_input_value.datas[i].Offset(j), iodata->input_size_,
+                     CNRT_MEM_TRANS_DIR_DEV2HOST);
+
+          // save model output 
+          for (size_t k = 0; k < iodata->output_num_; ++k) {
+            std::shared_ptr<void> output_cpu_addr = cnCpuMemAlloc(iodata->output_size_ * sizeof(float*));
+            memcpy(output_cpu_addr.get(), cpu_output_value.datas[k].Offset(j), sizeof(float*) * iodata->output_size_);
+            iodata->output_cpu_addr_.push_back(output_cpu_addr);
+          }
+
+          //save iodata
+          auto data_map = GetCNInferDataPtr(finfos[j].first);
+          if (data_map->datas_map_.find(module_name_) != data_map->datas_map_.end()) {
+            data_map->datas_map_[module_name_].push_back(iodata);
+          } else {
+            std::vector<std::shared_ptr<InferData>> vec{iodata};
+            data_map->datas_map_[module_name_] = vec;
+          }
+        }
+      }
+      alloc_cpu_output_mem.Destroy();
+    }
+    
     if (perf_manager_) {
       perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_end_time");
     }
 
     this->mlu_input_res_->DeallingDone();
     this->mlu_output_res_->DeallingDone();
+
     return 0;
   });
   tasks.push_back(task);
@@ -236,10 +285,10 @@ std::vector<std::shared_ptr<InferTask>> D2HBatchingDoneStage::BatchingDone(const
     IOResValue cpu_output_value = this->cpu_output_res_->WaitResourceByTicket(&cor_ticket);
     edk::MluMemoryOp mem_op;
     mem_op.SetLoader(this->model_);
-#ifdef CNS_MLU100
-    mem_op.MemcpyOutputD2H(cpu_output_value.ptrs, mlu_output_value.ptrs, this->batchsize_);
-#elif defined(CNS_MLU270) || defined(CNS_MLU220_SOC)
-    mem_op.MemcpyOutputD2H(cpu_output_value.ptrs, mlu_output_value.ptrs, 1);
+#if defined(CNS_MLU270) || defined(CNS_MLU220_SOC)
+    mem_op.MemcpyOutputD2H(cpu_output_value.ptrs, mlu_output_value.ptrs);
+#else
+    #error "Platform not supported yet";
 #endif
     this->mlu_output_res_->DeallingDone();
     this->cpu_output_res_->DeallingDone();
@@ -284,7 +333,9 @@ std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::Batchin
       for (size_t output_idx = 0; output_idx < cpu_output_value.datas.size(); ++output_idx) {
         net_outputs.push_back(reinterpret_cast<float*>(cpu_output_value.datas[output_idx].Offset(bidx)));
       }
-      this->postprocessor_->Execute(net_outputs, this->model_, finfo.first);
+      if (!cnstream::IsStreamRemoved(finfo.first->stream_id)) {
+        this->postprocessor_->Execute(net_outputs, this->model_, finfo.first);
+      }
       cpu_output_res->DeallingDone();
       return 0;
     });
@@ -360,7 +411,9 @@ std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjB
       for (size_t output_idx = 0; output_idx < cpu_output_value.datas.size(); ++output_idx) {
         net_outputs.push_back(reinterpret_cast<float*>(cpu_output_value.datas[output_idx].Offset(bidx)));
       }
-      this->postprocessor_->Execute(net_outputs, this->model_, finfo.first, obj);
+      if (!cnstream::IsStreamRemoved(finfo.first->stream_id)) {
+        this->postprocessor_->Execute(net_outputs, this->model_, finfo.first, obj);
+      }
       cpu_output_res->DeallingDone();
       return 0;
     });

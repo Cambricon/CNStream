@@ -64,7 +64,8 @@ int PostprocFakeYolov3::Execute(const std::vector<float*>& net_outputs, const st
   auto box_num = data[0];
   data += 64;
 
-  cnstream::CNObjsVec objs;
+  cnstream::CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(package);
+  cnstream::CNObjsVec &objs = objs_holder->objs_;
   for (decltype(box_num) bi = 0; bi < box_num; ++bi) {
     if (threshold_ > 0 && data[2] < threshold_) continue;
     std::shared_ptr<cnstream::CNInferObject> object = std::make_shared<cnstream::CNInferObject>();
@@ -78,6 +79,5 @@ int PostprocFakeYolov3::Execute(const std::vector<float*>& net_outputs, const st
     objs.push_back(object);
     data += 7;
   }
-  package->datas[cnstream::CNObjsVecKey] = objs;
   return 0;
 }

@@ -21,18 +21,18 @@
 # 1. build image
 # (1) build image without neuware and cnstream: docker build -f Dockerfile.CentOS -t centos_cnstream:v1 .
 # (2) build image with neuware installed and without cnstream:
-#   a. make sure the neuware_package is in your current directory
-#   b. docker build -f Dockerfile.CentOS --build-arg neuware_package=${neuware_package_name} -t centos_cnstream:v1 .
+#   a. make sure the toolkit_package is in your current directory
+#   b. docker build -f Dockerfile.CentOS --build-arg toolkit_package=${toolkit_package_name} -t centos_cnstream:v1 .
 # (3) build image with neuware installed and with cnstream code built:
-#   a. make sure the neuware_package is in your current directory
-#   b. docker build -f Dockerfile.CentOS --build-arg neuware_package=${neuware_package_name} --build-arg with_cnstream_code=yes -t centos_cnstream:v1 .
+#   a. make sure the toolkit_package is in your current directory
+#   b. docker build -f Dockerfile.CentOS --build-arg toolkit_package=${toolkit_package_name} --build-arg with_cnstream_code=yes -t centos_cnstream:v1 .
 # 2. start container: docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace centos_cnstream:v1
 
 FROM centos:7.6.1810
 
 MAINTAINER <Cambricon, Inc.>
 
-ARG neuware_package=""
+ARG toolkit_package=""
 ARG mlu_platform=MLU270
 ARG with_cnstream_code=no
 
@@ -51,10 +51,10 @@ RUN  yum install -y wget && \
 
 COPY . /tmp/
 # install neuware, git clone cnstream from gitee and build
-RUN if [ -n "$neuware_package" ]; then \
-      yum install -y /tmp/$neuware_package && \
-      yum install -y cnrt cnml cncodec cndev cndrv cnplugin && \
-      rm -rf /tmp/$neuware_package; \
+RUN if [ -n "$toolkit_package" ]; then \
+      yum install -y /tmp/$toolkit_package && \
+      yum install -y cnrt cncodec cndev cndrv && \
+      rm -rf /tmp/$toolkit_package; \
       if [ "$with_cnstream_code" = "yes" ]; then \
         cd /root && git clone https://gitee.com/SolutionSDK/CNStream.git CNStream && \
         cd /root/CNStream && mkdir build && cd build &&\

@@ -27,8 +27,6 @@
 
 #include "cnstream_logging.hpp"
 
-#define DEFAULT_MODULE_CATEGORY SOURCE
-
 namespace cnstream {
 
 DataSource::DataSource(const std::string &name) : SourceModule(name) {
@@ -79,13 +77,13 @@ bool DataSource::Open(ModuleParamSet paramSet) {
     } else if (out_type == "mlu") {
       param_.output_type_ = OUTPUT_MLU;
     } else {
-      MLOG(ERROR) << "output_type " << paramSet["output_type"] << " not supported";
+      LOGE(SOURCE) << "output_type " << paramSet["output_type"] << " not supported";
       return false;
     }
     if (param_.output_type_ == OUTPUT_MLU) {
       param_.device_id_ = GetDeviceId(paramSet);
       if (param_.device_id_ < 0) {
-        MLOG(ERROR) << "output_type MLU : device_id must be set";
+        LOGE(SOURCE) << "output_type MLU : device_id must be set";
         return false;
       }
     }
@@ -97,7 +95,7 @@ bool DataSource::Open(ModuleParamSet paramSet) {
     ss << paramSet["interval"];
     ss >> interval;
     if (interval <= 0) {
-      MLOG(ERROR) << "interval : invalid";
+      LOGE(SOURCE) << "interval : invalid";
       return false;
     }
     param_.interval_ = interval;
@@ -110,13 +108,13 @@ bool DataSource::Open(ModuleParamSet paramSet) {
     } else if (dec_type == "mlu") {
       param_.decoder_type_ = DECODER_MLU;
     } else {
-      MLOG(ERROR) << "decoder_type " << paramSet["decoder_type"] << " not supported";
+      LOGE(SOURCE) << "decoder_type " << paramSet["decoder_type"] << " not supported";
       return false;
     }
     if (dec_type == "mlu") {
       param_.device_id_ = GetDeviceId(paramSet);
       if (param_.device_id_ < 0) {
-        MLOG(ERROR) << "decoder_type MLU : device_id must be set";
+        LOGE(SOURCE) << "decoder_type MLU : device_id must be set";
         return false;
       }
     }
@@ -161,41 +159,41 @@ bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
-      MLOG(WARNING) << "[DataSource] Unknown param: " << it.first;
+      LOGW(SOURCE) << "[DataSource] Unknown param: " << it.first;
     }
   }
   int device_id = GetDeviceId(paramSet);
   if (paramSet.find("output_type") != paramSet.end()) {
     if (paramSet.at("output_type") != "cpu" && paramSet.at("output_type") != "mlu") {
-      MLOG(ERROR) << "[DataSource] [output_type] " << paramSet.at("output_type") << " not supported";
+      LOGE(SOURCE) << "[DataSource] [output_type] " << paramSet.at("output_type") << " not supported";
       ret = false;
     }
     if (paramSet.at("output_type") == "mlu" && device_id < 0) {
-      MLOG(ERROR) << "[DataSource] [output_type] MLU : device_id must be set";
+      LOGE(SOURCE) << "[DataSource] [output_type] MLU : device_id must be set";
       ret = false;
     }
   }
 
   std::string err_msg;
   if (!checker.IsNum({"interval", "input_buf_number", "output_buf_number"}, paramSet, err_msg, true)) {
-    MLOG(ERROR) << "[DataSource] " << err_msg;
+    LOGE(SOURCE) << "[DataSource] " << err_msg;
     ret = false;
   }
 
   if (paramSet.find("decoder_type") != paramSet.end()) {
     std::string dec_type = paramSet.at("decoder_type");
     if (dec_type != "cpu" && dec_type != "mlu") {
-      MLOG(ERROR) << "[DataSource] [decoder_type] " << dec_type << " not supported.";
+      LOGE(SOURCE) << "[DataSource] [decoder_type] " << dec_type << " not supported.";
       ret = false;
     }
 
     if (dec_type == "mlu" && device_id < 0) {
-      MLOG(ERROR) << "[DataSource] [decoder_type] MLU : device_id must be set";
+      LOGE(SOURCE) << "[DataSource] [decoder_type] MLU : device_id must be set";
       ret = false;
     }
     if (dec_type == "mlu" && paramSet.find("reuse_cndec_buf") != paramSet.end()) {
       if (paramSet.at("reuse_cndec_buf") != "true" && paramSet.at("reuse_cndec_buf") != "false") {
-        MLOG(ERROR) << "[DataSource] [reuse_cndec_buf] should be true or false";
+        LOGE(SOURCE) << "[DataSource] [reuse_cndec_buf] should be true or false";
         ret = false;
       }
     }

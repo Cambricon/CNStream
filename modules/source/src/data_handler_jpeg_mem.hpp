@@ -27,22 +27,18 @@
 #include <thread>
 #include <mutex>
 
-#include "data_source.hpp"
-#include "device/mlu_context.h"
-#include "ffmpeg_decoder.hpp"
 #include "cnstream_logging.hpp"
-#include "ffmpeg_parser.hpp"
 #include "data_handler_util.hpp"
-
-#define DEFAULT_MODULE_CATEGORY SOURCE
+#include "data_source.hpp"
+#include "util/video_decoder.hpp"
 
 namespace cnstream {
 
-class ESJpegMemHandlerImpl : public IHandler {
+class ESJpegMemHandlerImpl : public IDecodeResult, public SourceRender {
  public:
-  explicit ESJpegMemHandlerImpl(DataSource *module, ESJpegMemHandler &handler,  // NOLINT
+  explicit ESJpegMemHandlerImpl(DataSource *module, ESJpegMemHandler *handler,
                                 int max_width, int max_height)
-    : module_(module), handler_(handler), max_width_(max_width), max_height_(max_height) {
+    : SourceRender(handler), module_(module), handler_(*handler), max_width_(max_width), max_height_(max_height) {
       stream_id_ = handler_.GetStreamId();
   }
 
@@ -52,6 +48,11 @@ class ESJpegMemHandlerImpl : public IHandler {
   void Close();
 
   int Write(ESPacket *pkt);
+
+  // IDecodeResult methods
+  void OnDecodeError(DecodeErrorCode error_code) override;
+  void OnDecodeFrame(DecodeFrame *frame) override;
+  void OnDecodeEos() override;
 
  private:
   DataSource *module_ = nullptr;
@@ -64,53 +65,14 @@ class ESJpegMemHandlerImpl : public IHandler {
 #ifdef UNIT_TEST
  public:  // NOLINT
 #endif
-  bool PrepareResources();
-  void ClearResources();
-  bool Process();
-  bool Extract();
-  void DecodeLoop();
+  bool InitDecoder();
+  bool ProcessImage(ESPacket *pkt);
 
  private:
-  /**/
-  std::atomic<int> running_{0};
-  std::thread thread_;
-  bool eos_sent_ = false;
-
-  BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
-  /*
-   * Ensure that the queue_ is not deleted when the push is blocked.
-   */
-  std::mutex queue_mutex_;
-
   std::shared_ptr<Decoder> decoder_ = nullptr;
   // maximum resolution 8K
   int max_width_ = 7680;
   int max_height_ = 4320;
-  ParserHelper* parser_ = nullptr;
-
- public:
-  void SendFlowEos() override {
-    if (eos_sent_) return;
-    auto data = CreateFrameInfo(true);
-    if (!data) {
-      MLOG(ERROR) << "SendFlowEos: Create CNFrameInfo failed while received eos. stream id is " << stream_id_;
-      return;
-    }
-    SendFrameInfo(data);
-    eos_sent_ = true;
-  }
-
-  std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) override {
-    return handler_.CreateFrameInfo(eos);
-  }
-
-  bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) override {
-    return handler_.SendData(data);
-  }
-
-  const DataSourceParam& GetDecodeParam() const override {
-    return param_;
-  }
 
 #ifdef UNIT_TEST
  public:  // NOLINT
@@ -120,5 +82,4 @@ class ESJpegMemHandlerImpl : public IHandler {
 
 }  // namespace cnstream
 
-#undef DEFAULT_MODULE_CATEGORY
 #endif  // MODULES_SOURCE_HANDLER_JPEG_MEM_HPP_

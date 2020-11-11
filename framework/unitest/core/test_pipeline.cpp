@@ -376,25 +376,25 @@ void TestProcessFailure(const std::vector<std::list<int>>& neighbor_list, int pr
   provider->StopSendData();
 }
 
-// TEST(CorePipeline, Pipeline_TestProcess0) { TestProcess(g_neighbor_lists[0]); }
+TEST(CorePipeline, Pipeline_TestProcess0) { TestProcess(g_neighbor_lists[0]); }
 
-// TEST(CorePipeline, Pipeline_TestProcess1) { TestProcess(g_neighbor_lists[1]); }
+TEST(CorePipeline, Pipeline_TestProcess1) { TestProcess(g_neighbor_lists[1]); }
 
-// TEST(CorePipeline, Pipeline_TestProcess2) { TestProcess(g_neighbor_lists[2]); }
+TEST(CorePipeline, Pipeline_TestProcess2) { TestProcess(g_neighbor_lists[2]); }
 
-// TEST(CorePipeline, Pipeline_TestProcess3) { TestProcess(g_neighbor_lists[3]); }
+TEST(CorePipeline, Pipeline_TestProcess3) { TestProcess(g_neighbor_lists[3]); }
 
-// TEST(CorePipeline, Pipeline_TestProcess4) { TestProcess(g_neighbor_lists[4]); }
+TEST(CorePipeline, Pipeline_TestProcess4) { TestProcess(g_neighbor_lists[4]); }
 
-// TEST(CorePipeline, Pipeline_TestProcessFailure0) { TestProcessFailure(g_neighbor_lists[0], -1); }
+TEST(CorePipeline, Pipeline_TestProcessFailure0) { TestProcessFailure(g_neighbor_lists[0], -1); }
 
-// TEST(CorePipeline, Pipeline_TestProcessFailure1) { TestProcessFailure(g_neighbor_lists[1], -1); }
+TEST(CorePipeline, Pipeline_TestProcessFailure1) { TestProcessFailure(g_neighbor_lists[1], -1); }
 
-// TEST(CorePipeline, Pipeline_TestProcessFailure2) { TestProcessFailure(g_neighbor_lists[2], -1); }
+TEST(CorePipeline, Pipeline_TestProcessFailure2) { TestProcessFailure(g_neighbor_lists[2], -1); }
 
-// TEST(CorePipeline, Pipeline_TestProcessFailure3) { TestProcessFailure(g_neighbor_lists[3], -1); }
+TEST(CorePipeline, Pipeline_TestProcessFailure3) { TestProcessFailure(g_neighbor_lists[3], -1); }
 
-// TEST(CorePipeline, Pipeline_TestProcessFailure4) { TestProcessFailure(g_neighbor_lists[4], -1); }
+TEST(CorePipeline, Pipeline_TestProcessFailure4) { TestProcessFailure(g_neighbor_lists[4], -1); }
 
 /*************************************************************************************************
                                         unit test for each function
@@ -577,13 +577,13 @@ TEST(CorePipeline, ParseByJSONFile) {
 
 TEST(CorePipeline, ParseByJSONFileError) {
   CNModuleConfig m_cfg;
-  // invaid file path
+  // invalid file path
   EXPECT_FALSE(m_cfg.ParseByJSONFile(""));
 }
 
 TEST(CorePipeline, DefaultBusWatch) {
   Pipeline pipeline("test pipeline");
-  TestModule module("test_moudle");
+  TestModule module("test_module");
   std::thread::id thread_id = std::this_thread::get_id();
   Event event = {EVENT_ERROR, "test_stream", "test event", "test_module", thread_id};
   EventHandleFlag e_handle_flag;
@@ -789,7 +789,7 @@ TEST(CorePipeline, StartPipelineFailed) {
   EXPECT_FALSE(pipeline.GetEventBus()->IsRunning());
   EXPECT_FALSE(pipeline.IsRunning());
 
-  // pipeline is not runnning, return true directly
+  // pipeline is not running, return true directly
   EXPECT_TRUE(pipeline.Stop());
 }
 
@@ -935,14 +935,14 @@ TEST(CorePipeline, TaskLoopProcessFailed) {
 }
 
 TEST(CorePipeline, TaskLoopProcessHasTrans) {
-  // down node process() will return 0, which means success. And moudle should transmit data by itself.
+  // down node process() will return 0, which means success. And module should transmit data by itself.
   auto up_node = std::make_shared<TestModule>("up_node");
   auto down_node = std::make_shared<TestModule>("down_node", 1, true);
   RunTaskLoop(up_node, down_node);
 }
 
 TEST(CorePipeline, TaskLoopProcessHasTransFailed) {
-  // down node process() will return 0, which means success. And moudle should transmit data by itself.
+  // down node process() will return 0, which means success. And module should transmit data by itself.
   // However, the module can not transmit data, which is not right. So TaskLoop() will return.
   auto up_node = std::make_shared<TestModule>("up_node");
   auto down_node = std::make_shared<TestModule>("down_node", 1);
@@ -1100,12 +1100,10 @@ TEST(CorePipeline, CreatePerfManager) {
   EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, ""));
   EXPECT_TRUE(pipeline.Start());
   EXPECT_TRUE(pipeline.Stop());
-  remove(gTestPerfDir.c_str());
   PerfManager::CreateDir(gTestPerfDir);
   EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, ""));
   EXPECT_TRUE(pipeline.Start());
   EXPECT_TRUE(pipeline.Stop());
-  remove(gTestPerfDir.c_str());
   EXPECT_TRUE(pipeline.CreatePerfManager(stream_ids, ""));
   EXPECT_TRUE(pipeline.Start());
   EXPECT_TRUE(pipeline.Stop());
