@@ -85,8 +85,8 @@ TEST(PerfCalculator, CalcLatency) {
   size_t min = ~(0);
   size_t total = 0;
   for (int i = 0; i < 3; i++) {
-    sql->Insert(table_name, "ID,a,b",
-                std::to_string(i) + "," + std::to_string(start[i]) + "," + std::to_string(end[i]));
+    sql->Insert(table_name, {"ID", "a", "b"},
+                {std::to_string(i), std::to_string(start[i]), std::to_string(end[i])});
     size_t duration = end[i] - start[i];
     if (duration > max) max = duration;
     if (duration < min) min = duration;
@@ -105,7 +105,7 @@ TEST(PerfCalculator, CalcLatency) {
     size_t start = TimeStamp::Current();
     std::this_thread::sleep_for(std::chrono::microseconds(10 + i));
     size_t end = TimeStamp::Current();
-    sql->Insert(table_name, "ID,a,b", std::to_string(i) + "," + std::to_string(start) + "," + std::to_string(end));
+    sql->Insert(table_name, {"ID", "a", "b"}, {std::to_string(i), std::to_string(start), std::to_string(end)});
     size_t duration = end - start;
     total += duration;
     if (duration > max) max = duration;
@@ -150,8 +150,8 @@ TEST(PerfCalculatorForModule, CalcThroughput) {
 
   for (int i = 0; i < 3; i++) {
     sql->Insert(
-        table_name, "ID,a,b,th",
-        std::to_string(i) + "," + std::to_string(start[i]) + "," + std::to_string(end[i]) + ",'" + th_ids[i] + "'");
+        table_name, {"ID", "a", "b", "th"},
+        {std::to_string(i), std::to_string(start[i]), std::to_string(end[i]), th_ids[i]});
   }
   PerfStats stats = perf_cal.CalcThroughput("", table_name, {keys[0], keys[1], keys[2]});
 
@@ -200,7 +200,7 @@ TEST(PerfCalculatorForPipeline, CalcThroughput) {
   uint32_t data_num_1 = 3;
   size_t end[3] = {3000, 8000, 11000};
   for (int i = 0; i < 3; i++) {
-    sql->Insert(table_name, "ID,end", std::to_string(i) + "," + std::to_string(end[i]));
+    sql->Insert(table_name, {"ID", "end"}, {std::to_string(i), std::to_string(end[i])});
   }
   PerfStats stats = perf_cal.CalcThroughput(sql_name, table_name, {key});
 
@@ -212,7 +212,7 @@ TEST(PerfCalculatorForPipeline, CalcThroughput) {
   for (uint32_t i = data_num_1; i < data_num_1 + data_num_2; i++) {
     std::this_thread::sleep_for(std::chrono::microseconds(10 + i));
     end_ts = TimeStamp::Current();
-    sql->Insert(table_name, "ID,end", std::to_string(i) + "," + std::to_string(end_ts));
+    sql->Insert(table_name, {"ID", "end"}, {std::to_string(i), std::to_string(end_ts)});
   }
 
   stats = perf_cal.CalcThroughput(sql_name, table_name, {key});
@@ -262,7 +262,7 @@ TEST(PerfCalculatorForPipeline, CalcTotalThroughput) {
     perf_cal.GetPerfUtils()->AddSql(sql_name[i], sql_vec[i]);
     for (uint32_t data_i = 0; data_i < data0.size(); data_i++) {
       EXPECT_TRUE(
-          sql_vec[i]->Insert(table_name, "ID,end", std::to_string(data_i) + "," + std::to_string(data[i][data_i])));
+          sql_vec[i]->Insert(table_name, {"ID", "end"}, {std::to_string(data_i), std::to_string(data[i][data_i])}));
     }
   }
 
@@ -313,11 +313,11 @@ TEST(PerfCalculatorForInfer, CalcThroughput) {
   size_t end[6] = {3000, 8000, 11000, 4000, 5000, 9000};
 
   for (int i = 0; i < 3; i++) {
-    sql->Insert(table_name[0], "ID,a,b",
-                std::to_string(i) + "," + std::to_string(start[i]) + "," + std::to_string(end[i]));
+    sql->Insert(table_name[0], {"ID", "a", "b"},
+                {std::to_string(i), std::to_string(start[i]), std::to_string(end[i])});
     sql->Insert(
-        table_name[1], "ID,a,b",
-        std::to_string(i) + "," + std::to_string(start[data_num + i]) + "," + std::to_string(end[data_num + i]));
+        table_name[1], {"ID", "a", "b"},
+        {std::to_string(i), std::to_string(start[data_num + i]), std::to_string(end[data_num + i])});
   }
   PerfStats stats_0 = perf_cal.CalcThroughput(sql_name, table_name[0], {keys[0], keys[1]});
   PerfStats stats_1 = perf_cal.CalcThroughput(sql_name, table_name[1], {keys[0], keys[1]});

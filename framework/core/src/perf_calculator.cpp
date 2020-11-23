@@ -38,7 +38,7 @@
 namespace cnstream {
 
 void PrintLatency(const PerfStats &stats, uint32_t width) {
-  std::cout << std::right << "  -- [latency] avg: " << std::setw(4) << std::setfill(' ')
+  std::cout << std::right << " -- [latency] avg: " << std::setw(4) << std::setfill(' ')
             << stats.latency_avg / 1000 << "." << stats.latency_avg % 1000 / 100
             << "ms, min: " << std::setw(4) << std::setfill(' ')
             << stats.latency_min / 1000 << "." << stats.latency_min % 1000 / 100
@@ -211,7 +211,8 @@ PerfStats PerfCalculator::CalcLatency(const std::string &sql_name, const std::st
   size_t now = perf_utils_->FindMaxValue(sql_name, perf_type, end_key);
 
   // Get data
-  std::string condition = end_key + " > " + std::to_string(pre_time) + " AND " + end_key + " <= " + std::to_string(now);
+  std::string condition = "[" + end_key + "] > " + std::to_string(pre_time) +
+                          " AND [" + end_key + "] <= " + std::to_string(now);
 
   std::vector<DbItem> item_vec = perf_utils_->GetItems(sql_name, perf_type, keys, condition);
 
@@ -259,11 +260,12 @@ void PerfCalculatorForModule::StoreUnprocessedData(const std::string &sql_name, 
       pre_time_map_[map_key] = 0;
     }
     size_t pre_time = pre_time_map_[map_key];
-    std::string condition = end_key + " > " + std::to_string(pre_time) + " and " + thread_key + " = '" + th_id + "'";
+    std::string condition = "[" + end_key + "] > " + std::to_string(pre_time) +
+                            " AND [" + thread_key + "] = '" + th_id + "'";
     std::vector<DbItem> items = perf_utils_->GetItems(sql_name, perf_type, {start_key, end_key, thread_key}, condition);
     for (auto it : items) {
       if (it.second.size() != 3) { continue; }
-      it.second[2] = "'" + it.second[2] + "'";
+      it.second[2] = it.second[2];
       perf_utils_->Record("_" + perf_type + "_throughput", perf_type, {start_key, end_key, thread_key}, it.second);
     }
   }
@@ -300,7 +302,8 @@ PerfStats PerfCalculatorForModule::CalcThroughput(const std::string &sql_name, c
     }
 
     std::vector<size_t> max_values = perf_utils_->FindMaxValues(
-        perf_type, end_key, thread_key + "='" + th_id + "' and " + end_key + " > " + std::to_string(pre_time));
+        perf_type, end_key,
+        "[" + thread_key + "] = '" + th_id + "' AND [" + end_key + "] > " + std::to_string(pre_time));
     size_t now = ~(size_t(0));
     for (auto it : max_values) {
       if (it != 0 && it < now) {
@@ -312,10 +315,10 @@ PerfStats PerfCalculatorForModule::CalcThroughput(const std::string &sql_name, c
     }
 
     // Get Data
-    std::vector<DbItem> data =
-        perf_utils_->GetItemsFromAllDb(perf_type, {start_key, end_key},
-                                       thread_key + "='" + th_id + "' and " + end_key + " <= " + std::to_string(now) +
-                                           " and " + end_key + " > " + std::to_string(pre_time));
+    std::vector<DbItem> data = perf_utils_->GetItemsFromAllDb(
+        perf_type, {start_key, end_key},
+        "[" + thread_key + "] = '" + th_id + "' AND [" + end_key + "] <= " + std::to_string(now) +
+        " AND [" + end_key + "] > " + std::to_string(pre_time));
 
     std::vector<DbIntegerItem> integer_data = perf_utils_->ToInteger(data);
     PerfUtils::Sort(&integer_data,
@@ -399,7 +402,7 @@ void PerfCalculatorForPipeline::StoreUnprocessedData(const std::string &sql_name
     pre_time_map_[map_key] = 0;
   }
   size_t pre_time = pre_time_map_[map_key];
-  std::string condition = key + " > " + std::to_string(pre_time);
+  std::string condition = "[" + key + "] > " + std::to_string(pre_time);
   std::vector<DbItem> items = perf_utils_->GetItems(sql_name, perf_type, {key}, condition);
   for (auto it : items) {
     if (it.second.size() != 1) { continue; }
@@ -437,11 +440,11 @@ PerfStats PerfCalculatorForPipeline::CalcThroughput(const std::string &sql_name,
     if (first) {
       frame_cnt = perf_utils_->GetCount(
           sql_name, perf_type, end_key,
-          end_key + " >= " + std::to_string(pre_time) + " and " + end_key + " <=" + std::to_string(end_time));
+          "[" + end_key + "] >= " + std::to_string(pre_time) + " AND [" + end_key + "] <=" + std::to_string(end_time));
     } else {
       frame_cnt = perf_utils_->GetCount(
           sql_name, perf_type, end_key,
-          end_key + " > " + std::to_string(pre_time) + " and " + end_key + " <=" + std::to_string(end_time));
+          "[" + end_key + "] > " + std::to_string(pre_time) + " AND [" + end_key + "] <=" + std::to_string(end_time));
     }
   } else {
     // calculate throughput of all streams
@@ -472,11 +475,11 @@ PerfStats PerfCalculatorForPipeline::CalcThroughput(const std::string &sql_name,
     if (first) {
       frame_cnts = perf_utils_->GetCountFromAllDb(
           perf_type, end_key,
-          end_key + " >= " + std::to_string(pre_time) + " and " + end_key + " <=" + std::to_string(end_time));
+          "[" + end_key + "] >= " + std::to_string(pre_time) + " AND [" + end_key + "] <=" + std::to_string(end_time));
     } else {
       frame_cnts = perf_utils_->GetCountFromAllDb(
           perf_type, end_key,
-          end_key + " > " + std::to_string(pre_time) + " and " + end_key + " <=" + std::to_string(end_time));
+          "[" + end_key + "] > " + std::to_string(pre_time) + " AND [" + end_key + "] <=" + std::to_string(end_time));
     }
     frame_cnt = PerfUtils::Sum(frame_cnts);
   }
@@ -527,8 +530,9 @@ PerfStats PerfCalculatorForInfer::CalcThroughput(const std::string &sql_name, co
     now = perf_utils_->FindMaxValue(sql_name, perf_type, end_key);
 
     // Get Data
-    std::string condition = end_key + " > " + std::to_string(pre_time) + " AND " + end_key +
-                            " <= " + std::to_string(now) + " AND " + start_key + " > 0";
+    std::string condition = "[" + end_key + "] > " + std::to_string(pre_time) +
+                            " AND [" + end_key + "] <= " + std::to_string(now) +
+                            " AND [" + start_key + "] > 0";
 
     std::vector<DbItem> item_vec = perf_utils_->GetItems(sql_name, perf_type, keys, condition);
     integer_item = PerfUtils::ToInteger(item_vec);
@@ -551,8 +555,9 @@ PerfStats PerfCalculatorForInfer::CalcThroughput(const std::string &sql_name, co
     now = PerfUtils::Max(max_values);
 
     // Get Data
-    std::string condition = end_key + " > " + std::to_string(pre_time) + " AND " + end_key +
-                            " <= " + std::to_string(now) + " AND " + start_key + " > 0";
+    std::string condition = "[" + end_key + "] > " + std::to_string(pre_time) +
+                            " AND [" + end_key + "] <= " + std::to_string(now) +
+                            " AND [" + start_key + "] > 0";
 
     std::vector<DbItem> item_vec;
     for (auto thread_id : thread_ids) {
@@ -736,7 +741,7 @@ std::set<std::string> PerfUtils::GetThreadId(std::string name, std::string perf_
       return ids;
     }
 
-    std::string select_sql = " select distinct " + th_key + " from " + perf_type + ";";
+    std::string select_sql = " select distinct [" + th_key + "] from [" + perf_type + "];";
     th_vec = SearchFromDatabase(sql_map_[name], select_sql);
   }
   for (auto it : th_vec) {
@@ -766,11 +771,11 @@ std::vector<DbItem> PerfUtils::GetItems(std::string name, std::string perf_type,
 
   std::string key_str = "";
   for (auto key : keys) {
-    key_str += key + ",";
+    key_str += "[" + key + "],";
   }
   key_str.pop_back();
 
-  std::string select_sql = " select " + key_str + " from " + perf_type + " where " + condition + ";";
+  std::string select_sql = " select " + key_str + " from [" + perf_type + "] where " + condition + ";";
   item_vec = SearchFromDatabase(sql_map_[name], select_sql);
   return item_vec;
 }
@@ -897,24 +902,13 @@ bool PerfUtils::CreateTable(std::shared_ptr<Sqlite> sql, std::string perf_type, 
 
 bool PerfUtils::Record(std::string sql_name, std::string perf_type, std::vector<std::string> keys,
                        std::vector<std::string>values) {
-  if (keys.size() != values.size()) {
-    LOG(ERROR) << "Record: The size of keys and values is not the same.";
-    return false;
-  }
-  std::string key_str, value_str;
-  for (uint32_t i = 0; i < keys.size(); i++) {
-    key_str += keys[i] + ",";
-    value_str += values[i] + ",";
-  }
-  key_str.pop_back();
-  value_str.pop_back();
   {
     std::lock_guard<std::mutex> lg(sql_map_lock_);
     if (!SqlIsExisted(sql_name)) {
       LOG(ERROR) << "sql '" << sql_name << "' is not exist.";
       return false;
     }
-    return sql_map_[sql_name]->Insert(perf_type, key_str, value_str);
+    return sql_map_[sql_name]->Insert(perf_type, keys, values);
   }
 }
 

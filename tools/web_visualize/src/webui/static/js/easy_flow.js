@@ -23,7 +23,7 @@ function showJsonConfig() {
     function showJson(callback) {
         callback = callback.replace(/[EIW][0-9]+.*:.*:.*:[0-9]+\]/gi, "")
         let callback_lines = callback.split(/[\n]/)
-        if (callback_lines[0] === "Check module config file successfully!") {
+        if (callback_lines.includes("Check module config file successfully!")) {
             $('#json-output').val(json_str);
         } else {
             $('#json-output').val("Json config is invalid.\nPlease click 'Check Result' to check.\nAnd modify your configuration.");
@@ -345,7 +345,7 @@ Chart.ready(() => {
             function genDone(callback) {
                 callback = callback.replace(/[EIW][0-9]+.*:.*:.*:[0-9]+\]/gi, "")
                 let callback_lines = callback.split(/[\n]/)
-                if (callback_lines[0] === "Check module config file successfully!") {
+                if (callback_lines.includes("Check module config file successfully!")) {
                     window.sessionStorage.setItem("designedJson", json);
                     window.location.href="/home";
                 } else {

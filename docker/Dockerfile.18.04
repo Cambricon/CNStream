@@ -19,11 +19,11 @@
 # *************************************************************************/
 
 # 1. build image
-# (1) build image without neuware and cnstream: docker build -f Dockerfile.18.04 -t ubuntu18_cnstream:v1 .
-# (2) build image with neuware installed and without cnstream:
+# (1) build image without cntoolkit and cnstream: docker build -f Dockerfile.18.04 -t ubuntu18_cnstream:v1 .
+# (2) build image with cntoolkit installed and without cnstream:
 #   a. make sure the toolkit_package is in your current directory
 #   b. docker build -f Dockerfile.18.04 --build-arg toolkit_package=${toolkit_package_name} -t ubuntu18_cnstream:v1 .
-# (3) build image with neuware installed and with cnstream code built:
+# (3) build image with cntoolkit installed and with cnstream code built:
 #   a. make sure the toolkit_package is in your current directory
 #   b. docker build -f Dockerfile.18.04 --build-arg toolkit_package=${toolkit_package_name} --build-arg with_cnstream_code=yes -t ubuntu18_cnstream:v1 .
 # 2. start container: docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
@@ -43,7 +43,7 @@ RUN sed -i "1i deb http://mirrors.aliyun.com/ubuntu/ bionic main restricted univ
     apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends apt-utils \
             libopencv-dev python2.7  python-dev \
             libsdl2-dev wget \ 
-            git build-essential cmake make vim \
+            git build-essential cmake make vim curl libcurl4-openssl-dev \
             libgoogle-glog-dev \
             openssh-server \
             lcov  \ 
@@ -53,7 +53,7 @@ RUN sed -i "1i deb http://mirrors.aliyun.com/ubuntu/ bionic main restricted univ
     rm -rf /var/lib/apt/lists/*
 
 COPY . /tmp/
-# install neuware, git clone cnstream from gitee and build
+# install cntoolkit, git clone cnstream from gitee and build
 RUN if [ -n "$toolkit_package" ]; then \
       dpkg -i /tmp/$toolkit_package && \
       apt -o Accquire::AllowInsecureRepositories=true update && \

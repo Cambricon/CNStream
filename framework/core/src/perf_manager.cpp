@@ -171,7 +171,7 @@ void PerfManager::InsertInfoToDb(const PerfInfo& info) {
   }
 
   if (sql_->Count(info.perf_type, info.primary_key, info.primary_key + "=" + info.primary_value) == 0) {
-    sql_->Insert(info.perf_type, info.primary_key + "," + info.key, info.primary_value + "," + info.value);
+    sql_->Insert(info.perf_type, {info.primary_key, info.key}, {info.primary_value, info.value});
   } else {
     sql_->Update(info.perf_type, info.primary_key, info.primary_value, info.key, info.value);
   }

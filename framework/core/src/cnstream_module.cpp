@@ -134,7 +134,7 @@ int Module::DoTransmitData(std::shared_ptr<CNFrameInfo> data) {
 int Module::DoProcess(std::shared_ptr<CNFrameInfo> data) {
   bool removed = IsStreamRemoved(data->stream_id);
   if (!removed) {
-    // For the case that module is implememted by a pipeline
+    // For the case that module is implemented by a pipeline
     if (data->payload && IsStreamRemoved(data->payload->stream_id)) {
       SetStreamRemoved(data->stream_id, true);
       removed = true;

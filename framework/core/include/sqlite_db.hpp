@@ -22,6 +22,7 @@
 #define MODULES_CORE_INCLUDE_SQLITE_DB_HPP_
 
 #include <string>
+#include <utility>
 #include <vector>
 
 
@@ -40,13 +41,13 @@ class Sqlite {
 
   bool CreateTable(std::string table_name, std::string primary_key, std::vector<std::string> key_names);
 
-  bool Insert(std::string table_name, std::string key_names, std::string values);
+  bool Insert(std::string table_name, std::vector<std::string> key_names, std::vector<std::string> values);
   bool Update(std::string table_name, std::string condition_key, std::string condition_value, std::string update_key,
               std::string update_value);
-  bool Delete(std::string table_name, std::string key_names, std::string values);
+  bool Delete(std::string table_name, std::string key_name, std::string value);
   bool Delete(std::string table_name, std::string condition);
 
-  bool Select(std::string table_name, std::string key_name, std::string condition,
+  bool Select(std::string table_name, std::vector<std::string> key_names, std::string condition,
               int (*callback)(void*, int, char**, char**), void* data);
   bool Select(std::string condition, int (*callback)(void*, int, char**, char**), void* data);
 
@@ -61,6 +62,8 @@ class Sqlite {
   std::string GetDbName();
 
  private:
+  std::string ConvertStrVecToDbString(const std::vector<std::string> &str_vec,
+                                      const std::pair<std::string, std::string> &boundary_symbol);
   sqlite3* db_ = nullptr;
 
   std::string db_name_;

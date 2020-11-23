@@ -87,7 +87,7 @@ class PerfManager {
   * Creates timestamp and then records the data into database.
   *
   * @param is_finished If true, indicates the frame has been processed by the module,
-                       and the end time will be reocorded to database.
+                       and the end time will be recorded to database.
   * @param perf_type The perf type.
   * @param module_name The module name.
   * @param pts The pts of the frame.

@@ -21,7 +21,6 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include <iostream>
 #include <string>
 #include <vector>
 
@@ -186,9 +185,9 @@ TEST(PerfSqlite, Insert) {
   std::vector<std::string> keys = {"key1", "key2", "key3"};
   EXPECT_TRUE(sql.CreateTable(table_name, primary_key, keys));
 
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "1, 1, 1, 1"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2", "2, 5, 5"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key2", "3, 10"));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"1", "1", "1", "1"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2"}, {"2", "5", "5"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key2"}, {"3", "10"}));
 
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(3));
   EXPECT_EQ(sql.Count(table_name, "key1"), unsigned(2));
@@ -212,17 +211,17 @@ TEST(PerfSqlite, InsertFailedCase) {
   std::vector<std::string> keys = {"key1", "key2", "key3"};
   EXPECT_TRUE(sql.CreateTable(table_name, primary_key, keys));
 
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "1, 1, 1, 1"));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"1", "1", "1", "1"}));
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(1));
 
-  // primary key value must be uniqued and not null
-  EXPECT_FALSE(sql.Insert(table_name, primary_key, "1"));
-  EXPECT_FALSE(sql.Insert(table_name, "key1", "1"));
+  // primary key value must be unique and not null
+  EXPECT_FALSE(sql.Insert(table_name, {primary_key}, {"1"}));
+  EXPECT_FALSE(sql.Insert(table_name, {"key1"}, {"1"}));
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(1));
 
   EXPECT_TRUE(sql.Close());
 
-  EXPECT_FALSE(sql.Insert(table_name, "key1", "1"));
+  EXPECT_FALSE(sql.Insert(table_name, {"key1"}, {"1"}));
   remove(gTestPerfFile.c_str());
 }
 
@@ -237,8 +236,8 @@ TEST(PerfSqlite, Update) {
   std::vector<std::string> keys = {"key1", "key2", "key3"};
   EXPECT_TRUE(sql.CreateTable(table_name, primary_key, keys));
 
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "1, 1, 1, 1"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "2, 2, 2, 2"));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"1", "1", "1", "1"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"2", "2", "2", "2"}));
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(2));
 
   EXPECT_TRUE(sql.Update(table_name, primary_key, "1", "key1", "10"));
@@ -261,7 +260,7 @@ TEST(PerfSqlite, UpdateFailedCase) {
   std::vector<std::string> keys = {"key1", "key2", "key3"};
   EXPECT_TRUE(sql.CreateTable(table_name, primary_key, keys));
 
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "1, 1, 1, 1"));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"1", "1", "1", "1"}));
   EXPECT_FALSE(sql.Update("", primary_key, "1", "key1", "10"));
   EXPECT_FALSE(sql.Update("wrong_table", primary_key, "1", "key1", "10"));
   EXPECT_FALSE(sql.Update(table_name, "wrong_key", "1", "key1", "10"));
@@ -282,9 +281,9 @@ TEST(PerfSqlite, Delete) {
   std::vector<std::string> keys = {"key1", "key2", "key3"};
   EXPECT_TRUE(sql.CreateTable(table_name, primary_key, keys));
 
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "1, 1, 1, 1"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "2, 2, 2, 2"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "3, 3, 3, 3"));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"1", "1", "1", "1"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"2", "2", "2", "2"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"3", "3", "3", "3"}));
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(3));
 
   EXPECT_TRUE(sql.Delete(table_name, primary_key, "1"));
@@ -308,7 +307,7 @@ TEST(PerfSqlite, DeleteFailedCase) {
   std::vector<std::string> keys = {"key1", "key2", "key3"};
   EXPECT_TRUE(sql.CreateTable(table_name, primary_key, keys));
 
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "1, 1, 1, 1"));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"1", "1", "1", "1"}));
 
   EXPECT_FALSE(sql.Delete("wrong_table", primary_key, "1"));
   EXPECT_FALSE(sql.Delete(table_name, "wrong_key", "1"));
@@ -338,19 +337,20 @@ TEST(PerfSqlite, Select) {
   std::vector<std::string> keys = {"key1", "key2", "key3"};
   EXPECT_TRUE(sql.CreateTable(table_name, primary_key, keys));
 
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "1, 1, 1, 1"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "2, 2, 2, 2"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "3, 3, 3, 3"));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"1", "1", "1", "1"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"2", "2", "2", "2"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"3", "3", "3", "3"}));
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(3));
 
   int data = 0;
-  EXPECT_TRUE(sql.Select(table_name, "key1,key2,key3", "", Callback, reinterpret_cast<void *>(&data)));
+  EXPECT_TRUE(sql.Select(table_name, {"key1", "key2", "key3"}, "", Callback, reinterpret_cast<void *>(&data)));
   EXPECT_EQ(data, 3);
   data = 0;
   EXPECT_TRUE(sql.Select("select key1,key2,key3 from " + table_name + ";", Callback, reinterpret_cast<void *>(&data)));
   EXPECT_EQ(data, 3);
   data = 0;
-  EXPECT_TRUE(sql.Select(table_name, "key1,key2,key3", "key1=1 or key2=2", Callback, reinterpret_cast<void *>(&data)));
+  EXPECT_TRUE(sql.Select(table_name, {"key1", "key2", "key3"}, "key1=1 or key2=2", Callback,
+              reinterpret_cast<void *>(&data)));
   EXPECT_EQ(data, 2);
   data = 0;
   EXPECT_TRUE(sql.Select("select key1,key2,key3 from " + table_name + " where key1=1 or key2=2;", Callback,
@@ -372,22 +372,22 @@ TEST(PerfSqlite, SelectFailedCase) {
   std::vector<std::string> keys = {"key1", "key2", "key3"};
   EXPECT_TRUE(sql.CreateTable(table_name, primary_key, keys));
 
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "1, 1, 1, 1"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "2, 2, 2, 2"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "3, 3, 3, 3"));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"1", "1", "1", "1"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"2", "2", "2", "2"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"3", "3", "3", "3"}));
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(3));
 
   int data = 0;
-  EXPECT_TRUE(sql.Select(table_name, "*", "", nullptr, reinterpret_cast<void *>(&data)));
+  EXPECT_TRUE(sql.Select(table_name, {"*"}, "", nullptr, reinterpret_cast<void *>(&data)));
   EXPECT_EQ(data, 0);
 
-  EXPECT_FALSE(sql.Select(table_name, "", "", Callback, reinterpret_cast<void *>(&data)));
-  EXPECT_FALSE(sql.Select("wrong_table", "*", "", Callback, reinterpret_cast<void *>(&data)));
+  EXPECT_FALSE(sql.Select(table_name, {""}, "", Callback, reinterpret_cast<void *>(&data)));
+  EXPECT_FALSE(sql.Select("wrong_table", {"*"}, "", Callback, reinterpret_cast<void *>(&data)));
 
   EXPECT_FALSE(sql.Select("select * from wrong_table;", Callback, reinterpret_cast<void *>(&data)));
 
   EXPECT_TRUE(sql.Close());
-  EXPECT_FALSE(sql.Select(table_name, "*", "key1=1 or key2=2", Callback, reinterpret_cast<void *>(&data)));
+  EXPECT_FALSE(sql.Select(table_name, {"*"}, "key1=1 or key2=2", Callback, reinterpret_cast<void *>(&data)));
   EXPECT_FALSE(sql.Select("select * from " + table_name + " where key1=1 or key2=2;", Callback,
                           reinterpret_cast<void *>(&data)));
   remove(gTestPerfFile.c_str());
@@ -404,9 +404,9 @@ TEST(PerfSqlite, FindMin) {
   std::vector<std::string> keys = {"key1", "key2", "key3"};
   EXPECT_TRUE(sql.CreateTable(table_name, primary_key, keys));
 
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "1, 10, 15, 3"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "2, 1, 10, 15"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "3, 15, 2, 10"));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"1", "10", "15", "3"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"2", "1", "10", "15"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"3", "15", "2", "10"}));
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(3));
 
   EXPECT_EQ(sql.FindMin(table_name, "key1"), unsigned(1));
@@ -448,9 +448,9 @@ TEST(PerfSqlite, FindMax) {
   std::vector<std::string> keys = {"key1", "key2", "key3"};
   EXPECT_TRUE(sql.CreateTable(table_name, primary_key, keys));
 
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "1, 10, 22, 1"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "2, 1, 10, 15"));
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "3, 21, 1, 23"));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"1", "10", "22", "1"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"2", "1", "10", "15"}));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"3", "21", "1", "23"}));
   EXPECT_EQ(sql.Count(table_name, primary_key), unsigned(3));
 
   EXPECT_EQ(sql.FindMax(table_name, "key1"), unsigned(21));
@@ -494,7 +494,7 @@ TEST(PerfSqlite, Count) {
 
   uint32_t cnt = 1000;
   for (uint32_t i = 0; i < cnt; i++) {
-    EXPECT_TRUE(sql.Insert(table_name, primary_key, std::to_string(i)));
+    EXPECT_TRUE(sql.Insert(table_name, {primary_key}, {std::to_string(i)}));
   }
   EXPECT_EQ(sql.Count(table_name, primary_key), cnt);
   EXPECT_EQ(sql.Count(table_name, primary_key, primary_key + ">=300"), cnt - 300);
@@ -515,7 +515,7 @@ TEST(PerfSqlite, CountInvalid) {
   std::vector<std::string> keys = {"key1", "key2", "key3"};
   EXPECT_TRUE(sql.CreateTable(table_name, primary_key, keys));
 
-  EXPECT_TRUE(sql.Insert(table_name, primary_key + ", key1, key2, key3", "1, 10, 22, 1"));
+  EXPECT_TRUE(sql.Insert(table_name, {primary_key, "key1", "key2", "key3"}, {"1", "10", "22", "1"}));
   EXPECT_EQ(sql.Count("wrong_table", primary_key), unsigned(0));
   EXPECT_EQ(sql.Count(table_name, "wrong_key"), unsigned(0));
 
@@ -537,7 +537,7 @@ TEST(PerfSqlite, BeginCommit) {
   sql.Begin();
   uint32_t cnt = 1000;
   for (uint32_t i = 0; i < cnt; i++) {
-    EXPECT_TRUE(sql.Insert(table_name, primary_key, std::to_string(i)));
+    EXPECT_TRUE(sql.Insert(table_name, {primary_key}, {std::to_string(i)}));
   }
   sql.Commit();
   EXPECT_EQ(sql.Count(table_name, primary_key), cnt);
