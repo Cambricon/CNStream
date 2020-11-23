@@ -1,4 +1,7 @@
+changes for 5.1.2
+* support aarch64
 changes for 5.1.1
+* fix multiple scale errors for preprocessing use mlu
 * cpu decoder support all pixel formats
 changes for 5.1.0
 * fix memory leak in inferencer module.(both mlu memory and cpu memory)

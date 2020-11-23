@@ -998,38 +998,38 @@ bool FFmpegCpuDecoder::Process(AVPacket *pkt, bool eos) {
 }
 
 bool FFmpegCpuDecoder::FrameCvt2Yuv420sp(AVFrame *frame, uint8_t *sp, int dst_stride, bool nv21) {
-  AVFrame *yuvj420_frame = frame;
+  AVFrame *yuv420_frame = frame;
   std::function<void()> clear_resources = NULL;
   if (frame->format != AV_PIX_FMT_YUV420P && frame->format != AV_PIX_FMT_YUVJ420P) {
-    yuvj420_frame = av_frame_alloc();
-    yuvj420_frame->width = frame->width;
-    yuvj420_frame->height = frame->height;
-    auto yuvj420_buffer = av_malloc(av_image_get_buffer_size(AV_PIX_FMT_YUVJ420P, frame->width, frame->height, 1));
-    av_image_fill_arrays(yuvj420_frame->data, yuvj420_frame->linesize, reinterpret_cast<uint8_t *>(yuvj420_buffer),
-                         AV_PIX_FMT_YUVJ420P, frame->width, frame->height, 1);
+    yuv420_frame = av_frame_alloc();
+    yuv420_frame->width = frame->width;
+    yuv420_frame->height = frame->height;
+    auto yuv420_buffer = av_malloc(av_image_get_buffer_size(AV_PIX_FMT_YUV420P, frame->width, frame->height, 1));
+    av_image_fill_arrays(yuv420_frame->data, yuv420_frame->linesize, reinterpret_cast<uint8_t *>(yuv420_buffer),
+                         AV_PIX_FMT_YUV420P, frame->width, frame->height, 1);
     SwsContext *sws_ctx =
         sws_getContext(frame->width, frame->height, static_cast<AVPixelFormat>(frame->format), frame->width,
-                       frame->height, AVPixelFormat::AV_PIX_FMT_YUVJ420P, SWS_BICUBIC, NULL, NULL, NULL);
+                       frame->height, AVPixelFormat::AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
     if (sws_ctx == NULL) {
       LOG(ERROR) << "Can not deal with this frame with pixel format: " << frame->format;
-      av_frame_free(&yuvj420_frame);
-      av_free(yuvj420_buffer);
+      av_frame_free(&yuv420_frame);
+      av_free(yuv420_buffer);
       return false;
     }
-    sws_scale(sws_ctx, frame->data, frame->linesize, 0, frame->height, yuvj420_frame->data, yuvj420_frame->linesize);
+    sws_scale(sws_ctx, frame->data, frame->linesize, 0, frame->height, yuv420_frame->data, yuv420_frame->linesize);
     sws_freeContext(sws_ctx);
-    clear_resources = [&yuvj420_frame, yuvj420_buffer] () {
-      av_frame_free(&yuvj420_frame);
-      av_free(yuvj420_buffer);
+    clear_resources = [&yuv420_frame, yuv420_buffer] () {
+      av_frame_free(&yuv420_frame);
+      av_free(yuv420_buffer);
     };
   }
 
-  int height = frame->height;
-  int src_stride = frame->linesize[0];
+  int height = yuv420_frame->height;
+  int src_stride = yuv420_frame->linesize[0];
 
-  uint8_t *py = frame->data[0];
-  uint8_t *pu = frame->data[1];
-  uint8_t *pv = frame->data[2];
+  uint8_t *py = yuv420_frame->data[0];
+  uint8_t *pu = yuv420_frame->data[1];
+  uint8_t *pv = yuv420_frame->data[2];
 
   uint8_t *pdst_y = sp;
   uint8_t *pdst_uv = sp + dst_stride * height;
@@ -1045,11 +1045,11 @@ bool FFmpegCpuDecoder::FrameCvt2Yuv420sp(AVFrame *frame, uint8_t *sp, int dst_st
   }
 
   for (int row = 0; row < height / 2; ++row) {
-    uint8_t *psrc_u = pu + frame->linesize[1] * row;
-    uint8_t *psrc_v = pv + frame->linesize[2] * row;
+    uint8_t *psrc_u = pu + yuv420_frame->linesize[1] * row;
+    uint8_t *psrc_v = pv + yuv420_frame->linesize[2] * row;
     if (nv21) std::swap(psrc_u, psrc_v);
     uint8_t *pdst_uvt = pdst_uv + dst_stride * row;
-    for (int col = 0; col < frame->linesize[1]; ++col) {
+    for (int col = 0; col < yuv420_frame->linesize[1]; ++col) {
       pdst_uvt[col * 2] = psrc_u[col];
       pdst_uvt[col * 2 + 1] = psrc_v[col];
     }
