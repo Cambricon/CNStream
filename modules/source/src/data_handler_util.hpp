@@ -205,7 +205,7 @@ class SourceRender {
     if (perf_manager_ != nullptr) {
       perf_manager_->Record(false, PerfManager::GetDefaultType(), module_name, pts);
       perf_manager_->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(pts),
-                            module_name + PerfManager::GetThreadSuffix(), "'" + thread_name_ + "'");
+                            module_name + PerfManager::GetThreadSuffix(), thread_name_);
     }
   }
 

@@ -204,7 +204,7 @@ void IPCServerHandler::ProcessFrameInfoPackage(size_t thread_idx) {
       perf_manager_->Record(false, PerfManager::GetDefaultType(), ipc_module_->GetName(), recv_pkg.timestamp);
       perf_manager_->Record(
           PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(recv_pkg.timestamp),
-          ipc_module_->GetName() + PerfManager::GetThreadSuffix(), "'" + thread_name + "'");
+          ipc_module_->GetName() + PerfManager::GetThreadSuffix(), thread_name);
     }
 
     ipc_module_->SendData(data);

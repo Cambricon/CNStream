@@ -176,13 +176,17 @@ void ESJpegMemHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
     return;  // discard frames
   }
   if (!frame) return;
-  if (!frame->valid) return;
-
   std::shared_ptr<CNFrameInfo> data = this->CreateFrameInfo();
   if (!data) {
     return;
   }
+
   data->timestamp = frame->pts;  // FIXME
+  if (!frame->valid) {
+    data->flags = CN_FRAME_FLAG_INVALID;
+    this->SendFrameInfo(data);
+    return;
+  }
   int ret = SourceRender::Process(data, frame, frame_id_++, param_);
   if (ret < 0) {
     return;

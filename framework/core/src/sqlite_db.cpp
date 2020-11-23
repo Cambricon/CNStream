@@ -23,6 +23,7 @@
 #include <chrono>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
@@ -38,15 +39,15 @@ bool Sqlite::Connect() {
   }
   connected_ = true;
   if (!Execution("PRAGMA synchronous = OFF;")) {
-    LOG(ERROR) << "Set PRAGMA synchronous to normal falied.";
+    LOG(ERROR) << "Set PRAGMA synchronous to normal failed.";
     return false;
   }
   if (!Execution("PRAGMA cache_size = 8000;")) {
-    LOG(ERROR) << "Set PRAGMA set cache size  to 8000 falied.";
+    LOG(ERROR) << "Set PRAGMA set cache size  to 8000 failed.";
     return false;
   }
   if (!Execution("PRAGMA auto_vacuum = FULL;")) {
-    LOG(ERROR) << "Set PRAGMA auto_vacuum to FULL falied.";
+    LOG(ERROR) << "Set PRAGMA auto_vacuum to FULL failed.";
     return false;
   }
   // LOG(INFO) << "Successfully connect to sqlite database (" << db_name_ << ")";
@@ -69,7 +70,7 @@ bool Sqlite::Execution(std::string sql) {
   }
   char* err_msg;
   if (sqlite3_exec(db_, sql.c_str(), 0, 0, &err_msg) != SQLITE_OK) {
-    LOG(ERROR) << "(" << db_name_ << ") execute statement falied.\nSQL STATEMENT:\n  " << sql
+    LOG(ERROR) << "(" << db_name_ << ") execute statement failed.\nSQL STATEMENT:\n  " << sql
                << "\nError message: " << err_msg;
     return false;
   }
@@ -77,16 +78,20 @@ bool Sqlite::Execution(std::string sql) {
 }
 
 bool Sqlite::CreateTable(std::string table_name, std::string primary_key, std::vector<std::string> key_names) {
+  if (table_name.empty()) {
+    LOG(ERROR) << "Create table failed, table name is empty string.";
+    return false;
+  }
   std::string sql;
   if (primary_key.empty()) {
-    sql = "CREATE TABLE " + table_name + "(id integer PRIMARY KEY autoincrement," +
+    sql = "CREATE TABLE [" + table_name + "] (id integer PRIMARY KEY autoincrement," +
           "timestamp DATETIME DEFAULT  (STRFTIME('%Y-%m-%d %H:%M:%S', 'NOW', 'localtime')),";
   } else {
-    sql = "CREATE TABLE " + table_name + "(" + primary_key + " STRING PRIMARY KEY NOT NULL," +
+    sql = "CREATE TABLE [" + table_name + "] ([" + primary_key + "] STRING PRIMARY KEY NOT NULL," +
           "timestamp DATETIME DEFAULT  (STRFTIME('%Y-%m-%d %H:%M:%S', 'NOW', 'localtime')),";
   }
   for (auto it : key_names) {
-    sql += it + " STRING,";
+    sql += "[" + it + "] STRING,";
   }
   sql.pop_back();
   sql += " );";
@@ -94,49 +99,71 @@ bool Sqlite::CreateTable(std::string table_name, std::string primary_key, std::v
   return Execution(sql);
 }
 
-bool Sqlite::Insert(std::string table_name, std::string key_names, std::string values) {
-  std::string sql_statement = "INSERT INTO " + table_name + " (" + key_names + ") VALUES (" + values + "); ";
+std::string Sqlite::ConvertStrVecToDbString(const std::vector<std::string> &str_vec,
+                                            const std::pair<std::string, std::string> &boundary_symbol) {
+  std::string db_str;
+  for (uint32_t i = 0; i < str_vec.size(); i++) {
+    if (str_vec[i] == "*") {
+      db_str += str_vec[i] + ",";
+    } else {
+      db_str += boundary_symbol.first + str_vec[i] + boundary_symbol.second + ",";
+    }
+  }
+  db_str.pop_back();
+  return db_str;
+}
+
+bool Sqlite::Insert(std::string table_name, std::vector<std::string> key_names, std::vector<std::string> values) {
+  if (key_names.size() == 0 || values.size() == 0 || key_names.size() != values.size()) {
+    LOG(ERROR) << "[Sqlite] The size of keys and values is not the same or 0.";
+    return false;
+  }
+  std::string keys_str = ConvertStrVecToDbString(key_names, std::make_pair("[", "]"));
+  std::string values_str = ConvertStrVecToDbString(values, std::make_pair("'", "'"));
+
+  std::string sql_statement = "INSERT INTO [" + table_name + "] (" + keys_str + ") VALUES (" + values_str + "); ";
   return Execution(sql_statement.c_str());
 }
 
 bool Sqlite::Update(std::string table_name, std::string condition_key, std::string condition_value,
                     std::string update_key, std::string update_value) {
-  std::string sql_statement = "UPDATE " + table_name + " set " + update_key + " = " + update_value + " where " +
-                              condition_key + " = " + condition_value + "; ";
+  std::string sql_statement = "UPDATE [" + table_name + "] SET [" + update_key + "] = '" + update_value + "' WHERE [" +
+                              condition_key + "] = '" + condition_value + "'; ";
   return Execution(sql_statement.c_str());
 }
 
 bool Sqlite::Delete(std::string table_name, std::string key_name, std::string value) {
-  std::string sql_statement = "DELETE FROM " + table_name + " WHERE " + key_name + " = " + value + "; ";
+  std::string sql_statement = "DELETE FROM [" + table_name + "] WHERE [" + key_name + "] = '" + value + "'; ";
   return Execution(sql_statement.c_str());
 }
 
 bool Sqlite::Delete(std::string table_name, std::string condition) {
   if (condition.empty()) {
-    LOG(ERROR) << "Sqlite delete statment has no condition.";
+    LOG(ERROR) << "Sqlite delete statement has no condition.";
     return false;
   }
-  std::string sql_statement = "DELETE FROM " + table_name + " WHERE " + condition+ "; ";
+  std::string sql_statement = "DELETE FROM [" + table_name + "] WHERE " + condition + "; ";
   return Execution(sql_statement.c_str());
 }
 
-bool Sqlite::Select(std::string table_name, std::string key_name, std::string condition,
+bool Sqlite::Select(std::string table_name, std::vector<std::string> key_names, std::string condition,
                     int (*callback)(void*, int, char**, char**), void* data) {
   if (!connected_) {
     LOG(ERROR) << "SQL is not connected.";
     return false;
   }
   char* err_msg;
-  std::string sql_statement = "SELECT " + key_name + " from " + table_name;
+  std::string key_str = ConvertStrVecToDbString(key_names, std::make_pair("[", "]"));
+  std::string sql_statement = "SELECT " + key_str + " FROM [" + table_name + "]";
   if (condition != "") {
-    sql_statement += " where " + condition;
+    sql_statement += " WHERE " + condition;
   }
   sql_statement += ";";
 
   if (sqlite3_exec(db_, sql_statement.c_str(), callback, data, &err_msg) == SQLITE_OK) {
     return true;
   }
-  LOG(ERROR) << "Select data from table (" << table_name << ") falied.\nSQL STATEMENT:\n  " << sql_statement
+  LOG(ERROR) << "Select data from table (" << table_name << ") failed.\nSQL STATEMENT:\n  " << sql_statement
              << "\nError message: " << err_msg;
   return false;
 }
@@ -154,7 +181,7 @@ bool Sqlite::Select(std::string condition, int (*callback)(void*, int, char**, c
   if (sqlite3_exec(db_, condition.c_str(), callback, data, &err_msg) == SQLITE_OK) {
     return true;
   }
-  LOG(ERROR) << "Select data falied.\nSQL STATEMENT:\n  " << condition << "\nError message: " << err_msg;
+  LOG(ERROR) << "Select data failed.\nSQL STATEMENT:\n  " << condition << "\nError message: " << err_msg;
   return false;
 }
 
@@ -167,9 +194,9 @@ static int SingleValueCallback(void* data, int argc, char** argv, char** azColNa
 
 size_t Sqlite::FindMin(std::string table_name, std::string key_name, std::string condition) {
   size_t min = ~((size_t)0);
-  std::string sql_statement = "SELECT MIN(" + key_name + ") from " + table_name;
+  std::string sql_statement = "SELECT MIN([" + key_name + "]) FROM [" + table_name + "]";
   if (!condition.empty()) {
-    sql_statement += " where " + condition + "; ";
+    sql_statement += " WHERE " + condition + "; ";
   }
   sqlite3_exec(db_, sql_statement.c_str(), SingleValueCallback, reinterpret_cast<void*>(&min), 0);
   return min;
@@ -177,9 +204,9 @@ size_t Sqlite::FindMin(std::string table_name, std::string key_name, std::string
 
 size_t Sqlite::FindMax(std::string table_name, std::string key_name, std::string condition) {
   size_t max = 0;
-  std::string sql_statement = "SELECT MAX(" + key_name + ") from " + table_name;
+  std::string sql_statement = "SELECT MAX([" + key_name + "]) FROM [" + table_name + "]";
   if (!condition.empty()) {
-    sql_statement += " where " + condition + "; ";
+    sql_statement += " WHERE " + condition + "; ";
   }
   sqlite3_exec(db_, sql_statement.c_str(), SingleValueCallback, reinterpret_cast<void*>(&max), 0);
   return max;
@@ -187,9 +214,9 @@ size_t Sqlite::FindMax(std::string table_name, std::string key_name, std::string
 
 size_t Sqlite::Count(std::string table_name, std::string key_name, std::string condition) {
   size_t count = 0;
-  std::string sql_statement = "SELECT COUNT(" + key_name + ") from " + table_name;
+  std::string sql_statement = "SELECT COUNT([" + key_name + "]) FROM [" + table_name + "]";
   if (condition != "") {
-    sql_statement += " where " + condition + "; ";
+    sql_statement += " WHERE " + condition + "; ";
   }
   sqlite3_exec(db_, sql_statement.c_str(), SingleValueCallback, reinterpret_cast<void*>(&count), 0);
   return count;

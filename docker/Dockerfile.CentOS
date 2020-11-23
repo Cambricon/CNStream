@@ -19,11 +19,11 @@
 # *************************************************************************/
 
 # 1. build image
-# (1) build image without neuware and cnstream: docker build -f Dockerfile.CentOS -t centos_cnstream:v1 .
-# (2) build image with neuware installed and without cnstream:
+# (1) build image without cntoolkit and cnstream: docker build -f Dockerfile.CentOS -t centos_cnstream:v1 .
+# (2) build image with cntoolkit installed and without cnstream:
 #   a. make sure the toolkit_package is in your current directory
 #   b. docker build -f Dockerfile.CentOS --build-arg toolkit_package=${toolkit_package_name} -t centos_cnstream:v1 .
-# (3) build image with neuware installed and with cnstream code built:
+# (3) build image with cntoolkit installed and with cnstream code built:
 #   a. make sure the toolkit_package is in your current directory
 #   b. docker build -f Dockerfile.CentOS --build-arg toolkit_package=${toolkit_package_name} --build-arg with_cnstream_code=yes -t centos_cnstream:v1 .
 # 2. start container: docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace centos_cnstream:v1
@@ -42,7 +42,7 @@ RUN  yum install -y wget && \
      mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.backup  && \
      wget -O /etc/yum.repos.d/CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-7.repo && \
 	 yum clean all && yum makecache && \
-	 yum install -y epel-release && \
+	 yum install -y epel-release curl libcurl-devel && \
 	 yum install -y zlib-devel git make vim gcc gcc-c++ kernel-devel net-tools cmake && \
 	 yum install -y opencv-devel.x86_64 gflags-devel glog-devel SDL2_gfx-devel lcov &&\
 	 rpm --import http://li.nux.ro/download/nux/RPM-GPG-KEY-nux.ro && \
@@ -50,7 +50,7 @@ RUN  yum install -y wget && \
 	 yum install -y ffmpeg ffmpeg-devel gstreamer*
 
 COPY . /tmp/
-# install neuware, git clone cnstream from gitee and build
+# install cntoolkit, git clone cnstream from gitee and build
 RUN if [ -n "$toolkit_package" ]; then \
       yum install -y /tmp/$toolkit_package && \
       yum install -y cnrt cncodec cndev cndrv && \

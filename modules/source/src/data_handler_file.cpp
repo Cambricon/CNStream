@@ -134,7 +134,7 @@ void FileHandlerImpl::Loop() {
 
 bool FileHandlerImpl::PrepareResources(bool demux_only) {
   int ret = parser_.Open(filename_, this);
-  if (ret < 0) {
+  if (ret < 0 || dec_create_failed_) {
     return false;
   }
   return true;
@@ -210,6 +210,7 @@ void FileHandlerImpl::OnParserInfo(VideoInfo *info) {
     bool ret = decoder_->Create(info, &extra);
     if (ret != true) {
       LOGE(SOURCE) << "dec_create_failed_";
+      dec_create_failed_ = true;
       return;
     }
     if (info->extra_data.size()) {
@@ -255,13 +256,17 @@ void FileHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
     return;  // discard frames
   }
   if (!frame) return;
-  if (!frame->valid) return;
-
   std::shared_ptr<CNFrameInfo> data = this->CreateFrameInfo();
   if (!data) {
     return;
   }
   data->timestamp = frame->pts;  // FIXME
+  if (!frame->valid) {
+    data->flags = CN_FRAME_FLAG_INVALID;
+    this->SendFrameInfo(data);
+    return;
+  }
+
   int ret = SourceRender::Process(data, frame, frame_id_++, param_);
   if (ret < 0) {
     return;

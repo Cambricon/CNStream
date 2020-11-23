@@ -95,7 +95,7 @@ TEST(PerfManager, Record) {
     EXPECT_TRUE(manager.Record(false, table_name, module_names[i], 0));
     EXPECT_TRUE(manager.Record(true, table_name, module_names[i], 0));
     EXPECT_TRUE(manager.Record(table_name, PerfManager::GetPrimaryKey(), "0",
-                               module_names[i] + PerfManager::GetThreadSuffix(), "'th_0'"));
+                               module_names[i] + PerfManager::GetThreadSuffix(), "th_0"));
     EXPECT_TRUE(manager.Record(table_name, PerfManager::GetPrimaryKey(), "1",
                                module_names[i] + PerfManager::GetStartTimeSuffix()));
   }

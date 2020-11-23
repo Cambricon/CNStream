@@ -59,7 +59,7 @@ class PerfCalculator;
 enum StreamMsgType {
   EOS_MSG = 0,     ///< The end of a stream message. The stream has received EOS message in all modules.
   ERROR_MSG,       ///< An error message. The stream process has failed in one of the modules.
-  STREAM_ERR_MSG,  ///< Stream error message, stream process faild at source.
+  STREAM_ERR_MSG,  ///< Stream error message, stream process failed at source.
   FRAME_ERR_MSG,   ///< Frame error message, frame decode failed at source.
   USER_MSG0 = 32,  ///< Reserved message. You can define your own messages.
   USER_MSG1,       ///< Reserved message. You can define your own messages.
