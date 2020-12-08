@@ -22,7 +22,6 @@
 #include <cn_codec_common.h>
 #include <cnrt.h>
 #include <easyinfer/model_loader.h>
-#include <glog/logging.h>
 #include <memory>
 #include <vector>
 #include "cnstream_frame.hpp"
@@ -159,7 +158,7 @@ void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, ui
       fmt = CNCODEC_PIX_FMT_NV12;
       break;
     default:
-      LOG(ERROR) << "Scaler: unsupport fmt: " + std::to_string(frame->fmt);
+      LOGE(INFERENCER) << "Scaler: unsupport fmt: " + std::to_string(frame->fmt);
       break;
   }
 

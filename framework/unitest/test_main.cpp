@@ -19,15 +19,15 @@
  *************************************************************************/
 
 #include <gflags/gflags.h>
-#include "glog/logging.h"
 #include "gtest/gtest.h"
+#include "cnstream_logging.hpp"
 
 int main(int argc, char **argv) {
-  ::google::InitGoogleLogging(argv[0]);
+  cnstream::InitCNStreamLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
   ::gflags::ParseCommandLineFlags(&argc, &argv, false);
   // FLAGS_alsologtostderr = true;
   int ret = RUN_ALL_TESTS();
-  ::google::ShutdownGoogleLogging();
+  cnstream::ShutdownCNStreamLogging();
   return ret;
 }

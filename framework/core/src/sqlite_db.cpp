@@ -26,7 +26,7 @@
 #include <utility>
 #include <vector>
 
-#include "glog/logging.h"
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 
@@ -34,23 +34,23 @@ bool Sqlite::Connect() {
   if (sqlite3_open_v2(db_name_.c_str(), &db_, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX,
                       NULL) != SQLITE_OK) {
     connected_ = false;
-    LOG(ERROR) << "Open " << db_name_ << " failed.";
+    LOGE(CORE) << "Open " << db_name_ << " failed.";
     return false;
   }
   connected_ = true;
   if (!Execution("PRAGMA synchronous = OFF;")) {
-    LOG(ERROR) << "Set PRAGMA synchronous to normal failed.";
+    LOGE(CORE) << "Set PRAGMA synchronous to normal falied.";
     return false;
   }
   if (!Execution("PRAGMA cache_size = 8000;")) {
-    LOG(ERROR) << "Set PRAGMA set cache size  to 8000 failed.";
+    LOGE(CORE) << "Set PRAGMA set cache size  to 8000 falied.";
     return false;
   }
   if (!Execution("PRAGMA auto_vacuum = FULL;")) {
-    LOG(ERROR) << "Set PRAGMA auto_vacuum to FULL failed.";
+    LOGE(CORE) << "Set PRAGMA auto_vacuum to FULL falied.";
     return false;
   }
-  // LOG(INFO) << "Successfully connect to sqlite database (" << db_name_ << ")";
+  // LOGI(CORE) << "Successfully connect to sqlite database (" << db_name_ << ")";
   return true;
 }
 
@@ -65,12 +65,12 @@ bool Sqlite::Close() {
 
 bool Sqlite::Execution(std::string sql) {
   if (!connected_) {
-    LOG(ERROR) << "SQL is not connected.";
+    LOGE(CORE) << "SQL is not connected.";
     return false;
   }
   char* err_msg;
   if (sqlite3_exec(db_, sql.c_str(), 0, 0, &err_msg) != SQLITE_OK) {
-    LOG(ERROR) << "(" << db_name_ << ") execute statement failed.\nSQL STATEMENT:\n  " << sql
+    LOGE(CORE) << "(" << db_name_ << ") execute statement falied.\nSQL STATEMENT:\n  " << sql
                << "\nError message: " << err_msg;
     return false;
   }
@@ -79,7 +79,7 @@ bool Sqlite::Execution(std::string sql) {
 
 bool Sqlite::CreateTable(std::string table_name, std::string primary_key, std::vector<std::string> key_names) {
   if (table_name.empty()) {
-    LOG(ERROR) << "Create table failed, table name is empty string.";
+    LOGE(CORE) << "Create table failed, table name is empty string.";
     return false;
   }
   std::string sql;
@@ -115,7 +115,7 @@ std::string Sqlite::ConvertStrVecToDbString(const std::vector<std::string> &str_
 
 bool Sqlite::Insert(std::string table_name, std::vector<std::string> key_names, std::vector<std::string> values) {
   if (key_names.size() == 0 || values.size() == 0 || key_names.size() != values.size()) {
-    LOG(ERROR) << "[Sqlite] The size of keys and values is not the same or 0.";
+    LOGE(CORE) << "[Sqlite] The size of keys and values is not the same or 0.";
     return false;
   }
   std::string keys_str = ConvertStrVecToDbString(key_names, std::make_pair("[", "]"));
@@ -139,7 +139,7 @@ bool Sqlite::Delete(std::string table_name, std::string key_name, std::string va
 
 bool Sqlite::Delete(std::string table_name, std::string condition) {
   if (condition.empty()) {
-    LOG(ERROR) << "Sqlite delete statement has no condition.";
+    LOGE(CORE) << "Sqlite delete statment has no condition.";
     return false;
   }
   std::string sql_statement = "DELETE FROM [" + table_name + "] WHERE " + condition + "; ";
@@ -149,7 +149,7 @@ bool Sqlite::Delete(std::string table_name, std::string condition) {
 bool Sqlite::Select(std::string table_name, std::vector<std::string> key_names, std::string condition,
                     int (*callback)(void*, int, char**, char**), void* data) {
   if (!connected_) {
-    LOG(ERROR) << "SQL is not connected.";
+    LOGE(CORE) << "SQL is not connected.";
     return false;
   }
   char* err_msg;
@@ -163,14 +163,14 @@ bool Sqlite::Select(std::string table_name, std::vector<std::string> key_names, 
   if (sqlite3_exec(db_, sql_statement.c_str(), callback, data, &err_msg) == SQLITE_OK) {
     return true;
   }
-  LOG(ERROR) << "Select data from table (" << table_name << ") failed.\nSQL STATEMENT:\n  " << sql_statement
+  LOGE(CORE) << "Select data from table (" << table_name << ") falied.\nSQL STATEMENT:\n  " << sql_statement
              << "\nError message: " << err_msg;
   return false;
 }
 
 bool Sqlite::Select(std::string condition, int (*callback)(void*, int, char**, char**), void* data) {
   if (!connected_) {
-    LOG(ERROR) << "SQL is not connected.";
+    LOGE(CORE) << "SQL is not connected.";
     return false;
   }
   char* err_msg;
@@ -181,7 +181,7 @@ bool Sqlite::Select(std::string condition, int (*callback)(void*, int, char**, c
   if (sqlite3_exec(db_, condition.c_str(), callback, data, &err_msg) == SQLITE_OK) {
     return true;
   }
-  LOG(ERROR) << "Select data failed.\nSQL STATEMENT:\n  " << condition << "\nError message: " << err_msg;
+  LOGE(CORE) << "Select data falied.\nSQL STATEMENT:\n  " << condition << "\nError message: " << err_msg;
   return false;
 }
 

@@ -20,7 +20,7 @@
 
 #include "live_rtsp_server.hpp"
 
-#include <glog/logging.h>
+#include "cnstream_logging.hpp"
 
 #include "rtsp_frame_source.hpp"
 #include "rtsp_media_subsession.hpp"
@@ -84,14 +84,14 @@ void LiveRtspServer::Run() {
 
     std::ofstream out_file("RTSP_url_names.txt", std::ios::app);
     if (!out_file.is_open()) {
-      LOG(ERROR) << "Open RTSP_url_names.txt failure..." << std::endl;
+      LOGE(RTSP) << "Open RTSP_url_names.txt failure..." << std::endl;
     } else {
       out_file << url << std::endl;
       out_file.close();
     }
-    LOG(INFO) << "================================================================";
-    LOG(INFO) << " Stream URL \"" << url << "\"\n";
-    LOG(INFO) << "================================================================";
+    LOGI(RTSP) << "================================================================";
+    LOGI(RTSP) << " Stream URL \"" << url << "\"\n";
+    LOGI(RTSP) << "================================================================";
     delete[] url;
 
     // signal(SIGNIT,sighandler);

@@ -26,7 +26,7 @@
 #include <cxxabi.h>
 #include <unistd.h>
 
-#include <glog/logging.h>
+#include "cnstream_logging.hpp"
 
 #include <atomic>
 #include <functional>
@@ -362,7 +362,7 @@ class ModuleFactory {
   static ModuleFactory *Instance() {
     if (nullptr == factory_) {
       factory_ = new (std::nothrow) ModuleFactory();
-      LOG_IF(FATAL, nullptr == factory_) << "ModuleFactory::Instance() new ModuleFactory failed.";
+      LOGF_IF(CORE, nullptr == factory_) << "ModuleFactory::Instance() new ModuleFactory failed.";
     }
     return (factory_);
   }

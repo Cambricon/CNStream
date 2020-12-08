@@ -70,10 +70,10 @@ const std::list<BusWatcher> &EventBus::GetBusWatchers() const {
 
 bool EventBus::PostEvent(Event event) {
   if (!running_.load()) {
-    LOG(WARNING) << "Post event failed, pipeline not running";
+    LOGW(CORE) << "Post event failed, pipeline not running";
     return false;
   }
-  // LOG(INFO) << "Recieve Event from [" << event.module->GetName() << "] :" << event.message;
+  // LOGI(CORE) << "Recieve Event from [" << event.module->GetName() << "] :" << event.message;
   queue_.Push(event);
 #ifdef UNIT_TEST
   if (unit_test) {
@@ -105,10 +105,10 @@ void EventBus::EventLoop() {
   while (IsRunning()) {
     Event event = PollEvent();
     if (event.type == EVENT_INVALID) {
-      LOG(INFO) << "[EventLoop] event type is invalid";
+      LOGI(CORE) << "[EventLoop] event type is invalid";
       break;
     } else if (event.type == EVENT_STOP) {
-      LOG(INFO) << "[EventLoop] Get stop event";
+      LOGI(CORE) << "[EventLoop] Get stop event";
       break;
     }
     std::unique_lock<std::mutex> lk(watcher_mtx_);
@@ -122,7 +122,7 @@ void EventBus::EventLoop() {
       break;
     }
   }
-  LOG(INFO) << "Event bus exit.";
+  LOGI(CORE) << "Event bus exit.";
 }
 
 #ifdef UNIT_TEST

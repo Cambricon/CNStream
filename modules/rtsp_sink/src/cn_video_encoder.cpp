@@ -19,8 +19,7 @@
  *************************************************************************/
 
 #include "cn_video_encoder.hpp"
-
-#include <glog/logging.h>
+#include "cnstream_logging.hpp"
 
 #include <cstring>
 #include <functional>
@@ -72,7 +71,7 @@ void CNVideoEncoder::CNVideoFrame::Fill(uint8_t *data, int64_t timestamp) {
   if (frame_->pformat == edk::PixelFmt::NV21 || frame_->pformat == edk::PixelFmt::NV12) {
     memcpy(frame_->ptrs[0], data, frame_->frame_size);
   } else {
-    LOG(INFO) << "Unsupport Pixel Format: " << static_cast<int>(frame_->pformat) << std::endl;
+    LOGI(RTSP) << "Unsupport Pixel Format: " << static_cast<int>(frame_->pformat) << std::endl;
   }
 }
 
@@ -155,7 +154,7 @@ CNVideoEncoder::CNVideoEncoder(const RtspParam &rtsp_param) : VideoEncoder(OUTPU
     resize_attr.dst_w = dst_width;
     resize_attr.core_number = 4;
     if (src_height < dst_height || src_width < dst_width) {
-      LOG(ERROR) << "MLU Resize does not sopport up scaler," <<
+      LOGE(RTSP) << "MLU Resize does not sopport up scaler," <<
                     "source width and heigit must be lagger then dstination width and height";
       return;
     }
@@ -163,14 +162,14 @@ CNVideoEncoder::CNVideoEncoder(const RtspParam &rtsp_param) : VideoEncoder(OUTPU
     if (!resize_->Init(resize_attr)) {
       resize_->Destroy();
       delete resize_;
-      LOG(ERROR) << "resize Init() failed";
+      LOGE(RTSP) << "resize Init() failed";
     }
   }
   */
   try {
     encoder_ = edk::EasyEncode::Create(attr);
   } catch (edk::Exception &err) {
-    LOG(INFO) << "CnEncodeError: " << err.what();
+    LOGE(RTSP) << "CnEncodeError: " << err.what();
     Destroy();
     return;
   }
@@ -182,7 +181,7 @@ CNVideoEncoder::~CNVideoEncoder() {
     context.SetDeviceId(rtsp_param_.device_id);
     context.BindDevice();
   } catch (edk::Exception &err) {
-    LOG(ERROR) << "CNEncoderStream: set mlu env failed";
+    LOGE(RTSP) << "CNEncoderStream: set mlu env failed";
   }
   Stop();
   Destroy();
@@ -209,7 +208,7 @@ void CNVideoEncoder::EncodeFrame(VideoFrame *frame) {
   try {
     encoder_->SendDataCPU(*cnframe, false);
   } catch (edk::Exception &err) {
-    LOG(INFO) << "CnEncodeError: " << err.what();
+    LOGE(RTSP) << "CnEncodeError: " << err.what();
     return;
   }
 }
@@ -222,7 +221,7 @@ void CNVideoEncoder::EncodeFrame(void *y, void *uv, int64_t timestamp) {
   encoder_->GetEncoderInputAddress(&mlu_output_y, &mlu_output_uv);
   if(resize_->InvokeOp(reinterpret_cast<void*>(mlu_output_y),
                        reinterpret_cast<void*>(mlu_output_uv), y, uv)) {
-    LOG(INFO) << "CnEncodeError: InvokeOp error!!!" << std::endl;
+    LOGI(RTSP) << "CnEncodeError: InvokeOp error!!!" << std::endl;
     return;
   }
   cnframe->pts = timestamp;
@@ -240,7 +239,7 @@ void CNVideoEncoder::EncodeFrame(void *y, void *uv, int64_t timestamp) {
   try {
     encoder_->SendData(*cnframe, false);
   } catch (edk::Exception &err) {
-    LOG(INFO) << "CnEncodeError: " << err.what();
+    LOGE(RTSP) << "CnEncodeError: " << err.what();
     return;
   }
 }
@@ -280,7 +279,7 @@ void CNVideoEncoder::EosCallback() {
   edk::MluContext context;
   context.SetDeviceId(rtsp_param_.device_id);
   context.ConfigureForThisThread();
-  LOG(INFO) << "CNVideoEncoder got EOS";
+  LOGI(RTSP) << "CNVideoEncoder got EOS";
 }
 
 }  // namespace cnstream

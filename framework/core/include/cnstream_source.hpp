@@ -75,7 +75,7 @@ class SourceModule : public Module {
 
   int Process(std::shared_ptr<CNFrameInfo> data) override {
     (void)data;
-    LOG(ERROR) << "As a source module, Process() should not be invoked\n";
+    LOGE(CORE) << "As a source module, Process() should not be invoked\n";
     return 0;
   }
 
@@ -83,8 +83,6 @@ class SourceModule : public Module {
 #ifdef UNIT_TEST
  public:  // NOLINT
 #endif
-
-  friend class SourceHandler;
 
   uint32_t GetStreamIndex(const std::string &stream_id);
   void ReturnStreamIndex(const std::string &stream_id);

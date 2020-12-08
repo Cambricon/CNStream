@@ -79,6 +79,7 @@ int PostprocSsd::Execute(const std::vector<float*>& net_outputs, const std::shar
     object->bbox.w = data[5] - object->bbox.x;
     object->bbox.h = data[6] - object->bbox.y;
 
+    std::lock_guard<std::mutex> objs_mutex(objs_holder->mutex_);
     objs.push_back(object);
     data += 7;
   }

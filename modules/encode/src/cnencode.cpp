@@ -18,8 +18,6 @@
  * THE SOFTWARE.
  *************************************************************************/
 #include "cnencode.hpp"
-
-#include <glog/logging.h>
 #include <sys/stat.h>
 
 #include <memory>
@@ -40,26 +38,26 @@ CNEncode::CNEncode(const CNEncodeParam &param) {
 
 bool CNEncode::Init() {
   if (is_init_) {
-    LOG(ERROR) << "[CNEncode] Init function should be called only once.";
+    LOGE(ENCODE) << "[CNEncode] Init function should be called only once.";
     return false;
   }
   if (cnencode_param_.encoder_type == "cpu" &&
       cnencode_param_.dst_pix_fmt != BGR24 &&
       cnencode_param_.dst_pix_fmt != RGB24) {
-    LOG(ERROR) << "[CNEncode] cpu encoding only support bgr24/rgb24 format.";
+    LOGE(ENCODE) << "[CNEncode] cpu encoding only support bgr24/rgb24 format.";
     return false;
   }
   if (cnencode_param_.encoder_type == "mlu" &&
       cnencode_param_.dst_pix_fmt != NV12 &&
       cnencode_param_.dst_pix_fmt != NV21) {
-    LOG(ERROR) << "[CNEncode] mlu encoding only support nv12/nv2 format.";
+    LOGE(ENCODE) << "[CNEncode] mlu encoding only support nv12/nv2 format.";
     return false;
   }
   if (cnencode_param_.output_dir.empty()) {
     cnencode_param_.output_dir = "./output";
   }
   if (!CreateDir(cnencode_param_.output_dir + "/")) {
-    LOG(ERROR) << "[CNEncode] Create output dir " << cnencode_param_.output_dir << " failed.";
+    LOGE(ENCODE) << "[CNEncode] Create output dir " << cnencode_param_.output_dir << " failed.";
     return false;
   }
   if (cnencode_param_.encoder_type == "mlu") {
@@ -69,7 +67,7 @@ bool CNEncode::Init() {
         context.SetDeviceId(cnencode_param_.device_id);
         context.BindDevice();
       } catch (edk::Exception &err) {
-        LOG(ERROR) << "CNEncode: set mlu env failed";
+        LOGE(ENCODE) << "CNEncode: set mlu env failed";
         return false;
       }
     } else {
@@ -89,12 +87,12 @@ bool CNEncode::Init() {
         break;
     }
     if (!CreateMluEncoder()) {
-      LOG(ERROR) << "[CNEncode] Create Mlu encoder instance failed.";
+      LOGE(ENCODE) << "[CNEncode] Create Mlu encoder instance failed.";
       return false;
     }
   } else {
     if (!CreateCpuEncoder()) {
-      LOG(ERROR) << "[CNEncode] Create Cpu encoder instance failed.";
+      LOGE(ENCODE) << "[CNEncode] Create Cpu encoder instance failed.";
       return false;
     }
   }
@@ -106,19 +104,19 @@ bool CNEncode::CreateMluEncoder() {
   edk::CodecType codec_type = edk::CodecType::H264;
   switch (cnencode_param_.codec_type) {
     case H264:
-      LOG(INFO) << "[CNEncode] CodecType::H264";
+      LOGI(ENCODE) << "[CNEncode] CodecType::H264";
       codec_type = edk::CodecType::H264;
       break;
     case HEVC:
-      LOG(INFO) << "[CNEncode] CodecType::HEVC";
+      LOGI(ENCODE) << "[CNEncode] CodecType::HEVC";
       codec_type = edk::CodecType::H265;
       break;
     case MPEG4:
-      LOG(INFO) << "[CNEncode] CodecType::MPEG4";
+      LOGI(ENCODE) << "[CNEncode] CodecType::MPEG4";
       codec_type = edk::CodecType::MPEG4;
       break;
     case JPEG:
-      LOG(INFO) << "[CNEncode] CodecType::JPEG";
+      LOGI(ENCODE) << "[CNEncode] CodecType::JPEG";
       codec_type = edk::CodecType::JPEG;
       break;
     default:
@@ -163,7 +161,7 @@ bool CNEncode::CreateMluEncoder() {
   try {
     mlu_encoder_ = edk::EasyEncode::Create(attr);
   } catch (edk::Exception &err) {
-    LOG(ERROR) << "[CNEncode] create mlu encode failed. error message:" << err.what();
+    LOGE(ENCODE) << "[CNEncode] create mlu encode failed. error message:" << err.what();
     if (mlu_encoder_) {
       delete mlu_encoder_;
       mlu_encoder_ = nullptr;
@@ -171,7 +169,7 @@ bool CNEncode::CreateMluEncoder() {
     return false;
   }
   if (!mlu_encoder_) {
-    LOG(ERROR) << "[CNEncode] create mlu encoder failed.";
+    LOGE(ENCODE) << "[CNEncode] create mlu encoder failed.";
     return false;
   }
   return true;
@@ -179,14 +177,14 @@ bool CNEncode::CreateMluEncoder() {
 
 bool CNEncode::CreateCpuEncoder() {
   if (cnencode_param_.dst_width == 0 || cnencode_param_.dst_height == 0) {
-    LOG(ERROR) << "[CNEncode]  Create cpu encoder failed, dst_width or dst_height is 0";
+    LOGE(ENCODE) << "[CNEncode]  Create cpu encoder failed, dst_width or dst_height is 0";
     return false;
   }
   size_ = cv::Size(cnencode_param_.dst_width, cnencode_param_.dst_height);
   std::string filename = cnencode_param_.output_dir + "/encode_stream_" + cnencode_param_.stream_id;
   int fourcc = -1;
 #if ((CV_MAJOR_VERSION < 3) || CNS_MLU220_SOC)
-  LOG(WARNING) << "[CNEncode] H264 or HEVC encoder is not supported. MJPG encoder will be used instead.";
+  LOGW(ENCODE) << "[CNEncode] H264 or HEVC encoder is not supported. MJPG encoder will be used instead.";
   if (cnencode_param_.codec_type == H264 || cnencode_param_.codec_type == HEVC) {
     fourcc = CV_FOURCC('M', 'J', 'P', 'G');
     filename += ".avi";
@@ -203,7 +201,7 @@ bool CNEncode::CreateCpuEncoder() {
   if (fourcc >= 0) {
     writer_ = std::move(cv::VideoWriter(filename, fourcc, cnencode_param_.frame_rate, size_));
     if (!writer_.isOpened()) {
-      LOG(ERROR) << "[CNEncode] Create cpu encoder failed";
+      LOGE(ENCODE) << "[CNEncode] Create cpu encoder failed";
       return false;
     }
   }
@@ -219,7 +217,7 @@ bool CNEncode::CreateDir(std::string dir) {
   for (uint32_t i = 0; i < dir.size(); i++) {
     path.push_back(dir[i]);
     if (dir[i] == '/' && access(path.c_str(), 0) != success && mkdir(path.c_str(), 00700) != success) {
-      LOG(ERROR) << "[CNEncode] Failed at create directory";
+      LOGE(ENCODE) << "[CNEncode] Failed at create directory";
       return false;
     }
   }
@@ -233,7 +231,7 @@ CNEncode::~CNEncode() {
       context.SetDeviceId(cnencode_param_.device_id);
       context.BindDevice();
     } catch (edk::Exception &err) {
-      LOG(ERROR) << "[CNEncode][Close] set mlu env failed";
+      LOGE(ENCODE) << "[CNEncode][Close] set mlu env failed";
     }
     if (mlu_encoder_) {
       delete mlu_encoder_;
@@ -254,7 +252,7 @@ bool CNEncode::Update(const cv::Mat src, int64_t timestamp) {
                 std::to_string(++frame_count_) + ".jpg", src);
   } else {
     if (!writer_.isOpened()) {
-      LOG(ERROR) << "[CNEncode] cpu encoder is not existed.";
+      LOGE(ENCODE) << "[CNEncode] cpu encoder is not existed.";
       return false;
     }
     writer_.write(src);
@@ -265,7 +263,7 @@ bool CNEncode::Update(const cv::Mat src, int64_t timestamp) {
 
 bool CNEncode::Update(uint8_t* src_y, uint8_t* src_uv, int64_t timestamp, bool eos) {
   if (!mlu_encoder_) {
-    LOG(ERROR) << "[CNEncode] mlu encoder is not existed.";
+    LOGE(ENCODE) << "[CNEncode] mlu encoder is not existed.";
     return false;
   }
   edk::CnFrame *cnframe = new edk::CnFrame;
@@ -273,7 +271,7 @@ bool CNEncode::Update(uint8_t* src_y, uint8_t* src_uv, int64_t timestamp, bool e
   cnframe->pts = timestamp;
   if (!eos) {
     if (!src_y || !src_uv) {
-      LOG(ERROR) << "[CNEncode] src y or src uv pointer is nullptr.";
+      LOGE(ENCODE) << "[CNEncode] src y or src uv pointer is nullptr.";
       delete cnframe;
       return false;
     }
@@ -289,12 +287,12 @@ bool CNEncode::Update(uint8_t* src_y, uint8_t* src_uv, int64_t timestamp, bool e
   }
   try {
     if (!mlu_encoder_->SendDataCPU(*cnframe, eos)) {
-      LOG(ERROR) << "[CNEncode] send data to mlu encoder failed.";
+      LOGE(ENCODE) << "[CNEncode] send data to mlu encoder failed.";
       delete cnframe;
       return false;
     }
   } catch (edk::Exception &err) {
-    LOG(ERROR) << "EncoderError: send data to mlu encoder" << err.what();
+    LOGE(ENCODE) << "EncoderError: send data to mlu encoder" << err.what();
     delete cnframe;
     return false;
   }
@@ -324,7 +322,7 @@ void CNEncode::PacketCallback(const edk::CnPacket &packet) {
     context.SetDeviceId(cnencode_param_.device_id);
     context.BindDevice();
   } catch (edk::Exception &err) {
-    LOG(ERROR) << "[CNEncode][PacketCallback] set mlu env faild";
+    LOGE(ENCODE) << "[CNEncode][PacketCallback] set mlu env faild";
     mlu_encoder_->ReleaseBuffer(packet.buf_id);
     return;
   }
@@ -338,7 +336,7 @@ void CNEncode::PacketCallback(const edk::CnPacket &packet) {
     output_file_name_ = cnencode_param_.output_dir + "/encode_stream_" + cnencode_param_.stream_id + "_" +
                         std::to_string(++frame_count_) + ".jpg";
   } else {
-    LOG(ERROR) << "[CNEncode][PacketCallback] unknown output codec type: " << static_cast<int>(packet.codec_type);
+    LOGE(ENCODE) << "[CNEncode][PacketCallback] unknown output codec type: " << static_cast<int>(packet.codec_type);
   }
 
   if (packet.codec_type == edk::CodecType::JPEG) {
@@ -347,12 +345,12 @@ void CNEncode::PacketCallback(const edk::CnPacket &packet) {
     p_file_ = fopen(output_file_name_.c_str(), "wb");
   }
   if (p_file_ == nullptr) {
-    LOG(ERROR) << "[CNEncode][PacketCallback] open output file failed";
+    LOGE(ENCODE) << "[CNEncode][PacketCallback] open output file failed";
   } else {
     uint32_t length = packet.length;
     written_ = fwrite(packet.data, 1, length, p_file_);
     if (written_ != length) {
-      LOG(ERROR) << "[CNEncode][PacketCallback] written size: " << written_
+      LOGE(ENCODE) << "[CNEncode][PacketCallback] written size: " << written_
                  << " is not equal to data length: " << length;
     }
     if (packet.codec_type == edk::CodecType::JPEG) {
@@ -365,7 +363,7 @@ void CNEncode::PacketCallback(const edk::CnPacket &packet) {
 }
 
 void CNEncode::EosCallback() {
-  LOG(INFO) << "[CNEncode] EosCallback ... ";
+  LOGI(ENCODE) << "[CNEncode] EosCallback ... ";
 }
 
 void CNEncode::RecordEndTime(int64_t pts) {

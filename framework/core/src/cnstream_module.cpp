@@ -99,7 +99,7 @@ bool Module::PostEvent(EventType type, const std::string& msg) {
   if (container_) {
     return container_->GetEventBus()->PostEvent(event);
   } else {
-    LOG(WARNING) << "[" << GetName() << "] module's container is not set";
+    LOGW(CORE) << "[" << GetName() << "] module's container is not set";
     return false;
   }
 }
@@ -109,7 +109,7 @@ bool Module::PostEvent(Event e) {
   if (container_) {
     return container_->GetEventBus()->PostEvent(e);
   } else {
-    LOG(WARNING) << "[" << GetName() << "] module's container is not set";
+    LOGW(CORE) << "[" << GetName() << "] module's container is not set";
     return false;
   }
 }

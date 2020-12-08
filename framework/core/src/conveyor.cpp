@@ -20,8 +20,6 @@
 
 #include "conveyor.hpp"
 
-#include <glog/logging.h>
-
 #include <chrono>
 #include <memory>
 #include <thread>

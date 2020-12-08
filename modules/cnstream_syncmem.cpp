@@ -29,6 +29,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cnrt.h>
 #include <glog/logging.h>
+#include "cnstream_logging.hpp"
 
 #include "cnstream_common.hpp"
 #include "cnstream_syncmem.hpp"
@@ -43,7 +44,7 @@ namespace cnstream {
  */
 static void CNStreamMallocHost(void** ptr, size_t size) {
   void* __ptr = malloc(size);
-  LOG_IF(FATAL, nullptr == __ptr) << "Malloc memory on CPU failed, malloc size:" << size;
+  LOGF_IF(FRAME, nullptr == __ptr) << "Malloc memory on CPU failed, malloc size:" << size;
   *ptr = __ptr;
 }
 
@@ -129,8 +130,8 @@ const void* CNSyncedMemory::GetCpuData() {
 void CNSyncedMemory::SetMluCpuData(void* mlu_data, void* cpu_data) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (0 == size_) return;
-  LOG_IF(FATAL, NULL == mlu_data) << "mlu_data is NULL.";
-  LOG_IF(FATAL, NULL == cpu_data) << "cpu_data is NULL.";
+  LOGF_IF(FRAME, NULL == mlu_data) << "mlu_data is NULL.";
+  LOGF_IF(FRAME, NULL == cpu_data) << "cpu_data is NULL.";
 
   if (own_mlu_data_) {
     CALL_CNRT_BY_CONTEXT(cnrtFree(mlu_ptr_), dev_id_, ddr_chn_);
@@ -151,7 +152,7 @@ void CNSyncedMemory::SetMluCpuData(void* mlu_data, void* cpu_data) {
 void CNSyncedMemory::SetCpuData(void* data) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (0 == size_) return;
-  LOG_IF(FATAL, NULL == data) << "data is NULL.";
+  LOGF_IF(FRAME, NULL == data) << "data is NULL.";
   if (own_cpu_data_) {
     CNStreamFreeHost(cpu_ptr_);
   }
@@ -169,7 +170,7 @@ const void* CNSyncedMemory::GetMluData() {
 void CNSyncedMemory::SetMluData(void* data) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (0 == size_) return;
-  LOG_IF(FATAL, nullptr == data) << "data is NULL.";
+  LOGF_IF(FRAME, nullptr == data) << "data is NULL.";
   if (own_mlu_data_) {
     CALL_CNRT_BY_CONTEXT(cnrtFree(mlu_ptr_), dev_id_, ddr_chn_);
   }
@@ -184,8 +185,8 @@ void CNSyncedMemory::SetMluDevContext(int dev_id, int ddr_chn) {
     check device
    */
   cnrtDev_t dev;
-  LOG_IF(FATAL, CNRT_RET_SUCCESS != cnrtGetDeviceHandle(&dev, dev_id)) << "Can not find device by id: " << dev_id;
-  // LOG_IF(FATAL, ddr_chn < 0 || ddr_chn >= 4) << "Invalid ddr channel [0,4) :" << ddr_chn;
+  LOGF_IF(FRAME, CNRT_RET_SUCCESS != cnrtGetDeviceHandle(&dev, dev_id)) << "Can not find device by id: " << dev_id;
+  // LOGF_IF(FRAME, ddr_chn < 0 || ddr_chn >= 4) << "Invalid ddr channel [0,4) :" << ddr_chn;
 
   dev_id_ = dev_id;
   ddr_chn_ = ddr_chn;

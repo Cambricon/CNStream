@@ -98,7 +98,7 @@ std::shared_ptr<CnOsd> Osd::GetOsdContext() {
   if (!ctx) {
     ctx = std::make_shared<CnOsd>(labels_);
     if (!ctx) {
-      LOG(ERROR) << "Osd::GetOsdContext() create Osd Context Failed";
+      LOGE(OSD) << "Osd::GetOsdContext() create Osd Context Failed";
       return nullptr;
     }
     ctx->SetTextScale(label_size_ * text_scale_);
@@ -116,7 +116,7 @@ std::shared_ptr<CnOsd> Osd::GetOsdContext() {
       if (font && font->Init(font_path_, font_size, space, step)) {
         ctx->SetCnFont(font);
       } else {
-        LOG(ERROR) << "Create and initialize CnFont failed.";
+        LOGE(OSD) << "Create and initialize CnFont failed.";
       }
     }
 #endif
@@ -129,13 +129,13 @@ std::shared_ptr<CnOsd> Osd::GetOsdContext() {
 bool Osd::Open(cnstream::ModuleParamSet paramSet) {
   std::string label_path = "";
   if (paramSet.find("label_path") == paramSet.end()) {
-    LOG(WARNING) << "Can not find label_path from module parameters.";
+    LOGW(OSD) << "Can not find label_path from module parameters.";
   } else {
     label_path = paramSet["label_path"];
     label_path = GetPathRelativeToTheJSONFile(label_path, paramSet);
     labels_ = LoadLabels(label_path);
     if (labels_.empty()) {
-      LOG(WARNING) << "Empty label file or wrong file path.";
+      LOGW(OSD) << "Empty label file or wrong file path.";
     } else {
 #ifdef HAVE_FREETYPE
       if (paramSet.find("font_path") != paramSet.end()) {
@@ -197,18 +197,18 @@ void Osd::Close() {
 int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
   std::shared_ptr<CnOsd> ctx = GetOsdContext();
   if (ctx == nullptr) {
-    LOG(ERROR) << "Get Osd Context Failed.";
+    LOGE(OSD) << "Get Osd Context Failed.";
     return -1;
   }
 
   CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
   if (frame->width < 0 || frame->height < 0) {
-    LOG(ERROR) << "OSD module processed illegal frame: width or height may < 0.";
+    LOGE(OSD) << "OSD module processed illegal frame: width or height may < 0.";
     return -1;
   }
   if (frame->ptr_cpu[0] == nullptr && frame->ptr_mlu[0] == nullptr && frame->cpu_data == nullptr &&
       frame->mlu_data == nullptr) {
-    LOG(ERROR) << "OSD module processed illegal frame: data ptr point to nullptr.";
+    LOGE(OSD) << "OSD module processed illegal frame: data ptr point to nullptr.";
     return -1;
   }
 
@@ -229,30 +229,30 @@ bool Osd::CheckParamSet(const ModuleParamSet& paramSet) const {
   ParametersChecker checker;
   for (auto& it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
-      LOG(WARNING) << "[Osd] Unknown param: " << it.first;
+      LOGW(OSD) << "[Osd] Unknown param: " << it.first;
     }
   }
   if (paramSet.find("label_path") != paramSet.end()) {
     if (!checker.CheckPath(paramSet.at("label_path"), paramSet)) {
-      LOG(ERROR) << "[Osd] [label_path] : " << paramSet.at("label_path") << " non-existence.";
+      LOGE(OSD) << "[Osd] [label_path] : " << paramSet.at("label_path") << " non-existence.";
       ret = false;
     }
   }
   if (paramSet.find("font_path") != paramSet.end()) {
     if (!checker.CheckPath(paramSet.at("font_path"), paramSet)) {
-      LOG(ERROR) << "[Osd] [font_path] : " << paramSet.at("font_path") << " non-existence.";
+      LOGE(OSD) << "[Osd] [font_path] : " << paramSet.at("font_path") << " non-existence.";
       ret = false;
     }
   }
   if (paramSet.find("secondary_label_path") != paramSet.end()) {
     if (!checker.CheckPath(paramSet.at("secondary_label_path"), paramSet)) {
-      LOG(ERROR) << "[Osd] [secondary_label_path] : " << paramSet.at("secondary_label_path") << " non-existence.";
+      LOGE(OSD) << "[Osd] [secondary_label_path] : " << paramSet.at("secondary_label_path") << " non-existence.";
       ret = false;
     }
   }
   std::string err_msg;
   if (!checker.IsNum({"text_scale", "text_thickness", "box_thickness"}, paramSet, err_msg)) {
-    LOG(ERROR) << "[Osd] " << err_msg;
+    LOGE(OSD) << "[Osd] " << err_msg;
     ret = false;
   }
   if (paramSet.find("label_size") != paramSet.end()) {
@@ -260,7 +260,7 @@ bool Osd::CheckParamSet(const ModuleParamSet& paramSet) const {
     if (label_size != "normal" && label_size != "large" && label_size != "larger" &&
         label_size != "small" && label_size != "smaller") {
       if (!checker.IsNum({"label_size"}, paramSet, err_msg)) {
-        LOG(ERROR) << "[Osd] " << err_msg << " Please choose from 'normal', 'large', 'larger', 'small', 'smaller'."
+        LOGE(OSD) << "[Osd] " << err_msg << " Please choose from 'normal', 'large', 'larger', 'small', 'smaller'."
                    << " Or set a number to it.";
         ret = false;
       }

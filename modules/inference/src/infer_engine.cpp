@@ -98,13 +98,13 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
     if (error_func_) {
       error_func_(e.what());
     } else {
-      LOG(FATAL) << "Not handled error: " << std::string(e.what());
+      LOGF(INFERENCER) << "Not handled error: " << std::string(e.what());
     }
   } catch (edk::Exception& e) {
     if (error_func_) {
       error_func_(e.what());
     } else {
-      LOG(FATAL) << "Not handled error: " << std::string(e.what());
+      LOGF(INFERENCER) << "Not handled error: " << std::string(e.what());
     }
   }
 }
@@ -134,13 +134,13 @@ InferEngine::~InferEngine() {
     if (error_func_) {
       error_func_(e.what());
     } else {
-      LOG(FATAL) << "Not handled error: " << std::string(e.what());
+      LOGF(INFERENCER) << "Not handled error: " << std::string(e.what());
     }
   } catch (edk::Exception& e) {
     if (error_func_) {
       error_func_(e.what());
     } else {
-      LOG(FATAL) << "Not handled error: " << std::string(e.what());
+      LOGF(INFERENCER) << "Not handled error: " << std::string(e.what());
     }
   }
 }
@@ -168,7 +168,7 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
         InferTaskSptr task = obj_batching_stage_->Batching(finfo, obj);
         tp_->SubmitTask(task);
       } catch (edk::MluResizeConvertOpError& e) {
-        LOG(ERROR) << std::string(e.what());
+        LOGE(INFERENCER) << std::string(e.what());
         continue;
       }
       batched_finfos_.push_back(std::make_pair(finfo, auto_set_done));
@@ -190,7 +190,7 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       InferTaskSptr task = batching_stage_->Batching(finfo);
       tp_->SubmitTask(task);
     } catch (edk::MluResizeConvertOpError& e) {
-      LOG(ERROR) << std::string(e.what());
+      LOGE(INFERENCER) << std::string(e.what());
       timeout_helper_.UnlockOperator();
       return card;
     }
@@ -210,12 +210,12 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
 static bool CheckModel(const std::shared_ptr<edk::ModelLoader>& model) {
   auto shapes = model->InputShapes();
   if (shapes.size() != 1) {
-    LOG(ERROR) << "Unsupport model with " << shapes.size() << " input.";
+    LOGE(INFERENCER) << "Unsupport model with " << shapes.size() << " input.";
     return false;
   }
 
   if (shapes[0].c != 4) {
-    LOG(ERROR) << "Use mlu to do preprocessing, only support model with c = 4, but c = " << shapes[0].c;
+    LOGE(INFERENCER) << "Use mlu to do preprocessing, only support model with c = 4, but c = " << shapes[0].c;
     return false;
   }
   return true;

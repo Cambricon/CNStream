@@ -18,8 +18,6 @@
  * THE SOFTWARE.
  *************************************************************************/
 #include "rtsp_stream_pipe.hpp"
-
-#include <glog/logging.h>
 #include <thread>
 
 #include "cn_video_encoder.hpp"
@@ -58,7 +56,7 @@ StreamPipeCtx *StreamPipeCreate(const RtspParam &rtsp_param) {
 
 int StreamPipePutPacket(StreamPipeCtx *ctx, uint8_t *data, int64_t timestamp) {
   if (!ctx->init_flag) {
-    LOG(INFO) << "Init stream pipe firstly\n";
+    LOGI(RTSP) << "Init stream pipe firstly\n";
     return -1;
   }
   ctx->video_encoder->SendFrame(data, timestamp);
@@ -68,7 +66,7 @@ int StreamPipePutPacket(StreamPipeCtx *ctx, uint8_t *data, int64_t timestamp) {
 /*
 int StreamPipePutPacketMlu(StreamPipeCtx *ctx, void *y, void *uv, int64_t timestamp) {
   if (!ctx->init_flag) {
-    LOG(INFO) << "Init stream pipe firstly!";
+    LOGI(RTSP) << "Init stream pipe firstly!";
     return -1;
   }
   ctx->video_encoder->SendFrame(y, uv, timestamp);
@@ -78,7 +76,7 @@ int StreamPipePutPacketMlu(StreamPipeCtx *ctx, void *y, void *uv, int64_t timest
 
 int StreamPipeClose(StreamPipeCtx *ctx) {
   if (!ctx->init_flag) {
-    LOG(INFO) << "Init stream pipe firstly\n";
+    LOGI(RTSP) << "Init stream pipe firstly\n";
     return -1;
   }
   if (ctx->live_server) {
@@ -91,14 +89,14 @@ int StreamPipeClose(StreamPipeCtx *ctx) {
     ctx->server_thread = nullptr;
   }
 
-  LOG(INFO) << "live server release";
+  LOGI(RTSP) << "live server release";
   if (ctx->video_encoder) {
     ctx->video_encoder->Stop();
     delete ctx->video_encoder;
     ctx->video_encoder = nullptr;
   }
 
-  LOG(INFO) << "Stream Pipe close";
+  LOGI(RTSP) << "Stream Pipe close";
   delete ctx;
   return 0;
 }

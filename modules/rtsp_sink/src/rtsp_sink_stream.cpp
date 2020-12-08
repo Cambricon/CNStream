@@ -20,7 +20,7 @@
 
 #include "rtsp_sink_stream.hpp"
 
-#include <glog/logging.h>
+#include "cnstream_logging.hpp"
 #include <memory>
 
 #include "device/mlu_context.h"
@@ -54,14 +54,14 @@ bool RtspSinkJoinStream::Open(const RtspParam& rtsp_params) {
   *rtsp_param_ = rtsp_params;
 
   running_ = true;
-  LOG(INFO) << "==================================================================";
+  LOGI(RTSP) << "==================================================================";
   if (rtsp_params.enc_type == FFMPEG)
-    LOG(INFO) << "[Rtsp SINK] Use FFMPEG encoder";
+    LOGI(RTSP) << "[Rtsp SINK] Use FFMPEG encoder";
   else if (rtsp_params.enc_type == MLU)
-    LOG(INFO) << "[Rtsp SINK] Use MLU encoder";
-  LOG(INFO) << "[Rtsp Sink] FrameRate: " << rtsp_params.frame_rate << "  GOP: " << rtsp_params.gop
+    LOGI(RTSP) << "[Rtsp SINK] Use MLU encoder";
+  LOGI(RTSP) << "[Rtsp Sink] FrameRate: " << rtsp_params.frame_rate << "  GOP: " << rtsp_params.gop
             << "  KBPS: " << rtsp_params.kbps;
-  LOG(INFO) << "==================================================================";
+  LOGI(RTSP) << "==================================================================";
 
   ctx_ = StreamPipeCreate(rtsp_params);
   canvas_ = cv::Mat(rtsp_params.dst_height, rtsp_params.dst_width, CV_8UC3);           // for bgr24
@@ -108,7 +108,7 @@ void RtspSinkJoinStream::Close() {
   StreamPipeClose(ctx_);
   canvas_.release();
   delete[] canvas_data_;
-  LOG(INFO) << "Release stream resources !!!" << std::endl;
+  LOGI(RTSP) << "Release stream resources !!!" << std::endl;
 }
 
 bool RtspSinkJoinStream::UpdateBGR(cv::Mat image, int64_t timestamp, int channel_id) {

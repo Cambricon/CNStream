@@ -18,7 +18,7 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <glog/logging.h>
+#include "cnstream_logging.hpp"
 
 #include <chrono>
 #include <ctime>
@@ -57,7 +57,7 @@ void ThreadFuncState(int id) {
     for (int i = 0; i < id; i++) {
       if (flag[i] == 0) {
         if (cnt > 10) {
-          LOG(FATAL) << kind[id] << " is blocking! Thread: " << i << " is not end!" << std::endl;
+          LOGF(COREUNITEST) << kind[id] << " is blocking! Thread: " << i << " is not end!" << std::endl;
         }
         std::cout << kind[id] << " is blocking! Thread: " << i << " is not end!" << std::endl;
         f = false;

@@ -82,7 +82,7 @@ Encode::Encode(const std::string &name) : Module(name) {
 EncodeContext *Encode::GetEncodeContext(CNFrameInfoPtr data) {
   EncodeContext *ctx = nullptr;
   if (!data) {
-    LOG(ERROR) << "[Encode] data is nullptr.";
+    LOGE(ENCODE) << "[Encode] data is nullptr.";
     return ctx;
   }
   {
@@ -93,7 +93,7 @@ EncodeContext *Encode::GetEncodeContext(CNFrameInfoPtr data) {
     }
   }
   if (data->IsEos()) {
-    LOG(WARNING) << "[Encode] data is eos, get EncodeContext failed.";
+    LOGW(ENCODE) << "[Encode] data is eos, get EncodeContext failed.";
     return ctx;
   }
 
@@ -120,7 +120,7 @@ EncodeContext *Encode::GetEncodeContext(CNFrameInfoPtr data) {
       frame_pix_fmt = NV21;
       break;
     default:
-      LOG(ERROR) << "[Encode] unsupported pixel format.";
+      LOGE(ENCODE) << "[Encode] unsupported pixel format.";
       if (ctx) {
         delete ctx;
       }
@@ -169,7 +169,7 @@ EncodeContext *Encode::GetEncodeContext(CNFrameInfoPtr data) {
   }
   ctx->preproc.reset(new ImagePreproc(preproc_param));
   if (!ctx->preproc->Init()) {
-    LOG(ERROR) << "[Encode] encoder preproc init failed.";
+    LOGE(ENCODE) << "[Encode] encoder preproc init failed.";
     if (ctx) {
       delete ctx;
     }
@@ -195,7 +195,7 @@ EncodeContext *Encode::GetEncodeContext(CNFrameInfoPtr data) {
 
   ctx->cnencode.reset(new CNEncode(cnencode_param));
   if (!ctx->cnencode->Init()) {
-    LOG(ERROR) << "[Encode] CNEncode type object initialized failed.";
+    LOGE(ENCODE) << "[Encode] CNEncode type object initialized failed.";
     if (ctx) {
       delete ctx;
     }
@@ -219,29 +219,29 @@ Encode::~Encode() { Close(); }
 
 bool Encode::Open(ModuleParamSet paramSet) {
   if (param_) {
-    LOG(WARNING) << "[Encode] encode param is existed. Please Close before Open.";
+    LOGW(ENCODE) << "[Encode] encode param is existed. Please Close before Open.";
     return false;
   }
   param_ = new EncodeParam();
   if (paramSet.find("dump_dir") != paramSet.end()) {
-    LOG(ERROR) << "[Encode] parameter ``dump_dir`` is deprecated. Please use ``output_dir`` instead.";
+    LOGE(ENCODE) << "[Encode] parameter ``dump_dir`` is deprecated. Please use ``output_dir`` instead.";
     return false;
   }
   if (paramSet.find("dump_type") != paramSet.end()) {
-    LOG(ERROR) << "[Encode] parameter ``dump_type`` is deprecated. Please use ``codec_type`` instead. "
+    LOGE(ENCODE) << "[Encode] parameter ``dump_type`` is deprecated. Please use ``codec_type`` instead. "
                << "Supported options are jpeg, h264 and hevc.";
     return false;
   }
   if (paramSet.find("bit_rate") != paramSet.end()) {
-    LOG(ERROR) << "[Encode] parameter ``bit_rate`` is deprecated. Please use ``kbit_rate`` instead.";
+    LOGE(ENCODE) << "[Encode] parameter ``bit_rate`` is deprecated. Please use ``kbit_rate`` instead.";
     return false;
   }
   if (paramSet.find("pre_type") != paramSet.end()) {
-    LOG(ERROR) << "[Encode] parameter ``pre_type`` is deprecated. Please use ``preproc_type`` instead.";
+    LOGE(ENCODE) << "[Encode] parameter ``pre_type`` is deprecated. Please use ``preproc_type`` instead.";
     return false;
   }
   if (paramSet.find("enc_type") != paramSet.end()) {
-    LOG(ERROR) << "[Encode] parameter ``enc_type`` is deprecated. Please use ``codec_type`` instead. "
+    LOGE(ENCODE) << "[Encode] parameter ``enc_type`` is deprecated. Please use ``codec_type`` instead. "
                << "Supported options are jpeg, h264 and hevc.";
     return false;
   }
@@ -275,18 +275,18 @@ bool Encode::Open(ModuleParamSet paramSet) {
     } else if (paramSet["encoder_type"] == "cpu") {
       param_->encoder_type = "cpu";
     } else {
-      LOG(WARNING) << "[Encode] encoder type should be chosen from mlu and cpu. "
+      LOGW(ENCODE) << "[Encode] encoder type should be chosen from mlu and cpu. "
                    << "It is invalid, cpu will be selected as default.";
     }
   }
   if (paramSet.find("preproc_type") != paramSet.end()) {
     if (paramSet["preproc_type"] == "mlu") {
-      LOG(ERROR) << "[Encode] Preproc on MLU is not supported now.";
+      LOGE(ENCODE) << "[Encode] Preproc on MLU is not supported now.";
       return false;
     } else if (paramSet["preproc_type"] == "cpu") {
       param_->preproc_type = "cpu";
     } else {
-      LOG(WARNING) << "[Encode] preprocess type should be chosen from mlu and cpu. "
+      LOGW(ENCODE) << "[Encode] preprocess type should be chosen from mlu and cpu. "
                    << "It is invalid, cpu will be selected as default.";
     }
   }
@@ -299,7 +299,7 @@ bool Encode::Open(ModuleParamSet paramSet) {
     } else if ("jpeg" == codec_type) {
       param_->codec_type = JPEG;
     } else {
-      LOG(WARNING) << "[Encode] codec type should be chosen from h264, h265 and jpeg. "
+      LOGW(ENCODE) << "[Encode] codec type should be chosen from h264, h265 and jpeg. "
                    << "It is invalid, h264 will be selected as default.";
     }
   }
@@ -307,15 +307,15 @@ bool Encode::Open(ModuleParamSet paramSet) {
     param_->device_id = std::stoi(paramSet["device_id"]);
   }
   if ((param_->preproc_type == "mlu" || param_->encoder_type == "mlu") && param_->device_id < 0) {
-    LOG(ERROR) << "[Encode] Please set device id if use mlu to encode or preprocess.";
+    LOGE(ENCODE) << "[Encode] Please set device id if use mlu to encode or preprocess.";
     return false;
   }
   if (param_->preproc_type == "mlu" && param_->encoder_type == "cpu") {
-    LOG(ERROR) << "[Encode] Not supported cpu encoding after mlu preprocessing";
+    LOGE(ENCODE) << "[Encode] Not supported cpu encoding after mlu preprocessing";
     return false;
   }
   if (param_->encoder_type == "mlu" && (param_->dst_height % 2 || param_->dst_width % 2)) {
-    LOG(ERROR) << "[Encode] Not supported mlu encoding image the height or the width of which is odd.";
+    LOGE(ENCODE) << "[Encode] Not supported mlu encoding image the height or the width of which is odd.";
     return false;
   }
   return true;
@@ -349,7 +349,7 @@ int Encode::Process(CNFrameInfoPtr data) {
   bool eos = data->IsEos();
   EncodeContext *ctx = GetEncodeContext(data);
   if (!ctx) {
-    LOG(ERROR) << "[Encode] Get encode context failed.";
+    LOGE(ENCODE) << "[Encode] Get encode context failed.";
     return -1;
   }
   if (ctx->data_yuv) {
@@ -361,7 +361,7 @@ int Encode::Process(CNFrameInfoPtr data) {
   if (eos) {
     if (param_->encoder_type == "mlu") {
       if (!ctx->cnencode->Update(dst_y, dst_uv, data->timestamp, eos)) {
-        LOG(ERROR) << "[Encode] Encode frame on Mlu failed.";
+        LOGE(ENCODE) << "[Encode] Encode frame on Mlu failed.";
         return -1;
       }
     }
@@ -371,7 +371,7 @@ int Encode::Process(CNFrameInfoPtr data) {
 
   CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);;
   if (frame->width * frame->height == 0) {
-    LOG(ERROR) << "[Encode] The height or the width of the data frame is invalid.";
+    LOGE(ENCODE) << "[Encode] The height or the width of the data frame is invalid.";
     return -1;
   }
 
@@ -391,17 +391,17 @@ int Encode::Process(CNFrameInfoPtr data) {
       //   const uint8_t *src_uv = reinterpret_cast<const uint8_t*>(frame->data[1]->GetMluData());
       //   // TODO: Get encoder mlu address
       //   if (!ctx->preproc->Yuv2Yuv(src_y, src_uv, dst_y, dst_uv)) {
-      //     LOG(ERROR) << "[Encode] mlu yuv2yuv resize failed.";
+      //     LOGE(ENCODE) << "[Encode] mlu yuv2yuv resize failed.";
       //     return -1;
       //   }
       // } else {
       //   // bgr 2 yuv (mlu is not supported, use cpu instead opencv/ffmpeg)
       //   if (!ctx->preproc->Bgr2Yuv(*image, ctx->data_yuv)) {
-      //     LOG(ERROR) << "[Encode] cpu bgr2yuv resize failed. (mlu is not supported yet)";
+      //     LOGE(ENCODE) << "[Encode] cpu bgr2yuv resize failed. (mlu is not supported yet)";
       //     return -1;
       //   }
       // }
-      LOG(ERROR) << "[Encode] mlu preproc is not supported yet.";
+      LOGE(ENCODE) << "[Encode] mlu preproc is not supported yet.";
       return -1;
     } else {
       // Cpu Preproc
@@ -409,12 +409,12 @@ int Encode::Process(CNFrameInfoPtr data) {
         const uint8_t *src_y = reinterpret_cast<const uint8_t *>(frame->data[0]->GetCpuData());
         const uint8_t *src_uv = reinterpret_cast<const uint8_t *>(frame->data[1]->GetCpuData());
         if (!ctx->preproc->Yuv2Yuv(src_y, src_uv, ctx->data_yuv)) {
-          LOG(ERROR) << "[Encode] cpu yuv resize failed.";
+          LOGE(ENCODE) << "[Encode] cpu yuv resize failed.";
           return -1;
         }
       } else {
         if (!ctx->preproc->Bgr2Yuv(*image, ctx->data_yuv)) {
-          LOG(ERROR) << "[Encode] cpu bgr2yuv and resize failed.";
+          LOGE(ENCODE) << "[Encode] cpu bgr2yuv and resize failed.";
           return -1;
         }
       }
@@ -426,7 +426,7 @@ int Encode::Process(CNFrameInfoPtr data) {
 
     // Mlu Encode
     if (!ctx->cnencode->Update(dst_y, dst_uv, data->timestamp, eos)) {
-      LOG(ERROR) << "[Encode] Encode frame on Mlu failed.";
+      LOGE(ENCODE) << "[Encode] Encode frame on Mlu failed.";
       return -1;
     }
   } else if (param_->encoder_type == "cpu") {
@@ -434,12 +434,12 @@ int Encode::Process(CNFrameInfoPtr data) {
     image = frame->ImageBGR();
     // Cpu Preproc
     if (!ctx->preproc->Bgr2Bgr(*image, ctx->dst_image)) {
-      LOG(ERROR) << "[Encode] cpu bgr resize failed.";
+      LOGE(ENCODE) << "[Encode] cpu bgr resize failed.";
       return -1;
     }
     // Cpu Encode
     if (!ctx->cnencode->Update(ctx->dst_image, data->timestamp)) {
-      LOG(ERROR) << "[Encode] Encode frame on Cpu failed.";
+      LOGE(ENCODE) << "[Encode] Encode frame on Cpu failed.";
       return -1;
     }
   }
@@ -452,28 +452,28 @@ bool Encode::CheckParamSet(const ModuleParamSet &paramSet) const {
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
-      LOG(WARNING) << "[Encode] Unknown param: " << it.first;
+      LOGW(ENCODE) << "[Encode] Unknown param: " << it.first;
     }
   }
   if (paramSet.find("dump_dir") != paramSet.end()) {
-    LOG(ERROR) << "[Encode] parameter ``dump_dir`` is deprecated. Please use ``output_dir`` instead.";
+    LOGE(ENCODE) << "[Encode] parameter ``dump_dir`` is deprecated. Please use ``output_dir`` instead.";
     ret = false;
   }
   if (paramSet.find("dump_type") != paramSet.end()) {
-    LOG(ERROR) << "[Encode] parameter ``dump_type`` is deprecated. Please use ``codec_type`` instead. "
+    LOGE(ENCODE) << "[Encode] parameter ``dump_type`` is deprecated. Please use ``codec_type`` instead. "
                << "Supported options are jpeg, h264 and hevc.";
     ret = false;
   }
   if (paramSet.find("bit_rate") != paramSet.end()) {
-    LOG(ERROR) << "[Encode] parameter ``bit_rate`` is deprecated. Please use ``kbit_rate`` instead.";
+    LOGE(ENCODE) << "[Encode] parameter ``bit_rate`` is deprecated. Please use ``kbit_rate`` instead.";
     ret = false;
   }
   if (paramSet.find("pre_type") != paramSet.end()) {
-    LOG(ERROR) << "[Encode] parameter ``pre_type`` is deprecated. Please use ``preproc_type`` instead.";
+    LOGE(ENCODE) << "[Encode] parameter ``pre_type`` is deprecated. Please use ``preproc_type`` instead.";
     ret = false;
   }
   if (paramSet.find("enc_type") != paramSet.end()) {
-    LOG(ERROR) << "[Encode] parameter ``enc_type`` is deprecated. Please use ``codec_type`` instead. "
+    LOGE(ENCODE) << "[Encode] parameter ``enc_type`` is deprecated. Please use ``codec_type`` instead. "
                << "Supported options are jpeg, h264 and hevc.";
     ret = false;
   }
@@ -482,21 +482,21 @@ bool Encode::CheckParamSet(const ModuleParamSet &paramSet) const {
   if (paramSet.find("preproc_type") != paramSet.end()) {
     preproc_type = paramSet.at("preproc_type");
     if (preproc_type != "cpu") {
-      LOG(ERROR) << "[Encode] preproc_type is invalid, ``" << paramSet.at("preproc_type")
+      LOGE(ENCODE) << "[Encode] preproc_type is invalid, ``" << paramSet.at("preproc_type")
                  << "``. Choose ``cpu``. (mlu preproc is not supported yet.)";
       ret = false;
     }
   }
   if (paramSet.find("use_ffmpeg") != paramSet.end() && paramSet.at("use_ffmpeg") != "true" &&
       paramSet.at("use_ffmpeg") != "false") {
-    LOG(ERROR) << "[Encode] use_ffmpeg is invalid, ``" << paramSet.at("use_ffmpeg")
+    LOGE(ENCODE) << "[Encode] use_ffmpeg is invalid, ``" << paramSet.at("use_ffmpeg")
                << "``. Choose from ``true`` and ``false``.";
     ret = false;
   }
   if (paramSet.find("encoder_type") != paramSet.end()) {
     encoder_type = paramSet.at("encoder_type");
     if (encoder_type != "mlu" && encoder_type != "cpu") {
-      LOG(ERROR) << "[Encode] encoder_type is invalid, ``" << paramSet.at("encoder_type")
+      LOGE(ENCODE) << "[Encode] encoder_type is invalid, ``" << paramSet.at("encoder_type")
                  << "``. Choose from ``mlu`` and ``cpu``.";
       ret = false;
     }
@@ -504,7 +504,7 @@ bool Encode::CheckParamSet(const ModuleParamSet &paramSet) const {
 
   if (paramSet.find("codec_type") != paramSet.end() && paramSet.at("codec_type") != "jpeg" &&
       paramSet.at("codec_type") != "h264" && paramSet.at("codec_type") != "hevc") {
-    LOG(ERROR) << "[Encode] codec_type is invalid, ``" << paramSet.at("codec_type")
+    LOGE(ENCODE) << "[Encode] codec_type is invalid, ``" << paramSet.at("codec_type")
                << "``. Choose from ``jpeg``, ``h264`` and ``hevc``.";
     ret = false;
   }
@@ -512,22 +512,22 @@ bool Encode::CheckParamSet(const ModuleParamSet &paramSet) const {
   std::string err_msg;
   if (!checker.IsNum({"dst_width", "dst_height", "frame_rate", "kbit_rate", "gop_size", "device_id"}, paramSet, err_msg,
                      true)) {
-    LOG(ERROR) << "[Encode] " << err_msg;
+    LOGE(ENCODE) << "[Encode] " << err_msg;
     return false;
   }
 
   if ((preproc_type == "mlu" || encoder_type == "mlu") && paramSet.find("device_id") == paramSet.end()) {
-    LOG(ERROR) << "[Encode] Must set device id when encoder type is ``mlu``";
+    LOGE(ENCODE) << "[Encode] Must set device id when encoder type is ``mlu``";
     ret = false;
   }
   if (preproc_type == "mlu" && encoder_type == "cpu") {
-    LOG(ERROR) << "[Encode] mlu preproc and cpu encoding is not supported.";
+    LOGE(ENCODE) << "[Encode] mlu preproc and cpu encoding is not supported.";
     ret = false;
   }
   if (encoder_type == "mlu" &&
       ((paramSet.find("dst_width") != paramSet.end() && stoi(paramSet.at("dst_width")) % 2 != 0) ||
        (paramSet.find("dst_height") != paramSet.end() && stoi(paramSet.at("dst_height")) % 2 != 0))) {
-    LOG(ERROR) << "[Encode] Not supported mlu encoding image the height or the width of which is odd."
+    LOGE(ENCODE) << "[Encode] Not supported mlu encoding image the height or the width of which is odd."
                << " width: " << paramSet.at("dst_width") << ", height: " << paramSet.at("dst_height");
     ret = false;
   }

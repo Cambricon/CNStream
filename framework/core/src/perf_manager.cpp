@@ -30,8 +30,10 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include <fstream>
+#include <unistd.h>
 
-#include "glog/logging.h"
+#include "cnstream_logging.hpp"
 #include "sqlite_db.hpp"
 #include "util/cnstream_queue.hpp"
 #include "util/cnstream_time_utility.hpp"
@@ -62,17 +64,17 @@ std::shared_ptr<PerfManager> PerfManager::CreateDefaultManager(const std::string
                                                                const std::vector<std::string> &module_names) {
   std::shared_ptr<PerfManager> manager = std::make_shared<PerfManager>();
   if (!manager) {
-    LOG(ERROR) << "PerfManager::CreateDefaultManager() new PerfManager failed.";
+    LOGE(CORE) << "PerfManager::CreateDefaultManager() new PerfManager failed.";
     return nullptr;
   }
   if (!manager->Init(db_name)) {
-    LOG(ERROR) << "Init PerfManager " << db_name << " failed.";
+    LOGE(CORE) << "Init PerfManager " << db_name << " failed.";
     return nullptr;
   }
   std::vector<std::string> keys =
       PerfManager::GetKeys(module_names, {GetStartTimeSuffix(), GetEndTimeSuffix(), GetThreadSuffix()});
   if (!manager->RegisterPerfType(GetDefaultType(), GetPrimaryKey(), keys)) {
-    LOG(ERROR) << "PerfManager " << db_name << " register perf type " << GetDefaultType() << "failed.";
+    LOGE(CORE) << "PerfManager " << db_name << " register perf type " << GetDefaultType() << "failed.";
     return nullptr;
   }
   return manager;
@@ -80,21 +82,21 @@ std::shared_ptr<PerfManager> PerfManager::CreateDefaultManager(const std::string
 
 bool PerfManager::Init(std::string db_name) {
   if (db_name.empty()) {
-    LOG(ERROR) << "Please init with database file name.";
+    LOGE(CORE) << "Please init with database file name.";
     return false;
   }
   if (is_initialized_) {
-    LOG(ERROR) << "Should not initialize perf manager twice.";
+    LOGE(CORE) << "Should not initialize perf manager twice.";
     return false;
   }
   if (!PrepareDbFileDir(db_name)) {
-    LOG(ERROR) << "Prepare database file failed.";
+    LOGE(CORE) << "Prepare database file failed.";
     return false;
   }
 
   sql_ = std::make_shared<Sqlite>(db_name);
   if (!sql_->Connect()) {
-    LOG(ERROR) << "Can not connect to sqlite db.";
+    LOGE(CORE) << "Can not connect to sqlite db.";
     return false;
   }
 
@@ -110,7 +112,7 @@ bool PerfManager::RegisterPerfType(std::string type, std::string primary_key, co
     return false;
   }
   if (!sql_->CreateTable(type, primary_key, keys)) {
-    LOG(ERROR) << "Register perf type " << type << " failed";
+    LOGE(CORE) << "Register perf type " << type << " failed";
     return false;
   }
   perf_type_.insert(type);
@@ -159,13 +161,13 @@ void PerfManager::PopInfoFromQueue() {
 
 void PerfManager::InsertInfoToDb(const PerfInfo& info) {
   if (sql_ == nullptr) {
-    LOG(ERROR) << "sql pointer is nullptr";
+    LOGE(CORE) << "sql pointer is nullptr";
     return;
   }
   std::lock_guard<std::mutex> lg(perf_type_set_mutex);
   {
     if (perf_type_.find(info.perf_type) == perf_type_.end()) {
-      LOG(ERROR) << "perf type [" << info.perf_type << "] is not found. Please register first.";
+      LOGE(CORE) << "perf type [" << info.perf_type << "] is not found. Please register first.";
       return;
     }
   }
@@ -199,7 +201,7 @@ void PerfManager::SqlCommitTrans() {
 
 bool PerfManager::PrepareDbFileDir(std::string file_path) {
   if (file_path.empty()) {
-    LOG(ERROR) << "file path is empty.";
+    LOGE(CORE) << "file path is empty.";
     return false;
   }
 
@@ -212,9 +214,9 @@ bool PerfManager::PrepareDbFileDir(std::string file_path) {
       }
     }
   } else {
-    LOG(WARNING) << "File [" << file_path << "] is existed. Remove file.";
+    LOGW(CORE) << "File [" << file_path << "] is existed. Remove file.";
     if (remove(file_path.c_str()) != 0) {
-      LOG(ERROR) << "File [" << file_path << "] is existed. Remove file failed. Error code: " << errno;
+      LOGE(CORE) << "File [" << file_path << "] is existed. Remove file failed. Error code: " << errno;
       return false;
     }
   }
@@ -223,11 +225,11 @@ bool PerfManager::PrepareDbFileDir(std::string file_path) {
 
 bool PerfManager::CreateDir(std::string dir) {
   if (dir.empty()) {
-    LOG(ERROR) << "CreateDir failed. The directory is empty string.";
+    LOGE(CORE) << "CreateDir failed. The directory is empty string.";
     return false;
   }
   if (DirectoryExists(dir)) {
-    LOG(INFO) << "Directory [" << dir << "] exists.";
+    LOGI(CORE) << "Directory [" << dir << "] exists.";
     return true;
   }
   dir += "/";
@@ -236,9 +238,9 @@ bool PerfManager::CreateDir(std::string dir) {
     path.push_back(dir[i]);
     if (dir[i] == '/' && !DirectoryExists(path) && mkdir(path.c_str(), 00700) != 0) {
       if (DirectoryExists(path)) {
-        LOG(WARNING) << "Failed at create directory. [" << path << "] Error code: " << errno << " Directory exists.";
+        LOGW(CORE) << "Failed at create directory. [" << path << "] Error code: " << errno << " Directory exists.";
       } else {
-        LOG(ERROR) << "Failed at create directory. [" << path << "] Error code: " << errno;
+        LOGE(CORE) << "Failed at create directory. [" << path << "] Error code: " << errno;
         return false;
       }
     }
@@ -297,14 +299,14 @@ void PerfManager::ClearFiles(std::string dir, std::vector<std::string> files) {
   for (auto & file_name : files) {
     std::string file_path = dir + "/" + file_name;
     if (CheckFileStatus(file_path) == EXIST && remove(file_path.c_str()) != 0) {
-      LOG(WARNING) << "Remove file [" << file_path << "] failed. Error code: " << errno;
+      LOGW(CORE) << "Remove file [" << file_path << "] failed. Error code: " << errno;
     }
   }
 }
 
 int PerfManager::CheckFileStatus(std::string file_path) {
   if (file_path.empty()) {
-    LOG(WARNING) << "file path is empty.";
+    LOGW(CORE) << "file path is empty.";
     return INVALID_FILE_NAME;
   }
   int fd = open(file_path.c_str(), O_RDONLY);

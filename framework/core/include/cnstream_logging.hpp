@@ -21,6 +21,8 @@
 #include <time.h>
 
 #include <string>
+#include <streambuf>
+#include <ostream>
 
 /**
  * @brief Log filter.

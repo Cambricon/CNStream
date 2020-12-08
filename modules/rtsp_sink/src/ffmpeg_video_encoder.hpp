@@ -33,6 +33,7 @@ extern "C" {
 
 #include "rtsp_sink.hpp"
 #include "video_encoder.hpp"
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 
@@ -45,7 +46,7 @@ class FFmpegVideoEncoder : public VideoEncoder {
     if (avcodec_ctx_ != nullptr) {
       return avcodec_ctx_->bit_rate;
     } else {
-      LOG(ERROR) << "avcodec_ctx_ is nullptr.";
+      LOGE(RTSP) << "avcodec_ctx_ is nullptr.";
       return 0;
     }
   }

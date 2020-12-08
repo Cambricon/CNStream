@@ -25,7 +25,7 @@
 #include <utility>
 #include <vector>
 
-#include "glog/logging.h"
+#include "cnstream_logging.hpp"
 #include "gtest/gtest.h"
 #include "sys/stat.h"
 #include "sys/types.h"
@@ -50,7 +50,7 @@ class TestEnvironment : public testing::Environment {
     mlu_ctx.SetDeviceId(0);
     mlu_ctx.SetChannelId(0);
     mlu_ctx.BindDevice();
-    LOG(INFO) << "Set Up global environment.";
+    LOGI(MODULESUNITEST) << "Set Up global environment.";
   }
 };
 
@@ -120,12 +120,12 @@ void GetModuleExists(const std::vector<std::array<std::string, 3>> model_info) {
 int main(int argc, char **argv) {
   // GetModuleExists(model_name, modulepath_pair);
   GetModuleExists(model_info);
-  ::google::InitGoogleLogging(argv[0]);
+  cnstream::InitCNStreamLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
   ::gflags::ParseCommandLineFlags(&argc, &argv, false);
   // FLAGS_alsologtostderr = true;
   testing::AddGlobalTestEnvironment(new TestEnvironment);
   int ret = RUN_ALL_TESTS();
-  ::google::ShutdownGoogleLogging();
+  cnstream::ShutdownCNStreamLogging();
   return ret;
 }

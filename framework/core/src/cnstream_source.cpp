@@ -93,12 +93,12 @@ int SourceModule::AddSource(std::shared_ptr<SourceHandler> handler) {
   std::string stream_id = handler->GetStreamId();
   std::unique_lock<std::mutex> lock(mutex_);
   if (source_map_.find(stream_id) != source_map_.end()) {
-    LOG(ERROR) << "Duplicate stream_id\n";
+    LOGE(CORE) << "Duplicate stream_id\n";
     return -1;
   }
 
   if (source_map_.size() >= GetMaxStreamNumber()) {
-    LOG(WARNING) << handler->GetStreamId()
+    LOGW(CORE) << handler->GetStreamId()
                  << " doesn't add to pipeline because of maximum limitation: " << GetMaxStreamNumber();
     return -1;
   }
@@ -108,7 +108,7 @@ int SourceModule::AddSource(std::shared_ptr<SourceHandler> handler) {
 
   SetStreamRemoved(stream_id, false);
   if (handler->Open() != true) {
-    LOG(ERROR) << "source Open failed";
+    LOGE(CORE) << "source Open failed";
     return -1;
   }
   source_map_[stream_id] = handler;
@@ -137,7 +137,7 @@ int SourceModule::RemoveSource(const std::string &stream_id, bool force) {
     std::unique_lock<std::mutex> lock(mutex_);
     auto iter = source_map_.find(stream_id);
     if (iter == source_map_.end()) {
-      LOG(WARNING) << "source does not exist\n";
+      LOGW(CORE) << "source does not exist\n";
       return 0;
     }
     iter->second->Close();

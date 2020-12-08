@@ -1,5 +1,3 @@
-#include <glog/logging.h>
-
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -26,11 +24,12 @@ class SdlInitTool {
     mutex_.lock();
     if (!initialized_) {
       if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-        LOG(ERROR) << "Unable to initialize SDL:" << SDL_GetError();
+        LOGE(DISPLAYER) << "Unable to initialize SDL:" << SDL_GetError();
         mutex_.unlock();
         return false;
       }
       initialized_ = true;
+      atexit(SDL_Quit);
     }
     mutex_.unlock();
     return true;
@@ -38,11 +37,7 @@ class SdlInitTool {
 
  private:
   SdlInitTool() : initialized_(false) {}
-  ~SdlInitTool() {
-    if (initialized_) {
-      atexit(SDL_Quit());
-    }
-  }
+  ~SdlInitTool() {}
   bool initialized_;
   std::mutex mutex_;
 };  // class SdlInitTool
@@ -71,19 +66,19 @@ bool SDLVideoPlayer::Init(int max_chn) {
   std::cout << "before create window" << std::endl;
   window_ = SDL_CreateWindow("CNStream", 0, 0, window_w_, window_h_, 0);
   if (nullptr == window_) {
-    LOG(ERROR) << "Create SDL window failed." << SDL_GetError();
+    LOGE(DISPLAYER) << "Create SDL window failed." << SDL_GetError();
     return false;
   }
   renderer_ = SDL_CreateRenderer(window_, -1, 0);
   if (nullptr == renderer_) {
-    LOG(ERROR) << "Create SDL renderer failed." << SDL_GetError();
+    LOGE(DISPLAYER) << "Create SDL renderer failed." << SDL_GetError();
     return false;
   }
   std::cout << "before create texture" << std::endl;
   int pixelf = SDL_PIXELFORMAT_BGR24;
   texture_ = SDL_CreateTexture(renderer_, pixelf, SDL_TEXTUREACCESS_STREAMING, window_w_, window_h_);
   if (nullptr == texture_) {
-    LOG(ERROR) << "Create SDL texture failed." << SDL_GetError();
+    LOGE(DISPLAYER) << "Create SDL texture failed." << SDL_GetError();
     return false;
   }
   max_chn_ = max_chn;

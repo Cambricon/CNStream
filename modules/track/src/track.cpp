@@ -61,7 +61,7 @@ TrackerContext *Tracker::GetContext(CNFrameInfoPtr data) {
   }
   if (!g_tl_feature_extractor) {
     if (!model_loader_) {
-      LOG(INFO) << "[FeatureExtractor] model not set, extract feature on CPU";
+      LOGI(TRACK) << "[FeatureExtractor] model not set, extract feature on CPU";
       g_tl_feature_extractor.reset(new FeatureExtractor());
     } else {
       g_tl_feature_extractor.reset(new FeatureExtractor(model_loader_, device_id_));
@@ -123,7 +123,7 @@ bool Tracker::Open(ModuleParamSet paramSet) {
     try {
       model_loader_ = std::make_shared<edk::ModelLoader>(model_path_, func_name_);
     } catch (edk::Exception &e) {
-      LOG(ERROR) << e.what();
+      LOGE(TRACK) << e.what();
       return false;
     }
   }
@@ -149,7 +149,7 @@ void Tracker::Close() {
 int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
   CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
   if (frame->width <= 0 || frame->height <= 0) {
-    LOG(ERROR) << "Frame width and height can not be lower than 0.";
+    LOGE(TRACK) << "Frame width and height can not be lower than 0.";
     return -1;
   }
 
@@ -170,7 +170,7 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
   }
   TrackerContext *ctx = GetContext(data);
   if (nullptr == ctx || nullptr == ctx->processer_) {
-    LOG(ERROR) << "Get Tracker Context Failed.";
+    LOGE(TRACK) << "Get Tracker Context Failed.";
     return -1;
   }
 
@@ -200,7 +200,7 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
   } else if (track_name_ == "KCF") {
 #ifdef ENABLE_KCF
     if (frame->fmt != CN_PIXEL_FORMAT_YUV420_NV21) {
-      LOG(ERROR) << "KCF Only support frame in CN_PIXEL_FORMAT_YUV420_NV21 format.";
+      LOGE(TRACK) << "KCF Only support frame in CN_PIXEL_FORMAT_YUV420_NV21 format.";
       return -1;
     }
     std::vector<edk::DetectObject> in, out;
@@ -247,13 +247,13 @@ bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
-      LOG(WARNING) << "[Tracker] Unknown param: " << it.first;
+      LOGW(TRACK) << "[Tracker] Unknown param: " << it.first;
     }
   }
 
   if (paramSet.find("model_path") != paramSet.end()) {
     if (!checker.CheckPath(paramSet.at("model_path"), paramSet)) {
-      LOG(ERROR) << "[Tracker] [model_path] : " << paramSet.at("model_path") << " non-existence.";
+      LOGE(TRACK) << "[Tracker] [model_path] : " << paramSet.at("model_path") << " non-existence.";
       ret = false;
     }
   }
@@ -261,7 +261,7 @@ bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
   if (paramSet.find("track_name") != paramSet.end()) {
     std::string track_name = paramSet.at("track_name");
     if (track_name != "FeatureMatch" && track_name != "KCF") {
-      LOG(ERROR) << "[Tracker] [track_name] : Unsupported tracker type " << track_name;
+      LOGE(TRACK) << "[Tracker] [track_name] : Unsupported tracker type " << track_name;
       ret = false;
     }
   }
@@ -269,14 +269,14 @@ bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
   std::string err_msg;
   if (paramSet.find("device_id") != paramSet.end()) {
     if (!checker.IsNum({"device_id"}, paramSet, err_msg)) {
-      LOG(ERROR) << "[Tracker] " << err_msg;
+      LOGE(TRACK) << "[Tracker] " << err_msg;
       ret = false;
     }
   }
 
   if (paramSet.find("max_cosine_distance") != paramSet.end()) {
     if (!checker.IsNum({"max_cosine_distance"}, paramSet, err_msg)) {
-      LOG(ERROR) << "[Tracker] " << err_msg;
+      LOGE(TRACK) << "[Tracker] " << err_msg;
       ret = false;
     }
   }

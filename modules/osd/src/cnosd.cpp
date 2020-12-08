@@ -88,7 +88,7 @@ void CnOsd::DrawLabel(cv::Mat* image, const CNInferObjsPtr& objs_holder,
                       std::vector<std::string> attr_keys) const {
   // check input data
   if (image->cols * image->rows == 0) {
-    LOG(ERROR) << "Osd: the image is empty.";
+    LOGE(OSD) << "Osd: the image is empty.";
     return;
   }
 
