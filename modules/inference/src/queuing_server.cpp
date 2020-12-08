@@ -19,7 +19,7 @@
  *************************************************************************/
 
 #include "queuing_server.hpp"
-#include <glog/logging.h>
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 
@@ -57,7 +57,7 @@ QueuingTicket QueuingServer::PickUpNewTicket(bool reserve) {
   if (reserved_) {
     // last ticket reserved, clean it.
     if (0 == tickets_q_.back().reserved_time) {
-      CHECK_EQ(1, static_cast<int>(tickets_q_.size())) << "Internel error";
+      LOGF_IF(INFERENCER, static_cast<int>(tickets_q_.size()) != 1) << "Internel error";
       tickets_q_.pop();
     } else {
       tickets_q_.back().reserved_time--;

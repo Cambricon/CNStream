@@ -50,7 +50,7 @@ bool CheckStreamEosReached(const std::string &stream_id, bool sync) {
       if (iter != s_stream_eos_map_.end()) {
         if (iter->second == true) {
           s_stream_eos_map_.erase(iter);
-          // LOG(INFO) << "check stream eos reached, stream_id =  " << stream_id;
+          // LOGI(CORE) << "check stream eos reached, stream_id =  " << stream_id;
           return true;
         }
       } else {
@@ -83,14 +83,14 @@ void SetStreamRemoved(const std::string &stream_id, bool value) {
   } else {
     s_stream_removed_map_[stream_id] = value;
   }
-  // LOG(INFO) << "_____SetStreamRemoved " << stream_id << ":" << s_stream_removed_map_[stream_id];
+  // LOGI(CORE) << "_____SetStreamRemoved " << stream_id << ":" << s_stream_removed_map_[stream_id];
 }
 
 bool IsStreamRemoved(const std::string &stream_id) {
   SpinLockGuard guard(s_remove_spinlock_);
   auto iter = s_stream_removed_map_.find(stream_id);
   if (iter != s_stream_removed_map_.end()) {
-    // LOG(INFO) << "_____IsStreamRemoved " << stream_id << ":" << s_stream_removed_map_[stream_id];
+    // LOGI(CORE) << "_____IsStreamRemoved " << stream_id << ":" << s_stream_removed_map_[stream_id];
     return s_stream_removed_map_[stream_id];
   }
   return false;
@@ -99,12 +99,12 @@ bool IsStreamRemoved(const std::string &stream_id) {
 std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, bool eos,
                                                  std::shared_ptr<CNFrameInfo> payload) {
   if (stream_id == "") {
-    LOG(ERROR) << "CNFrameInfo::Create() stream_id is empty string.";
+    LOGE(CORE) << "CNFrameInfo::Create() stream_id is empty string.";
     return nullptr;
   }
   std::shared_ptr<CNFrameInfo> ptr(new (std::nothrow) CNFrameInfo());
   if (!ptr) {
-    LOG(ERROR) << "CNFrameInfo::Create() new CNFrameInfo failed.";
+    LOGE(CORE) << "CNFrameInfo::Create() new CNFrameInfo failed.";
     return nullptr;
   }
   ptr->stream_id = stream_id;
@@ -123,14 +123,14 @@ std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, b
     auto iter = stream_count_map_.find(stream_id);
     if (iter == stream_count_map_.end()) {
       stream_count_map_[stream_id] = 1;
-      // LOG(INFO) << "CNFrameInfo::Create() insert stream_id: " << stream_id;
+      // LOGI(CORE) << "CNFrameInfo::Create() insert stream_id: " << stream_id;
     } else {
       int count = stream_count_map_[stream_id];
       if (count >= flow_depth_) {
         return nullptr;
       }
       stream_count_map_[stream_id] = count + 1;
-      // LOG(INFO) << "CNFrameInfo::Create() add count stream_id " << stream_id << ":" << count;
+      // LOGI(CORE) << "CNFrameInfo::Create() add count stream_id " << stream_id << ":" << count;
     }
   }
   return ptr;
@@ -155,13 +155,13 @@ CNFrameInfo::~CNFrameInfo() {
       --count;
       if (count <= 0) {
         stream_count_map_.erase(iter);
-        // LOG(INFO) << "CNFrameInfo::~CNFrameInfo() erase stream_id " << frame.stream_id;
+        // LOGI(CORE) << "CNFrameInfo::~CNFrameInfo() erase stream_id " << frame.stream_id;
       } else {
         iter->second = count;
-        // LOG(INFO) << "CNFrameInfo::~CNFrameInfo() update stream_id " << frame.stream_id << " : " << count;
+        // LOGI(CORE) << "CNFrameInfo::~CNFrameInfo() update stream_id " << frame.stream_id << " : " << count;
       }
     } else {
-      LOG(ERROR) << "Invaid stream_id, please check\n";
+      LOGE(CORE) << "Invaid stream_id, please check\n";
     }
   }
 }

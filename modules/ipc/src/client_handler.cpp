@@ -35,22 +35,22 @@ IPCClientHandler::~IPCClientHandler() { CloseSemphore(); }
 
 bool IPCClientHandler::Open() {
   if (socket_address_.empty()) {
-    LOG(ERROR) << "client connect to server, socket address is empty.";
+    LOGE(IPC) << "client connect to server, socket address is empty.";
     return false;
   }
 
   if (!OpenSemphore()) return false;
   while (!WaitSemphore()) {
-    LOG(WARNING) << "wait semphore failed, continue.";
+    LOGW(IPC) << "wait semphore failed, continue.";
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
 
   if (!client_handle_.Open(socket_address_)) {
-    LOG(ERROR) << "client connect to server failed, unix address: " << socket_address_;
+    LOGE(IPC) << "client connect to server failed, unix address: " << socket_address_;
     return false;
   }
 
-  LOG(INFO) << "client connect to server succeed, unix address: " << socket_address_;
+  LOGI(IPC) << "client connect to server succeed, unix address: " << socket_address_;
   server_closed_.store(false);
   is_running_.store(true);
   is_connected_.store(true);
@@ -93,7 +93,7 @@ void IPCClientHandler::RecvPackageLoop() {
   while (is_running_.load()) {
     if (client_handle_.RecvData(recv_buf_, sizeof(recv_buf_)) != sizeof(recv_buf_)) {
       recv_err_msg = "client receive message error";
-      LOG(ERROR) << recv_err_msg;
+      LOGE(IPC) << recv_err_msg;
       client_handle_.Close();
       is_connected_.store(false);
       ipc_module_->PostEvent(EventType::EVENT_ERROR, recv_err_msg);
@@ -103,7 +103,7 @@ void IPCClientHandler::RecvPackageLoop() {
     std::string recv_str(recv_buf_);
     memset(recv_buf_, 0, sizeof(recv_buf_));
     if (!ParseStringToPackage(recv_str, &recv_pkg)) {
-      LOG(WARNING) << "client parse error.";
+      LOGW(IPC) << "client parse error.";
     }
 
     switch (recv_pkg.pkg_type) {
@@ -134,7 +134,7 @@ void IPCClientHandler::RecvPackageLoop() {
 bool IPCClientHandler::Send() {
   if (is_connected_.load()) {
     if (client_handle_.SendData(send_buf_, sizeof(send_buf_)) != sizeof(send_buf_)) {
-      LOG(WARNING) << " client send message to server failed.";
+      LOGW() << " client send message to server failed.";
       return false;
     }
   }
@@ -158,7 +158,7 @@ void IPCClientHandler::FreeSharedMemory() {
       processed_frames_map_.erase(iter);
       framesmap_full_cond_.notify_one();
     } else {
-      LOG(FATAL) << "frame need to release can not find by key: " << key;
+      LOGF(IPC) << "frame need to release can not find by key: " << key;
     }
   }
 }

@@ -35,6 +35,7 @@
 #include "cnstream_eventbus.hpp"
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 

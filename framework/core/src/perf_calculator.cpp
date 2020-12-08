@@ -30,7 +30,7 @@
 #include <utility>
 #include <vector>
 
-#include "glog/logging.h"
+#include "cnstream_logging.hpp"
 #include "perf_manager.hpp"
 #include "sqlite_db.hpp"
 #include "util/cnstream_time_utility.hpp"
@@ -95,7 +95,7 @@ PerfStats PerfCalculator::GetLatency(const std::string &sql_name, const std::str
 
   std::lock_guard<std::mutex> lg(latency_mutex_);
   if (stats_latency_map_.find(map_key) == stats_latency_map_.end()) {
-    LOG(WARNING) << "Can not find latency for " << map_key;
+    LOGW(CORE) << "Can not find latency for " << map_key;
   } else {
     stats = stats_latency_map_.at(map_key);
   }
@@ -109,7 +109,7 @@ std::vector<PerfStats> PerfCalculator::GetThroughput(const std::string &sql_name
 
   std::lock_guard<std::mutex> lg(fps_mutex_);
   if (throughput_.find(map_key) == throughput_.end()) {
-    LOG(ERROR) << "Can not find throughput for " << map_key;
+    LOGE(CORE) << "Can not find throughput for " << map_key;
   } else {
     throughput = {throughput_.at(map_key)};
   }
@@ -135,7 +135,7 @@ PerfStats PerfCalculator::GetAvgThroughput(const std::string &sql_name, const st
 
   std::lock_guard<std::mutex> lg(fps_mutex_);
   if (throughput_.find(map_key) == throughput_.end()) {
-    LOG(ERROR) << "Can not find throughput for " << map_key;
+    LOGE(CORE) << "Can not find throughput for " << map_key;
   } else {
     throughput = throughput_.at(map_key);
   }
@@ -177,11 +177,11 @@ bool PerfCalculator::CreateDbForStoreUnprocessedData(const std::string &db_name,
   std::vector<std::string> keys = PerfManager::GetKeys({module_name}, suffixes);
   std::shared_ptr<Sqlite> sql = PerfUtils::CreateDb(db_name);
   if (sql == nullptr) {
-    LOG(ERROR) << "Create Database failed. Database name is " << db_name;
+    LOGE(CORE) << "Create Database failed. Database name is " << db_name;
     return false;
   }
   if (!PerfUtils::CreateTable(sql, perf_type, "", keys)) {
-    LOG(ERROR) << "Create database table failed. Database name is " << db_name;
+    LOGE(CORE) << "Create database table failed. Database name is " << db_name;
     return false;
   }
   return perf_utils_->AddSql("_" + perf_type + "_throughput", sql);
@@ -193,7 +193,7 @@ PerfStats PerfCalculator::CalcLatency(const std::string &sql_name, const std::st
   const std::string map_key = sql_name + "_" + perf_type + "_latency";
 
   if (keys.size() != 2 && keys.size() != 3) {
-    LOG(ERROR) << "[Calc Latency] Please provide two or three keys for calculation.";
+    LOGE(CORE) << "[Calc Latency] Please provide two or three keys for calculation.";
     return PerfStats();
   }
   const std::string &end_key = keys[1];
@@ -274,7 +274,7 @@ void PerfCalculatorForModule::StoreUnprocessedData(const std::string &sql_name, 
 PerfStats PerfCalculatorForModule::CalcThroughput(const std::string &sql_name, const std::string &perf_type,
                                                   const std::vector<std::string> &keys) {
   if (keys.size() != 3) {
-    LOG(ERROR) << "[Calc Throughput] Please provide three keys for calculation.";
+    LOGE(CORE) << "[Calc Throughput] Please provide three keys for calculation.";
     return PerfStats();
   }
   const std::string &start_key = keys[0];
@@ -413,7 +413,7 @@ void PerfCalculatorForPipeline::StoreUnprocessedData(const std::string &sql_name
 PerfStats PerfCalculatorForPipeline::CalcThroughput(const std::string &sql_name, const std::string &perf_type,
                                                     const std::vector<std::string> &keys) {
   if (keys.size() != 1) {
-    LOG(ERROR) << "[Calc Throughput] Please provide one key for calculation.";
+    LOGE(CORE) << "[Calc Throughput] Please provide one key for calculation.";
     return PerfStats();
   }
   const std::string &end_key = keys[0];
@@ -507,7 +507,7 @@ PerfStats PerfCalculatorForInfer::CalcThroughput(const std::string &sql_name, co
   PerfStats stats;
 
   if (keys.size() != 3 && keys.size() != 2) {
-    LOG(ERROR) << "[Calc Throughput] Please provide two or three keys for calculation.";
+    LOGE(CORE) << "[Calc Throughput] Please provide two or three keys for calculation.";
     return stats;
   }
   const std::string &start_key = keys[0];
@@ -688,15 +688,15 @@ static int Callback(void *data, int argc, char **argv, char **azColName) {
 bool PerfUtils::AddSql(const std::string &name, std::shared_ptr<Sqlite> sql) {
   std::lock_guard<std::mutex> lg(sql_map_lock_);
   if (SqlIsExisted(name)) {
-    LOG(ERROR) << "Add sql handler failed. sql '" << name << "' exists.";
+    LOGE(CORE) << "Add sql handler failed. sql '" << name << "' exists.";
     return false;
   }
   if (name.empty()) {
-    LOG(ERROR) << "Add sql handler failed, name is empty string";
+    LOGE(CORE) << "Add sql handler failed, name is empty string";
     return false;
   }
   if (sql == nullptr) {
-    LOG(ERROR) << "Add sql handler failed, sql pointer is nullptr";
+    LOGE(CORE) << "Add sql handler failed, sql pointer is nullptr";
     return false;
   }
   sql_map_[name] = sql;
@@ -706,7 +706,7 @@ bool PerfUtils::AddSql(const std::string &name, std::shared_ptr<Sqlite> sql) {
 bool PerfUtils::RemoveSql(const std::string &name) {
   std::lock_guard<std::mutex> lg(sql_map_lock_);
   if (!SqlIsExisted(name)) {
-    LOG(ERROR) << "Remove sql failed. sql '" << name << "' does not exist.";
+    LOGE(CORE) << "Remove sql failed. sql '" << name << "' does not exist.";
     return false;
   }
   sql_map_.erase(name);
@@ -716,7 +716,7 @@ bool PerfUtils::RemoveSql(const std::string &name) {
 std::vector<DbItem> PerfUtils::SearchFromDatabase(std::shared_ptr<Sqlite> sql, std::string sql_statement) {
   std::vector<DbItem> item_vec;
   if (sql == nullptr) {
-    LOG(ERROR) << "sqlite is nullptr.";
+    LOGE(CORE) << "sqlite is nullptr.";
     return item_vec;
   }
   sql->Select(sql_statement, Callback, reinterpret_cast<void *>(&item_vec));
@@ -879,12 +879,12 @@ bool PerfUtils::SqlIsExisted(std::string name) {
 
 std::shared_ptr<Sqlite> PerfUtils::CreateDb(std::string name) {
   if (name.empty()) {
-    LOG(ERROR) << "Can not create database with empty name";
+    LOGE(CORE) << "Can not create database with empty name";
     return nullptr;
   }
   std::shared_ptr<Sqlite> sql = std::make_shared<Sqlite>(name);
   if (!sql->Connect()) {
-    LOG(ERROR) << "Can not connect to database " << name;
+    LOGE(CORE) << "Can not connect to database " << name;
     sql->Close();
     return nullptr;
   }
@@ -894,7 +894,7 @@ std::shared_ptr<Sqlite> PerfUtils::CreateDb(std::string name) {
 bool PerfUtils::CreateTable(std::shared_ptr<Sqlite> sql, std::string perf_type, std::string primary_key,
                             std::vector<std::string> keys) {
   if (sql == nullptr) {
-    LOG(ERROR) << "Can not create table for nullptr";
+    LOGE(CORE) << "Can not create table for nullptr";
     return false;
   }
   return sql->CreateTable(perf_type, primary_key, keys);
@@ -905,7 +905,7 @@ bool PerfUtils::Record(std::string sql_name, std::string perf_type, std::vector<
   {
     std::lock_guard<std::mutex> lg(sql_map_lock_);
     if (!SqlIsExisted(sql_name)) {
-      LOG(ERROR) << "sql '" << sql_name << "' is not exist.";
+      LOGE(CORE) << "sql '" << sql_name << "' is not exist.";
       return false;
     }
     return sql_map_[sql_name]->Insert(perf_type, keys, values);

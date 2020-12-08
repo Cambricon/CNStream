@@ -18,8 +18,6 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <glog/logging.h>
-
 #include <fcntl.h>
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>
@@ -41,15 +39,15 @@ bool IPCHandler::OpenSemphore() {
   sem_id_ = sem_open(sem_name.c_str(), O_CREAT | O_EXCL, 0644, 0);
   if (sem_id_ == SEM_FAILED) {
     if (errno == EEXIST) {
-      LOG(INFO) << "semaphore: " << sem_name << " exist, open it directly.";
+      LOGI(IPC) << "semaphore: " << sem_name << " exist, open it directly.";
       sem_id_ = sem_open(sem_name.c_str(), 0);
       if (sem_id_ == SEM_FAILED) {
-        LOG(ERROR) << "semaphore: " << sem_name << " open error.";
+        LOGE(IPC) << "semaphore: " << sem_name << " open error.";
         return false;
       }
     }
   } else {
-    LOG(INFO) << "semaphore: " << sem_name << " create successfully.";
+    LOGI(IPC) << "semaphore: " << sem_name << " create successfully.";
     sem_created_ = true;
   }
 
@@ -85,7 +83,7 @@ bool IPCHandler::ParseStringToPackage(const std::string& str, FrameInfoPackage* 
 
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(str.c_str()).HasParseError()) {
-    LOG(ERROR) << "SerializeFromString failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
+    LOGE(IPC) << "SerializeFromString failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
                << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. JSON:" << str;
     return false;
   }
@@ -102,21 +100,21 @@ bool IPCHandler::ParseStringToPackage(const std::string& str, FrameInfoPackage* 
 
   if (PKG_RELEASE_MEM == pkg->pkg_type || PKG_DATA == pkg->pkg_type) {
     if (end == doc.FindMember("stream_id") || !doc["stream_id"].IsString()) {
-      LOG(WARNING) << "parse stream_id error.";
+      LOGW(IPC) << "parse stream_id error.";
       return false;
     } else {
       pkg->stream_id = doc["stream_id"].GetString();
     }
 
     if (end == doc.FindMember("stream_idx") || !doc["stream_idx"].IsUint()) {
-      LOG(WARNING) << "parse stream_idx error.";
+      LOGW(IPC) << "parse stream_idx error.";
       return false;
     } else {
       pkg->stream_idx = doc["stream_idx"].GetUint();
     }
 
     if (end == doc.FindMember("frame_id") || !doc["frame_id"].IsInt64()) {
-      LOG(WARNING) << "parse frame_id error.";
+      LOGW(IPC) << "parse frame_id error.";
       return false;
     } else {
       pkg->frame_id = doc["frame_id"].GetInt64();
@@ -125,49 +123,49 @@ bool IPCHandler::ParseStringToPackage(const std::string& str, FrameInfoPackage* 
 
   if (PKG_DATA == pkg->pkg_type) {
     if (end == doc.FindMember("flags") || !doc["flags"].IsUint()) {
-      LOG(WARNING) << "parse flags error.";
+      LOGW(IPC) << "parse flags error.";
       return false;
     } else {
       pkg->flags = doc["flags"].GetUint();
     }
 
     if (end == doc.FindMember("timestamp") || !doc["timestamp"].IsInt64()) {
-      LOG(WARNING) << "parse timestamp error.";
+      LOGW(IPC) << "parse timestamp error.";
       return false;
     } else {
       pkg->timestamp = doc["timestamp"].GetInt64();
     }
 
     if (end == doc.FindMember("data_fmt") || !doc["data_fmt"].IsInt()) {
-      LOG(WARNING) << "parse data fmt error.";
+      LOGW(IPC) << "parse data fmt error.";
       return false;
     } else {
       pkg->fmt = CNDataFormat(doc["data_fmt"].GetInt());
     }
 
     if (end == doc.FindMember("width") || !doc["width"].IsInt()) {
-      LOG(WARNING) << "parse width error.";
+      LOGW(IPC) << "parse width error.";
       return false;
     } else {
       pkg->width = doc["width"].GetInt();
     }
 
     if (end == doc.FindMember("height") || !doc["height"].IsInt()) {
-      LOG(WARNING) << "parse height error.";
+      LOGW(IPC) << "parse height error.";
       return false;
     } else {
       pkg->height = doc["height"].GetInt();
     }
 
     if (end == doc.FindMember("strides") || !doc["strides"].IsArray()) {
-      LOG(WARNING) << "parse strides error.";
+      LOGW(IPC) << "parse strides error.";
       return false;
     } else {
       auto values = doc["strides"].GetArray();
       int i = 0;
       for (auto iter = values.begin(); iter != values.end(); ++iter) {
         if (!iter->IsInt()) {
-          LOG(WARNING) << "parse strides type error.";
+          LOGW(IPC) << "parse strides type error.";
           return false;
         }
         pkg->stride[i] = iter->GetInt();
@@ -176,42 +174,42 @@ bool IPCHandler::ParseStringToPackage(const std::string& str, FrameInfoPackage* 
     }
 
     if (end == doc.FindMember("dev_type") || !doc["dev_type"].IsInt()) {
-      LOG(WARNING) << "parse dev_type error.";
+      LOGW(IPC) << "parse dev_type error.";
       return false;
     } else {
       pkg->ctx.dev_type = DevContext::DevType(doc["dev_type"].GetInt());
     }
 
     if (end == doc.FindMember("dev_id") || !doc["dev_id"].IsInt()) {
-      LOG(WARNING) << "parse dev_id error.";
+      LOGW(IPC) << "parse dev_id error.";
       return false;
     } else {
       pkg->ctx.dev_id = doc["dev_id"].GetInt();
     }
 
     if (end == doc.FindMember("ddr_channel") || !doc["ddr_channel"].IsInt()) {
-      LOG(WARNING) << "parse ddr_channel error.";
+      LOGW(IPC) << "parse ddr_channel error.";
       return false;
     } else {
       pkg->ctx.ddr_channel = doc["ddr_channel"].GetInt();
     }
 
     if (end == doc.FindMember("mem_map_type") || !doc["mem_map_type"].IsInt()) {
-      LOG(WARNING) << "parse mem_map_type error.";
+      LOGW(IPC) << "parse mem_map_type error.";
       return false;
     } else {
       pkg->mem_map_type = MemMapType(doc["mem_map_type"].GetInt());
     }
 
     if (end == doc.FindMember("mlu_mem_handle") || !doc["mlu_mem_handle"].IsString()) {
-      LOG(WARNING) << "parse mlu_mem_handle error.";
+      LOGW(IPC) << "parse mlu_mem_handle error.";
       return false;
     } else {
       try {
         intptr_t tmp = std::stoll(doc["mlu_mem_handle"].GetString());
         pkg->mlu_mem_handle = reinterpret_cast<void*>(tmp);
       } catch (const std::invalid_argument& e) {
-        LOG(WARNING) << "mlu_mem_handle is invalid.";
+        LOGW(IPC) << "mlu_mem_handle is invalid.";
         return false;
       }
     }
@@ -289,7 +287,7 @@ void IPCHandler::PreparePackageToSend(const PkgType& type, const std::shared_ptr
   switch (type) {
     case PkgType::PKG_DATA: {
       if (!data) {
-        LOG(WARNING) << "frame data to pack data message is nullptr.";
+        LOGW(IPC) << "frame data to pack data message is nullptr.";
         return;
       }
 
@@ -317,7 +315,7 @@ void IPCHandler::PreparePackageToSend(const PkgType& type, const std::shared_ptr
     } break;
     case PkgType::PKG_RELEASE_MEM: {
       if (!data) {
-        LOG(WARNING) << "frame data to release shared memory is nullptr.";
+        LOGW(IPC) << "frame data to release shared memory is nullptr.";
         return;
       }
 
@@ -336,7 +334,7 @@ void IPCHandler::PreparePackageToSend(const PkgType& type, const std::shared_ptr
       send_pkg.pkg_type = PkgType::PKG_EXIT;
       break;
     default:
-      LOG(WARNING) << "unsupported message type in ipc.";
+      LOGW(IPC) << "unsupported message type in ipc.";
       return;
   }
 
@@ -352,7 +350,7 @@ void IPCHandler::PreparePackageToSend(const PkgType& type, const std::shared_ptr
 
 void IPCHandler::PackageToCNData(const FrameInfoPackage& recv_pkg, std::shared_ptr<CNFrameInfo> data) {
   if (!data) {
-    LOG(WARNING) << "frame data for trans message pack is nullptr, pack message frame id: " << recv_pkg.frame_id
+    LOGW(IPC) << "frame data for trans message pack is nullptr, pack message frame id: " << recv_pkg.frame_id
                  << std::endl;
     return;
   }

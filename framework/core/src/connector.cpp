@@ -21,6 +21,7 @@
 #include "connector.hpp"
 
 #include <glog/logging.h>
+#include "cnstream_logging.hpp"
 
 #include <atomic>
 #include <vector>
@@ -35,7 +36,7 @@ Connector::Connector(const size_t conveyor_count, size_t conveyor_capacity) {
   fail_times_.reserve(conveyor_count);
   for (size_t i = 0; i < conveyor_count; ++i) {
     Conveyor* conveyor = new (std::nothrow) Conveyor(conveyor_capacity);
-    LOG_IF(FATAL, nullptr == conveyor) << "Connector::Connector()  new Conveyor failed.";
+    LOGF_IF(CORE, nullptr == conveyor) << "Connector::Connector()  new Conveyor failed.";
     conveyors_.push_back(conveyor);
   }
 }
@@ -71,11 +72,7 @@ bool Connector::IsConveyorFull(int conveyor_idx) const {
 }
 
 CNFrameInfoPtr Connector::PopDataBufferFromConveyor(int conveyor_idx) {
-  CNFrameInfoPtr data = nullptr;
-  if (!IsConveyorEmpty(conveyor_idx)) {
-    data  = GetConveyor(conveyor_idx)->PopDataBuffer();
-  }
-  return data;
+  return GetConveyor(conveyor_idx)->PopDataBuffer();
 }
 
 bool Connector::PushDataBufferToConveyor(int conveyor_idx, CNFrameInfoPtr data) {
@@ -99,8 +96,8 @@ void Connector::Stop() {
 }
 
 Conveyor* Connector::GetConveyorByIdx(int idx) const {
-  CHECK_GE(idx, 0);
-  CHECK_LT(idx, static_cast<int>(conveyors_.size()));
+  LOGF_IF(CORE, idx < 0) << "Connector::GetConveyorByIdx() idx < 0.";
+  LOGF_IF(CORE, idx >= static_cast<int>(conveyors_.size())) << "Connector::GetConveyorByIdx() idx outpace conveyors size";
   return conveyors_[idx];
 }
 

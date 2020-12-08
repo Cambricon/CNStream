@@ -25,7 +25,7 @@
 #include <thread>
 #include <vector>
 
-#include "glog/logging.h"
+#include "cnstream_logging.hpp"
 #include "gtest/gtest.h"
 
 #include "util/cnstream_queue.hpp"
@@ -48,7 +48,7 @@ void ThreadFuncTryPop(ThreadSafeQueue<int>* thread_safe_queue) {
   bool res = thread_safe_queue->TryPop(value);
   std::lock_guard<std::mutex> lk(data_mutex_);
   if (res) {
-    LOG_IF(FATAL, !flag_[value]) << "Test pop data repeatedly:try_pop error! ";
+    LOGF_IF(COREUNITEST, !flag_[value]) << "Test pop data repeatedly:try_pop error! ";
     flag_[value] = false;
   }
 }
@@ -57,7 +57,7 @@ void ThreadFuncWaitAndPop(ThreadSafeQueue<int>* thread_safe_queue) {
   int value = -1;
   thread_safe_queue->WaitAndPop(value);
   std::lock_guard<std::mutex> lk(data_mutex_);
-  LOG_IF(FATAL, !flag_[value]) << "Test pop data repeatedly: wait_and_pop error!";
+  LOGF_IF(COREUNITEST, !flag_[value]) << "Test pop data repeatedly: wait_and_pop error!";
   flag_[value] = false;
 }
 
@@ -66,7 +66,7 @@ void ThreadFuncWaitAndTryPop(ThreadSafeQueue<int>* thread_safe_queue) {
   bool res = thread_safe_queue->WaitAndTryPop(value, std::chrono::microseconds(50));
   std::lock_guard<std::mutex> lk(data_mutex_);
   if (res) {
-    LOG_IF(FATAL, !flag_[value]) << "Test pop data repeatedly: wait_and_try_pop error!";
+    LOGF_IF(COREUNITEST, !flag_[value]) << "Test pop data repeatedly: wait_and_try_pop error!";
     flag_[value] = false;
   }
 }
@@ -85,7 +85,7 @@ bool TestThreadsafeQueue() {
   uint32_t seed = (uint32_t)time(0);
   srand(time(nullptr));
 
-  LOG(INFO) << "Test threadsafe_queue: push and pop!";
+  LOGI(COREUNITEST) << "Test threadsafe_queue: push and pop!";
   while (++i < 40) {
     if (i > 20) {
       threads[i] = new std::thread(ThreadFuncPush, &thread_safe_queue, data[i]);
@@ -112,7 +112,7 @@ bool TestThreadsafeQueue() {
     threads[k]->join();
   }
 
-  LOG(INFO) << "Test threadsafe_queue: blocking";
+  LOGI(COREUNITEST) << "Test threadsafe_queue: blocking";
   i--;
   while (++i < 70) {
     if (i < 55) {

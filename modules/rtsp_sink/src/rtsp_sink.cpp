@@ -38,10 +38,10 @@ RtspSinkContext* RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {
   RwLockWriteGuard lg(rtsp_lock_);
   if (is_mosaic_style_) {
     if (data->GetStreamIndex() >= static_cast<uint32_t>(params_.view_cols * params_.view_rows)) {
-      LOG(INFO) << "================================================================================";
-      LOG(ERROR) << "[RtspSink] Input stream number must no more than " << params_.view_cols * params_.view_rows
+      LOGI(RTSP) << "================================================================================";
+      LOGE(RTSP) << "[RtspSink] Input stream number must no more than " << params_.view_cols * params_.view_rows
                  << " (view window col: " << params_.view_cols << " row: " << params_.view_rows << ")";
-      LOG(INFO) << "=================================================================================";
+      LOGI(RTSP) << "=================================================================================";
       return nullptr;
     }
 
@@ -75,7 +75,7 @@ RtspSinkContext* RtspSink::CreateRtspSinkContext(CNFrameInfoPtr data) {
 
   if (!ret) {
     delete context;
-    LOG(ERROR) << "[RtspSink] Open rtsp stream failed. Invalid parameter";
+    LOGE(RTSP) << "[RtspSink] Open rtsp stream failed. Invalid parameter";
     return nullptr;
   }
   return context;
@@ -88,7 +88,7 @@ RtspParam RtspSink::GetRtspParam(CNFrameInfoPtr data) {
       params_.color_format = BGR24;
       if (params_.color_mode != "bgr") {
         params_.color_mode = "bgr";
-        LOG(WARNING) << "Color mode should be bgr.";
+        LOGW(RTSP) << "Color mode should be bgr.";
       }
       break;
     case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
@@ -98,11 +98,11 @@ RtspParam RtspSink::GetRtspParam(CNFrameInfoPtr data) {
       params_.color_format = NV21;
       break;
     default:
-      LOG(WARNING) << "[CNEncoder] unsuport color format.";
+      LOGW(RTSP) << "[CNEncoder] unsuport color format.";
       params_.color_format = BGR24;
       if (params_.color_mode != "bgr") {
         params_.color_mode = "bgr";
-        LOG(WARNING) << "Color mode should be bgr.";
+        LOGW(RTSP) << "Color mode should be bgr.";
       }
       break;
   }
@@ -202,7 +202,7 @@ int RtspSink::Process(CNFrameInfoPtr data) {
       delete[] image_data;
       image_data = nullptr;
     } else {
-      LOG(ERROR) << "color type must be set nv or bgr !!!";
+      LOGE(RTSP) << "color type must be set nv or bgr !!!";
       return -1;
     }
     /*
@@ -220,7 +220,7 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
-      LOG(WARNING) << "[RtspSink] (WARNING) Unknown param: \"" << it.first << "\"";
+      LOGW(RTSP) << "[RtspSink] (WARNING) Unknown param: \"" << it.first << "\"";
     }
   }
 
@@ -228,20 +228,20 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
   if (!checker.IsNum({"http_port", "udp_port", "frame_rate", "kbit_rate", "gop_size", "view_cols", "view_rows",
                       "device_id", "dst_width", "dst_height"},
                      paramSet, err_msg, true)) {
-    LOG(ERROR) << "[RtspSink] (ERROR) " << err_msg;
+    LOGE(RTSP) << "[RtspSink] (ERROR) " << err_msg;
     ret = false;
   }
 
   if (paramSet.find("dst_width") == paramSet.end()) {
-    LOG(INFO) << "[RtspSink] (INFO) destination *width* is not given. Keep source width.";
+    LOGI(RTSP) << "[RtspSink] (INFO) destination *width* is not given. Keep source width.";
   }
   if (paramSet.find("dst_height") == paramSet.end()) {
-    LOG(INFO) << "[RtspSink] (INFO) destination *height* is not given. Keep source height.";
+    LOGI(RTSP) << "[RtspSink] (INFO) destination *height* is not given. Keep source height.";
   }
 
   if (paramSet.find("encoder_type") != paramSet.end()) {
     if (paramSet.at("encoder_type") != "mlu" && paramSet.at("encoder_type") != "ffmpeg") {
-      LOG(ERROR) << "[RtspSink] (ERROR) Not support encoder type: \"" << paramSet.at("encoder_type")
+      LOGE(RTSP) << "[RtspSink] (ERROR) Not support encoder type: \"" << paramSet.at("encoder_type")
                  << "\". Choose from \"mlu\", \"ffmpeg\".";
       ret = false;
     }
@@ -249,7 +249,7 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
 
   if (paramSet.find("preproc_type") != paramSet.end()) {
     if (paramSet.at("preproc_type") != "cpu") {
-      LOG(ERROR) << "[RtspSink] (ERROR) Not support preprocess type: \"" << paramSet.at("preproc_type")
+      LOGE(RTSP) << "[RtspSink] (ERROR) Not support preprocess type: \"" << paramSet.at("preproc_type")
                  << "\". Choose from \"cpu\".";
       ret = false;
     }
@@ -257,26 +257,26 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
 
   if (paramSet.find("view_mode") != paramSet.end()) {
     if (paramSet.at("view_mode") != "single" && paramSet.at("view_mode") != "mosaic") {
-      LOG(ERROR) << "[RtspSink] (ERROR) Not support view mode: \"" << paramSet.at("view_mode")
+      LOGE(RTSP) << "[RtspSink] (ERROR) Not support view mode: \"" << paramSet.at("view_mode")
                  << "\". Choose from \"single\",\" mosaic\".";
       ret = false;
     }
     if (paramSet.at("view_mode") == "mosaic") {
       if (paramSet.find("color_mode") != paramSet.end() && paramSet.at("color_mode") != "bgr") {
-        LOG(WARNING) << "[RtspSink] (WARNING) view mode is \"mosaic\". Only support plane type \"bgr\"!";
+        LOGW(RTSP) << "[RtspSink] (WARNING) view mode is \"mosaic\". Only support plane type \"bgr\"!";
       }
       if (paramSet.find("view_cols") == paramSet.end()) {
-        LOG(WARNING) << "[RtspSink] (WARNING) View *column* number is not given. Default 4.";
+        LOGW(RTSP) << "[RtspSink] (WARNING) View *column* number is not given. Default 4.";
       }
       if (paramSet.find("view_rows") == paramSet.end()) {
-        LOG(WARNING) << "[RtspSink] (WARNING) View *row* number is not given. Default 4.";
+        LOGW(RTSP) << "[RtspSink] (WARNING) View *row* number is not given. Default 4.";
       }
     }
   }
 
   if (paramSet.find("color_mode") != paramSet.end()) {
     if (paramSet.at("color_mode") != "nv" && paramSet.at("color_mode") != "bgr") {
-      LOG(ERROR) << "[RtspSink] (ERROR) Not support plane type: \"" << paramSet.at("color_mode")
+      LOGE(RTSP) << "[RtspSink] (ERROR) Not support plane type: \"" << paramSet.at("color_mode")
                  << "\". Choose from \"nv\", \"bgr\".";
       ret = false;
     }

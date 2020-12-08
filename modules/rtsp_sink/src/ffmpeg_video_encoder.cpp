@@ -19,8 +19,6 @@
  *************************************************************************/
 
 #include "ffmpeg_video_encoder.hpp"
-
-#include <glog/logging.h>
 #include <string.h>
 
 #define OUTPUT_BUFFER_SIZE 0x200000
@@ -77,7 +75,7 @@ void FFmpegVideoEncoder::FFmpegVideoFrame::Fill(uint8_t *data, int64_t timestamp
       memcpy(frame_->data[1] + frame_->linesize[1] * i, data + size + line_size * i, line_size);
     }
   } else {
-    LOG(ERROR) << "unsupport pixel format: " << frame_->format;
+    LOGE(RTSP) << "unsupport pixel format: " << frame_->format;
   }
 }
 
@@ -128,11 +126,11 @@ FFmpegVideoEncoder::FFmpegVideoEncoder(const RtspParam &rtsp_param) : VideoEncod
 
   avcodec_ = avcodec_find_encoder(avcodec_id_);
   if (!avcodec_) {  // plan to add qsv or other codec
-    LOG(ERROR) << "cannot find encoder,use 'libx264'";
+    LOGE(RTSP) << "cannot find encoder,use 'libx264'";
     avcodec_ = avcodec_find_encoder_by_name("libx264");
     if (avcodec_ == nullptr) {
       Destroy();
-      LOG(ERROR) << "Can't find encoder with libx264";
+      LOGE(RTSP) << "Can't find encoder with libx264";
       return;
     }
   }
@@ -157,7 +155,7 @@ FFmpegVideoEncoder::FFmpegVideoEncoder(const RtspParam &rtsp_param) : VideoEncod
   av_dict_set(&avcodec_opts_, "profile", "high", 0);
   int ret = avcodec_open2(avcodec_ctx_, avcodec_, &avcodec_opts_);
   if (ret < 0) {
-    LOG(ERROR) << "avcodec_open2() failed, ret=" << ret;
+    LOGE(RTSP) << "avcodec_open2() failed, ret=" << ret;
     Destroy();
     return;
   }
@@ -173,7 +171,7 @@ FFmpegVideoEncoder::FFmpegVideoEncoder(const RtspParam &rtsp_param) : VideoEncod
     ret = av_image_alloc(avframe_->data, avframe_->linesize, avcodec_ctx_->width, avcodec_ctx_->height,
                          AV_PIX_FMT_YUV420P, 8);
     if (ret < 0) {
-      LOG(ERROR) << "av_image_alloc() failed, ret=" << ret;
+      LOGE(RTSP) << "av_image_alloc() failed, ret=" << ret;
       Destroy();
       return;
     }
@@ -181,7 +179,7 @@ FFmpegVideoEncoder::FFmpegVideoEncoder(const RtspParam &rtsp_param) : VideoEncod
     sws_ctx_ = sws_getContext(avcodec_ctx_->width, avcodec_ctx_->height, picture_format_, avcodec_ctx_->width,
                               avcodec_ctx_->height, AV_PIX_FMT_YUV420P, SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
     if (!sws_ctx_) {
-      LOG(ERROR) << "sws_getContext() failed, ret=" << ret;
+      LOGE(RTSP) << "sws_getContext() failed, ret=" << ret;
       Destroy();
       return;
     }
@@ -254,12 +252,12 @@ void FFmpegVideoEncoder::EncodeFrame(VideoFrame *frame) {
   int ret = 0, got_packet;
   ret = avcodec_encode_video2(avcodec_ctx_, avpacket_, picture, &got_packet);
   if (ret < 0) {
-    LOG(ERROR) << "avcodec_encode_video2() failed, ret=" << ret;
+    LOGE(RTSP) << "avcodec_encode_video2() failed, ret=" << ret;
     return;
   }
 
   if (!ret && got_packet && avpacket_->size) {
-    // LOG(INFO) << "===got packet: size=" << avpacket_->size << ", pts=" << avpacket_->pts;
+    // LOGI(RTSP) << "===got packet: size=" << avpacket_->size << ", pts=" << avpacket_->pts;
     int offset = 0;
     uint8_t *packet_data = nullptr;
     packet_data = reinterpret_cast<uint8_t *>(avpacket_->data);

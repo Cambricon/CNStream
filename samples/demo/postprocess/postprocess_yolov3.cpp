@@ -83,7 +83,7 @@ class PostprocYolov3 : public cnstream::Postproc {
       obj->bbox.h = std::min(1.0f - obj->bbox.y, bottom - top);
 
       if (obj->bbox.h <= 0 || obj->bbox.w <= 0 || (obj->score < threshold_ && threshold_ > 0)) continue;
-
+      std::lock_guard<std::mutex> objs_mutex(objs_holder->mutex_);
       objs.push_back(obj);
     }
 

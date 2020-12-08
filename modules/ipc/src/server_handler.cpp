@@ -35,21 +35,21 @@ IPCServerHandler::~IPCServerHandler() { CloseSemphore(); }
 
 bool IPCServerHandler::Open() {
   if (socket_address_.empty()) {
-    LOG(ERROR) << "open server handler failed, socket address is empty.";
+    LOGE(IPC) << "open server handler failed, socket address is empty.";
     return false;
   }
 
   if (!OpenSemphore()) return false;
   if (!server_handle_.Open(socket_address_)) {
-    LOG(ERROR) << "open server handler failed, socket address: " << socket_address_;
+    LOGE(IPC) << "open server handler failed, socket address: " << socket_address_;
     return false;
   }
 
-  LOG(INFO) << "open server handler succeed, socket address: " << socket_address_;
+  LOGI(IPC) << "open server handler succeed, socket address: " << socket_address_;
   is_running_.store(true);
   listen_thread_ = std::thread(&IPCServerHandler::ListenConnections, this);
   if (!PostSemphore()) {
-    LOG(WARNING) << "post semphore failed.";
+    LOGW(IPC) << "post semphore failed.";
     return false;
   }
 
@@ -89,7 +89,7 @@ void IPCServerHandler::RecvPackageLoop() {
   while (is_running_.load()) {
     if (server_handle_.RecvData(recv_buf_, sizeof(recv_buf_)) != sizeof(recv_buf_)) {
       recv_err_msg = "server receive message error";
-      LOG(ERROR) << recv_err_msg;
+      LOGE(IPC) << recv_err_msg;
       server_handle_.Close();
       is_connected_.store(false);
       ipc_module_->PostEvent(EventType::EVENT_ERROR, recv_err_msg);
@@ -99,7 +99,7 @@ void IPCServerHandler::RecvPackageLoop() {
     std::string recv_str(recv_buf_);
     memset(recv_buf_, 0, sizeof(recv_buf_));
     if (!ParseStringToPackage(recv_str, &recv_pkg)) {
-      LOG(WARNING) << "server receive parse error";
+      LOGW(IPC) << "server receive parse error";
       continue;
     }
 
@@ -119,7 +119,7 @@ void IPCServerHandler::RecvPackageLoop() {
         if (recv_pkg.flags & CN_FRAME_FLAG_EOS) {
           eos_chn_cnt++;
           if (eos_chn_cnt == ipc_module_->GetStreamCount()) {
-            LOG(INFO) << "Server received all eos.";
+            LOGI(IPC) << "Server received all eos.";
             return;
           }
         }
@@ -131,7 +131,7 @@ void IPCServerHandler::RecvPackageLoop() {
         return;
 
       default:
-        LOG(WARNING) << "server receive message type error!";
+        LOGW(IPC) << "server receive message type error!";
         break;
     }
   }
@@ -149,7 +149,7 @@ void IPCServerHandler::SendPackageLoop() {
     memset(send_buf_, 0, sizeof(send_buf_));
     memcpy(send_buf_, send_str.c_str(), send_str.length());
     if (server_handle_.SendData(send_buf_, sizeof(send_buf_)) != sizeof(send_buf_)) {
-      LOG(WARNING) << " server send message to client failed.";
+      LOGW(IPC) << " server send message to client failed.";
     }
   }
 }
@@ -158,9 +158,9 @@ void IPCServerHandler::ListenConnections() {
   while (is_running_.load()) {
     int client_fd = server_handle_.Accept();
     if (-1 == client_fd) {
-      LOG(ERROR) << "server listening, client connect failed.";
+      LOGE(IPC) << "server listening, client connect failed.";
     } else {
-      LOG(INFO) << "server listening, client connect succeed.";
+      LOGI(IPC) << "server listening, client connect succeed.";
       is_connected_.store(true);
       send_thread_ = std::thread(&IPCServerHandler::SendPackageLoop, this);
       recv_thread_ = std::thread(&IPCServerHandler::RecvPackageLoop, this);

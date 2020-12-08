@@ -20,7 +20,6 @@
 
 #include "infer_resource.hpp"
 #include <cnrt.h>
-#include <glog/logging.h>
 #include <map>
 #include <memory>
 #include <string>
@@ -191,7 +190,7 @@ void RCOpResource::Init(uint32_t dst_w, uint32_t dst_h, CNDataFormat src_fmt,
     std::make_pair(YUV2ABGR32_NV12, edk::MluResizeConvertOp::ColorMode::YUV2ABGR_NV12)
   };
 
-  LOG_IF(FATAL, cvt_mode_map.find(color_cvt_mode) == cvt_mode_map.end())
+  LOGF_IF(INFERENCER, cvt_mode_map.find(color_cvt_mode) == cvt_mode_map.end())
     << "Unsupport color convert mode. src pixel format : " << src_fmt << ", dst pixel format : " << dst_fmt_;
 
   if (Initialized()) {

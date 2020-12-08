@@ -66,13 +66,13 @@ bool ModuleIPC::Open(ModuleParamSet paramSet) {
     type = IPC_SERVER;
     hasTransmit_.store(true);
   } else {
-    LOG(ERROR) << "[ModuleIPC], ipc_type must be client or server.";
+    LOGE(IPC) << "[ModuleIPC], ipc_type must be client or server.";
     return false;
   }
 
   ipc_handler_ = CreateIPCHandler(type, this);
   if (nullptr == ipc_handler_) {
-    LOG(ERROR) << "[ModuleIPC], create ipc handler failed\n";
+    LOGE(IPC) << "[ModuleIPC], create ipc handler failed\n";
     return false;
   }
 
@@ -89,12 +89,12 @@ bool ModuleIPC::Open(ModuleParamSet paramSet) {
   } else if (paramSet["memmap_type"] == "mlu") {
     ipc_handler_->SetMemmapType(MEMMAP_MLU);
   } else {
-    LOG(ERROR) << "[ModuleIPC], memmap_type is invalid.";
+    LOGE(IPC) << "[ModuleIPC], memmap_type is invalid.";
     return false;
   }
 
   if (!ipc_handler_->Open()) {
-    LOG(ERROR) << "[ModuleIPC], open ipc handler failed\n";
+    LOGE(IPC) << "[ModuleIPC], open ipc handler failed\n";
     return false;
   }
 
@@ -141,31 +141,31 @@ bool ModuleIPC::CheckParamSet(const ModuleParamSet& paramSet) const {
   // ParametersChecker checker;
   for (auto& it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
-      LOG(WARNING) << "[ModuleIPC] Unknown param: " << it.first;
+      LOGW(IPC) << "[ModuleIPC] Unknown param: " << it.first;
     }
   }
   if (paramSet.find("ipc_type") == paramSet.end()) {
-    LOG(ERROR) << "[ModuleIPC], must set ipc_type. ";
+    LOGE(IPC) << "[ModuleIPC], must set ipc_type. ";
     ret = false;
   }
 
   if (paramSet.find("memmap_type") == paramSet.end()) {
-    LOG(ERROR) << "[ModuleIPC], must set memmap_type for memory shared.";
+    LOGE(IPC) << "[ModuleIPC], must set memmap_type for memory shared.";
     ret = false;
   }
 
   if (paramSet.find("socket_address") == paramSet.end()) {
-    LOG(ERROR) << "[ModuleIPC], must set socket_address.";
+    LOGE(IPC) << "[ModuleIPC], must set socket_address.";
     ret = false;
   }
 
   if (paramSet.find("device_id") == paramSet.end()) {
-    LOG(WARNING) << "[ModuleIPC], device id is not set, will use device info in CNFrameInfo.";
+    LOGW(IPC) << "[ModuleIPC], device id is not set, will use device info in CNFrameInfo.";
   }
 
   std::string err_msg;
   if (!checker.IsNum({"device_id", "max_cachedframe_size"}, paramSet, err_msg)) {
-    LOG(ERROR) << err_msg;
+    LOGE(IPC) << err_msg;
     ret = false;
   }
 
@@ -174,7 +174,7 @@ bool ModuleIPC::CheckParamSet(const ModuleParamSet& paramSet) const {
 
 bool ModuleIPC::SendData(std::shared_ptr<CNFrameInfo> frame_data) {
   if (frame_data->GetStreamIndex() == INVALID_STREAM_IDX) {
-    LOG(ERROR) << "CNFrameInfo->stream_idx not initialized";
+    LOGE(IPC) << "CNFrameInfo->stream_idx not initialized";
     return false;
   }
   TransmitData(frame_data);

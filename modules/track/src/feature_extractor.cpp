@@ -18,8 +18,6 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <glog/logging.h>
-
 #include <memory>
 #include <string>
 #include <vector>
@@ -43,14 +41,14 @@ FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& mode
                                    int device_id)
     : model_loader_(model_loader) {
   if (!model_loader_) {
-    LOG(INFO) << "[FeatureExtractor] Model not set, using opencv to extract feature on CPU";
+    LOGI(TRACK) << "[FeatureExtractor] Model not set, using opencv to extract feature on CPU";
   } else {
     model_loader_->InitLayout();
     device_id_ = device_id;
 
     // 1.Check model I/O
     if (model_loader_->InputNum() != 1) {
-      LOG(ERROR) << "[FeatureExtractor] model should have exactly one input";
+      LOGE(TRACK) << "[FeatureExtractor] model should have exactly one input";
       return;
     }
 
@@ -63,12 +61,12 @@ FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& mode
 
     // 3.init cninfer
     infer_.Init(model_loader_, device_id_);
-    LOG(INFO) << "[FeatureExtractor] to extract feature on MLU";
+    LOGI(TRACK) << "[FeatureExtractor] to extract feature on MLU";
   }
 }
 
 FeatureExtractor::~FeatureExtractor() {
-  LOG(INFO) << "[FeatureExtractor] release resources";
+  LOGI(TRACK) << "[FeatureExtractor] release resources";
   if (model_loader_) {
     if (input_mlu_ptr_) mem_op_.FreeArrayMlu(input_mlu_ptr_, model_loader_->InputNum());
     if (output_mlu_ptr_) mem_op_.FreeArrayMlu(output_mlu_ptr_, model_loader_->OutputNum());

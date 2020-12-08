@@ -21,7 +21,6 @@
 #ifndef MODULES_IMAGE_PREPROC_HPP_
 #define MODULES_IMAGE_PREPROC_HPP_
 
-#include <glog/logging.h>
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/error.h>

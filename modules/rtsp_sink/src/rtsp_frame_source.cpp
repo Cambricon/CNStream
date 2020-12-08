@@ -20,7 +20,7 @@
 
 #include "rtsp_frame_source.hpp"
 
-#include <glog/logging.h>
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 
@@ -65,7 +65,7 @@ void RtspFrameSource::DeliverFrame() {
       if (frame_size > fMaxSize) {
         fFrameSize = fMaxSize;
         fNumTruncatedBytes = frame_size - fMaxSize;
-        LOG(INFO) << "Truncated, frame_size(" << frame_size << ") > fMaxSize(" << fMaxSize << ")";
+        LOGI(RTSP) << "Truncated, frame_size(" << frame_size << ") > fMaxSize(" << fMaxSize << ")";
       } else {
         fFrameSize = frame_size;
         fNumTruncatedBytes = 0;

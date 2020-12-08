@@ -21,7 +21,6 @@
 #include <easybang/resize_and_colorcvt.h>
 #include <easyinfer/easy_infer.h>
 #include <easyinfer/mlu_memory_op.h>
-#include <glog/logging.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -190,7 +189,7 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
               break;
             }
             default:
-              LOG(ERROR) << "Unsupported fmt, dump resized image failed." << "fmt :" << model_input_fmt_;
+              LOGE(INFERENCER) << "Unsupported fmt, dump resized image failed." << "fmt :" << model_input_fmt_;
               break;
           }
           std::string stream_index = std::to_string(info->GetStreamIndex());

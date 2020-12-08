@@ -20,10 +20,12 @@
 
 #include "test_base.hpp"
 
-#include <cerrno>
-#include <string>
+#include <unistd.h>
+#include <string.h>
 
-#include "glog/logging.h"
+#include <cerrno>
+
+#include "cnstream_logging.hpp"
 
 extern int errno;
 
@@ -45,7 +47,7 @@ std::string GetExePath() {
 
 void CheckExePath(const std::string& path) {
   if (path.size() == 0) {
-    LOG_IF(FATAL, 0 != errno) << std::string(strerror(errno));
-    LOG(FATAL) << "length of exe path is larger than " << PATH_MAX_LENGTH;
+    LOGF_IF(COREUNITEST, 0 != errno) << std::string(strerror(errno));
+    LOGF(COREUNITEST) << "length of exe path is larger than " << PATH_MAX_LENGTH;
   }
 }

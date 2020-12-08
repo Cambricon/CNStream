@@ -32,7 +32,7 @@
 
 #include <string>
 
-#include "glog/logging.h"
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 
@@ -40,12 +40,12 @@ namespace cnstream {
 
 bool CnFont::Init(const std::string &font_path, float font_pixel, float space, float step) {
 if (FT_Init_FreeType(&m_library)) {
-    LOG(ERROR) << "FreeType init errors";
+    LOGE(OSD) << "FreeType init errors";
     return false;
   }
   if (FT_New_Face(m_library, font_path.c_str(), 0, &m_face)) {
     FT_Done_FreeType(m_library);
-    LOG(ERROR) << "Can not create a font, please checkout the font path: " << m_library;
+    LOGE(OSD) << "Can not create a font, please checkout the font path: " << m_library;
     return false;
   }
   is_initialized_ = true;
@@ -69,7 +69,7 @@ CnFont::~CnFont() {
 // Restore the original font Settings
 void CnFont::restoreFont(float font_pixel, float space, float step) {
   if (!is_initialized_) {
-    LOG(ERROR) << " [Osd] Please init CnFont first.";
+    LOGE(OSD) << " [Osd] Please init CnFont first.";
     return;
   }
   m_fontType = 0;
@@ -89,7 +89,7 @@ void CnFont::restoreFont(float font_pixel, float space, float step) {
 
 uint32_t CnFont::GetFontPixel() {
   if (!is_initialized_) {
-    LOG(ERROR) << " [Osd] Please init CnFont first.";
+    LOGE(OSD) << " [Osd] Please init CnFont first.";
     return 0;
   }
   return m_fontSize.val[0];
@@ -126,11 +126,11 @@ int CnFont::ToWchar(char*& src, wchar_t*& dest, const char* locale) {
 
 bool CnFont::GetTextSize(char* text, uint32_t* width, uint32_t* height) {
   if (!width || !height || !text) {
-    LOG(ERROR) << " [CnFont] [GetTextSize] The text, width or height is nullptr.";
+    LOGE(OSD) << " [CnFont] [GetTextSize] The text, width or height is nullptr.";
     return false;
   }
   if (!is_initialized_) {
-    LOG(ERROR) << " [CnFont] [GetTextSize] Please init CnFont first.";
+    LOGE(OSD) << " [CnFont] [GetTextSize] Please init CnFont first.";
     return false;
   }
   wchar_t* w_str;
@@ -157,7 +157,7 @@ bool CnFont::GetTextSize(char* text, uint32_t* width, uint32_t* height) {
 
 void CnFont::GetWCharSize(wchar_t wc, uint32_t* width, uint32_t* height) {
   if (!width || !height) {
-    LOG(ERROR) << " [CnFont] [GetWCharSize] The width or height is nullptr.";
+    LOGE(OSD) << " [CnFont] [GetWCharSize] The width or height is nullptr.";
     return;
   }
 
@@ -176,7 +176,7 @@ int CnFont::putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) {
   if (img.data == nullptr) return -1;
   if (text == nullptr) return -1;
   if (!is_initialized_) {
-    LOG(ERROR) << " [Osd] Please init CnFont first.";
+    LOGE(OSD) << " [Osd] Please init CnFont first.";
     return -1;
   }
 

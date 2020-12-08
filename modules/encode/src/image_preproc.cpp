@@ -20,8 +20,6 @@
 
 #include "image_preproc.hpp"
 
-#include <glog/logging.h>
-
 #include <string>
 
 #include "cnencode.hpp"
@@ -35,7 +33,7 @@ ImagePreproc::ImagePreproc(ImagePreprocParam param) {
 
 bool ImagePreproc::Init() {
   if (is_init_) {
-    LOG(ERROR) << "[ImagePreproc] Init function should be called only once.";
+    LOGE(ENCODE) << "[ImagePreproc] Init function should be called only once.";
     return false;
   }
   if (preproc_param_.dst_stride == 0) preproc_param_.dst_stride = preproc_param_.dst_width;
@@ -55,23 +53,23 @@ bool ImagePreproc::Init() {
           context.SetDeviceId(preproc_param_.device_id);
           context.BindDevice();
         } catch (edk::Exception &err) {
-          LOG(ERROR) << "[ImagePreproc] set mlu env failed.";
+          LOGE(ENCODE) << "[ImagePreproc] set mlu env failed.";
           return false;
         }
       } else {
-        LOG(ERROR) << "[ImagePreproc] device id is invalid.";
+        LOGE(ENCODE) << "[ImagePreproc] device id is invalid.";
         return false;
       }
       // do something to init a mlu resize yuv op
-      LOG(ERROR) << "[ImagePreproc] mlu preproc is not supported yet.";
+      LOGE(ENCODE) << "[ImagePreproc] mlu preproc is not supported yet.";
       return false;
     } else {
-      LOG(ERROR) << "[ImagePreproc] mlu preproc only support yuv2yuv resize.";
+      LOGE(ENCODE) << "[ImagePreproc] mlu preproc only support yuv2yuv resize.";
       return false;
     }
   } else if (preproc_param_.use_ffmpeg) {
     if (!InitForFFmpeg()) {
-      LOG(ERROR) << "[ImagePreproc] Init ffmpeg failed.";
+      LOGE(ENCODE) << "[ImagePreproc] Init ffmpeg failed.";
       return false;
     }
   }
@@ -86,7 +84,7 @@ bool ImagePreproc::InitForFFmpeg() {
     case NV12: src_pix_fmt_ = AV_PIX_FMT_NV12; break;
     case NV21: src_pix_fmt_ = AV_PIX_FMT_NV21; break;
     default:
-      LOG(ERROR) << "[ImagePreproc] Only support source with bgr24/rgb24/nv21/nv12 format";
+      LOGE(ENCODE) << "[ImagePreproc] Only support source with bgr24/rgb24/nv21/nv12 format";
       return false;
   }
   switch (preproc_param_.dst_pix_fmt) {
@@ -95,21 +93,21 @@ bool ImagePreproc::InitForFFmpeg() {
     case NV12: dst_pix_fmt_ = AV_PIX_FMT_NV12; break;
     case NV21: dst_pix_fmt_ = AV_PIX_FMT_NV21; break;
     default:
-      LOG(ERROR) << "[ImagePreproc] Only support destination with bgr24/rgb24/nv21/nv12 format";
+      LOGE(ENCODE) << "[ImagePreproc] Only support destination with bgr24/rgb24/nv21/nv12 format";
       return false;
   }
 
   src_pic_ = av_frame_alloc();
   dst_pic_ = av_frame_alloc();
   if (src_pic_ == nullptr || dst_pic_ == nullptr) {
-    LOG(ERROR) << "[ImagePreproc] Failed allocating AVFrame for the src_pic/dst_pic";
+    LOGE(ENCODE) << "[ImagePreproc] Failed allocating AVFrame for the src_pic/dst_pic";
     return false;
   }
   swsctx_ = sws_getContext(preproc_param_.src_width, preproc_param_.src_height, src_pix_fmt_,
                            preproc_param_.dst_width, preproc_param_.dst_height, dst_pix_fmt_,
                            SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
   if (swsctx_ == nullptr) {
-    LOG(ERROR) << "[ImagePreproc] sws_getContext failed.";
+    LOGE(ENCODE) << "[ImagePreproc] sws_getContext failed.";
     if (src_pic_) {
       av_frame_free(&src_pic_);
       src_pic_ = nullptr;
@@ -125,7 +123,7 @@ bool ImagePreproc::InitForFFmpeg() {
 
 bool ImagePreproc::SetSrcWidthHeight(uint32_t width, uint32_t height, uint32_t stride) {
   if (width == 0 || height == 0) {
-    LOG(ERROR) << "[ImagePreproc] src h or src w is 0.";
+    LOGE(ENCODE) << "[ImagePreproc] src h or src w is 0.";
     return false;
   }
   if (preproc_param_.src_width != width || preproc_param_.src_height != height) {
@@ -138,12 +136,12 @@ bool ImagePreproc::SetSrcWidthHeight(uint32_t width, uint32_t height, uint32_t s
                                          preproc_param_.dst_width, preproc_param_.dst_height, dst_pix_fmt_,
                                          SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
         if (ctx == nullptr) {
-          LOG(ERROR) << "[ImagePreproc] ffmpeg sws get context failed.";
+          LOGE(ENCODE) << "[ImagePreproc] ffmpeg sws get context failed.";
           return false;
         }
         swsctx_ = ctx;
       } else {
-        LOG(ERROR) << "[ImagePreproc] please init first";
+        LOGE(ENCODE) << "[ImagePreproc] please init first";
         return false;
       }
     }
@@ -181,7 +179,7 @@ ImagePreproc::~ImagePreproc() {
 // bgr to bgr opencv/ffmpeg
 bool ImagePreproc::Bgr2Bgr(const cv::Mat &src_image, cv::Mat dst_image) {
   if (src_image.cols * src_image.rows == 0 || dst_image.cols * dst_image.rows == 0) {
-    LOG(ERROR) << "[ImagePreproc] src image or dst image has invalid width or height.";
+    LOGE(ENCODE) << "[ImagePreproc] src image or dst image has invalid width or height.";
     return false;
   }
   bool ret = true;
@@ -199,12 +197,12 @@ bool ImagePreproc::Bgr2Bgr(const cv::Mat &src_image, cv::Mat dst_image) {
 // bgr to yuv opencv/ffmpeg
 bool ImagePreproc::Bgr2Yuv(const cv::Mat &src_image, uint8_t *dst_y, uint8_t *dst_uv) {
   if (dst_y == nullptr || dst_uv == nullptr) {
-    LOG(ERROR) << "[ImagePreproc][Bgr2Yuv] data pointer is nullptr";
+    LOGE(ENCODE) << "[ImagePreproc][Bgr2Yuv] data pointer is nullptr";
     return false;
   }
   if (src_image.cols * src_image.rows == 0 ||
       preproc_param_.dst_height * preproc_param_.dst_width == 0) {
-    LOG(ERROR) << "[ImagePreproc][Bgr2Yuv] src w, src h, dst w or dst h is 0";
+    LOGE(ENCODE) << "[ImagePreproc][Bgr2Yuv] src w, src h, dst w or dst h is 0";
     return false;
   }
   uint8_t *dst_data = nullptr;
@@ -224,12 +222,12 @@ bool ImagePreproc::Bgr2Yuv(const cv::Mat &src_image, uint8_t *dst_y, uint8_t *ds
 // bgr to yuv opencv/ffmpeg
 bool ImagePreproc::Bgr2Yuv(const cv::Mat &src_image, uint8_t *dst) {
   if (dst == nullptr) {
-    LOG(ERROR) << "[ImagePreproc][Bgr2Yuv] data pointer is nullptr";
+    LOGE(ENCODE) << "[ImagePreproc][Bgr2Yuv] data pointer is nullptr";
     return false;
   }
   if (src_image.cols * src_image.rows == 0 ||
       preproc_param_.dst_height * preproc_param_.dst_width == 0) {
-    LOG(ERROR) << "[ImagePreproc][Bgr2Yuv] src w, src h, dst w or dst h is 0";
+    LOGE(ENCODE) << "[ImagePreproc][Bgr2Yuv] src w, src h, dst w or dst h is 0";
     return false;
   }
   bool ret = true;
@@ -251,7 +249,7 @@ bool ImagePreproc::Bgr2Yuv(const cv::Mat &src_image, uint8_t *dst) {
 
 bool ImagePreproc::Yuv2Yuv(const uint8_t *src_y, const uint8_t *src_uv, uint8_t *dst_y, uint8_t *dst_uv) {
   if (src_y == nullptr || src_uv == nullptr || dst_y == nullptr || dst_uv == nullptr) {
-    LOG(ERROR) << "[ImagePreproc][Yuv2Yuv] data pointer is nullptr";
+    LOGE(ENCODE) << "[ImagePreproc][Yuv2Yuv] data pointer is nullptr";
     return false;
   }
   if (preproc_param_.preproc_type == "cpu") {
@@ -277,7 +275,7 @@ bool ImagePreproc::Yuv2Yuv(const uint8_t *src_y, const uint8_t *src_uv, uint8_t 
 bool ImagePreproc::Yuv2Yuv(const uint8_t *src_y, const uint8_t *src_uv, uint8_t *dst) {
   bool ret = true;
   if (src_y == nullptr || src_uv == nullptr || dst == nullptr) {
-    LOG(ERROR) << "[ImagePreproc][Yuv2Yuv] data pointer is nullptr";
+    LOGE(ENCODE) << "[ImagePreproc][Yuv2Yuv] data pointer is nullptr";
     return false;
   }
   if (preproc_param_.preproc_type != "cpu") {
@@ -323,7 +321,7 @@ bool ImagePreproc::Yuv2Yuv(const uint8_t *src_y, const uint8_t *src_uv, uint8_t 
 // cpu yuv 2 yuv
 bool ImagePreproc::ResizeYuvNearest(const uint8_t *src, uint8_t *dst) {
   if (!src || !dst) {
-    LOG(ERROR) << "[ImagePreproc][ResizeYuvNearest] src or dst pointer is nullptr";
+    LOGE(ENCODE) << "[ImagePreproc][ResizeYuvNearest] src or dst pointer is nullptr";
     return false;
   }
 
@@ -370,11 +368,11 @@ bool ImagePreproc::ResizeYuvNearest(const uint8_t *src, uint8_t *dst) {
 // opencv bgr 2 yuv
 bool ImagePreproc::Bgr2YUV420NV(const cv::Mat &bgr, uint8_t *nv_data) {
   if (!nv_data) {
-    LOG(ERROR) << "[ImagePreproc][Bgr2YUV420NV] dst nv_data is nullptr.";
+    LOGE(ENCODE) << "[ImagePreproc][Bgr2YUV420NV] dst nv_data is nullptr.";
     return false;
   }
   if (preproc_param_.dst_pix_fmt != NV12 && preproc_param_.dst_pix_fmt != NV21) {
-    LOG(ERROR) << "[ImagePreproc][Bgr2YUV420NV] Unsupported pixel format.";
+    LOGE(ENCODE) << "[ImagePreproc][Bgr2YUV420NV] Unsupported pixel format.";
     return false;
   }
 
@@ -383,7 +381,7 @@ bool ImagePreproc::Bgr2YUV420NV(const cv::Mat &bgr, uint8_t *nv_data) {
   height = bgr.rows;
   stride = preproc_param_.dst_stride;
   if (width % 2 || height % 2 || width == 0 || height == 0 || stride == 0) {
-    LOG(ERROR) << "[ImagePreproc][Bgr2YUV420NV] width or height is odd number or 0.";
+    LOGE(ENCODE) << "[ImagePreproc][Bgr2YUV420NV] width or height is odd number or 0.";
     return false;
   }
 
@@ -422,23 +420,23 @@ bool ImagePreproc::Bgr2YUV420NV(const cv::Mat &bgr, uint8_t *nv_data) {
 bool ImagePreproc::ConvertWithFFmpeg(const uint8_t *src_buffer, const size_t src_buffer_size, uint8_t *dst_buffer,
                                      const size_t dst_buffer_size) {
   if (!swsctx_|| !src_buffer || !dst_buffer) {
-    LOG(ERROR) << "[ImagePreproc] Please init first.";
+    LOGE(ENCODE) << "[ImagePreproc] Please init first.";
     return false;
   }
   if ((preproc_param_.dst_pix_fmt == NV12 || preproc_param_.dst_pix_fmt == NV21) &&
       (preproc_param_.dst_stride % 2 || preproc_param_.dst_height % 2)) {
-    LOG(ERROR) << "[ImagePreproc][ConvertWithFFmpeg] dst stride or dst height is odd number.";
+    LOGE(ENCODE) << "[ImagePreproc][ConvertWithFFmpeg] dst stride or dst height is odd number.";
     return false;
   }
   if ((preproc_param_.src_pix_fmt == NV12 || preproc_param_.src_pix_fmt == NV21) &&
       (preproc_param_.src_stride % 2 || preproc_param_.src_height % 2)) {
-    LOG(ERROR) << "[ImagePreproc][ConvertWithFFmpeg] src stride or src height is odd number.";
+    LOGE(ENCODE) << "[ImagePreproc][ConvertWithFFmpeg] src stride or src height is odd number.";
     return false;
   }
   size_t in_size =
       av_image_get_buffer_size(src_pix_fmt_, preproc_param_.src_width, preproc_param_.src_height, src_align_);
   if (in_size != src_buffer_size) {
-    LOG(ERROR) << "[ImagePreproc][ConvertWithFFmpeg] The input buffer size does not match the expected size. Required:"
+    LOGE(ENCODE) << "[ImagePreproc][ConvertWithFFmpeg] The input buffer size does not match the expected size. Required:"
                << in_size << " Available: " << src_buffer_size;
     return false;
   }
@@ -446,27 +444,27 @@ bool ImagePreproc::ConvertWithFFmpeg(const uint8_t *src_buffer, const size_t src
   size_t outsize =
       av_image_get_buffer_size(dst_pix_fmt_, preproc_param_.dst_width, preproc_param_.dst_height, dst_align_);
   if (outsize < dst_buffer_size) {
-    LOG(ERROR) << "[ImagePreproc][ConvertWithFFmpeg] The input buffer size does not match the expected size. Required:"
+    LOGE(ENCODE) << "[ImagePreproc][ConvertWithFFmpeg] The input buffer size does not match the expected size. Required:"
                << outsize << " Available: " << dst_buffer_size;
     return false;
   }
 
   if (av_image_fill_arrays(src_pic_->data, src_pic_->linesize, src_buffer, src_pix_fmt_,
                            preproc_param_.src_width, preproc_param_.src_height, src_align_) <= 0) {
-    LOG(ERROR) << "[ImagePreproc][ConvertWithFFmpeg] Failed filling input frame with input buffer";
+    LOGE(ENCODE) << "[ImagePreproc][ConvertWithFFmpeg] Failed filling input frame with input buffer";
     return false;
   }
 
   if (av_image_fill_arrays(dst_pic_->data, dst_pic_->linesize, dst_buffer, dst_pix_fmt_,
                            preproc_param_.dst_width, preproc_param_.dst_height, dst_align_) <= 0) {
-    LOG(ERROR) << "[ImagePreproc][ConvertWithFFmpeg] Failed filling output frame with output buffer";
+    LOGE(ENCODE) << "[ImagePreproc][ConvertWithFFmpeg] Failed filling output frame with output buffer";
     return false;
   }
 
   /* Do the conversion */
   if (sws_scale(swsctx_, src_pic_->data, src_pic_->linesize, 0, preproc_param_.src_height,
                 dst_pic_->data, dst_pic_->linesize) < 0) {
-    LOG(ERROR) << "[ImagePreproc][ConvertWithFFmpeg] resize and convert failed.";
+    LOGE(ENCODE) << "[ImagePreproc][ConvertWithFFmpeg] resize and convert failed.";
     return false;
   }
   return true;

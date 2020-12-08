@@ -2,7 +2,8 @@
 CWD="$( cd "$( dirname "$0"  )" && pwd  )"
 PACKAGE_NAME=libyuv
 LIBYUV_INST_DIR=${CWD}/../3rdparty/libyuv
-#CROSS_COMPILE=$1
+CMAKE_C_COMPILER=$1
+CMAKE_CXX_COMPILER=$2
 
 if [ -f "$LIBYUV_INST_DIR/lib/libyuv.a" ] && [ -f "$LIBYUV_INST_DIR/include/libyuv.h" ];then
   echo "libyuv has been built and installed already"
@@ -28,7 +29,12 @@ if [ ${SRC_TYPE} = 2 ]; then
 fi
 
 cd ${CWD}/${PACKAGE_NAME}
-make -f linux.mk CFLAGS="-O2 -fomit-frame-pointer -fPIC -I./include"  CXXFLAGS="-O2 -fomit-frame-pointer -fPIC -I./include"
+
+if [ ${CMAKE_C_COMPILER} ] && [ ${CMAKE_CXX_COMPILER} ]; then
+  make -f linux.mk CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} CFLAGS="-O2 -fomit-frame-pointer -fPIC -I./include"  CXXFLAGS="-O2 -fomit-frame-pointer -fPIC -I./include"
+else
+  make -f linux.mk CFLAGS="-O2 -fomit-frame-pointer -fPIC -I./include"  CXXFLAGS="-O2 -fomit-frame-pointer -fPIC -I./include"
+fi
 
 if [ $? = 0 ]; then
   echo "build ${PACKAGE_NAME} done"

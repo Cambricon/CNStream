@@ -20,13 +20,14 @@
 
 #include "infer_thread_pool.hpp"
 
+#include "cnstream_logging.hpp"
 #include <device/mlu_context.h>
-#include <glog/logging.h>
 #include <cassert>
 #include <string>
 #include <vector>
 
 #include "cnstream_error.hpp"
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 
@@ -118,12 +119,12 @@ void InferThreadPool::TaskLoop() {
       if (error_func_) {
         error_func_(e.what());
       } else {
-        LOG(FATAL) << "Not handled error: " << std::string(e.what());
+        LOGF(INFERENCER) << "Not handled error: " << std::string(e.what());
       }
     }
 
     if (ret != 0) {
-      DLOG(INFO) << "Inference task execute failed. Error code [" << ret << "]. Task message: " << task->task_msg;
+      LOGI(INFERENCER) << "Inference task execute failed. Error code [" << ret << "]. Task message: " << task->task_msg;
     }
   }
 }

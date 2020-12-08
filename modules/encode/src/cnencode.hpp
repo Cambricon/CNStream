@@ -21,7 +21,6 @@
 #ifndef MODULES_CNENCODE_HPP_
 #define MODULES_CNENCODE_HPP_
 
-#include <glog/logging.h>
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/error.h>

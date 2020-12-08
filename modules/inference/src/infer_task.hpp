@@ -21,7 +21,6 @@
 #ifndef MODULES_INFERENCE_SRC_INFER_TASK_HPP_
 #define MODULES_INFERENCE_SRC_INFER_TASK_HPP_
 
-#include <glog/logging.h>
 #include <functional>
 #include <future>
 #include <memory>

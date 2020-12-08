@@ -29,8 +29,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <glog/logging.h>
 #include <cstring>
+#include <cmath>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -38,6 +38,7 @@
 #include <utility>
 #include <vector>
 
+#include "cnstream_logging.hpp"
 #include "cnstream_module.hpp"
 
 namespace cnstream {
@@ -69,7 +70,7 @@ cv::Mat* CNDataFrame::ImageBGR() {
   int stride_ = stride[0];
   cv::Mat bgr(height, stride_, CV_8UC3);
   uint8_t* img_data = new (std::nothrow) uint8_t[GetBytes()];
-  LOG_IF(FATAL, nullptr == img_data) << "CNDataFrame::ImageBGR() failed to alloc memory";
+  LOGF_IF(FRAME, nullptr == img_data) << "CNDataFrame::ImageBGR() failed to alloc memory";
   uint8_t* t = img_data;
   for (int i = 0; i < GetPlanes(); ++i) {
     memcpy(t, data[i]->GetCpuData(), GetPlaneBytes(i));
@@ -110,13 +111,13 @@ cv::Mat* CNDataFrame::ImageBGR() {
       }
     } break;
     default: {
-      LOG(WARNING) << "Unsupport pixel format.";
+      LOGW(FRAME) << "Unsupport pixel format.";
       delete[] img_data;
       return nullptr;
     }
   }
   bgr_mat = new (std::nothrow) cv::Mat();
-  LOG_IF(FATAL, nullptr == bgr_mat) << "CNDataFrame::ImageBGR() failed to alloc cv::Mat";
+  LOGF_IF(FRAME, nullptr == bgr_mat) << "CNDataFrame::ImageBGR() failed to alloc cv::Mat";
   *bgr_mat = bgr(cv::Rect(0, 0, width, height)).clone();
   delete[] img_data;
   return bgr_mat;
@@ -136,7 +137,7 @@ size_t CNDataFrame::GetPlaneBytes(int plane_idx) const {
       else if (1 == plane_idx)
         return std::ceil(1.0 * height * stride[1] / 2);
       else
-        LOG(FATAL) << "plane index wrong.";
+        LOGF(FRAME) << "plane index wrong.";
     default:
       return 0;
   }
@@ -162,7 +163,7 @@ void CNDataFrame::CopyToSyncMem(bool dst_mlu) {
       }
       return;
     } else {
-      LOG(FATAL) << " unsupported dev_type";
+      LOGF(FRAME) << " unsupported dev_type";
     }
 #else
     /*cndecoder buffer will be used to avoid dev2dev copy*/
@@ -184,19 +185,19 @@ void CNDataFrame::CopyToSyncMem(bool dst_mlu) {
     bytes = ROUND_UP(bytes, 64 * 1024);
     if (dst_mlu) {
       if (dst_device_id < 0 || (ctx.dev_type == DevContext::MLU && ctx.dev_id != dst_device_id)) {
-        LOG(FATAL) << "CopyToSyncMem: dst_device_id not set, or ctx.dev_id != dst_device_id" << "," << dst_device_id;
+        LOGF(FRAME) << "CopyToSyncMem: dst_device_id not set, or ctx.dev_id != dst_device_id" << "," << dst_device_id;
         std::terminate();
         return;
       }
       mlu_data = cnMluMemAlloc(bytes, dst_device_id);
       if (nullptr == mlu_data) {
-        LOG(FATAL) << "CopyToSyncMem: failed to alloc mlu memory";
+        LOGF(FRAME) << "CopyToSyncMem: failed to alloc mlu memory";
         std::terminate();
       }
     } else {
       cpu_data = cnCpuMemAlloc(bytes);
       if (nullptr == cpu_data) {
-        LOG(FATAL) << "CopyToSyncMem: failed to alloc cpu memory";
+        LOGF(FRAME) << "CopyToSyncMem: failed to alloc cpu memory";
         std::terminate();
       }
     }
@@ -208,7 +209,7 @@ void CNDataFrame::CopyToSyncMem(bool dst_mlu) {
         MluDeviceGuard guard(dst_device_id);  // dst_device_id is equal to ctx.devi_id
         cnrtRet_t ret = cnrtMemcpy(dst, ptr_mlu[i], plane_size, CNRT_MEM_TRANS_DIR_DEV2DEV);
         if (ret != CNRT_RET_SUCCESS) {
-          LOG(FATAL) << "CopyToSyncMem: failed to cnrtMemcpy(CNRT_MEM_TRANS_DIR_DEV2DEV)";
+          LOGF(FRAME) << "CopyToSyncMem: failed to cnrtMemcpy(CNRT_MEM_TRANS_DIR_DEV2DEV)";
         }
         this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, dst_device_id));
         this->data[i]->SetMluData(dst);
@@ -221,7 +222,7 @@ void CNDataFrame::CopyToSyncMem(bool dst_mlu) {
         MluDeviceGuard guard(ctx.dev_id);
         cnrtRet_t ret = cnrtMemcpy(dst, ptr_mlu[i], plane_size, CNRT_MEM_TRANS_DIR_DEV2HOST);
         if (ret != CNRT_RET_SUCCESS) {
-          LOG(FATAL) << "CopyToSyncMem: failed to cnrtMemcpy(CNRT_MEM_TRANS_DIR_DEV2HOST)";
+          LOGF(FRAME) << "CopyToSyncMem: failed to cnrtMemcpy(CNRT_MEM_TRANS_DIR_DEV2HOST)";
         }
         this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, dst_device_id));
         this->data[i]->SetCpuData(dst);
@@ -234,7 +235,7 @@ void CNDataFrame::CopyToSyncMem(bool dst_mlu) {
         MluDeviceGuard guard(dst_device_id);
         cnrtRet_t ret = cnrtMemcpy(dst, ptr_cpu[i], plane_size, CNRT_MEM_TRANS_DIR_HOST2DEV);
         if (ret != CNRT_RET_SUCCESS) {
-          LOG(FATAL) << "CopyToSyncMem: failed to cnrtMemcpy(CNRT_MEM_TRANS_DIR_HOST2DEV)";
+          LOGF(FRAME) << "CopyToSyncMem: failed to cnrtMemcpy(CNRT_MEM_TRANS_DIR_HOST2DEV)";
         }
         this->data[i].reset(new (std::nothrow) CNSyncedMemory(plane_size, dst_device_id));
         this->data[i]->SetMluData(dst);
@@ -252,7 +253,7 @@ void CNDataFrame::CopyToSyncMem(bool dst_mlu) {
     }
     this->deAllocator_.reset();  // deep-copy is done, release dec-buf-ref
   } else {
-    LOG(FATAL) << "CopyToSyncMem: Unsupported type";
+    LOGF(FRAME) << "CopyToSyncMem: Unsupported type";
     std::terminate();
   }
 }
@@ -264,7 +265,7 @@ void CNDataFrame::CopyToSyncMemOnDevice(int device_id) {
     CALL_CNRT_BY_CONTEXT(cnrtGetPeerAccessibility(&can_peer, device_id, this->ctx.dev_id), this->ctx.dev_id,
                          this->ctx.ddr_channel);
     if (1 != can_peer) {
-      LOG(FATAL) << "dst device: " << device_id << " is not peerable to src device: " << this->ctx.dev_id;
+      LOGF(FRAME) << "dst device: " << device_id << " is not peerable to src device: " << this->ctx.dev_id;
     }
 
     // malloc memory on device_id
@@ -273,7 +274,7 @@ void CNDataFrame::CopyToSyncMemOnDevice(int device_id) {
     bytes = ROUND_UP(bytes, 64 * 1024);
     peerdev_data = cnMluMemAlloc(bytes, device_id);
     if (nullptr == peerdev_data) {
-      LOG(FATAL) << "CopyToSyncMemOnDevice: failed to alloc mlu memory";
+      LOGF(FRAME) << "CopyToSyncMemOnDevice: failed to alloc mlu memory";
     }
 
     // copy data to mlu memory on device_id
@@ -298,10 +299,10 @@ void CNDataFrame::CopyToSyncMemOnDevice(int device_id) {
         dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
       }
     } else {
-      LOG(FATAL) << "invalid mlu data.";
+      LOGF(FRAME) << "invalid mlu data.";
     }
   } else {
-    LOG(FATAL) << "only support mlu memory sync between different devices.";
+    LOGF(FRAME) << "only support mlu memory sync between different devices.";
   }
 
   // reset ctx.dev_id to device_id
@@ -310,11 +311,11 @@ void CNDataFrame::CopyToSyncMemOnDevice(int device_id) {
 
 void CNDataFrame::MmapSharedMem(MemMapType type, std::string stream_id) {
   if (!GetBytes()) {
-    LOG(ERROR) << "GetByte() is 0.";
+    LOGE(FRAME) << "GetByte() is 0.";
     return;
   }
   if (map_mem_ptr) {
-    LOG(FATAL) << "MmapSharedMem should be called once for each frame";
+    LOGF(FRAME) << "MmapSharedMem should be called once for each frame";
   }
 
   if (type == MemMapType::MEMMAP_CPU) {
@@ -323,15 +324,15 @@ void CNDataFrame::MmapSharedMem(MemMapType type, std::string stream_id) {
     const std::string key = "stream_id_" + stream_id + "_frame_id_" + std::to_string(frame_id);
     map_mem_fd = shm_open(key.c_str(), O_RDWR, S_IRUSR | S_IWUSR);
     if (map_mem_fd < 0) {
-      LOG(FATAL) << "Shered memory open failed, fd: " << map_mem_fd << ", error code: " << errno;
+      LOGF(FRAME) << "Shered memory open failed, fd: " << map_mem_fd << ", error code: " << errno;
     }
     map_mem_ptr = mmap(NULL, map_mem_size, PROT_READ | PROT_WRITE, MAP_SHARED, map_mem_fd, 0);
     if (map_mem_ptr == MAP_FAILED) {
-      LOG(FATAL) << "Mmap error";
+      LOGF(FRAME) << "Mmap error";
     }
 
     if (ftruncate(map_mem_fd, map_mem_size) == -1) {
-      LOG(FATAL) << "truncate shared memory size failed";
+      LOGF(FRAME) << "truncate shared memory size failed";
     }
     // sync shared memory
     if (this->ctx.dev_type == DevContext::CPU) {
@@ -348,13 +349,13 @@ void CNDataFrame::MmapSharedMem(MemMapType type, std::string stream_id) {
       bytes = ROUND_UP(bytes, 64 * 1024);
       mlu_data = cnMluMemAlloc(bytes, ctx.dev_id);
       if (nullptr == mlu_data) {
-        LOG(FATAL) << "MmapSharedMem: failed to alloc mlu memory";
+        LOGF(FRAME) << "MmapSharedMem: failed to alloc mlu memory";
       }
 
       auto dst = reinterpret_cast<uint8_t*>(mlu_data.get());
       cnrtRet_t ret = cnrtMemcpy(dst, map_mem_ptr, bytes, CNRT_MEM_TRANS_DIR_HOST2DEV);
       if (ret != CNRT_RET_SUCCESS) {
-        LOG(ERROR) << "MmapSharedMem: failed to cnrtMemcpy, ret = " << ret;
+        LOGE(FRAME) << "MmapSharedMem: failed to cnrtMemcpy, ret = " << ret;
       }
 
       for (int i = 0; i < GetPlanes(); i++) {
@@ -366,7 +367,7 @@ void CNDataFrame::MmapSharedMem(MemMapType type, std::string stream_id) {
         dst += plane_size;
       }
     } else {
-      LOG(FATAL) << "Device type not supported";
+      LOGF(FRAME) << "Device type not supported";
     }
   } else if (type == MemMapType::MEMMAP_MLU) {
     // get shared mlu memory from mlu memory handle
@@ -376,7 +377,7 @@ void CNDataFrame::MmapSharedMem(MemMapType type, std::string stream_id) {
       bytes = ROUND_UP(bytes, 64 * 1024);
       cpu_data = cnCpuMemAlloc(bytes);
       if (nullptr == cpu_data.get()) {
-        LOG(FATAL) << "MmapSharedMem: failed to alloc cpu memory";
+        LOGF(FRAME) << "MmapSharedMem: failed to alloc cpu memory";
       }
       MluDeviceGuard guard(ctx.dev_id);
       cnrtMemcpy(cpu_data.get(), map_mem_ptr, bytes, CNRT_MEM_TRANS_DIR_DEV2HOST);
@@ -397,16 +398,16 @@ void CNDataFrame::MmapSharedMem(MemMapType type, std::string stream_id) {
         dst = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(dst) + plane_size);
       }
     } else {
-      LOG(FATAL) << "Device type not supported";
+      LOGF(FRAME) << "Device type not supported";
     }
   } else {
-    LOG(FATAL) << "Mem map type not supported";
+    LOGF(FRAME) << "Mem map type not supported";
   }
 }
 
 void CNDataFrame::UnMapSharedMem(MemMapType type) {
   if (!GetBytes()) {
-    LOG(ERROR) << "GetByte() is 0.";
+    LOGE(FRAME) << "GetByte() is 0.";
     return;
   }
   if (!map_mem_ptr) return;
@@ -418,18 +419,18 @@ void CNDataFrame::UnMapSharedMem(MemMapType type) {
   } else if (type == MemMapType::MEMMAP_MLU) {
     CALL_CNRT_BY_CONTEXT(cnrtUnMapMemHandle(map_mem_ptr), ctx.dev_id, ctx.ddr_channel);
   } else {
-    LOG(FATAL) << "Mem map type not supported";
+    LOGF(FRAME) << "Mem map type not supported";
   }
 }
 
 void CNDataFrame::CopyToSharedMem(MemMapType type, std::string stream_id) {
   if (!GetBytes()) {
-    LOG(ERROR) << "GetByte() is 0.";
+    LOGE(FRAME) << "GetByte() is 0.";
     return;
   }
 
   if (shared_mem_ptr) {
-    LOG(FATAL) << "CopyToSharedMem should be called once for each frame";
+    LOGF(FRAME) << "CopyToSharedMem should be called once for each frame";
   }
 
   if (type == MemMapType::MEMMAP_CPU) {
@@ -439,14 +440,14 @@ void CNDataFrame::CopyToSharedMem(MemMapType type, std::string stream_id) {
     // O_EXCL ensure open one time
     shared_mem_fd = shm_open(key.c_str(), O_CREAT | O_TRUNC | O_RDWR /*| O_EXCL*/, S_IRUSR | S_IWUSR);
     if (shared_mem_fd < 0) {
-      LOG(FATAL) << "Shared memory create failed, fd: " << shared_mem_fd << ", error code: " << errno;
+      LOGF(FRAME) << "Shared memory create failed, fd: " << shared_mem_fd << ", error code: " << errno;
     }
     if (ftruncate(shared_mem_fd, shared_mem_size) == -1) {
-      LOG(FATAL) << "truncate shared size memory failed";
+      LOGF(FRAME) << "truncate shared size memory failed";
     }
     shared_mem_ptr = mmap(NULL, shared_mem_size, PROT_READ | PROT_WRITE, MAP_SHARED, shared_mem_fd, 0);
     if (shared_mem_ptr == MAP_FAILED) {
-      LOG(FATAL) << "Mmap error";
+      LOGF(FRAME) << "Mmap error";
     }
     // copy frame data to cpu shared memory
     auto ptmp = reinterpret_cast<uint8_t*>(shared_mem_ptr);
@@ -474,7 +475,7 @@ void CNDataFrame::CopyToSharedMem(MemMapType type, std::string stream_id) {
 
     CALL_CNRT_BY_CONTEXT(cnrtAcquireMemHandle(&mlu_mem_handle, shared_mem_ptr), ctx.dev_id, ctx.ddr_channel);
   } else {
-    LOG(FATAL) << "Mem map type not supported";
+    LOGF(FRAME) << "Mem map type not supported";
   }
   return;
 }
@@ -492,7 +493,7 @@ void CNDataFrame::ReleaseSharedMem(MemMapType type, std::string stream_id) {
       CALL_CNRT_BY_CONTEXT(cnrtFree(shared_mem_ptr), ctx.dev_id, ctx.ddr_channel);
     }
   } else {
-    LOG(FATAL) << "Mem map type not supported";
+    LOGF(FRAME) << "Mem map type not supported";
   }
   return;
 }

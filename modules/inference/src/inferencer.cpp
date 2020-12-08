@@ -78,7 +78,7 @@ class InferencerPrivate {
   std::mutex ctx_mtx_;
 
   void InferEngineErrorHnadleFunc(const std::string& err_msg) {
-    LOG(ERROR) << err_msg;
+    LOGE(INFERENCER) << err_msg;
   }
 
   bool InitByParams(const InferParams &params, const ModuleParamSet &param_set) {
@@ -103,19 +103,19 @@ class InferencerPrivate {
       bsize_ = model_loader->InputShapes()[0].n;
       model_loader_ = model_loader;
     } catch (edk::Exception &e) {
-      LOG(ERROR) << "[" << q_ptr_->GetName() << "] init offline model failed. model_path: ["
+      LOGE(INFERENCER) << "[" << q_ptr_->GetName() << "] init offline model failed. model_path: ["
                  << model_path << "]. error message: [" << e.what() << "]";
       return false;
     }
 
     if (params.object_infer) {
-      LOG(INFO) << "[" << q_ptr_->GetName() << "] inference mode: inference with objects.";
+      LOGI(INFERENCER) << "[" << q_ptr_->GetName() << "] inference mode: inference with objects.";
       if (!params.obj_filter_name.empty()) {
         obj_filter_ = std::shared_ptr<ObjFilter>(ObjFilter::Create(params.obj_filter_name));
         if (obj_filter_) {
-          LOG(INFO) << "[" << q_ptr_->GetName() << "] Object filter set:" << params.obj_filter_name;
+          LOGI(INFERENCER) << "[" << q_ptr_->GetName() << "] Object filter set:" << params.obj_filter_name;
         } else {
-          LOG(ERROR) << "Can not find ObjFilter implemention by name: "
+          LOGE(INFERENCER) << "Can not find ObjFilter implemention by name: "
                      << params.obj_filter_name;
           return false;
         }
@@ -126,13 +126,13 @@ class InferencerPrivate {
       if (params.object_infer) {
         obj_preproc_ = std::shared_ptr<ObjPreproc>(ObjPreproc::Create(params.preproc_name));
         if (!obj_preproc_) {
-          LOG(ERROR) << "Can not find ObjPreproc implemention by name: " << params.preproc_name;
+          LOGE(INFERENCER) << "Can not find ObjPreproc implemention by name: " << params.preproc_name;
           return false;
         }
       } else {
         preproc_ = std::shared_ptr<Preproc>(Preproc::Create(params.preproc_name));
         if (!preproc_) {
-          LOG(ERROR) << "Can not find Preproc implemention by name: " << params.preproc_name;
+          LOGE(INFERENCER) << "Can not find Preproc implemention by name: " << params.preproc_name;
           return false;
         }
       }
@@ -142,14 +142,14 @@ class InferencerPrivate {
       if (params.object_infer) {
         obj_postproc_ = std::shared_ptr<ObjPostproc>(ObjPostproc::Create(params.postproc_name));
         if (!obj_postproc_) {
-          LOG(ERROR) << "Can not find ObjPostproc implemention by name: " << params.postproc_name;
+          LOGE(INFERENCER) << "Can not find ObjPostproc implemention by name: " << params.postproc_name;
           return false;
         }
         obj_postproc_->SetThreshold(params.threshold);
       } else {
         postproc_ = std::shared_ptr<Postproc>(Postproc::Create(params.postproc_name));
         if (!postproc_) {
-          LOG(ERROR) << "Can not find Postproc implemention by name: " << params.postproc_name;
+          LOGE(INFERENCER) << "Can not find Postproc implemention by name: " << params.postproc_name;
           return false;
         }
         postproc_->SetThreshold(params.threshold);
@@ -174,16 +174,16 @@ class InferencerPrivate {
           stats_db_dir = db_name.substr(0, dir_pos);
           stats_db_path = db_name;
         } else {
-          LOG(WARNING) << "[Inferencer]: parameter stats_db_name should end with '.db'."
+          LOGW(INFERENCER) << "[Inferencer]: parameter stats_db_name should end with '.db'."
                        << " Database file will be stored at [perf_database] directory instead.";
         }
       }
       stats_db_path = GetPathRelativeToTheJSONFile(stats_db_path, param_set);
       PerfManager::ClearDbFiles(GetPathRelativeToTheJSONFile(stats_db_dir, param_set));
 
-      LOG(INFO) << "[" << q_ptr_->GetName() << "] save performance info database file to : " << stats_db_path;
+      LOGI(INFERENCER) << "[" << q_ptr_->GetName() << "] save performance info database file to : " << stats_db_path;
       if (!infer_perf_manager_->Init(stats_db_path)) {
-        LOG(ERROR) << "[" << q_ptr_->GetName() << "] Init infer perf manager failed.";
+        LOGE(INFERENCER) << "[" << q_ptr_->GetName() << "] Init infer perf manager failed.";
         return false;
       }
 
@@ -197,7 +197,7 @@ class InferencerPrivate {
 
       for (auto it : perf_calculator_) {
         if (!it.second->SetPerfUtils(perf_utils)) {
-          LOG(ERROR) << "Set perf utils failed.";
+          LOGE(INFERENCER) << "Set perf utils failed.";
           return false;
         }
       }
@@ -264,7 +264,7 @@ class InferencerPrivate {
 
 void InferencerPrivate::PrintPerf(std::string name, std::vector<std::string> keys) {
   if (perf_calculator_.find(name) == perf_calculator_.end()) {
-    LOG(ERROR) << "[Inferencer] [" << q_ptr_->GetName() << "] Can not find perf calculator " << name << std::endl;
+    LOGE(INFERENCER) << "[Inferencer] [" << q_ptr_->GetName() << "] Can not find perf calculator " << name << std::endl;
     return;
   }
   std::shared_ptr<PerfCalculator> calculator = perf_calculator_[name];
@@ -360,7 +360,7 @@ Inferencer::Inferencer(const std::string& name) : Module(name) {
       "Inferencer is a module for running offline model inference,"
       " as well as preprocedding and postprocessing.");
   param_manager_ = new (std::nothrow) InferParamManager();
-  LOG_IF(FATAL, !param_manager_) << "Inferencer::Inferencer(const std::string& name) new InferParams failed.";
+  LOGF_IF(INFERENCER, !param_manager_) << "Inferencer::Inferencer(const std::string& name) new InferParams failed.";
   param_manager_->RegisterAll(&param_register_);
 }
 
@@ -374,23 +374,23 @@ bool Inferencer::Open(ModuleParamSet raw_params) {
   }
   d_ptr_ = new (std::nothrow) InferencerPrivate(this);
   if (!d_ptr_) {
-    LOG(ERROR) << "Inferencer::Open() new InferencerPrivate failed";
+    LOGE(INFERENCER) << "Inferencer::Open() new InferencerPrivate failed";
     return false;
   }
 
   InferParams params;
   if (!param_manager_->ParseBy(raw_params, &params)) {
-    LOG(ERROR) << "[" << GetName() << "] parse parameters failed.";
+    LOGE(INFERENCER) << "[" << GetName() << "] parse parameters failed.";
     return false;
   }
 
   if (!d_ptr_->InitByParams(params, raw_params)) {
-    LOG(ERROR) << "[" << GetName() << "] init resources failed.";
+    LOGE(INFERENCER) << "[" << GetName() << "] init resources failed.";
     return false;
   }
 
   if (container_ == nullptr) {
-    LOG(INFO) << name_ << " has not been added into pipeline.";
+    LOGI(INFERENCER) << name_ << " has not been added into pipeline.";
   } else {
   }
 

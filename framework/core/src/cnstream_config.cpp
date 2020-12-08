@@ -23,7 +23,7 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
-#include <glog/logging.h>
+#include "cnstream_logging.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -42,7 +42,7 @@ namespace cnstream {
 bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
-    LOG(ERROR) << "Parse module configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
+    LOGE(CORE) << "Parse module configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
                << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. JSON:" << jstr;
     return false;
   }
@@ -52,11 +52,11 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
 
   // className
   if (end == doc.FindMember("class_name")) {
-    LOG(ERROR) << "Module has to have a class_name.";
+    LOGE(CORE) << "Module has to have a class_name.";
     return false;
   } else {
     if (!doc["class_name"].IsString()) {
-      LOG(ERROR) << "class_name must be string type.";
+      LOGE(CORE) << "class_name must be string type.";
       return false;
     }
     this->className = doc["class_name"].GetString();
@@ -65,13 +65,13 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   // parallelism
   if (end != doc.FindMember("parallelism")) {
     if (!doc["parallelism"].IsUint()) {
-      LOG(ERROR) << "parallelism must be uint type.";
+      LOGE(CORE) << "parallelism must be uint type.";
       return false;
     }
     this->parallelism = doc["parallelism"].GetUint();
     if (this->className != "cnstream::DataSource" && this->className != "cnstream::TestDataSource" &&
         this->className != "cnstream::ModuleIPC" && this->parallelism < 1) {
-      LOG(ERROR) << "parallelism must be larger than 0, when class name is " << this->className;
+      LOGE(CORE) << "parallelism must be larger than 0, when class name is " << this->className;
       return false;
     }
   } else {
@@ -81,7 +81,7 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   // maxInputQueueSize
   if (end != doc.FindMember("max_input_queue_size")) {
     if (!doc["max_input_queue_size"].IsUint()) {
-      LOG(ERROR) << "max_input_queue_size must be uint type.";
+      LOGE(CORE) << "max_input_queue_size must be uint type.";
       return false;
     }
     this->maxInputQueueSize = doc["max_input_queue_size"].GetUint();
@@ -92,7 +92,7 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   // enablePerfInfo
   if (end != doc.FindMember("show_perf_info")) {
     if (!doc["show_perf_info"].IsBool()) {
-      LOG(ERROR) << "show_perf_info must be Boolean type.";
+      LOGE(CORE) << "show_perf_info must be Boolean type.";
       return false;
     }
     this->showPerfInfo = doc["show_perf_info"].GetBool();
@@ -103,13 +103,13 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   // next
   if (end != doc.FindMember("next_modules")) {
     if (!doc["next_modules"].IsArray()) {
-      LOG(ERROR) << "next_modules must be array type.";
+      LOGE(CORE) << "next_modules must be array type.";
       return false;
     }
     auto values = doc["next_modules"].GetArray();
     for (auto iter = values.begin(); iter != values.end(); ++iter) {
       if (!iter->IsString()) {
-        LOG(ERROR) << "next_modules must be an array of strings.";
+        LOGE(CORE) << "next_modules must be an array of strings.";
         return false;
       }
       this->next.push_back(iter->GetString());
@@ -122,7 +122,7 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   if (end != doc.FindMember("custom_params")) {
     rapidjson::Value& custom_params = doc["custom_params"];
     if (!custom_params.IsObject()) {
-      LOG(ERROR) << "custom_params must be an object.";
+      LOGE(CORE) << "custom_params must be an object.";
       return false;
     }
     this->parameters.clear();
@@ -148,7 +148,7 @@ bool CNModuleConfig::ParseByJSONFile(const std::string& jfname) {
   std::ifstream ifs(jfname);
 
   if (!ifs.is_open()) {
-    LOG(ERROR) << "File open failed :" << jfname;
+    LOGE(CORE) << "File open failed :" << jfname;
     return false;
   }
 
@@ -173,7 +173,7 @@ bool CNModuleConfig::ParseByJSONFile(const std::string& jfname) {
   jf_dir += '/';
 
   if (this->parameters.end() != this->parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
-    LOG(WARNING) << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
+    LOGW(CORE) << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
                  << "up by cnstream as the directory where the configuration file is located and passed to the module.";
   }
 
@@ -184,7 +184,7 @@ bool CNModuleConfig::ParseByJSONFile(const std::string& jfname) {
 bool ConfigsFromJsonFile(const std::string& config_file, std::vector<CNModuleConfig>& configs) {  // NOLINT
   std::ifstream ifs(config_file);
   if (!ifs.is_open()) {
-    LOG(ERROR) << "Failed to open file: " << config_file;
+    LOGE(CORE) << "Failed to open file: " << config_file;
     return false;
   }
 
@@ -195,7 +195,7 @@ bool ConfigsFromJsonFile(const std::string& config_file, std::vector<CNModuleCon
   std::vector<std::string> namelist;
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
-    LOG(ERROR) << "Parse pipeline configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
+    LOGE(CORE) << "Parse pipeline configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
                << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. ";
     return false;
   }
@@ -204,7 +204,7 @@ bool ConfigsFromJsonFile(const std::string& config_file, std::vector<CNModuleCon
     CNModuleConfig mconf;
     mconf.name = iter->name.GetString();
     if (find(namelist.begin(), namelist.end(), mconf.name) != namelist.end()) {
-      LOG(ERROR) << "Module name should be unique in Jason file. Module name : [" << mconf.name + "]"
+      LOGE(CORE) << "Module name should be unique in Jason file. Module name : [" << mconf.name + "]"
                  << " appeared more than one time.";
       return false;
     }
@@ -215,7 +215,7 @@ bool ConfigsFromJsonFile(const std::string& config_file, std::vector<CNModuleCon
     iter->value.Accept(jwriter);
 
     if (!mconf.ParseByJSONStr(std::string(sbuf.GetString()))) {
-      LOG(ERROR) << "Parse module config failed. Module name : [" << mconf.name << "]";
+      LOGE(CORE) << "Parse module config failed. Module name : [" << mconf.name << "]";
       return false;
     }
 
@@ -233,7 +233,7 @@ bool ConfigsFromJsonFile(const std::string& config_file, std::vector<CNModuleCon
     jf_dir += '/';
 
     if (mconf.parameters.end() != mconf.parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
-      LOG(WARNING)
+      LOGW(CORE)
           << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
           << "up by cnstream as the directory where the configuration file is located and passed to the module.";
     }

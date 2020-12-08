@@ -101,7 +101,7 @@ void IdxManager::ReturnModuleIdx(size_t id_) {
 }
 
 void Pipeline::UpdateByStreamMsg(const StreamMsg& msg) {
-  LOG(INFO) << "[" << GetName() << "] "
+  LOGI(CORE) << "[" << GetName() << "] "
             << "stream: " << msg.stream_id << " got message: " << msg.type;
   msgq_.Push(msg);
 }
@@ -113,7 +113,7 @@ void Pipeline::StreamMsgHandleFunc() {
     }
 
     if (exit_msg_loop_) {
-        LOG(INFO) << "[" << GetName() << "] stop updating stream message";
+        LOGI(CORE) << "[" << GetName() << "] stop updating stream message";
         return;
     }
     switch (msg.type) {
@@ -131,7 +131,7 @@ void Pipeline::StreamMsgHandleFunc() {
       case StreamMsgType::USER_MSG7:
       case StreamMsgType::USER_MSG8:
       case StreamMsgType::USER_MSG9:
-        LOG(INFO) << "[" << GetName() << "] "
+        LOGI(CORE) << "[" << GetName() << "] "
                   << "stream: " << msg.stream_id << " notify message: " << msg.type;
         if (smsg_observer_) {
           smsg_observer_->Update(msg);
@@ -149,11 +149,11 @@ Pipeline::Pipeline(const std::string& name) : name_(name) {
   smsg_thread_ = std::thread(&Pipeline::StreamMsgHandleFunc, this);
 
   event_bus_ = new (std::nothrow) EventBus();
-  LOG_IF(FATAL, nullptr == event_bus_) << "Pipeline::Pipeline() failed to alloc EventBus";
+  LOGF_IF(CORE, nullptr == event_bus_) << "Pipeline::Pipeline() failed to alloc EventBus";
   GetEventBus()->AddBusWatch(std::bind(&Pipeline::DefaultBusWatch, this, std::placeholders::_1));
 
   idxManager_ = new (std::nothrow) IdxManager();
-  LOG_IF(FATAL, nullptr == idxManager_) << "Pipeline::Pipeline() failed to alloc IdxManager";
+  LOGF_IF(CORE, nullptr == idxManager_) << "Pipeline::Pipeline() failed to alloc IdxManager";
 }
 
 Pipeline::~Pipeline() {
@@ -185,22 +185,22 @@ EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
       smsg.type = ERROR_MSG;
       smsg.module_name = event.module_name;
       UpdateByStreamMsg(smsg);
-      LOG(ERROR) << "[" << event.module_name << "]: "
+      LOGE(CORE) << "[" << event.module_name << "]: "
                  << "Error: " << event.message;
       ret = EVENT_HANDLE_STOP;
       break;
     case EventType::EVENT_WARNING:
-      LOG(WARNING) << "[" << event.module_name << "]: "
+      LOGW(CORE) << "[" << event.module_name << "]: "
                    << "Warning: " + event.message;
       ret = EVENT_HANDLE_SYNCED;
       break;
     case EventType::EVENT_STOP:
-      LOG(INFO) << "[" << event.module_name << "]: "
+      LOGI(CORE) << "[" << event.module_name << "]: "
                 << "Info: " << event.message;
       ret = EVENT_HANDLE_STOP;
       break;
     case EventType::EVENT_EOS: {
-      LOG(INFO) << "Pipeline received eos from module " + event.module_name << " of stream " << event.stream_id;
+      LOGI(CORE) << "Pipeline received eos from module " + event.module_name << " of stream " << event.stream_id;
       ret = EVENT_HANDLE_SYNCED;
       break;
     }
@@ -209,13 +209,13 @@ EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
       smsg.module_name = event.module_name;
       smsg.stream_id = event.stream_id;
       UpdateByStreamMsg(smsg);
-      LOG(INFO) << "Pipeline received stream error from module " + event.module_name
+      LOGI(CORE) << "Pipeline received stream error from module " + event.module_name
         << " of stream " << event.stream_id;
       ret = EVENT_HANDLE_SYNCED;
       break;
     }
     case EventType::EVENT_INVALID:
-      LOG(ERROR) << "[" << event.module_name << "]: "
+      LOGE(CORE) << "[" << event.module_name << "]: "
                  << "Info: " << event.message;
     default:
       ret = EVENT_HANDLE_NULL;
@@ -238,14 +238,14 @@ bool Pipeline::AddModule(std::shared_ptr<Module> module) {
   std::string moduleName = module->GetName();
 
   if (modules_map_.find(moduleName) != modules_map_.end()) {
-    LOG(WARNING) << "Module [" << moduleName << "] has already been added to this pipeline";
+    LOGW(CORE) << "Module [" << moduleName << "] has already been added to this pipeline";
     return false;
   }
 
-  LOG(INFO) << "Add Module " << moduleName << " to pipeline";
+  LOGI(CORE) << "Add Module " << moduleName << " to pipeline";
   module->SetContainer(this);
   if (module->GetId() == INVALID_MODULE_ID) {
-    LOG(ERROR) << "Failed to get module Id";
+    LOGE(CORE) << "Failed to get module Id";
     return false;
   }
 
@@ -283,7 +283,7 @@ std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_p
 
   if (modules_.find(up_node_name) == modules_.end() ||
       modules_.find(down_node_name) == modules_.end()) {
-    LOG(ERROR) << "module has not been added to this pipeline";
+    LOGE(CORE) << "module has not been added to this pipeline";
     return "";
   }
 
@@ -292,16 +292,16 @@ std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_p
 
   std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
   if (!down_node_info.connector) {
-    LOG(ERROR) << "connector is invalid when linking " << link_id;
+    LOGE(CORE) << "connector is invalid when linking " << link_id;
     return "";
   }
   auto ret = up_node_info.down_nodes.insert(down_node_name);
   if (!ret.second) {
-    LOG(ERROR) << "modules have been linked already";
+    LOGE(CORE) << "modules have been linked already";
     return link_id;
   }
 
-  LOG(INFO) << "Link Module " << link_id;
+  LOGI(CORE) << "Link Module " << link_id;
 
   // create connector
   up_node_info.output_connectors.push_back(link_id);
@@ -315,11 +315,11 @@ std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_p
 bool Pipeline::QueryLinkStatus(LinkStatus* status, const std::string& link_id) {
   std::shared_ptr<Connector> con = links_[link_id];
   if (!con) {
-    LOG(ERROR) << "can not find link according to link id";
+    LOGE(CORE) << "can not find link according to link id";
     return false;
   }
   if (!status) {
-    LOG(ERROR) << "status cannot be nullptr";
+    LOGE(CORE) << "status cannot be nullptr";
     return false;
   }
   status->stopped = con->IsStopped();
@@ -338,7 +338,7 @@ bool Pipeline::Start() {
   for (auto& it : modules_map_) {
     if (!it.second->Open(GetModuleParamSet(it.second->GetName()))) {
       open_module_failed = true;
-      LOG(ERROR) << it.second->GetName() << " start failed!";
+      LOGE(CORE) << it.second->GetName() << " start failed!";
       break;
     } else {
       opened_modules.push_back(it.second);
@@ -377,7 +377,7 @@ bool Pipeline::Start() {
     uint32_t parallelism = module_info.parallelism;
     if ((!parallelism && module_info.input_connectors.size()) ||
         (parallelism && !module_info.input_connectors.size())) {
-      LOG(ERROR) << "The parallelism of the first module should be 0, and the parallelism of other modules should be "
+      LOGE(CORE) << "The parallelism of the first module should be 0, and the parallelism of other modules should be "
                     "larger than 0. "
                  << "Please check the config of " << node_name << " module.";
       Stop();
@@ -385,7 +385,7 @@ bool Pipeline::Start() {
     }
     if ((!parallelism && module_info.connector) || (parallelism && !module_info.connector) ||
         (parallelism && module_info.connector && parallelism != module_info.connector->GetConveyorCount())) {
-      LOG(ERROR) << "Module parallelism do not equal input Connector's Conveyor number, in module " << node_name;
+      LOGE(CORE) << "Module parallelism do not equal input Connector's Conveyor number, in module " << node_name;
       Stop();
       return false;
     }
@@ -393,8 +393,8 @@ bool Pipeline::Start() {
       threads_.push_back(std::thread(&Pipeline::TaskLoop, this, node_name, conveyor_idx));
     }
   }
-  LOG(INFO) << "Pipeline Start";
-  LOG(INFO) << "All modules, except the first module, total  threads  is: " << threads_.size();
+  LOGI(CORE) << "Pipeline Start";
+  LOGI(CORE) << "All modules, except the first module, total  threads  is: " << threads_.size();
   return true;
 }
 
@@ -449,12 +449,12 @@ bool Pipeline::Stop() {
     stream_ids_.clear();
     end_nodes_.clear();
   }
-  LOG(INFO) << "[" << GetName() << "] " << "Stop";
+  LOGI(CORE) << "[" << GetName() << "] " << "Stop";
   return true;
 }
 
 void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo> data) {
-  LOG_IF(FATAL, modules_.find(moduleName) == modules_.end());
+  LOGF_IF(CORE, modules_.find(moduleName) == modules_.end());
 
   const ModuleAssociatedInfo& module_info = modules_[moduleName];
   Module* module = modules_map_[moduleName].get();
@@ -462,7 +462,7 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
   uint64_t changed_mask = data->MarkPassed(module);
 
   if (data->IsEos()) {
-    LOG(INFO) << "[" << moduleName << "]"
+    LOGI(CORE) << "[" << moduleName << "]"
               << " StreamId " << data->stream_id << " got eos.";
     Event e;
     e.type = EventType::EVENT_EOS;
@@ -493,7 +493,7 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
     msg.module_name = moduleName;
     msg.pts = data->timestamp;
     UpdateByStreamMsg(msg);
-    LOG(WARNING) << "[" << GetName() << "]" << " got frame error from " << module->name_ <<
+    LOGW(CORE) << "[" << GetName() << "]" << " got frame error from " << module->name_ <<
       " stream_id: " << data->stream_id << ", pts: " << data->timestamp;
     return;
   }
@@ -516,7 +516,7 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
       while (!connector->IsStopped() && connector->PushDataBufferToConveyor(conveyor_idx, data) == false) {
         if (connector->GetFailTime(conveyor_idx) % 50 == 0) {
           // Show infomation when conveyor is full in every second
-          // LOG(INFO) << "[" << down_node->name_  << " " << conveyor_idx << "] " << "Input buffer is full";
+          // LOGI(CORE) << "[" << down_node->name_  << " " << conveyor_idx << "] " << "Input buffer is full";
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
       }
@@ -530,7 +530,7 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
 }
 
 void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
-  LOG_IF(FATAL, modules_.find(node_name) == modules_.end());
+  LOGF_IF(CORE, modules_.find(node_name) == modules_.end());
 
   ModuleAssociatedInfo& module_info = modules_[node_name];
   std::shared_ptr<Connector> connector = module_info.connector;
@@ -548,7 +548,7 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
     std::shared_ptr<CNFrameInfo> data = nullptr;
     // sync data
     while (!connector->IsStopped() && data == nullptr) {
-      // LOG(INFO) << "[" << instance->name_ << "]" << " There is no avaiable input data"; 
+      // LOGI(CORE) << "[" << instance->name_ << "]" << " There is no avaiable input data"; 
       data = connector->PopDataBufferFromConveyor(conveyor_idx);
     }
     if (connector->IsStopped()) {
@@ -619,7 +619,7 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
     this->AddModuleConfig(v);
     std::shared_ptr<Module> instance(creator.Create(v.className, v.name));
     if (!instance) {
-      LOG(ERROR) << "Failed to create module by className(" << v.className << ") and name(" << v.name << ")";
+      LOGE(CORE) << "Failed to create module by className(" << v.className << ") and name(" << v.name << ")";
       return -1;
     }
     instance->ShowPerfInfo(v.showPerfInfo);
@@ -631,7 +631,7 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
       if (modules_map_.find(v.first) == modules_map_.end() ||
           modules_map_.find(name) == modules_map_.end() ||
           this->LinkModules(modules_map_[v.first], modules_map_[name]).empty()) {
-        LOG(ERROR) << "Link [" << v.first << "] with [" << name << "] failed.";
+        LOGE(CORE) << "Link [" << v.first << "] with [" << name << "] failed.";
         return -1;
       }
       linked_id_mask |= (uint64_t)1 << modules_map_[name]->GetId();
@@ -641,7 +641,7 @@ int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& configs) {
     if (v.className != "cnstream::DataSource" && v.className != "cnstream::TestDataSource" &&
         v.className != "cnstream::ModuleIPC" &&
         !(((uint64_t)1 << modules_map_[v.name]->GetId()) & linked_id_mask)) {
-      LOG(ERROR) << v.name << " not linked to any module.";
+      LOGE(CORE) << v.name << " not linked to any module.";
       return -1;
     }
   }
@@ -695,7 +695,7 @@ bool Pipeline::CreatePerfManager(std::vector<std::string> stream_ids, std::strin
                           TimeStamp::CurrentToDate() + ".db";
     std::shared_ptr<PerfManager> manager = PerfManager::CreateDefaultManager(db_name, module_names);
     if (manager == nullptr) {
-      LOG(ERROR) << stream_id << "Failed to create PerfManager";
+      LOGE(CORE) << stream_id << "Failed to create PerfManager";
       return false;
     }
     perf_managers_[stream_id] = manager;
@@ -872,17 +872,17 @@ void Pipeline::CalculatePipelinePerfStats(bool final_print) {
 }
 
 bool Pipeline::RemovePerfManager(std::string stream_id) {
-  LOG(INFO) << "Remove PerfManager of stream " << stream_id;
+  LOGI(CORE) << "Remove PerfManager of stream " << stream_id;
   std::vector<std::pair<std::string, PerfStats>> latency_vec, latency_vec_pipe, fps_vec, avg_fps_vec;
   {
     RwLockWriteGuard lg(perf_managers_lock_);
     if (perf_managers_.find(stream_id) == perf_managers_.end()) {
-      LOG(ERROR) << "Remove PerfManager failed. Not find PerfManager of " << stream_id;
+      LOGE(CORE) << "Remove PerfManager failed. Not find PerfManager of " << stream_id;
       return false;
     }
     std::shared_ptr<PerfManager> manager = perf_managers_[stream_id];
     if (manager == nullptr) {
-      LOG(ERROR) << "Remove PerfManager failed. The PerfManager of " << stream_id << " is nullptr.";
+      LOGE(CORE) << "Remove PerfManager failed. The PerfManager of " << stream_id << " is nullptr.";
       return false;
     }
     manager->Stop();
@@ -950,13 +950,13 @@ bool Pipeline::AddPerfManager(std::string stream_id, std::string db_dir) {
   std::shared_ptr<PerfManager> manager;
   {
     RwLockWriteGuard lg(perf_managers_lock_);
-    LOG(INFO) << "Add PerfManager for stream " << stream_id;
+    LOGI(CORE) << "Add PerfManager for stream " << stream_id;
     if (!perf_running_) {
-      LOG(ERROR) << "Please CreatePerfManager first.";
+      LOGE(CORE) << "Please CreatePerfManager first.";
       return false;
     }
     if (perf_managers_.find(stream_id) != perf_managers_.end()) {
-      LOG(ERROR) << "Create perf manager failed, PerfManager of " << stream_id << " is exist.";
+      LOGE(CORE) << "Create perf manager failed, PerfManager of " << stream_id << " is exist.";
       return false;
     }
 
@@ -1005,7 +1005,7 @@ void Pipeline::SetStartAndEndNodeNames() {
 bool Pipeline::CreatePerfCalculator(std::string db_dir, std::string node_name, bool is_pipeline) {
   std::string name = is_pipeline ? "pipeline_" + node_name : node_name;
   if (perf_calculators_.find(name) != perf_calculators_.end()) {
-    LOG(ERROR) << "perf calculator is created before. name : " << name;
+    LOGE(CORE) << "perf calculator is created before. name : " << name;
     return false;
   }
   std::shared_ptr<PerfCalculator> calculator;

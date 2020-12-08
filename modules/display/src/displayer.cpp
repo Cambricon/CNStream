@@ -17,7 +17,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include <glog/logging.h>
 #include <memory>
 #include <string>
 
@@ -31,7 +30,7 @@ namespace cnstream {
 Displayer::Displayer(const std::string &name) : Module(name) {
   player_ = new (std::nothrow) SDLVideoPlayer;
   player_->SetModuleName(name);
-  LOG_IF(FATAL, nullptr == player_) << "Displayer::Displayer() new SDLVideoPlayer failed.";
+  LOGF_IF(DISPLAYER, nullptr == player_) << "Displayer::Displayer() new SDLVideoPlayer failed.";
   param_register_.SetModuleDesc("Displayer is a module for displaying video.");
   param_register_.Register("window-width", "Width of the displayer window.");
   param_register_.Register("window-height", "Height of the displayer window.");
@@ -47,7 +46,7 @@ bool Displayer::Open(ModuleParamSet paramSet) {
   if (paramSet.find("window-width") == paramSet.end() || paramSet.find("window-height") == paramSet.end() ||
       paramSet.find("refresh-rate") == paramSet.end() || paramSet.find("max-channels") == paramSet.end() ||
       paramSet.find("show") == paramSet.end()) {
-    LOG(ERROR) << "[Displayer] [window-width] [window-height] [refresh-rate] [max-channels] should be set";
+    LOGE(DISPLAYER) << "[Displayer] [window-width] [window-height] [refresh-rate] [max-channels] should be set";
     return false;
   }
   bool full_screen = false;
@@ -60,7 +59,7 @@ bool Displayer::Open(ModuleParamSet paramSet) {
   int display_rate = std::stoi(paramSet["refresh-rate"]);
   int max_chns = std::stoi(paramSet["max-channels"]);
   if (window_w < 1 || window_h < 1 || display_rate < 1 || max_chns < 1) {
-    LOG(ERROR) << "[Displayer] invalid parameters";
+    LOGE(DISPLAYER) << "[Displayer] invalid parameters";
     return false;
   }
 
@@ -102,7 +101,7 @@ void Displayer::GUILoop(const std::function<void()> &quit_callback) {
   if (show_) {
     player_->EventLoop(quit_callback);
   } else {
-    LOG(ERROR) << "[Displayer] [show] not set to true.";
+    LOGE(DISPLAYER) << "[Displayer] [show] not set to true.";
     if (quit_callback) {
       quit_callback();
     }
@@ -114,30 +113,30 @@ bool Displayer::CheckParamSet(const ModuleParamSet &paramSet) const {
   ParametersChecker checker;
   for (auto &it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
-      LOG(WARNING) << "[Displayer] Unknown param: " << it.first;
+      LOGW(DISPLAYER) << "[Displayer] Unknown param: " << it.first;
     }
   }
 
   if (paramSet.find("window-width") == paramSet.end() || paramSet.find("window-height") == paramSet.end() ||
       paramSet.find("refresh-rate") == paramSet.end() || paramSet.find("max-channels") == paramSet.end() ||
       paramSet.find("show") == paramSet.end()) {
-    LOG(ERROR) << "Displayer must specify [window-width], [window-height], [refresh-rate], [max-channels] [show].";
+    LOGE(DISPLAYER) << "Displayer must specify [window-width], [window-height], [refresh-rate], [max-channels] [show].";
     ret = false;
   } else {
     std::string err_msg;
     if (!checker.IsNum({"window-width", "window-height", "refresh-rate", "max-channels"}, paramSet, err_msg, true)) {
-      LOG(ERROR) << "[Displayer] " << err_msg;
+      LOGE(DISPLAYER) << "[Displayer] " << err_msg;
       ret = false;
     }
     if (paramSet.at("show") != "true" && paramSet.at("show") != "false") {
-      LOG(ERROR) << "[Displayer] [show] should be true or false.";
+      LOGE(DISPLAYER) << "[Displayer] [show] should be true or false.";
       ret = false;
     }
   }
 
   if (paramSet.find("full-screen") != paramSet.end()) {
     if (paramSet.at("full-screen") != "true" && paramSet.at("full-screen") != "false") {
-      LOG(ERROR) << "[Displayer] [full-screen] should be true or false.";
+      LOGE(DISPLAYER) << "[Displayer] [full-screen] should be true or false.";
       ret = false;
     }
   }

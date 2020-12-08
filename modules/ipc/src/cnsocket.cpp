@@ -23,7 +23,7 @@
 #include <string>
 
 #include "cnsocket.hpp"
-#include "glog/logging.h"
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 
@@ -56,13 +56,13 @@ int CNSocket::SendData(char* send_buf, int buf_size) {
 bool CNServer::Open(const std::string& socket_address) {
   listen_fd_ = socket(AF_UNIX, SOCK_STREAM, 0);
   if (-1 == listen_fd_) {
-    LOG(ERROR) << "create listen_fd for server failed, errno: " << errno;
+    LOGE(IPC) << "create listen_fd for server failed, errno: " << errno;
     return false;
   }
 
   socket_addr_ = socket_address;
   if (access(socket_addr_.c_str(), F_OK) == 0) {
-    LOG(INFO) << socket_addr_ << " exists, unlink it.";
+    LOGI(IPC) << socket_addr_ << " exists, unlink it.";
     unlink(socket_addr_.c_str());
   }
 
@@ -72,12 +72,12 @@ bool CNServer::Open(const std::string& socket_address) {
   memcpy(un.sun_path, socket_addr_.c_str(), socket_addr_.length());
   unsigned int length = strlen(un.sun_path) + sizeof(un.sun_family);
   if (bind(listen_fd_, reinterpret_cast<sockaddr*>(&un), length) < 0) {
-    LOG(ERROR) << "bind server listen_fd failed, errno: " << errno;
+    LOGE(IPC) << "bind server listen_fd failed, errno: " << errno;
     return false;
   }
 
   if (listen(listen_fd_, 1) < 0) {
-    LOG(ERROR) << "start server listen failed, errno: " << errno;
+    LOGE(IPC) << "start server listen failed, errno: " << errno;
     return false;
   }
 
@@ -86,7 +86,7 @@ bool CNServer::Open(const std::string& socket_address) {
 
 int CNServer::Accept() {
   if (listen_fd_ < 0) {
-    LOG(ERROR) << "server is not listening.";
+    LOGE(IPC) << "server is not listening.";
     return -1;
   }
 
@@ -94,7 +94,7 @@ int CNServer::Accept() {
   unsigned int length = sizeof(un);
   socket_fd_ = accept(listen_fd_, reinterpret_cast<sockaddr*>(&un), &length);
   if (-1 == socket_fd_) {
-    LOG(ERROR) << "server accept failed, errno: " << errno;
+    LOGE(IPC) << "server accept failed, errno: " << errno;
     return -1;
   }
 
@@ -109,13 +109,13 @@ void CNServer::CloseListen() {
 bool CNClient::Open(const std::string& socket_address) {
   socket_fd_ = socket(AF_UNIX, SOCK_STREAM, 0);
   if (-1 == socket_fd_) {
-    LOG(ERROR) << "create client socket fd failed, errno: " << errno;
+    LOGE(IPC) << "create client socket fd failed, errno: " << errno;
     return false;
   }
 
   socket_addr_ = socket_address;
   if (access(socket_addr_.c_str(), F_OK) < 0) {
-    LOG(WARNING) << socket_addr_ << " not exists, can not create connection.";
+    LOGW(IPC) << socket_addr_ << " not exists, can not create connection.";
     return false;
   }
 
@@ -128,7 +128,7 @@ bool CNClient::Open(const std::string& socket_address) {
   if (connect(socket_fd_, reinterpret_cast<sockaddr*>(&un), length) < 0) {
     close(socket_fd_);
     socket_fd_ = -1;
-    LOG(ERROR) << "client connect failed, errno: " << errno;
+    LOGE(IPC) << "client connect failed, errno: " << errno;
     return false;
   }
 

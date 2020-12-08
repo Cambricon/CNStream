@@ -18,13 +18,13 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <glog/logging.h>
 #include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <thread>
 
 #include "timeout_helper.hpp"
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 
@@ -50,7 +50,7 @@ int TimeoutHelper::SetTimeout(float timeout) {
 
 int TimeoutHelper::Reset(const std::function<void()>& func) {
   if (STATE_EXIT == state_) {
-    LOG(WARNING) << "Timeout Operator has been exit.";
+    LOGW(INFERENCER) << "Timeout Operator has been exit.";
     return 1;
   }
   func_ = func;
@@ -60,7 +60,7 @@ int TimeoutHelper::Reset(const std::function<void()>& func) {
     } else if (STATE_DO == state_ || STATE_RESET == state_) {
       state_ = STATE_RESET;
     } else {
-      LOG(FATAL) << "Unexpected logic.";
+      LOGF(INFERENCER) << "Unexpected logic.";
     }
   } else {
     state_ = STATE_NO_FUNC;
@@ -87,12 +87,12 @@ void TimeoutHelper::HandleFunc() {
     } else if (STATE_EXIT == state_) {
       break;
     } else if (STATE_DO == state_) {
-      CHECK_NE(static_cast<bool>(func_), false) << "Bad logic: state_ is STATE_DO, but function is NULL.";
+      LOGF_IF(INFERENCER, static_cast<bool>(func_) == false) << "Bad logic: state_ is STATE_DO, but function is NULL.";
       func_();
       timeout_print_cnt_++;
       if (timeout_print_cnt_ == TIMEOUT_PRINT_INTERVAL) {
         timeout_print_cnt_ = 0;
-        LOG(INFO) << "Batching timeout. The trigger frequency of timeout processing can be reduced by"
+        LOGI(INFERENCER) << "Batching timeout. The trigger frequency of timeout processing can be reduced by"
                      " increasing the timeout time(see batching_timeout parameter of the inferencer module). If the"
                      " decoder memory is reused, the trigger frequency of timeout processing can also be reduced by"
                      " increasing the number of cache blocks output by the decoder(see output_buf_number parameter of"
@@ -101,7 +101,7 @@ void TimeoutHelper::HandleFunc() {
       func_ = NULL;  // unbind resources.
       state_ = STATE_NO_FUNC;
     } else {
-      LOG(FATAL) << "Unexpected logic.";
+      LOGF(INFERENCER) << "Unexpected logic.";
       break;
     }
   }

@@ -20,7 +20,8 @@
 
 #include "video_encoder.hpp"
 
-#include <glog/logging.h>
+#include <cstring>
+#include "cnstream_logging.hpp"
 #include <algorithm>
 
 namespace cnstream {
@@ -154,7 +155,7 @@ bool VideoEncoder::SendFrame(void *y, void *uv, int64_t timestamp) {
 bool VideoEncoder::PushOutputBuffer(uint8_t *data, size_t size, uint32_t frame_id, int64_t timestamp) {
   if (!running_) return false;
   if (data == nullptr || size <= 0) {
-    LOG(ERROR) << "PushOutputBuffer(): invalid parameters!";
+    LOGE(RTSP) << "PushOutputBuffer(): invalid parameters!";
     return false;
   }
 
@@ -201,7 +202,7 @@ bool VideoEncoder::PushOutputBuffer(uint8_t *data, size_t size, uint32_t frame_i
 bool VideoEncoder::GetFrame(uint8_t *data, uint32_t max_size, uint32_t *size, int64_t *timestamp) {
   if (!running_) return false;
   if (size == nullptr || timestamp == nullptr) {
-    LOG(ERROR) << "GetFrame(): invalid parameters!";
+    LOGE(RTSP) << "GetFrame(): invalid parameters!";
     return false;
   }
   is_client_running_ = true;
@@ -225,7 +226,7 @@ bool VideoEncoder::GetFrame(uint8_t *data, uint32_t max_size, uint32_t *size, in
           output_circular_buffer_->read(data, max_size);
           *size = max_size;
           *timestamp = output_frame_header_->timestamp;
-          LOG(INFO) << "Buffer truncated, data_size(" << data_size << ") > max_size(" << max_size << ")";
+          LOGI(RTSP) << "Buffer truncated, data_size(" << data_size << ") > max_size(" << max_size << ")";
           output_circular_buffer_->read(nullptr, output_frame_header_->length - max_size);
         }
       }

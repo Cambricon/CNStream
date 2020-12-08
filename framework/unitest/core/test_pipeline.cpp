@@ -62,7 +62,7 @@ class MsgObserver : StreamMsgObserver {
   void Update(const StreamMsg& smsg) override {
     if (stop_) return;
     if (smsg.type == StreamMsgType::EOS_MSG) {
-      LOG(INFO) << "[Observer] received EOS_MSG from stream_id: " << smsg.stream_id;
+      LOGI(COREUNITEST) << "[Observer] received EOS_MSG from stream_id: " << smsg.stream_id;
       EXPECT_EQ(std::find(eos_stream_id_.begin(), eos_stream_id_.end(), smsg.stream_id), eos_stream_id_.end())
           << " " << eos_stream_id_.size() << " " << chn_cnt_;
       eos_stream_id_.insert(smsg.stream_id);
@@ -71,7 +71,7 @@ class MsgObserver : StreamMsgObserver {
         wakener_.set_value(STOP_BY_EOS);
       }
     } else if (smsg.type == StreamMsgType::ERROR_MSG) {
-      LOG(INFO) << "[Observer] received ERROR_MSG";
+      LOGI(COREUNITEST) << "[Observer] received ERROR_MSG";
       stop_ = true;
       wakener_.set_value(STOP_BY_ERROR);
     }
@@ -271,7 +271,7 @@ class TestProvider : public TestProcessor {
         data = CNFrameInfo::Create(std::to_string(chn_idx), true);
         data->SetStreamIndex(chn_idx);
         pipeline_->ProvideData(this, data);
-        LOG(INFO) << "Send EOS:" << chn_idx << " frame id :" << frame_idx;
+        LOGI(COREUNITEST) << "Send EOS:" << chn_idx << " frame id :" << frame_idx;
       }
     }
   }
@@ -321,11 +321,11 @@ std::pair<std::vector<std::shared_ptr<Module>>, std::shared_ptr<Pipeline>> Creat
   }
 
   // link modules
-  LOG(INFO) << "Graph:";
+  LOGI(COREUNITEST) << "Graph:";
   for (size_t i = 0; i < modules.size(); ++i) {
     for (auto it : neighbor_list[i]) {
       EXPECT_NE("", pipeline->LinkModules(modules[i], modules[it]));
-      LOG(INFO) << i << " ---> " << it;
+      LOGI(COREUNITEST) << i << " ---> " << it;
     }
   }
 
@@ -1176,7 +1176,7 @@ class MsgObserverPerf : StreamMsgObserver {
   void Update(const StreamMsg& smsg) override {
     if (stop_) return;
     if (smsg.type == StreamMsgType::EOS_MSG) {
-      LOG(INFO) << "[Observer] received EOS_MSG from stream_id: " << smsg.stream_id;
+      LOGI(COREUNITEST) << "[Observer] received EOS_MSG from stream_id: " << smsg.stream_id;
       eos_chn_.push_back(smsg.stream_id);
       SetFlag(smsg.stream_id);
       if (static_cast<int>(eos_chn_.size()) == chn_cnt_) {
@@ -1184,7 +1184,7 @@ class MsgObserverPerf : StreamMsgObserver {
         wakener_.set_value(STOP_BY_EOS);
       }
     } else if (smsg.type == StreamMsgType::ERROR_MSG) {
-      LOG(INFO) << "[Observer] received ERROR_MSG";
+      LOGI(COREUNITEST) << "[Observer] received ERROR_MSG";
       stop_ = true;
       wakener_.set_value(STOP_BY_ERROR);
     }
