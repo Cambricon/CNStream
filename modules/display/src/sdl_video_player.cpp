@@ -1,3 +1,5 @@
+#include "sdl_video_player.hpp"
+
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -7,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "sdl_video_player.hpp"
+#include "cnstream_logging.hpp"
 
 #define REFRESH_EVENT (SDL_USEREVENT + 1)
 namespace cnstream {
