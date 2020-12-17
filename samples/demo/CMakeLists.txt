@@ -13,6 +13,7 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ipc/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/rtsp_sink/include")
 
 list(APPEND Example_INCLUDE_DIRS ${3RDPARTY_INCLUDE_DIRS})
+list(APPEND Example_INCLUDE_DIRS "${Example_DIR}/demo")
 list(APPEND Example_INCLUDE_DIRS "${Example_DIR}/../include")
 list(APPEND Example_INCLUDE_DIRS "${Example_DIR}/../framework/core/include")
 
@@ -37,6 +38,12 @@ endif()
 
 add_dependencies(${name} cnstream_va cnstream_core)
 target_link_libraries(${name} ${Example_LINKER_LIBS})
+
+
+add_executable(multi_pipelines ${CMAKE_CURRENT_SOURCE_DIR}/multi_pipelines/multi_pipelines.cpp util.cpp ${preprocess_srcs} ${postprocess_srcs} ${obj_filter_srcs})
+
+add_dependencies(multi_pipelines cnstream_va cnstream_core)
+target_link_libraries(multi_pipelines ${Example_LINKER_LIBS})
 
 if(build_modules_contrib)
   #force load all the modules

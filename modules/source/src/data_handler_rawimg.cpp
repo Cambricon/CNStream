@@ -315,7 +315,11 @@ bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size,
   if (!dataframe) return false;
 
   if (param_.output_type_ == OUTPUT_MLU) {
+#ifdef CNS_MLU220_SOC    
+    dataframe->ctx.dev_type = DevContext::MLU_CPU;
+#else
     dataframe->ctx.dev_type = DevContext::MLU;
+#endif
     dataframe->ctx.dev_id = param_.device_id_;
     dataframe->ctx.ddr_channel = -1;  // FIXME
   } else {

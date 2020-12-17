@@ -68,15 +68,15 @@
 ::
  
   "source" : {
-    "class_name" : "cnstream::DataSource",  // 数据源类名。
-    "parallelism" : 0,                      // 并行度。无效值，设置为0即可。
-    "next_modules" : ["detector"],          // 下一个连接模块的名称。
+    "class_name" : "cnstream::DataSource",  // （必设参数）数据源类名。
+    "parallelism" : 0,                      // （必设参数）并行度。无效值，设置为0即可。
+    "next_modules" : ["detector"],          // （必设参数）下一个连接模块的名称。
     "custom_params" : {                     // 特有参数。
-      "source_type" : "ffmpeg",             // source类型。
-      "output_type" : "mlu",                // 输出类型。可设为MLU或CPU。
-      "decoder_type" : "mlu",               // decoder类型。可设为MLU或CPU。
-      "reuse_cndec_buf" : "false"           // 是否复用Codec的buffer。
-      "device_id" : 0                       // 设备id,用于标识多卡机器的设备唯一编号。
+      "source_type" : "ffmpeg",             // （可选参数）source类型。
+      "output_type" : "mlu",                // （可选参数）输出类型。可设为MLU或CPU。
+      "decoder_type" : "mlu",               // （可选参数）decoder类型。可设为MLU或CPU。
+      "reuse_cndec_buf" : "false"           // （可选参数）是否复用Codec的buffer。
+      "device_id" : 0                       // 当使用MLU时为必设参数。设备id,用于标识多卡机器的设备唯一编号。
     }
   }
 
@@ -95,31 +95,29 @@
 ::
 
   "detector" : {
-    "class_name" : "cnstream::Inferencer",    // 推理类名。               
-    "parallelism" : 2,                       // 并行度。 
-    "max_input_queue_size" : 20,              // 最大队列深度。   
-    "next_modules" : ["tracker"],             // 下一个连接模块的名称。  
+    "class_name" : "cnstream::Inferencer",    // （必设参数）推理类名。               
+    "parallelism" : 2,                       // （必设参数）并行度。 
+    "max_input_queue_size" : 20,              // （必设参数）最大队列深度。   
+    "next_modules" : ["tracker"],             // （必设参数）下一个连接模块的名称。  
     "custom_params" : {                       // 特有参数 。
-      // 模型路径。本例中的路径使用了代码示例的模型，用户需根据实际情况修改路径。该参数支持绝对路径和相对路径。相对路径是相对于JSON配置文件的路径。
+      // （必设参数）模型路径。本例中的路径使用了代码示例的模型，用户需根据实际情况修改路径。该参数支持绝对路径和相对路径。相对路径是相对于JSON配置文件的路径。
       "model_path" : "../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon",
-      // 模型函数名。通过寒武纪神经网络框架生成离线模型时，通过生成的twins文件获取。
+      // （必设参数）模型函数名。通过寒武纪神经网络框架生成离线模型时，通过生成的twins文件获取。
       "func_name" : "subnet0",  
-      // 前处理类名。可继承cnstream::Preproc实现自定义前处理。在代码示例中，提供标准前处类PreprocCpu和YOLOv3的前处理类PreprocYolov3。
+      // （可选参数）前处理类名。可继承cnstream::Preproc实现自定义前处理。在代码示例中，提供标准前处类PreprocCpu和YOLOv3的前处理类PreprocYolov3。
       preproc_name" : "PreprocCpu",          
-      //后处理类名。可继承cnstream::Postproc实现自定义后处理操作。在代码示例中提供分类、SSD以及YOLOv3后处理类。
-      "postproc_name" : "PostprocSsd",        
-      // 多batch推理支持。用于提高单位时间内吞吐量。该参数仅支持MLU100。MLU100生成离线时设置batchsize为1。通过指定batchsize参数，来进行多batch推理。使用MLU270进行多batch推理时，需要在生成离线模型时指定batchsize。
-      "batchsize" : 1,                        
-      // 攒batch的超时时间，单位为毫秒。即使用多batch进行推理时的超时机制。当超过指定的时间时，该模块将直接进行推理，不再继续等待上游数据。
+      // （必设参数）后处理类名。可继承cnstream::Postproc实现自定义后处理操作。在代码示例中提供分类、SSD以及YOLOv3后处理类。
+      "postproc_name" : "PostprocSsd",                        
+      // （可选参数）攒batch的超时时间，单位为毫秒。即使用多batch进行推理时的超时机制。当超过指定的时间时，该模块将直接进行推理，不再继续等待上游数据。
       "batching_timeout" : 30,                
-      "device_id" : 0    // 设备id，用于标识多卡机器的设备唯一编号。
+      "device_id" : 0    // （可选参数）设备id，用于标识多卡机器的设备唯一编号。
     }
   }
 
 追踪模块
 ---------------
 
-追踪（Tracker）模块用于对检测到的物体进行追踪。主要应用于车辆行人等检测物的追踪。目前支持FeatureMatch和KCF两种追踪方法。该模块连接在神经网络推理模块后，通过在配置文件中指定追踪使用的离线模型以及使用的追踪方法来配置模块。
+追踪模块（Tracker）用于对检测到的物体进行追踪。主要应用于车辆行人等检测物的追踪。目前支持FeatureMatch和KCF两种追踪方法。该模块连接在神经网络推理模块后，通过在配置文件中指定追踪使用的离线模型以及使用的追踪方法来配置模块。
 
 使用说明
 ^^^^^^^^^
@@ -129,18 +127,242 @@
    ::
  
      “tracker” : {
-     “class_name” : “cnstream::Tracker”,       // Track的类名。
-     “parallelism” : 4,                        // 并行度。
-     “max_input_queue_size” : 20,              // 数据输入队列长度。
-     “next_modules” : [“osd”],                 // 下一个连接的模块名。
+     “class_name” : “cnstream::Tracker”,       // （必设参数）Track的类名。
+     “parallelism” : 4,                        // （必设参数）并行度。
+     “max_input_queue_size” : 20,              // （必设参数）数据输入队列长度。
+     “next_modules” : [“osd”],                 // （必设参数）下一个连接的模块名。
      “custom_params” : {
-         // 追踪使用的离线模型的路径。该参数支持绝对路径和相对路径。相对路径是相对于JSON配置文件的路径。
-         “model_path” : “xxx.cambricon”,        
-         “func_name” : “subnet0”,    // 模型函数名。
-         “track_name” : “KCF”       // 追踪方法。支持FeatureMatch和KCF两种追踪方法。
+         // （必设参数）追踪使用的离线模型的路径。该参数支持绝对路径和相对路径。相对路径是相对于JSON配置文件的路径。
+         “model_path” : “xxx.cambricon”,  
+         “func_name” : “subnet0”,    // 如果设置将使用MLU，如果不设置将使用CPU。模型函数名。
+         “track_name” : “KCF”       // （可选参数）追踪方法。支持FeatureMatch和KCF两种追踪方法。
          }
      }
     
+OSD模块
+---------------
+
+OSD（On Screen Display）模块用于在图像上绘制对象，并输出图像为BGR24格式。
+
+OSD模块可以连接在下面模块后面，绘制需要的推理结果：
+
+- 神经网络推理模块（Inferencer）
+- 追踪模块（Tracker）
+
+OSD模块后面可以连接下面模块，实现不同功能：
+
+- RTSP模块（RtspSink）：进行编码和RTSP推流。
+- 展示模块（Displayer）：对结果进行展示。
+- 编码模块（Encode）：编码成视频或者图片。
+
+使用说明
+^^^^^^^^^
+
+例如在 ``ssd_resnet34_and_resnet50_mlu270_config.json`` 配置文件中配置一个包含二级网络的推理过程，即包含两个推理模块。该文件位于 ``cnstream/samples/demo/secondary/`` 目录下。
+
+::
+
+  "class_name" : "cnstream::Osd",
+    "parallelism" : 4,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["rtsp_sink"],
+    "show_perf_info" : true,
+    "custom_params" : {
+      "label_path" : "../../../data/models/MLU270/Primary_Detector/ssd/label_voc.txt",
+      "font_path" : "../../data/wqy_zenhei.ttf", 
+      "label_size" : "normal",
+      "text_scale" : 1,
+      "text_thickness" : 1,
+      "box_thickness" : 1,
+      "secondary_label_path" : "../../../data/models/MLU270/Classification/resnet50/synset_words.txt",
+      "attr_keys" : "classification",
+      "logo" : "cambricon"  
+    }
+  }
+
+配置文件中参数说明如下：
+
+- class_name：（必设参数）模块名称。
+
+- parallelism：（必设参数）模块并行度。
+
+- max_input_queue_size：（必设参数）数据输入队列长度。
+
+- next_modules：（必设参数）下一个连接模块名称。
+
+- show_perf_info：（可选参数）是否显示模块信息。
+
+- label_path：（可选参数）标签路径。对应一级网络的标签路径。
+
+- font_path：（可选参数）字体路径。使用的 ``wqy_zenhei.ttf`` 文件需要自行下载，作为正确输出中文标签。
+
+- label_size：（可选参数）标签大小，默认值为 ``normal``。可设置的值包括：
+  
+  - normal：正常标签。
+  - large：大标签。
+  - larger：加大标签。
+  - small：小标签。
+  - smaller：较小标签。
+  - 直接为数字，如1、2等。
+
+- text_scale：（可选参数）字体大小，默认值为1。
+
+- text_thickness：（可选参数）字体宽度，默认值为1。
+
+- box_thickness：（可选参数）标识框宽度，默认值为1。设置label_size后可分别设置text_scale、text_thickness、box_thickness大小调节。也可以只设置label_size为其他缺省。
+
+- secondary_label_path：（可选参数）二级标签路径。对应二级网络的标签路径。
+
+- attr_keys：（可选参数）显示二级标签中某个关键特征。
+  该属性必须结合二级网络的后处理过程。例如二级网络对车辆进行识别，识别出车的类别，车的颜色两个特征。同时在后处理时类别标记为 ``classification``，颜色标记为 ``color``。通过显示包含关键字 ``classification`` 可以输出车辆类别，也可以同时包含 ``classification`` 和 ``color`` 输出类别和颜色两个标签。
+
+- logo：（可选参数）打印logo的名称。例如 ``cambricon`` 可以在每帧图像右下角添加名称为 ``cambricon`` 的水印。
+
+Encode模块
+---------------
+
+Encode为编码模块，主要用于编码视频和图像。
+
+编码模块可以连接在下面模块后面，对视频和图像进行编码：
+
+- 数据源模块（cnstream::DataSource）
+- 神经网络推理模块（cnstream::Inferencer）
+- 追踪模块（cnstream::Tracker）
+- OSD模块（cnstream::Osd）
+
+编码模块一般作为最后一个模块，后面不再连接其他模块。
+
+使用说明
+^^^^^^^^^
+
+例如 ``encode_config.json`` 配置文件，如下所示。该文件位于 ``cnstream/samples/demo/encode/`` 目录下。
+
+::
+
+  "encode" : {
+    "class_name" : "cnstream::Encode",
+    "parallelism" : 2,
+    "max_input_queue_size" : 20,
+    "show_perf_info" : true,
+    "custom_params" : {
+      "encoder_type" : "mlu",
+      "codec_type" : "h264",
+      "preproc_type" : "cpu",
+      "use_ffmpeg" : "false",
+      "dst_width": 1280,
+      "dst_height": 720,
+      "frame_rate" : 25,
+      "kbit_rate" : 3000,
+      "gop_size" : 30,
+      "output_dir" : "./output",
+      "device_id": 0
+    }
+  }
+
+配置参数说明如下：
+
+- class_name：（必设参数）模块名称。
+
+- parallelism：（必设参数）模块并行度。
+
+- max_input_queue_size：（必设参数）数据输入队列长度。
+
+- show_perf_info：（可选参数）是否显示模块信息。
+
+- encoder_type：（可选参数）编码类型。可设置的值包括：
+
+  - cpu：使用CPU编码（默认值）。
+  - mlu：使用MLU编码。
+
+- codec_type：（可选参数）编码的格式。可设置的值包括：
+
+  - h264（默认值）
+  - h265
+  - jpeg
+
+- preproc_type：（可选参数）前处理使用的类型是cpu还是mlu。可设置的值包括：
+
+  - cpu(默认值)
+  - mlu(目前不支持)
+
+- use_ffmpeg：（可选参数）是否使用ffmpeg进行大小调整和色彩空间转换。可设置的值包括：
+
+  - true 
+  - false(默认值)
+
+- dst_width：（可选参数）输出图像宽度，单位像素。注意当使用mlu解码时，设置输出图像宽度不为奇数。
+
+- dst_height：（可选参数）输出图像高度，单位像素。注意当使用mlu解码时，设置输出图像高度不为奇数。
+
+- frame_rate：（可选参数）编码后视频的帧率。默认值为25。
+
+- kbit_rate：（可选参数）单位时间内编码的数据量。默认值为1Mbps，仅当在mlu上编码时才有效。较高的比特率表示视频质量较高，但相应编码速度较低。
+
+- gop_size：（可选参数）表示连续的画面组的大小。与两个关键帧I-frame相关。默认值30。
+
+- output_dir：（可选参数）视频解码后保存的地址。如果不指定，则不显示保存解码后视频或图片。默认值为 ``{CURRENT_DIR}/output``.
+
+- device_id：（可选参数）当 ``encoder_type`` 或者 ``preproc_type`` 设置为 ``mlu`` 时，必须指定设备的id。
+
+
+Display模块  
+---------------
+
+Display模块是CNStream中基于SDL视频播放插件开发的多媒体展示模块。使用该模块可以略过视频流编码过程，对Pipeline中处理完成的视频流进行实时的播放展示。
+
+Display模块支持客户在播放视频过程中，选择播放窗口大小，并且支持全屏播放功能。对于不同路的视频流可以做到同时进行播放，可以通过设置 ``max-channels`` 对播放的视频流个数进行设置。该值若是小于输入视频个数，则只会展示前几路输入视频流。
+
+Display模块一般连接下面模块后面：
+
+- 神经网络推理模块（Inferencer）
+- 追踪模块（Tracker）
+- OSD模块（Osd）
+
+Display模块一般作为最后一个模块，后面不再连接其他模块。
+
+
+使用说明
+^^^^^^^^^
+
+例如 ``detection_config.json`` 配置文件如下，该文件位于 ``cnstream/samples/demo/`` 目录下。配置Display模块所需要的窗口大小、视频流个数以及刷新帧率等参数。Display模块和Encode模块一样，处于Pipeline最后位置的模块，所以不需要 ``next_modules`` 参数的设置。
+
+::
+ 
+     “displayer” : {
+     “class_name” : “cnstream::Displayer”,     
+     “parallelism” : 4,                        
+     “max_input_queue_size” : 20,              
+     “custom_params” : {
+         // 设置视频流播放时的窗口大小和刷新帧率等信息。
+         “window-width” : “1920”, 
+         “window-height” : “1080”, 
+         “refresh-rate” : “25”,   
+         "max-channels" : "32",     
+         "show" : "false",      
+         "full-screen" : "false" 
+         }
+     }
+
+配置参数说明如下：
+
+- class_name：（必设参数）模块名称。
+
+- parallelism：（必设参数）模块并行度。
+
+- max_input_queue_size：（必设参数）数据输入队列长度。
+
+- window-width：（必设参数）播放窗口的宽度，单位像素。
+
+- window-height：（必设参数）播放窗口的高度，单位像素。
+
+- refresh-rate：（必设参数）播放时的刷新帧率。
+
+- max-channels：（必设参数）播放的视频流路数。建议大于等于输入视频流路数。
+
+- show：（必设参数）是否播放视频流，设置为 ``true`` 之前需要确保顶层 ``CMakeList.txt`` 文件中 ``build_display`` 选项设置为 ``ON``。
+
+- full-screen：（可选参数）是否进行全屏播放。
+
 .. _rstp_sink:
 
 RTSP Sink模块
@@ -161,24 +383,24 @@ RTSP Sink模块处理数据流程如下：
 
 用户可以通过配置JSON文件方式设置和使用RTSP Sink模块。JSON文件的配置参数说明如下：
 
-- color_mode：颜色空间。可设置的值包括：
+- color_mode：（可选参数）颜色空间。可设置的值包括：
 
   -  bgr：输入为BGR。
   -  nv：输入为YUV420NV12或YUV420NV21。（默认值）
 
-- preproc_type：预处理 (resize)。可设置的值包括：
+- preproc_type：（可选参数）预处理 (resize)。可设置的值包括：
 
   -  cpu：在CPU上进行预处理。（默认值）
   -  mlu：在MLU上进行预处理。(暂不支持)
 
-- encoder_type：编码。可设置的值包括：
+- encoder_type：（可选参数）编码。可设置的值包括：
 
   -  ffmpeg：在CPU上使用ffmpeg进行编码。
   -  mlu：在MLU上进行编码。（默认值）
 
-- device_id：设备号。仅在使用MLU时生效。默认使用设备0。
+- device_id：（可选参数）设备号。仅在使用MLU时生效。默认使用设备0。
 
-- view_mode：显示界面。可设置的值包括：
+- view_mode：（可选参数）显示界面。可设置的值包括：
 
   -  single：single模式，每个端口仅显示一路视频，不同路视频流会被推到不同的端口。（默认值）
   -  mosaic：mosaic模式，实现多路显示。根据参数 ``view_cols`` 和 ``view_rows`` 的值，将画面均等分割，默认为4*4。
@@ -189,27 +411,27 @@ RTSP Sink模块处理数据流程如下：
            - ``view_cols`` * ``view_rows`` 必须大于等于视频路数。以2*3为特例，画面将会分割成1个主窗口（左上角）和5个子窗口。
            - mosaic模式仅支持BGR输入。
 
-- view_cols：多路显示列数。仅在mosaic模式有效。取值应大于0。默认值为0。
+- view_cols：（可选参数）多路显示列数。仅在mosaic模式有效。取值应大于0。默认值为0。
 
-- view_rows：多路显示行数。仅在mosaic模式有效。取值应大于0。默认值为0。
+- view_rows：（可选参数）多路显示行数。仅在mosaic模式有效。取值应大于0。默认值为0。
 
-- udp_port：UDP端口。格式为：
+- udp_port：（可选参数）UDP端口。格式为：
  
   ``url=rtsp://本机ip:9554/rtsp_live``。
   
   运行 示例代码_，URL将保存在文件 ``RTSP_url_names.txt`` 中。默认值为9554。
 
-- http_port：RTSP-over-HTTP隧道端口。默认值为8080。
+- http_port：（可选参数）RTSP-over-HTTP隧道端口。默认值为8080。
 
-- dst_width：输出帧的宽。取值为大于0，小于原宽。只能向下改变大小。默认值为0（原宽）。
+- dst_width：（可选参数）输出帧的宽。取值为大于0，小于原宽。只能向下改变大小。默认值为0（原宽）。
 
-- dst_height：输出帧的高。取值为大于0，小于原高。只能向下改变大小。默认值为0（原高）。
+- dst_height：（可选参数）输出帧的高。取值为大于0，小于原高。只能向下改变大小。默认值为0（原高）。
 
-- frame_rate：编码视频帧率。取值为大于0。默认值为25。
+- frame_rate：（可选参数）编码视频帧率。取值为大于0。默认值为25。
 
-- kbit_rate：编码比特率。单位为kb，需要比特率/1000。取值为大于0。默认值为1000。
+- kbit_rate：（可选参数）编码比特率。单位为kb，需要比特率/1000。取值为大于0。默认值为1000。
 
-- gop_size：GOP（Group of Pictures），两个I帧之间的帧数。取值为大于0。默认值为30。
+- gop_size：（可选参数）GOP（Group of Pictures），两个I帧之间的帧数。取值为大于0。默认值为30。
 
 配置文件示例
 ^^^^^^^^^^^^^^^^

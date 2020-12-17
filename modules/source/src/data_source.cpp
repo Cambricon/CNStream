@@ -70,6 +70,9 @@ static int GetDeviceId(ModuleParamSet paramSet) {
 }
 
 bool DataSource::Open(ModuleParamSet paramSet) {
+  if(!CheckParamSet(paramSet)) {
+    return false;
+  }
   if (paramSet.find("output_type") != paramSet.end()) {
     std::string out_type = paramSet["output_type"];
     if (out_type == "cpu") {
@@ -172,6 +175,12 @@ bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
       LOGE(SOURCE) << "[DataSource] [output_type] MLU : device_id must be set";
       ret = false;
     }
+#ifdef CNS_MLU220_SOC
+    if (paramSet.at("output_type") != "mlu") {
+      LOGE(SOURCE) << "[DataSource] [output_type] should be mlu for mlu220 edge";
+      ret = false;
+    }
+#endif
   }
 
   std::string err_msg;
@@ -197,6 +206,16 @@ bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
         ret = false;
       }
     }
+#ifdef CNS_MLU220_SOC
+    if (dec_type != "mlu") {
+      LOGE(SOURCE) << "[DataSource] [decoder_type] should be mlu for mlu220 edge";
+      ret = false;
+    }
+    if (paramSet.find("reuse_cndec_buf") != paramSet.end() && paramSet.at("reuse_cndec_buf") != "true"){
+        LOGE(SOURCE) << "[DataSource] [reuse_cndec_buf] should be true for mlu220 edge";
+        ret = false;
+    }
+#endif    
   }
 
   return ret;

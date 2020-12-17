@@ -61,11 +61,11 @@ SDLVideoPlayer::SDLVideoPlayer() {}
 SDLVideoPlayer::~SDLVideoPlayer() {}
 
 bool SDLVideoPlayer::Init(int max_chn) {
-  std::cout << "before init" << std::endl;
+  LOGI(DISPLAYER) << "before init";
   if (!SdlInitTool::instance()->init()) {
     return false;
   }
-  std::cout << "before create window" << std::endl;
+  LOGI(DISPLAYER) << "before create window";
   window_ = SDL_CreateWindow("CNStream", 0, 0, window_w_, window_h_, 0);
   if (nullptr == window_) {
     LOGE(DISPLAYER) << "Create SDL window failed." << SDL_GetError();
@@ -76,7 +76,7 @@ bool SDLVideoPlayer::Init(int max_chn) {
     LOGE(DISPLAYER) << "Create SDL renderer failed." << SDL_GetError();
     return false;
   }
-  std::cout << "before create texture" << std::endl;
+  LOGI(DISPLAYER) << "before create texture";
   int pixelf = SDL_PIXELFORMAT_BGR24;
   texture_ = SDL_CreateTexture(renderer_, pixelf, SDL_TEXTUREACCESS_STREAMING, window_w_, window_h_);
   if (nullptr == texture_) {
@@ -136,6 +136,7 @@ void SDLVideoPlayer::EventLoop(const std::function<void()>& quit_callback) {
     SDL_WaitEvent(&event);
     switch (event.type) {
       case SDL_MOUSEBUTTONDOWN:
+        LOGI(DISPLAYER) << "Get SDL_MOUSEBUTTONDOWN EVENT";
         mouse_x = event.button.x;
         mouse_y = event.button.y;
         ClickEventProcess(mouse_x, mouse_y);
@@ -143,7 +144,14 @@ void SDLVideoPlayer::EventLoop(const std::function<void()>& quit_callback) {
       case REFRESH_EVENT:
         Refresh();
         break;
+      case SDL_WINDOWEVENT:
+        if (SDL_WINDOWEVENT_CLOSE == event.window.event) {
+          LOGI(DISPLAYER) << "Get SDL Close Window EVENT";
+          if (quit_callback) quit_callback();
+        }
+        break;
       case SDL_QUIT:
+        LOGI(DISPLAYER) << "Get SDL QUIT EVENT";
         if (quit_callback) quit_callback();
         break;
     }  // switch (event.type)

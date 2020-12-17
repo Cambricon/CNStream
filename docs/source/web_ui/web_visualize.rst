@@ -16,7 +16,7 @@ web可视化工具主要提供以下功能：
 - 图形化界面设计和配置pipeline：
 
   * 提供内置的pipeline示例配置，用户可以直接运行示例，快速体验如何使用CNStream开发应用。
-  * 支持在线设计和配置pipeline。提供内置模块的流程块，支持像绘制流程图一样在web端绘制pipeline，拖动表示模块的流程块至设计框，并通过连线连接数据流向。
+  * 支持在线设计和配置pipeline。提供内置模块的流程块，支持像绘制流程图一样在web端绘制pipeline，选择表示模块的流程块至设计框，并通过连线连接数据流向。
    
     * 支持修改模块参数配置。
     * 提供pipeline配置正确性自动检测，包括基本的模块参数配置和流程图的环自动检测。
@@ -24,7 +24,7 @@ web可视化工具主要提供以下功能：
   
 - 支持部分数据源选用和上传：
 
-  * 默认支持cars、people、images三种类型的数据源。
+  * 默认支持cars、people、images、objects四种类型的数据源。
   * 支持上传视频文件为数据源。
 
 - 支持preview和status两种模式运行pipeline。
@@ -107,7 +107,7 @@ pipeline设计完成后，Web可视化工具会自动生成对应的JSON配置�
 
 Web可视化工具提供了pipeline示例，用户可以直接运行示例，并直接在页面查看运行结果。
 
-1. 在web可视化工具主页面，从下拉菜单中选择数据源类型。目前支持cars、people、images三种类型的数据源。
+1. 在web可视化工具主页面，从下拉菜单中选择数据源类型。目前支持cars、people、images、objects四种类型的数据源。
 2. 在下拉菜单中选择任务类型类型，目前提供以下一种示例：Classification、Object Detection、Object Tracking、Secondary Classification。
 3. 选择Preview或者Status标签。
 4. 点击 **RUN** 按钮。

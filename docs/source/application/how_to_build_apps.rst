@@ -129,3 +129,38 @@ Pipeline基本骨架的构建
 ^^^^^^^^^^^^^^^^^^^^
 
 CNStream针对非配置文件方式提供了一些完整的、独立的应用程序开发示例。参见CNStream源代码中 ``samples/example/example.cpp``。
+
+用户侧MessageHandle
+---------------------
+
+用户程序可以通过注册的事件监听监测Pipeline的Message信息，目前定义的用户侧Message信息包括EOS_MSG、FRAME_ERR_MSG、STREAM_ERR_MSG、ERROR_MSG(参见StreamMsgType定义)。
+
+各消息处理示例可以参考CNStream源代码 ``samples/demo/demo.cpp``。
+
+1. EOS_MSG
+^^^^^^^^^^^^^^^^^^^^
+
+EOS_MSG表示Pipeline数据处理结束，接收到该消息时，可以正常结束Pipeline释放资源等。
+
+2. FRAME_ERR_MSG
+^^^^^^^^^^^^^^^^^^^^
+
+FRAME_ERR_MSG表示帧解码失败消息，当前仅支持使用mlu解码JPEG图片场景：
+
+（1）JPEG图片文件形式时，用户侧接收到FRAME_ERR_MSG消息时，可以同时获取解码错误的图片帧信息，包含用户侧定义的stream_id和内部赋值定义的pts、frame_id信息；
+
+（2）从内存中输入JPEG数据流时，用户侧接收到FRAME_ERR_MSG消息时，可以同时获取解码错误的图片帧信息，包含用户侧定义的stream_id、pts和内部赋值定义的frame_id信息；
+
+接收到这些信息后，用户侧可以根据自己的业务逻辑处理解码失败的图片帧，比如丢弃、记录等。
+
+3. STREAM_ERR_MSG
+^^^^^^^^^^^^^^^^^^^^
+
+STREAM_ERR_MSG表示某一路数据发生不可恢复错误，通常包括超过内存限制导致的解码器申请失败等。
+
+用户侧接收到该信息时，若希望Pipeline继续进行，将出现错误的数据流移除掉即可（使用Source模块的RemoveSource方法进行特定数据流的卸载），该操作不影响其他正常处理的数据流。
+
+4. ERROR_MSG
+^^^^^^^^^^^^^^^^^^^^
+
+ERROR_MSG表示普通的错误信息，目前表示不可恢复错误，建议直接停止Pipeline，并根据log信息进行错误定位。
