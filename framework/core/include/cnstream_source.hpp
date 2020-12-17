@@ -84,6 +84,8 @@ class SourceModule : public Module {
  public:  // NOLINT
 #endif
 
+  friend class SourceHandler;
+
   uint32_t GetStreamIndex(const std::string &stream_id);
   void ReturnStreamIndex(const std::string &stream_id);
   /**

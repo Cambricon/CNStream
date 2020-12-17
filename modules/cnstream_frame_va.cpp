@@ -29,8 +29,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <cstring>
 #include <cmath>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -73,7 +73,34 @@ cv::Mat* CNDataFrame::ImageBGR() {
   LOGF_IF(FRAME, nullptr == img_data) << "CNDataFrame::ImageBGR() failed to alloc memory";
   uint8_t* t = img_data;
   for (int i = 0; i < GetPlanes(); ++i) {
+#ifdef CNS_MLU220_SOC
+    void* src = nullptr;
+    cnrtRet_t ret = cnrtMap(reinterpret_cast<void**>(&src), const_cast<void*>(data[i]->GetCpuData()));
+    if (ret != CNRT_RET_SUCCESS) {
+      LOGF(FRAME) << "cnrtMap: failed to cnrtMap(void **host_ptr, void *dev_ptr)";
+    }
+    ret = cnrtCacheOperation(src, CNRT_FLUSH_CACHE);
+    if (ret != CNRT_RET_SUCCESS) {
+      LOGF(FRAME) << "cnrtCacheOperation: failed to cnrtCacheOperation(void *host_ptr, cnrtCacheOps_t opr)";
+    }
+    void* dev_src_found_by_mapped = NULL;
+    ret = cnrtFindDevAddrByMappedAddr(reinterpret_cast<void*>(src), &dev_src_found_by_mapped);
+    if (ret != CNRT_RET_SUCCESS) {
+      LOGF(FRAME) << "cnrtFindDevAddrByMappedAddr: failed to"
+                  << "cnrtFindDevAddrByMappedAddr(void *mappped_host_ptr, void **dev_ptr)";
+    }
+    if (dev_src_found_by_mapped != data[i]->GetCpuData())
+      LOGF(FRAME) << ("find device address by mapped host failed!\n");
+    memcpy(t, src, GetPlaneBytes(i));
+    ret = cnrtUnmap(src);
+    if (ret != CNRT_RET_SUCCESS) {
+      LOGF(FRAME) << "cnrtUnmap: failed to"
+                  << "cnrtUnmap(void *host_ptr)";
+    }
+
+#else
     memcpy(t, data[i]->GetCpuData(), GetPlaneBytes(i));
+#endif
     t += GetPlaneBytes(i);
   }
   switch (fmt) {
@@ -185,7 +212,8 @@ void CNDataFrame::CopyToSyncMem(bool dst_mlu) {
     bytes = ROUND_UP(bytes, 64 * 1024);
     if (dst_mlu) {
       if (dst_device_id < 0 || (ctx.dev_type == DevContext::MLU && ctx.dev_id != dst_device_id)) {
-        LOGF(FRAME) << "CopyToSyncMem: dst_device_id not set, or ctx.dev_id != dst_device_id" << "," << dst_device_id;
+        LOGF(FRAME) << "CopyToSyncMem: dst_device_id not set, or ctx.dev_id != dst_device_id"
+                    << "," << dst_device_id;
         std::terminate();
         return;
       }
@@ -559,7 +587,7 @@ StringPairs CNInferObject::GetExtraAttributes() {
   return StringPairs(extra_attributes_.begin(), extra_attributes_.end());
 }
 
-bool CNInferObject::AddFeature(const std::string &key, const CNInferFeature &feature) {
+bool CNInferObject::AddFeature(const std::string& key, const CNInferFeature& feature) {
   std::lock_guard<std::mutex> lk(feature_mutex_);
   if (features_.find(key) != features_.end()) {
     return false;
@@ -568,7 +596,7 @@ bool CNInferObject::AddFeature(const std::string &key, const CNInferFeature &fea
   return true;
 }
 
-CNInferFeature CNInferObject::GetFeature(const std::string &key) {
+CNInferFeature CNInferObject::GetFeature(const std::string& key) {
   std::lock_guard<std::mutex> lk(feature_mutex_);
   if (features_.find(key) != features_.end()) {
     return features_[key];
