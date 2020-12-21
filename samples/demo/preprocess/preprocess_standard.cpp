@@ -18,8 +18,6 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <glog/logging.h>
-
 #include <memory>
 #include <utility>
 #include <vector>
@@ -38,6 +36,7 @@
 #include "easyinfer/model_loader.h"
 #include "easyinfer/shape.h"
 #include "preproc.hpp"
+#include "cnstream_logging.hpp"
 
 /**
  * @brief standard pre process
@@ -68,12 +67,12 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
   // check params
   auto input_shapes = model->InputShapes();
   if (net_inputs.size() != 1 || (input_shapes[0].c != 3 && input_shapes[0].c != 4)) {
-    LOG(ERROR) << "[PreprocCpu] model input shape not supported, net_input.size = " << net_inputs.size()
+    LOGE(DEMO) << "[PreprocCpu] model input shape not supported, net_input.size = " << net_inputs.size()
                << ", input_shapes[0].c = " << input_shapes[0].c;
     return -1;
   }
 
-  DLOG(INFO) << "[PreprocCpu] do preproc...";
+  LOGI(DEMO) << "[PreprocCpu] do preproc...";
 
   cnstream::CNDataFramePtr frame = cnstream::GetCNDataFramePtr(package);
 
@@ -84,7 +83,7 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
 
   uint8_t* img_data = new (std::nothrow) uint8_t[frame->GetBytes()];
   if (!img_data) {
-    LOG(ERROR) << "Failed to alloc memory, size: " << frame->GetBytes();
+    LOGE(DEMO) << "Failed to alloc memory, size: " << frame->GetBytes();
     return -1;
   }
   uint8_t* t = img_data;
@@ -117,7 +116,7 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
       img = bgr;
     } break;
     default:
-      LOG(WARNING) << "[Encoder] Unsupport pixel format.";
+      LOGW(DEMO) << "[Encoder] Unsupport pixel format.";
       delete[] img_data;
       return -1;
   }

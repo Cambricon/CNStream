@@ -21,6 +21,7 @@
 
 #include <iostream>
 #include <mutex>
+#include <vector>
 
 namespace cnstream {
 
@@ -352,7 +353,7 @@ class EsParserImpl {
  public:
   EsParserImpl() = default;
   ~EsParserImpl() = default;
-  int Open(AVCodecID codec_id, IParserResult *result) {
+  int Open(AVCodecID codec_id, IParserResult *result, uint8_t* paramset = nullptr, uint32_t paramset_size = 0) {
     std::unique_lock<std::mutex> guard(mutex_);
     codec_id_ = codec_id;
     result_ = result;
@@ -374,6 +375,13 @@ class EsParserImpl {
     }
     codec_ctx_->time_base.den = 90000;
     codec_ctx_->time_base.num = 1;
+
+    if (paramset && paramset_size) {
+      paramset_ = std::vector<uint8_t>(paramset, paramset + paramset_size);
+      codec_ctx_->extradata = paramset_.data();
+      codec_ctx_->extradata_size = paramset_.size();
+    }
+
     if (avcodec_open2(codec_ctx_, codec_, NULL) < 0) {
       return -1;
     }
@@ -392,9 +400,21 @@ class EsParserImpl {
   }
   void Close() {
     std::unique_lock<std::mutex> guard(mutex_);
-    if (parser_ctx_) av_parser_close(parser_ctx_), parser_ctx_ = nullptr;
-    if (frame_) av_frame_free(&frame_), frame_ = nullptr;
-	  if (codec_ctx_) avcodec_close(codec_ctx_), av_free(codec_ctx_), codec_ctx_ = nullptr;
+    if (parser_ctx_) {
+      av_parser_close(parser_ctx_);
+      parser_ctx_ = nullptr;
+    }
+    if (frame_) {
+      av_frame_free(&frame_);
+      frame_ = nullptr;
+    }
+    if (codec_ctx_) {
+      codec_ctx_->extradata = nullptr;
+      codec_ctx_->extradata_size = 0;
+      avcodec_close(codec_ctx_);
+      av_free(codec_ctx_);
+      codec_ctx_ = nullptr;
+    }
     open_sucess_ = false;
   }
   int Parse(const VideoEsPacket &pkt);
@@ -403,10 +423,11 @@ class EsParserImpl {
   AVCodecID codec_id_;
   IParserResult *result_;
   AVCodec *codec_ = nullptr;
-  AVCodecContext *codec_ctx_= nullptr;
- 	AVCodecParserContext *parser_ctx_= nullptr;
-  AVFrame	*frame_ = nullptr;
+  AVCodecContext *codec_ctx_ = nullptr;
+  AVCodecParserContext *parser_ctx_ = nullptr;
+  AVFrame *frame_ = nullptr;
   AVPacket packet_;
+  std::vector<uint8_t> paramset_;
   bool first_time_ = true;
   bool open_sucess_ = false;
   std::mutex mutex_;
@@ -420,9 +441,9 @@ EsParser::~EsParser() {
   if (impl_) delete impl_;
 }
 
-int EsParser::Open(AVCodecID codec_id, IParserResult *result) {
+int EsParser::Open(AVCodecID codec_id, IParserResult *result, uint8_t* paramset, uint32_t paramset_size) {
   if (impl_) {
-    return impl_->Open(codec_id, result);
+    return impl_->Open(codec_id, result, paramset, paramset_size);
   }
   return -1;
 }
@@ -441,7 +462,7 @@ int EsParser::Parse(const VideoEsPacket &pkt) {
 }
 
 int EsParserImpl::Parse(const VideoEsPacket &pkt) {
-  std::unique_lock<std::mutex> guard(mutex_);  
+  std::unique_lock<std::mutex> guard(mutex_);
   if (!open_sucess_ || !pkt.data ||!pkt.len) {
     if (result_) {
       VideoEsFrame frame;
@@ -454,9 +475,10 @@ int EsParserImpl::Parse(const VideoEsPacket &pkt) {
   }
   uint8_t *cur_ptr = pkt.data;
   int cur_size = pkt.len;
+
   while (cur_size > 0) {
     int len = av_parser_parse2(parser_ctx_, codec_ctx_, &packet_.data, &packet_.size,
-                              cur_ptr , cur_size, pkt.pts, AV_NOPTS_VALUE, AV_NOPTS_VALUE);
+                               cur_ptr , cur_size, pkt.pts, AV_NOPTS_VALUE, AV_NOPTS_VALUE);
     cur_ptr += len;
     cur_size -= len;
     if (packet_.size == 0)
@@ -496,10 +518,12 @@ int EsParserImpl::Parse(const VideoEsPacket &pkt) {
           info.progressive = 1;
           break;
         }
+
         // info.width = codec_ctx_->width;
         // info.height = codec_ctx_->height;
 
-        // fill extradata, FIXME
+        info.extra_data = paramset_;
+
         if (result_) {
           result_->OnParserInfo(&info);
         }
@@ -508,7 +532,8 @@ int EsParserImpl::Parse(const VideoEsPacket &pkt) {
         av_packet_unref(&packet_);
         continue;
       }
-		}
+    }
+
     if (result_) {
       VideoEsFrame frame;
       frame.data = packet_.data;

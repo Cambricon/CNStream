@@ -18,7 +18,6 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <glog/logging.h>
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>
 #include <rapidjson/stringbuffer.h>
@@ -39,6 +38,7 @@
 #include "cnstream_module.hpp"
 #include "cnstream_pipeline.hpp"
 #include "cnstream_version.hpp"
+#include "cnstream_logging.hpp"
 
 static void Usage() {
   std::cout << "Usage:" << std::endl;
@@ -234,7 +234,7 @@ static void CheckConfigFile(const std::string& config_file) {
   for (rapidjson::Document::ConstMemberIterator iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter) {
     cnstream::CNModuleConfig mconf;
     mconf.name = iter->name.GetString();
-    LOG(INFO) << "Check module [" << mconf.name << "] ...";
+    LOGI(INSPECT) << "Check module [" << mconf.name << "] ...";
     bool ret = true;
     if (find(namelist.begin(), namelist.end(), mconf.name) != namelist.end()) {
       std::string err_str = "Module name should be unique in Jason file. Module name : [" + mconf.name + "]" +
@@ -277,9 +277,9 @@ static void CheckConfigFile(const std::string& config_file) {
 
     mconfs.push_back(mconf);
     if (!ret) {
-      LOG(INFO) << "Failed!";
+      LOGI(INSPECT) << "Failed!";
     } else {
-      LOG(INFO) << "Succeed!";
+      LOGI(INSPECT) << "Succeed!";
     }
     result &= ret;
   }
@@ -287,7 +287,7 @@ static void CheckConfigFile(const std::string& config_file) {
   cnstream::ModuleCreatorWorker creator;
   // check className
   for (auto& cfg : mconfs) {
-    LOG(INFO) << "Check module [" << cfg.name << "] custom parameter...";
+    LOGI(INSPECT) << "Check module [" << cfg.name << "] custom parameter...";
     bool ret = true;
     cnstream::Module* module = creator.Create(cfg.className, cfg.name);
     if (nullptr == module) {
@@ -304,9 +304,9 @@ static void CheckConfigFile(const std::string& config_file) {
       delete module;
     }
     if (!ret) {
-      LOG(INFO) << "Failed!";
+      LOGI(INSPECT) << "Failed!";
     } else {
-      LOG(INFO) << "Succeed!";
+      LOGI(INSPECT) << "Succeed!";
     }
     result &= ret;
   }
@@ -338,8 +338,6 @@ static void CheckConfigFile(const std::string& config_file) {
 }
 
 int main(int argc, char* argv[]) {
-  google::InitGoogleLogging(argv[0]);
-  FLAGS_logtostderr = true;
   int opt = 0;
   bool getopt = false;
   std::string config_file;
@@ -397,6 +395,5 @@ int main(int argc, char* argv[]) {
       std::cout << std::endl;
     }
   }
-  google::ShutdownGoogleLogging();
   return 0;
 }

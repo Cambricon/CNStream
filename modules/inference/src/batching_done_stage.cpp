@@ -75,7 +75,7 @@ std::vector<std::shared_ptr<InferTask>> ResizeConvertBatchingDoneStage::Batching
     QueuingTicket mir_tickett = mlu_input_res_ticket;
     std::shared_ptr<RCOpValue> rcop_value = this->rcop_res_->WaitResourceByTicket(&rcopr_ticket);
     IOResValue mlu_value = this->mlu_input_res_->WaitResourceByTicket(&mir_tickett);
-    CHECK_EQ(mlu_value.datas.size(), 1) << "Internal error, maybe model input num not 1";
+    LOGF_IF(INFERENCER, mlu_value.datas.size() != 1) << "Internal error, maybe model input num not 1";
 
     std::shared_ptr<CNFrameInfo> info = nullptr;
     std::string pts_str;

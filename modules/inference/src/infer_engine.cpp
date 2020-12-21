@@ -129,7 +129,7 @@ InferEngine::~InferEngine() {
     if (mlu_output_res_)
       mlu_output_res_->Destroy();
     if (rcop_res_.get()) rcop_res_->Destroy();
-    DLOG(INFO) << "Destroied resources";
+    LOGI(INFERENCER) << "Destroied resources";
   } catch (CnstreamError& e) {
     if (error_func_) {
       error_func_(e.what());
@@ -237,7 +237,7 @@ void InferEngine::StageAssemble() {
     batching_done_stages_.push_back(h2d_stage);
   } else {
     // 2. mlu preprocessing
-    CHECK_EQ(true, CheckModel(model_));
+    LOGF_IF(INFERENCER, CheckModel(model_) != true);
     // rgb0 input.
     if (use_scaler_) {
       // use scaler (MLU220 only)

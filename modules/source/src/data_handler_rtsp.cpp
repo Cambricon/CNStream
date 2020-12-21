@@ -147,7 +147,7 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
     cnstream::OpenParam param;
     param.url = url_;
     param.reconnect = reconnect_;
-    param.cb = this;
+    param.cb = dynamic_cast<IRtspCB*>(this);
     rtsp_session_.Open(param);
 
     // waiting for stream info...
@@ -370,6 +370,7 @@ void RtspHandlerImpl::DecodeLoop() {
     extra.input_buf_num = param_.input_buf_number_;
     extra.output_buf_num = param_.output_buf_number_;
     extra.apply_stride_align_for_scaler = param_.apply_stride_align_for_scaler_;
+    extra.extra_info = stream_info_.extra_data;
     std::unique_lock<std::mutex> lk(mutex_);
     bool ret = decoder_->Create(&stream_info_, &extra);
     if (!ret) {
@@ -414,6 +415,9 @@ void RtspHandlerImpl::DecodeLoop() {
     pkt.data = in->pkt_.data;
     pkt.len = in->pkt_.size;
     pkt.pts = in->pkt_.pts;
+
+    // uncomment to use increased number as pts
+    // pkt.pts = pts_++;
 
     this->RecordStartTime(module_->GetName(), pkt.pts);
 

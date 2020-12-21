@@ -908,8 +908,13 @@ bool FFmpegCpuDecoder::Create(VideoInfo *info, ExtraDecoderInfo *extra) {
   if (!instance_) {
     LOGE(SOURCE) << "Failed to do avcodec_alloc_context3";
     return false;
-  }  
+  }
   // av_codec_set_pkt_timebase(instance_, st->time_base);
+
+  if (!extra->extra_info.empty()) {
+    instance_->extradata = extra->extra_info.data();
+    instance_->extradata_size = extra->extra_info.size();
+  }
 
   if (avcodec_open2(instance_, dec, NULL) < 0) {
     LOGE(SOURCE) << "Failed to open codec";

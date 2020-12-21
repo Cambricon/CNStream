@@ -164,8 +164,8 @@ class DummySink : public MediaSink, public cnstream::IParserResult {
 
 void continueAfterDESCRIBE(RTSPClient* rtspClient, int resultCode, char* resultString) {
   do {
-    UsageEnvironment& env = rtspClient->envir();                 // alias
-    StreamClientState& scs = ((ourRTSPClient*)rtspClient)->scs;  // alias
+    UsageEnvironment& env = rtspClient->envir();                            // alias
+    StreamClientState& scs = static_cast<ourRTSPClient*>(rtspClient)->scs;  // alias
 
     if (resultCode != 0) {
       env << *rtspClient << "Failed to get a SDP description: " << resultString << "\n";
@@ -336,10 +336,10 @@ void continueAfterPLAY(RTSPClient* rtspClient, int resultCode, char* resultStrin
       scs.duration += delaySlop;
       unsigned uSecsToDelay = (unsigned)(scs.duration * 1000000);
       scs.streamTimerTask =
-          env.taskScheduler().scheduleDelayedTask(uSecsToDelay, (TaskFunc*)streamTimerHandler, rtspClient);
+          env.taskScheduler().scheduleDelayedTask(uSecsToDelay, static_cast<TaskFunc*>(streamTimerHandler), rtspClient);
     } else {
       // start to check liveness for livestream
-      ((ourRTSPClient*)rtspClient)->resetLivenessTimer();
+      static_cast<ourRTSPClient*>(rtspClient)->resetLivenessTimer();
     }
 
     env << *rtspClient << "Started playing session";
@@ -510,16 +510,6 @@ DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char co
   fStreamId = strDup(streamId);
   fReceiveBuffer.reset(new u_int8_t[DUMMY_SINK_RECEIVE_BUFFER_SIZE + 4]);
 
-  AVCodecID codec_id;
-  if (!strcmp(fSubsession.codecName(), "H264")) {
-    codec_id = AV_CODEC_ID_H264;
-  } else if (!strcmp(fSubsession.codecName(), "H265")) {
-    codec_id = AV_CODEC_ID_HEVC;
-  } else {
-    throw std::runtime_error("Unsupported codec type");  // FIXME
-  }
-  parser_.Open(codec_id, this);
-
   unsigned int num;
   SPropRecord* sps = parseSPropParameterSets(fSubsession.fmtp_spropparametersets(), num);
   paramset_size = 0;
@@ -538,6 +528,16 @@ DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char co
       tmp += 4 + sps[i].sPropLength;
     }
   }
+
+  AVCodecID codec_id;
+  if (!strcmp(fSubsession.codecName(), "H264")) {
+    codec_id = AV_CODEC_ID_H264;
+  } else if (!strcmp(fSubsession.codecName(), "H265")) {
+    codec_id = AV_CODEC_ID_HEVC;
+  } else {
+    throw std::runtime_error("Unsupported codec type");  // FIXME
+  }
+  parser_.Open(codec_id, this, paramset.get(), paramset_size);
 }
 
 DummySink::~DummySink() {
@@ -603,13 +603,13 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
 
 void DummySink::OnParserInfo(cnstream::VideoInfo *info) {
   ourRTSPClient* client = reinterpret_cast<ourRTSPClient*>(fSubsession.miscPtr);
-  if (client->cb_) {
+  if (client && client->cb_ && info) {
     client->cb_->OnRtspInfo(info);
   }
 }
 void DummySink::OnParserFrame(cnstream::VideoEsFrame *frame) {
   ourRTSPClient* client = reinterpret_cast<ourRTSPClient*>(fSubsession.miscPtr);
-  if (client->cb_) {
+  if (client && client->cb_) {
     client->cb_->OnRtspFrame(frame);
   }
 }

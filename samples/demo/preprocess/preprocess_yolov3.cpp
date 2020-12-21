@@ -18,8 +18,6 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <glog/logging.h>
-
 #include <algorithm>
 #include <memory>
 #include <vector>
@@ -36,6 +34,7 @@
 
 #include "cnstream_frame_va.hpp"
 #include "preproc.hpp"
+#include "cnstream_logging.hpp"
 
 class PreprocYolov3 : public cnstream::Preproc {
  public:
@@ -44,7 +43,7 @@ class PreprocYolov3 : public cnstream::Preproc {
     // check params
     auto input_shapes = model->InputShapes();
     if (net_inputs.size() != 1 || input_shapes[0].c != 3) {
-      LOG(ERROR) << "[PreprocCpu] model input shape not supported";
+      LOGE(DEMO) << "[PreprocCpu] model input shape not supported";
       return -1;
     }
     cnstream::CNDataFramePtr frame = cnstream::GetCNDataFramePtr(package);
@@ -56,7 +55,7 @@ class PreprocYolov3 : public cnstream::Preproc {
 
     uint8_t* img_data = new (std::nothrow) uint8_t[frame->GetBytes()];
     if (!img_data) {
-      LOG(ERROR) << "Failed to alloc memory, size:" << frame->GetBytes();
+      LOGE(DEMO) << "Failed to alloc memory, size:" << frame->GetBytes();
       return -1;
     }
     uint8_t* t = img_data;
@@ -89,7 +88,7 @@ class PreprocYolov3 : public cnstream::Preproc {
         img = bgr;
       } break;
       default:
-        LOG(WARNING) << "[Encoder] Unsupport pixel format.";
+        LOGW(DEMO) << "[Encoder] Unsupport pixel format.";
         delete[] img_data;
         return -1;
     }
@@ -98,8 +97,8 @@ class PreprocYolov3 : public cnstream::Preproc {
     if (height != dst_h || width != dst_w) {
       cv::Mat dst(dst_h, dst_w, CV_8UC3, cv::Scalar(128, 128, 128));
       const float scaling_factors = std::min(1.0 * dst_w / width, 1.0 * dst_h / height);
-      CHECK_GT(scaling_factors, 0);
-      CHECK_LE(scaling_factors, 1);
+      LOGF_IF(DEMO, scaling_factors < 0 || scaling_factors == 0);
+      LOGF_IF(DEMO, scaling_factors > 1);
       cv::Mat resized(height * scaling_factors, width * scaling_factors, CV_8UC3);
       cv::resize(img, resized, cv::Size(resized.cols, resized.rows));
       cv::Rect roi;

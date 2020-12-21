@@ -24,6 +24,8 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <vector>
+
 #include "video_parser.hpp"
 
 namespace cnstream {
@@ -62,6 +64,7 @@ struct ExtraDecoderInfo {
   bool apply_stride_align_for_scaler = false;  // for M220
   int32_t max_width = 0;   // for jpu
   int32_t max_height = 0;  // for jpu
+  std::vector<uint8_t> extra_info;
 };
 
 // FIXME

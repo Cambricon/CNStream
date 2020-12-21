@@ -19,7 +19,6 @@
  *************************************************************************/
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <chrono>
 #include <future>
 #include <iostream>
@@ -81,13 +80,24 @@ std::pair<double, double> ThreadFunc() {
 }
 
 int main(int argc, char *argv[]) {
-  ::google::InitGoogleLogging(argv[0]);
   ::gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  CHECK_NE(FLAGS_offline_model.size(), 0);
-  CHECK_NE(FLAGS_function_name.size(), 0);
-  CHECK_GT(FLAGS_th_num, 0);
-  CHECK_GT(FLAGS_iterations, 0);
+  if (FLAGS_offline_model.size() == 0) {
+    std::cout << "offline model size is 0";
+    return 0;
+  }
+  if (FLAGS_function_name.size() == 0) {
+    std::cout << "function name size is 0";
+    return 0;
+  }
+  if (FLAGS_th_num <= 0) {
+    std::cout << "thread number <= 0";
+    return 0;
+  }
+  if (FLAGS_iterations <= 0) {
+    std::cout << "invoke time per thread <= 0";
+    return 0;
+  }
 
   int batchsize = 0;
   {
@@ -125,7 +135,6 @@ int main(int argc, char *argv[]) {
   std::cout << "Avg software time: " << total_sw_time / FLAGS_th_num << std::endl;
   std::cout << "Fps: " << 1000.0 * FLAGS_th_num * batchsize * FLAGS_th_num / total_sw_time << std::endl;
 
-  ::google::ShutdownGoogleLogging();
   return 0;
 }
 

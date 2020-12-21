@@ -19,7 +19,6 @@
  *************************************************************************/
 
 #include <gflags/gflags.h>
-// #include <glog/logging.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -197,7 +196,7 @@ int AddSourceForImageInMem(cnstream::DataSource *source, const std::string &stre
     unsigned char *buf = new (std::nothrow) unsigned char[jpeg_buffer_size_];
 
     if (!buf) {
-      LOG(FATAL) << "malloc buf failed, size: " << jpeg_buffer_size_;
+      LOGF(APP) << "malloc buf failed, size: " << jpeg_buffer_size_;
     }
 
     cnstream::ESPacket pkt;
@@ -209,7 +208,7 @@ int AddSourceForImageInMem(cnstream::DataSource *source, const std::string &stre
         delete[] buf;
         buf = new (std::nothrow) unsigned char[file_size];
         if (!buf) {
-          LOG(FATAL) << "malloc buf failed, size: " << file_size;
+          LOGF(APP) << "malloc buf failed, size: " << file_size;
         }
         jpeg_buffer_size_ = file_size;
       }
