@@ -22,7 +22,6 @@
 #define EXAMPLE_MODULES_HPP_
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 
 #include <atomic>
 #include <iostream>
@@ -32,6 +31,7 @@
 
 #include "util/cnstream_queue.hpp"
 #include "cnstream_core.hpp"
+#include "cnstream_logging.hpp"
 
 // user-defined data struct
 
@@ -75,16 +75,16 @@ class ExampleSourceHandler : public cnstream::SourceHandler {
         }
         std::this_thread::yield();
       }
-      LOG(INFO) << "Source Send EOS..." << GetStreamId();
+      LOGI(DEMO) << "Source Send EOS..." << GetStreamId();
       auto data_eos = this->CreateFrameInfo(true);
       data_eos->SetStreamIndex(stream_index_);
       this->SendData(data_eos);
-      LOG(INFO) << "Source Send EOS..." << GetStreamId() << " Done";
+      LOGI(DEMO) << "Source Send EOS..." << GetStreamId() << " Done";
     });
     return true;
   }
   void Close() override {
-    // LOG(INFO) << "ExampleSourceHandler::Close() called..." << GetStreamId();
+    // LOGI(DEMO) << "ExampleSourceHandler::Close() called..." << GetStreamId();
     exit_flag_ = 1;
     if (thread_id_.joinable()) {
       thread_id_.join();
@@ -115,17 +115,17 @@ class ExampleModule : public cnstream::Module, public cnstream::ModuleCreator<Ex
     // std::cout << "********anycast********* " << frame->frame_id;
     // std::cout << std::endl;
     if (cnstream::IsStreamRemoved(data->stream_id)) {
-      LOG(ERROR) << "SHOULD NOT BE SHOWN_____Process ---- stream removed";
+      LOGE(DEMO) << "SHOULD NOT BE SHOWN_____Process ---- stream removed";
       return 0;
     }
-    // LOG(INFO) << "Process  ...Done" << GetName() << ": " << data->stream_id << ", " << data->timestamp;
+    // LOGI(DEMO) << "Process  ...Done" << GetName() << ": " << data->stream_id << ", " << data->timestamp;
     usleep(1000 * 1000);
-    // LOG(INFO) << "Process  ...Done" << GetName() << ": " << data->stream_id << ", " << data->timestamp;
+    // LOGI(DEMO) << "Process  ...Done" << GetName() << ": " << data->stream_id << ", " << data->timestamp;
     return 0;
   }
 
   void OnEos(const std::string &stream_id) override {
-    LOG(INFO) << this->GetName() << " OnEos flow-EOS arrived:  " << stream_id;
+    LOGI(DEMO) << this->GetName() << " OnEos flow-EOS arrived:  " << stream_id;
   }
 };
 
@@ -149,11 +149,11 @@ class ExampleModuleEx : public cnstream::ModuleEx, public cnstream::ModuleCreato
     for (auto &thread : threads_) {
       thread.join();
     }
-    LOG(INFO) << this->GetName() << " Close called";
+    LOGI(DEMO) << this->GetName() << " Close called";
   }
   int Process(FrameInfoPtr data) override {
     if (data->IsEos()) {
-      LOG(INFO) << this->GetName() << " process: " << data->stream_id << "--EOS";
+      LOGI(DEMO) << this->GetName() << " process: " << data->stream_id << "--EOS";
     } else {
       // auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data->datas[CNDataFramePtrKey]);
       // std::cout << this->GetName() << " process: " << data->stream_id << "--" << frame->frame_id;
@@ -183,7 +183,7 @@ class ExampleModuleEx : public cnstream::ModuleEx, public cnstream::ModuleCreato
       }
 
       if (data->IsEos()) {
-        LOG(INFO) << this->GetName() << " BackgroundProcess: " << data->stream_id << "--EOS";
+        LOGI(DEMO) << this->GetName() << " BackgroundProcess: " << data->stream_id << "--EOS";
       }
 
       /*gather data*/
@@ -214,7 +214,7 @@ class ExampleModuleEx : public cnstream::ModuleEx, public cnstream::ModuleCreato
       /*forward EOS*/
       for (auto &v : eos_datas) {
         this->TransmitData(v);
-        LOG(INFO) << this->GetName() << " forward: " << v->stream_id << "--EOS " << " : " << std::this_thread::get_id();
+        LOGI(DEMO) << this->GetName() << " forward: " << v->stream_id << "--EOS " << " : " << std::this_thread::get_id();
       }
       eos_datas.clear();
     }  // while

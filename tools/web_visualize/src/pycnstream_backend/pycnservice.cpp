@@ -25,6 +25,7 @@
 #include "cnstream_frame_va.hpp"
 #include "pipeline_handler.hpp"
 #include "pycnservice.hpp"
+#include "cnstream_logging.hpp"
 
 #define MIN_CACHE_QSIZE 20
 
@@ -41,15 +42,15 @@ class CNSEventObserver {
   void EventNotify(const std::string &stream_id, EVENT event) {
     switch (event) {
       case EVENT::EOS:
-        LOG(INFO) << "cnservice get eos from stream with stream_id: " << stream_id;
+        LOGI(WEBVISUAL) << "cnservice get eos from stream with stream_id: " << stream_id;
         if (service_) service_->WaitStop();
         break;
       case EVENT::ERROR:
-        LOG(INFO) << "CNService error for stream with stream_id: " << stream_id;
+        LOGI(WEBVISUAL) << "CNService error for stream with stream_id: " << stream_id;
         if (service_) service_->WaitStop();
         break;
       default:
-        LOG(INFO) << "CNService receive unkonw msg.";
+        LOGI(WEBVISUAL) << "CNService receive unkonw msg.";
         break;
     }
   }
@@ -96,17 +97,17 @@ void PyCNService::InitService(const CNServiceInfo &info) {
 }
 
 bool PyCNService::Start(const std::string &stream_url, const std::string &config_fname) {
-  LOG(INFO) << "CNService start, stream_url: " << stream_url << ", pipeline config: " << config_fname;
+  LOGI(WEBVISUAL) << "CNService start, stream_url: " << stream_url << ", pipeline config: " << config_fname;
   if (config_fname.empty() || !ppipe_handler_) return false;
 
   if (cnsinfo_.register_data) {
-    LOG(INFO) << "CNService register data.";
+    LOGI(WEBVISUAL) << "CNService register data.";
   }
 
   bool ret = false;
   ret = ppipe_handler_->CreatePipeline(config_fname, "perf_cache");
   if (!ret) {
-    LOG(INFO) << "CNService create pipeline failed, stream_url: " << stream_url;
+    LOGI(WEBVISUAL) << "CNService create pipeline failed, stream_url: " << stream_url;
     return false;
   }
 
@@ -123,19 +124,19 @@ bool PyCNService::Start(const std::string &stream_url, const std::string &config
 
   ret = ppipe_handler_->Start();
   if (!ret) {
-    LOG(INFO) << "CNService start pipeline failed, stream_url: " << stream_url;
+    LOGI(WEBVISUAL) << "CNService start pipeline failed, stream_url: " << stream_url;
     return false;
   }
 
   std::string stream_id = "cnservice-stream";
   ret = ppipe_handler_->AddStream(stream_url, stream_id, cnsinfo_.fps);
   if (!ret) {
-    LOG(INFO) << "CNService add stream failed, stream_url: " << stream_url;
+    LOGI(WEBVISUAL) << "CNService add stream failed, stream_url: " << stream_url;
     return false;
   }
 
   is_running_.store(true);
-  LOG(INFO) << "CNService start pipeline succeed, stream_url: " << stream_url;
+  LOGI(WEBVISUAL) << "CNService start pipeline succeed, stream_url: " << stream_url;
   return true;
 }
 
@@ -193,7 +194,7 @@ void PyCNService::DestoryResource() {
     cache_frameq_ = nullptr;
   }
 
-  LOG(INFO) << "CNService stop succeed.";
+  LOGI(WEBVISUAL) << "CNService stop succeed.";
 }
 
 void PyCNService::FrameDataCallBack(std::shared_ptr<cnstream::CNFrameInfo> in_data) {
@@ -217,12 +218,12 @@ void PyCNService::FrameDataCallBack(std::shared_ptr<cnstream::CNFrameInfo> in_da
   if (cache_frameq_->Full()) {
     CNSFrame discard_cnsframe;
     cache_frameq_->Pop(10, discard_cnsframe);
-    LOG(WARNING) << "cache frame queue is full, discard frame, frame_id: ." << discard_cnsframe.frame_info.frame_id;
+    LOGW(WEBVISUAL) << "cache frame queue is full, discard frame, frame_id: ." << discard_cnsframe.frame_info.frame_id;
     delete discard_cnsframe.bgr_mat;
     return;
   }
   if (!cache_frameq_->Push(10, cnsframe)) {
-    LOG(WARNING) << "cache frame queue is full, discard frame, frame_id: ." << cnsframe.frame_info.frame_id;
+    LOGW(WEBVISUAL) << "cache frame queue is full, discard frame, frame_id: ." << cnsframe.frame_info.frame_id;
     delete cnsframe.bgr_mat;
   }
 }

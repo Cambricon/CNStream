@@ -18,14 +18,13 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <glog/logging.h>
-
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 #include "cnstream_frame_va.hpp"
 #include "postproc.hpp"
+#include "cnstream_logging.hpp"
 
 class PostprocClassification : public cnstream::Postproc {
  public:
@@ -41,7 +40,7 @@ int PostprocClassification::Execute(const std::vector<float*>& net_outputs,
                                     const std::shared_ptr<edk::ModelLoader>& model,
                                     const cnstream::CNFrameInfoPtr& package) {
   if (net_outputs.size() != 1) {
-    LOG(ERROR) << "[Warning] classification neuron network only has one output,"
+    LOGE(DEMO) << "[Warning] classification neuron network only has one output,"
                   " but get " +
                       std::to_string(net_outputs.size());
     return -1;
@@ -62,7 +61,7 @@ int PostprocClassification::Execute(const std::vector<float*>& net_outputs,
   }
 
   if (0 == label) return -1;
-  DLOG(INFO) << "label = " << label + 1 << " score = " << mscore;
+  LOGI(DEMO) << "label = " << label + 1 << " score = " << mscore;
   auto obj = std::make_shared<cnstream::CNInferObject>();
   obj->id = std::to_string(label);
   obj->score = mscore;
@@ -87,7 +86,7 @@ int ObjPostprocClassification::Execute(const std::vector<float*>& net_outputs,
                                        const cnstream::CNFrameInfoPtr& finfo,
                                        const std::shared_ptr<cnstream::CNInferObject>& obj) {
   if (net_outputs.size() != 1) {
-    LOG(ERROR) << "[Warning] classification neuron network only has one output,"
+    LOGE(DEMO) << "[Warning] classification neuron network only has one output,"
                   " but get " +
                       std::to_string(net_outputs.size());
     return -1;
@@ -108,7 +107,7 @@ int ObjPostprocClassification::Execute(const std::vector<float*>& net_outputs,
   }
 
   if (0 == label) return -1;
-  DLOG(INFO) << "label = " << label + 1 << " score = " << mscore;
+  LOGI(DEMO) << "label = " << label + 1 << " score = " << mscore;
   cnstream::CNInferAttr attr;
   attr.id = 0;
   attr.value = label;

@@ -28,7 +28,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <cnrt.h>
-#include <glog/logging.h>
+#include <string.h>
 #include "cnstream_logging.hpp"
 
 #include "cnstream_common.hpp"

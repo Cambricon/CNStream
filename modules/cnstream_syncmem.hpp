@@ -37,15 +37,14 @@
  * This file contains a declaration of the CNSyncedMemory class.
  */
 
-#include <glog/logging.h>
-
 #include <cstddef>
 #include <mutex>
+#include "cnstream_logging.hpp"
 
 #define CNS_CNRT_CHECK(__EXPRESSION__)                                                                        \
   do {                                                                                                        \
     cnrtRet_t ret = (__EXPRESSION__);                                                                         \
-    LOG_IF(FATAL, CNRT_RET_SUCCESS != ret) << "Call [" << #__EXPRESSION__ << "] failed, error code: " << ret; \
+    LOGF_IF(FRAME, CNRT_RET_SUCCESS != ret) << "Call [" << #__EXPRESSION__ << "] failed, error code: " << ret; \
   } while (0)
 
 #define CALL_CNRT_BY_CONTEXT(__EXPRESSION__, __DEV_ID__, __DDR_CHN__)          \

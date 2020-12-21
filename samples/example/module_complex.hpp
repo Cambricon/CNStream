@@ -88,13 +88,13 @@ class ComplexModule : public cnstream::ModuleEx,
     sink_->SetObserver(this);
 
     if (!pipeline_->Start()) {
-      LOG(ERROR) << "Complex module " << this->GetName() << " starts nested pipeline failed.";
+      LOGE(DEMO) << "Complex module " << this->GetName() << " starts nested pipeline failed.";
       return false;
   }
     return true;
   }
   void Close() override {
-    LOG(INFO) << this->GetName() << " Close called";
+    LOGI(DEMO) << this->GetName() << " Close called";
     if (pipeline_) {
       sink_->SetObserver(nullptr);
       pipeline_->Stop();
@@ -112,7 +112,7 @@ class ComplexModule : public cnstream::ModuleEx,
         auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data->datas[CNDataFramePtrKey]);
         data_inner->datas[CNDataFramePtrKey] = frame;
       } else {
-        // LOG(INFO) << this->GetName() << " Module(InnerPipeline) Process: " << data->stream_id << "--EOS";
+        // LOGI(DEMO) << this->GetName() << " Module(InnerPipeline) Process: " << data->stream_id << "--EOS";
       }
       pipeline_->ProvideData(source_, data_inner);
     } else {
@@ -126,10 +126,10 @@ class ComplexModule : public cnstream::ModuleEx,
     // update data of outer-pipeline and forward...
     auto data_ = data->payload;
     if (data_->IsEos()) {
-      // LOG(INFO) << "*****inner Observer :" << data_->stream_id << "---" << "--EOS";
+      // LOGI(DEMO) << "*****inner Observer :" << data_->stream_id << "---" << "--EOS";
     } else {
       // auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data_->datas[CNDataFramePtrKey]);
-      // LOG(INFO) << "*****inner Observer :" << data_->stream_id << "---" << frame->frame_id;
+      // LOGI(DEMO) << "*****inner Observer :" << data_->stream_id << "---" << frame->frame_id;
     }
     this->TransmitData(data_);
   }

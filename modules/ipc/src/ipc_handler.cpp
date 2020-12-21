@@ -396,6 +396,8 @@ void IPCHandler::PackageToCNData(const FrameInfoPackage& recv_pkg, std::shared_p
   }
 
   data->datas[CNDataFramePtrKey] = dataframe;
+  data->datas[CNInferObjsPtrKey] = std::make_shared<CNInferObjs>();
+  data->datas[CNInferDataPtrKey] = std::make_shared<CNInferData>();
   return;
 }
 

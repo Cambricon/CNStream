@@ -32,12 +32,12 @@ bool PipelineHandler::CreatePipeline(const std::string &config_fname, const std:
 
   ppipeline_ = new (std::nothrow) cnstream::Pipeline("cns-pipeline");
   if (nullptr == ppipeline_) {
-    LOG(ERROR) << "pipeline is nullptr.";
+    LOGE(WEBVISUAL) << "pipeline is nullptr.";
     return false;
   }
 
   if (0 != ppipeline_->BuildPipelineByJSONFile(config_fname)) {
-    LOG(ERROR) << "Build pipeline by json file failed.";
+    LOGE(WEBVISUAL) << "Build pipeline by json file failed.";
     delete ppipeline_;
     ppipeline_ = nullptr;
     return false;
@@ -45,7 +45,7 @@ bool PipelineHandler::CreatePipeline(const std::string &config_fname, const std:
 
   auto source = dynamic_cast<cnstream::DataSource *>(ppipeline_->GetModule("source"));
   if (nullptr == source) {
-    LOG(ERROR) << "Get source module failed, source module name is 'source' by now.";
+    LOGE(WEBVISUAL) << "Get source module failed, source module name is 'source' by now.";
     delete ppipeline_;
     ppipeline_ = nullptr;
     return false;
@@ -53,7 +53,7 @@ bool PipelineHandler::CreatePipeline(const std::string &config_fname, const std:
 
   auto end_module = ppipeline_->GetEndModule();
   if (end_module == nullptr) {
-    LOG(ERROR) << "Get end module failed, please make sure end module is a converged node.";
+    LOGE(WEBVISUAL) << "Get end module failed, please make sure end module is a converged node.";
     delete ppipeline_;
     ppipeline_ = nullptr;
     return false;
@@ -81,12 +81,12 @@ void PipelineHandler::SetDataObserver(cnstream::IModuleObserver *data_observer) 
 bool PipelineHandler::Start() {
   if (!ppipeline_) return false;
   if (!ppipeline_->CreatePerfManager({}, perf_dir_)) {
-    LOG(ERROR) << "create perf Manager failed.";
+    LOGE(WEBVISUAL) << "create perf Manager failed.";
     return false;
   }
 
   if (!ppipeline_->Start()) {
-    LOG(ERROR) << "pipeline start failed.";
+    LOGE(WEBVISUAL) << "pipeline start failed.";
     return false;
   }
 
@@ -94,7 +94,7 @@ bool PipelineHandler::Start() {
 }
 
 void PipelineHandler::Stop() {
-  LOG(INFO) << "stop pipeline.";
+  LOGI(WEBVISUAL) << "stop pipeline.";
   std::lock_guard<std::mutex> lock(stop_mtx_);
   if (ppipeline_) {
     RemoveStream(stream_id_);
@@ -104,7 +104,7 @@ void PipelineHandler::Stop() {
     ppipeline_ = nullptr;
   }
 
-  LOG(INFO) << "stop pipeline succeed.";
+  LOGI(WEBVISUAL) << "stop pipeline succeed.";
 }
 
 bool PipelineHandler::AddStream(const std::string &stream_url, const std::string &stream_id, int fps, bool loop) {
@@ -119,7 +119,7 @@ bool PipelineHandler::AddStream(const std::string &stream_url, const std::string
   auto handler = cnstream::FileHandler::Create(source, stream_id, stream_url, fps, loop);
   int ret = source->AddSource(handler);
   if (ret < 0) {
-    LOG(ERROR) << "add source to pipeline failed.";
+    LOGE(WEBVISUAL) << "add source to pipeline failed.";
     ppipeline_->RemovePerfManager(stream_id);
     return false;
   }

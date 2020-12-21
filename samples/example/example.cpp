@@ -45,9 +45,9 @@ class MyPipeline : public cnstream::Pipeline, public cnstream::StreamMsgObserver
   /*StremMsgObserver*/
   void Update(const cnstream::StreamMsg &smsg) override {
     if (smsg.type == cnstream::StreamMsgType::EOS_MSG) {
-      LOG(INFO) << "Update[Observer] " << smsg.stream_id << " received EOS";
+      LOGI(DEMO) << "Update[Observer] " << smsg.stream_id << " received EOS";
     } else if (smsg.type == cnstream::StreamMsgType::ERROR_MSG) {
-      LOG(INFO) << "Update[Observer] " << smsg.stream_id << " received ERROR_MSG";
+      LOGI(DEMO) << "Update[Observer] " << smsg.stream_id << " received ERROR_MSG";
     }
   }
 
@@ -63,19 +63,17 @@ class Observer : public cnstream::IModuleObserver {
   Observer() {}
   void notify(FrameInfoPtr data) override {
     if (data->IsEos()) {
-      LOG(INFO) << "notify*****Observer :" << data->stream_id << "---" << "use_count = " << data.use_count() << "--EOS";
+      LOGI(DEMO) << "notify*****Observer :" << data->stream_id << "---" << "use_count = " << data.use_count() << "--EOS";
     } else {
       // auto frame = cnstream::any_cast<std::shared_ptr<CNDataFrame>>(data->datas[CNDataFramePtrKey]);
-      // LOG(INFO) << "notify*****Observer :" << data->stream_id << "---" << frame->frame_id;
+      // LOGI(DEMO) << "notify*****Observer :" << data->stream_id << "---" << frame->frame_id;
     }
   }
 };
 
 int main(int argc, char **argv) {
-  google::InitGoogleLogging(argv[0]);
+  cnstream::InitCNStreamLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, false);
-  FLAGS_stderrthreshold = google::INFO;
-  FLAGS_logbufsecs = 0;  // realtime
 
   std::cout << "\033[01;31m"
             << "CNSTREAM VERSION:" << cnstream::VersionString() << "\033[0m" << std::endl;
@@ -145,7 +143,7 @@ int main(int argc, char **argv) {
 
   /*start pipeline*/
   if (!pipeline.Start()) {
-    LOG(ERROR) << "Pipeline start failed.";
+    LOGE(DEMO) << "Pipeline start failed.";
     return EXIT_FAILURE;
   }
 
@@ -157,13 +155,13 @@ int main(int argc, char **argv) {
   /*send data to pipeline*/
 #if 1
   for (int i = 0; i < 10; i++) {
-    LOG(INFO) << i << "test1_______add stream_id_0, feed data for random ms (0..10000), then remove it\n\n";
+    LOGI(DEMO) << i << "test1_______add stream_id_0, feed data for random ms (0..10000), then remove it\n\n";
     std::shared_ptr<cnstream::SourceHandler> handler(new (std::nothrow) ExampleSourceHandler(source_, "stream_id_0"));
     source_->AddSource(handler);
     unsigned int value = u(random_engine);
     std::this_thread::sleep_for(std::chrono::milliseconds(value * 1000));
     source_->RemoveSource(handler, true);  // block until stream_id_0 eos reached
-    LOG(INFO) << i << "________source stream_id_0 forced removed,  feed data for " << value * 1000 << "ms\n\n";
+    LOGI(DEMO) << i << "________source stream_id_0 forced removed,  feed data for " << value * 1000 << "ms\n\n";
   }
 #endif
 
@@ -172,7 +170,7 @@ int main(int argc, char **argv) {
     std::string desc = std::to_string(i) + "________test2_______add stream_id_0..";
     desc += std::to_string(MyPipeline::TEST_STREAM_NUM - 1);
     desc += ", feed data for random ms (0 .. 5000), then remove them\n\n";
-    LOG(INFO) << desc;
+    LOGI(DEMO) << desc;
     for (int i = 0; i < MyPipeline::TEST_STREAM_NUM; i ++) {
       std::string stream_id = "stream_id_" + std::to_string(i);
       std::shared_ptr<cnstream::SourceHandler> handler(new (std::nothrow) ExampleSourceHandler(source_, stream_id));
@@ -181,13 +179,13 @@ int main(int argc, char **argv) {
     unsigned int value = u(random_engine);
     std::this_thread::sleep_for(std::chrono::milliseconds(value * 1000));
     source_->RemoveSources(true);  // block until all stream eos reached
-    LOG(INFO) << i << "________source all streams removed (feeding data for " << value  * 1000 << " ms)\n\n";
+    LOGI(DEMO) << i << "________source all streams removed (feeding data for " << value  * 1000 << " ms)\n\n";
   }
 #endif
 
-  LOG(INFO) << "_______Press any key to exit ...";
+  LOGI(DEMO) << "_______Press any key to exit ...";
   getchar();
   pipeline.Stop();
-  google::ShutdownGoogleLogging();
+  cnstream::ShutdownCNStreamLogging();
   return EXIT_SUCCESS;
 }

@@ -27,12 +27,14 @@
 #endif
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <glog/logging.h>
+#include <string.h>
 #include <cerrno>
 #include <fstream>
 #include <list>
 #include <string>
 #include <vector>
+
+#include "cnstream_logging.hpp"
 
 std::string GetExePath() {
   char path[PATH_MAX_LENGTH];
@@ -53,8 +55,8 @@ std::string GetExePath() {
 void CheckExePath(const std::string &path) {
   extern int errno;
   if (path.size() == 0) {
-    LOG_IF(FATAL, 0 != errno) << std::string(strerror(errno));
-    LOG(FATAL) << "length of exe path is larger than " << PATH_MAX_LENGTH;
+    LOGF_IF(DEMO, 0 != errno) << std::string(strerror(errno));
+    LOGF(DEMO) << "length of exe path is larger than " << PATH_MAX_LENGTH;
   }
 }
 
@@ -74,7 +76,7 @@ std::list<std::string> ReadFileList(const std::string &list) {
       }
     }
   } else {
-    LOG(ERROR) << "Open file: " << list.c_str() << " failed.";
+    LOGE(DEMO) << "Open file: " << list.c_str() << " failed.";
     exit(0);
   }
   ifile.close();
@@ -84,7 +86,7 @@ std::list<std::string> ReadFileList(const std::string &list) {
 std::vector<std::string> LoadLabels(const std::string &filename) {
   std::vector<std::string> labels;
   std::ifstream file(filename);
-  LOG_IF(FATAL, !file.is_open()) << "file:" << filename << " open failed.";
+  LOGF_IF(DEMO, !file.is_open()) << "file:" << filename << " open failed.";
   std::string line;
   while (std::getline(file, line)) {
     labels.push_back(std::string(line));

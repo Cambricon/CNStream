@@ -92,7 +92,7 @@ class EsParser {
  public:
   EsParser();
   ~EsParser();
-  int Open(AVCodecID codec_id, IParserResult *result);
+  int Open(AVCodecID codec_id, IParserResult *result, uint8_t* paramset = nullptr, uint32_t paramset_size = 0);
   void Close();
   int Parse(const VideoEsPacket &pkt);
 

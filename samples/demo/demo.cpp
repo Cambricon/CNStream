@@ -19,7 +19,6 @@
  *************************************************************************/
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 
 #include <atomic>
 #include <mutex>
@@ -42,6 +41,7 @@
 #include "data_source.hpp"
 #include "displayer.hpp"
 #include "util.hpp"
+#include "cnstream_logging.hpp"
 #ifdef BUILD_IPC
 #include "module_ipc.hpp"
 #endif
@@ -90,38 +90,38 @@ class MsgObserver : cnstream::StreamMsgObserver {
     switch (smsg.type) {
       case cnstream::StreamMsgType::EOS_MSG:
         eos_stream_.push_back(smsg.stream_id);
-        LOG(INFO) << "[Observer] received EOS from stream:" << smsg.stream_id;
+        LOGI(DEMO) << "[Observer] received EOS from stream:" << smsg.stream_id;
         if (static_cast<int>(eos_stream_.size()) == stream_cnt_) {
-          LOG(INFO) << "[Observer] received all EOS";
+          LOGI(DEMO) << "[Observer] received all EOS";
           stop_ = true;
         }
         break;
 
       case cnstream::StreamMsgType::STREAM_ERR_MSG:
-        LOG(WARNING) << "[Observer] received stream error from stream: " << smsg.stream_id
+        LOGW(DEMO) << "[Observer] received stream error from stream: " << smsg.stream_id
           << ", remove it from pipeline.";
         source = dynamic_cast<cnstream::DataSource*>(pipeline_->GetModule(source_name_));
         if (source) source->RemoveSource(smsg.stream_id);
         pipeline_->RemovePerfManager(smsg.stream_id);
         stream_cnt_--;
         if (stream_cnt_ == 0) {
-          LOG(INFO) << "[Observer] all streams is removed from pipeline, pipeline will stop.";
+          LOGI(DEMO) << "[Observer] all streams is removed from pipeline, pipeline will stop.";
           stop_ = true;
         }
         break;
 
       case cnstream::StreamMsgType::ERROR_MSG:
-        LOG(ERROR) << "[Observer] received ERROR_MSG";
+        LOGE(DEMO) << "[Observer] received ERROR_MSG";
         stop_ = true;
         break;
 
       case cnstream::StreamMsgType::FRAME_ERR_MSG:
-        LOG(WARNING) << "[Observer] received frame error from stream: " << smsg.stream_id
+        LOGW(DEMO) << "[Observer] received frame error from stream: " << smsg.stream_id
           << ", pts: " << smsg.pts << ".";
         break;
 
       default:
-        LOG(ERROR) << "[Observer] unkonw message type.";
+        LOGE(DEMO) << "[Observer] unkonw message type.";
         break;
     }
     if (stop_) {
@@ -216,7 +216,7 @@ int AddSourceForImageInMem(cnstream::DataSource *source, const std::string &stre
     unsigned char *buf = new(std::nothrow) unsigned char[jpeg_buffer_size_];
 
     if (!buf) {
-      LOG(FATAL) << "malloc buf failed, size: " << jpeg_buffer_size_;
+      LOGF(DEMO) << "malloc buf failed, size: " << jpeg_buffer_size_;
     }
 
     cnstream::ESPacket pkt;
@@ -228,7 +228,7 @@ int AddSourceForImageInMem(cnstream::DataSource *source, const std::string &stre
         delete [] buf;
         buf = new(std::nothrow) unsigned char[file_size];
         if (!buf) {
-          LOG(FATAL) << "malloc buf failed, size: " << file_size;
+          LOGF(DEMO) << "malloc buf failed, size: " << file_size;
         }
         jpeg_buffer_size_ = file_size;
       }
@@ -293,7 +293,7 @@ int AddSourceForDecompressedImage(cnstream::DataSource *source, const std::strin
         }
 
         if (-2 == ret_code) {
-          LOG(WARNING) << "write image failed(invalid data).";
+          LOGW(DEMO) << "write image failed(invalid data).";
         }
       }
       itor++;
@@ -305,7 +305,7 @@ int AddSourceForDecompressedImage(cnstream::DataSource *source, const std::strin
   });
   thread_source.detach();
 #else
-  LOG(ERROR) << "OPENCV is not linked, can not support cv::mat or raw image data with bgr24/rgb24 "
+  LOGE(DEMO) << "OPENCV is not linked, can not support cv::mat or raw image data with bgr24/rgb24 "
     "format.";
 #endif
   return ret;
@@ -325,7 +325,7 @@ int main(int argc, char** argv) {
   cnstream::AddLogSink(&log_listener);
 #endif
 
-  LOG(INFO) << "CNSTREAM VERSION:" << cnstream::VersionString();
+  LOGI(DEMO) << "CNSTREAM VERSION:" << cnstream::VersionString();
 
   /*
     flags to variables
@@ -346,7 +346,7 @@ int main(int argc, char** argv) {
   // pipeline.BuildPipeline({source_config, detector_config, tracker_config});
 
   if (0 != pipeline.BuildPipelineByJSONFile(FLAGS_config_fname)) {
-    LOG(ERROR) << "Build pipeline failed.";
+    LOGE(DEMO) << "Build pipeline failed.";
     return EXIT_FAILURE;
   }
 
@@ -363,10 +363,10 @@ int main(int argc, char** argv) {
 #ifdef BUILD_IPC
   cnstream::ModuleIPC* ipc = dynamic_cast<cnstream::ModuleIPC*>(pipeline.GetModule("ipc"));
   if (nullptr == source && (nullptr == ipc)) {
-    LOG(ERROR) << "DataSource && ModuleIPC module both not found.";
+    LOGE(DEMO) << "DataSource && ModuleIPC module both not found.";
 #else
   if (nullptr == source) {
-    LOG(ERROR) << "DataSource module not found.";
+    LOGE(DEMO) << "DataSource module not found.";
 #endif
     return EXIT_FAILURE;
   }
@@ -376,7 +376,7 @@ int main(int argc, char** argv) {
   */
   if (FLAGS_perf) {
     if (!pipeline.CreatePerfManager({}, FLAGS_perf_db_dir)) {
-      LOG(ERROR) << "Pipeline Create Perf Manager failed.";
+      LOGE(DEMO) << "Pipeline Create Perf Manager failed.";
       return EXIT_FAILURE;
     }
   }
@@ -385,7 +385,7 @@ int main(int argc, char** argv) {
     start pipeline
   */
   if (!pipeline.Start()) {
-    LOG(ERROR) << "Pipeline start failed.";
+    LOGE(DEMO) << "Pipeline start failed.";
     return EXIT_FAILURE;
   }
 

@@ -20,13 +20,11 @@
 
 #include "connector.hpp"
 
-#include <glog/logging.h>
-#include "cnstream_logging.hpp"
-
 #include <atomic>
 #include <vector>
 
 #include "conveyor.hpp"
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 

@@ -18,7 +18,7 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <glog/logging.h>
+#include <gflags/gflags.h>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -29,7 +29,6 @@ DEFINE_string(offline_model, "", "path of offline-model");
 DEFINE_string(function_name, "subnet0", "model defined function name");
 
 int main(int argc, char *argv[]) {
-  ::google::InitGoogleLogging(argv[0]);
   ::gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   if (FLAGS_offline_model.size() == 0) {
@@ -61,6 +60,5 @@ int main(int argc, char *argv[]) {
 
   std::cout << "[INFO] succeed in getting input & output format\n";
 
-  ::google::ShutdownGoogleLogging();
   return 0;
 }

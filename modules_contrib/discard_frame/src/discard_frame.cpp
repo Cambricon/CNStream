@@ -70,14 +70,14 @@ bool DiscardFrame::CheckParamSet(const ModuleParamSet& paramSet) const {
   ParametersChecker checker;
   for (auto& it : paramSet) {
     if (!param_register_.IsRegisted(it.first)) {
-      LOG(WARNING) << "[DiscardFrame] Unknown param: " << it.first;
+      LOGW(MODULESCONTRIB) << "[DiscardFrame] Unknown param: " << it.first;
     }
   }
 
   if (paramSet.find("discard_interval") != paramSet.end()) {
     std::string err_msg;
     if (!checker.IsNum({"discard_interval"}, paramSet, err_msg)) {
-      LOG(ERROR) << "[DiscardFrame] " << err_msg;
+      LOGE(MODULESCONTRIB) << "[DiscardFrame] " << err_msg;
       return false;
     }
   }

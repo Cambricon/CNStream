@@ -70,6 +70,7 @@ class RtspHandlerImpl : public IDecodeResult, public SourceRender {
   DataSourceParam param_;
   bool use_ffmpeg_ = false;
   int reconnect_ = 0;
+  int64_t pts_ = 0;
 
  private:
   /**/
