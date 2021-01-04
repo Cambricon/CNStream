@@ -33,11 +33,11 @@ class PostprocYolov3 : public cnstream::Postproc {
     LOGF_IF(DEMO, model->InputNum() != 1);
     LOGF_IF(DEMO, model->OutputNum() != 1);
     LOGF_IF(DEMO, net_outputs.size() != 1);
-    const auto input_sp = model->InputShapes()[0];
+    const auto input_sp = model->InputShape(0);
     // const int img_w = package->frame.width;
     // const int img_h = package->frame.height;
-    const int model_input_w = static_cast<int>(input_sp.w);
-    const int model_input_h = static_cast<int>(input_sp.h);
+    const int model_input_w = static_cast<int>(input_sp.W());
+    const int model_input_h = static_cast<int>(input_sp.H());
     const float* net_output = net_outputs[0];
 
     // scaling factors

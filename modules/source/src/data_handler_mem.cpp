@@ -29,8 +29,8 @@
 #include <memory>
 #include <vector>
 
-#include "perf_manager.hpp"
-
+#include "profiler/module_profiler.hpp"
+#include "profiler/pipeline_profiler.hpp"
 namespace cnstream {
 
 std::shared_ptr<SourceHandler> ESMemHandler::Create(DataSource *module, const std::string &stream_id) {
@@ -106,7 +106,6 @@ bool ESMemHandlerImpl::Open() {
   }
   */
 
-  SetPerfManager(source->GetPerfManager(stream_id_));
   SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
 
   size_t MaxSize = 60;  // FIXME
@@ -151,118 +150,21 @@ int ESMemHandlerImpl::Write(ESPacket *pkt) {
     eos_reached_ = true;
     return -1;
   }
-  return 0;
-}
 
-struct NalDesc {
-  unsigned char *nal = nullptr;
-  int len = 0;
-};
-
-static int FindStartCode(unsigned char *buf) {
-  if (buf[0] == 0 && buf[1] == 0 && buf[2] == 0 && buf[3] == 1) {
-    return 4;
-  }
-  if (buf[0] == 0 && buf[1] == 0 && buf[2] == 1) {
-    return 3;
-  }
-  return 0;
-}
-
-static int GetNaluH2645(unsigned char *buf, int len, std::vector<NalDesc> &vec_desc) {  // NOLINT
-  std::vector<int> vec_pos;
-  for (int i = 0; i < len - 4; i++) {
-    int size = FindStartCode(buf + i);
-    if (!size) {
-      continue;
-    }
-    vec_pos.push_back(i);
-    i += size - 1;
-  }
-  if (vec_pos.empty()) {
-    return 0;
-  }
-
-  int num = vec_pos.size();
-  for (int i = 0; i < num - 1; i++) {
-    NalDesc desc;
-    desc.nal = buf + vec_pos[i];
-    desc.len = vec_pos[i + 1] - vec_pos[i];
-    int type_idx = (desc.nal[2] == 1) ? 3 : 4;
-    if (desc.len < type_idx) {
-      // "INVALID nal size"
-      return -1;
-    }
-    vec_desc.push_back(desc);
-  }
-
-  // handle the last nal
-  if (vec_pos[num - 1]) {
-    NalDesc desc;
-    desc.nal = buf + vec_pos[num - 1];
-    desc.len = len - vec_pos[num - 1];
-    vec_desc.push_back(desc);
-  }
-  return 0;
-}
-
-static const size_t max_frame_bits_size = 2 * 1024 * 1024;
-int ESMemHandlerImpl::Write(unsigned char *data, int len) {
-  if (eos_reached_ || !running_.load()) {
-    return -1;
-  }
-
-  if (!frame_bits_buf_) {
-    std::unique_ptr<unsigned char[]> ptr(new unsigned char[max_frame_bits_size]);
-    frame_bits_buf_ = std::move(ptr);
-    if (!frame_bits_buf_) {
-      return -1;
-    }
-    frame_bits_size_ = 0;
-  }
-  generate_pts_ = true;
-
-  if (!data || !len) {
-    // eos reached
-    VideoEsPacket packet;
-    parser_.Parse(packet);
+  if (!pkt->data || !pkt->size) {
     eos_reached_ = true;
     return 0;
   }
-
-  if (frame_bits_size_ + len <= max_frame_bits_size) {
-    memcpy(frame_bits_buf_.get() + frame_bits_size_, data, len);
-    frame_bits_size_ += len;
-
-    std::vector<NalDesc> vec_desc;
-    GetNaluH2645(frame_bits_buf_.get(), frame_bits_size_, vec_desc);
-
-    size_t parsed_len = 0;
-    if (vec_desc.size() > 1) {
-      for (size_t i = 0; i < vec_desc.size() - 1; i++) {
-        VideoEsPacket packet;
-        packet.data = vec_desc[i].nal;
-        packet.len = vec_desc[i].len;
-        packet.pts = 0;
-        if (parser_.Parse(packet) < 0) {
-          eos_reached_ = true;
-          return -1;
-        }
-        parsed_len += packet.len;
-      }
-    }
-    if (parsed_len) {
-      if (frame_bits_size_ - parsed_len) {
-        memmove(frame_bits_buf_.get(), frame_bits_buf_.get() + parsed_len, frame_bits_size_ - parsed_len);
-      }
-    }
-    frame_bits_size_ -= parsed_len;
-  } else {
-    // FIXME
-    LOGW(SOURCE) << " parse es failed, discard data";
-    frame_bits_size_ = 0;
-  }
   return 0;
+}
+
+int ESMemHandlerImpl::Write(unsigned char *data, int len) {
+  ESPacket pkt;
+  pkt.data = data;
+  pkt.size = len;
+  pkt.pts = 0;
+  generate_pts_ = true;
+  return Write(&pkt);
 }
 
 void ESMemHandlerImpl::OnParserInfo(VideoInfo *video_info) {
@@ -407,8 +309,13 @@ bool ESMemHandlerImpl::Process() {
   pkt.len = in->pkt_.size;
   pkt.pts = in->pkt_.pts;
 
-  RecordStartTime(module_->GetName(), pkt.pts);
-
+  if (module_ && module_->GetProfiler()) {
+    auto record_key = std::make_pair(stream_id_, pkt.pts);
+    module_->GetProfiler()->RecordProcessStart(kPROCESS_PROFILER_NAME, record_key);
+    if (module_->GetContainer() && module_->GetContainer()->GetProfiler()) {
+      module_->GetContainer()->GetProfiler()->RecordInput(record_key);
+    }
+  }
   if (!decoder_->Process(&pkt)) {
     return false;
   }

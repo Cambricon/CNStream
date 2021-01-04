@@ -22,7 +22,6 @@
 #include <SDL2/SDL.h>
 #endif
 
-#include "perf_manager.hpp"
 #include "util/cnstream_time_utility.hpp"
 
 namespace cnstream {
@@ -32,7 +31,6 @@ struct UpdateData {
   int chn_idx = -1;
   uint32_t pts = ~(0);
   std::string stream_id;
-  std::shared_ptr<PerfManager> perf_manager;
 };  // struct UpdateData
 
 #ifdef HAVE_SDL
@@ -71,13 +69,6 @@ class SDLVideoPlayer {  // BGR
   int GetColIdByChnId(int chn_id) { return chn_id % cols_; }
   int GetXByChnId(int chn_id) { return chn_w_ * GetColIdByChnId(chn_id); }
   int GetYByChnId(int chn_id) { return chn_h_ * GetRowIdByChnId(chn_id); }
-  void RecordEndTime(const std::vector<UpdateData>& data_vec) {
-    for (auto& it : data_vec) {
-      if (it.perf_manager != nullptr) {
-        it.perf_manager->Record(true, cnstream::PerfManager::GetDefaultType(), module_name_, it.pts);
-      }
-    }
-  }
 
   int frame_rate_ = 10;
   int window_w_ = 1920;

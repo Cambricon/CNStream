@@ -43,7 +43,6 @@ FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& mode
   if (!model_loader_) {
     LOGI(TRACK) << "[FeatureExtractor] Model not set, using opencv to extract feature on CPU";
   } else {
-    model_loader_->InitLayout();
     device_id_ = device_id;
 
     // 1.Check model I/O
@@ -53,7 +52,7 @@ FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& mode
     }
 
     // 2.prepare input and output memory
-    mem_op_.SetLoader(model_loader_);
+    mem_op_.SetModel(model_loader_);
     input_cpu_ptr_ = mem_op_.AllocCpuInput();
     input_mlu_ptr_ = mem_op_.AllocMluInput();
     output_mlu_ptr_ = mem_op_.AllocMluOutput();
@@ -68,8 +67,8 @@ FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& mode
 FeatureExtractor::~FeatureExtractor() {
   LOGI(TRACK) << "[FeatureExtractor] release resources";
   if (model_loader_) {
-    if (input_mlu_ptr_) mem_op_.FreeArrayMlu(input_mlu_ptr_, model_loader_->InputNum());
-    if (output_mlu_ptr_) mem_op_.FreeArrayMlu(output_mlu_ptr_, model_loader_->OutputNum());
+    if (input_mlu_ptr_) mem_op_.FreeMluInput(input_mlu_ptr_);
+    if (output_mlu_ptr_) mem_op_.FreeMluOutput(output_mlu_ptr_);
     if (input_cpu_ptr_) mem_op_.FreeCpuInput(input_cpu_ptr_);
     if (output_cpu_ptr_) mem_op_.FreeCpuOutput(output_cpu_ptr_);
     input_mlu_ptr_ = output_mlu_ptr_ = input_cpu_ptr_ = output_cpu_ptr_ = nullptr;

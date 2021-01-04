@@ -131,9 +131,11 @@ void IPCClientHandler::RecvPackageLoop() {
   }
 }
 
-bool IPCClientHandler::Send() {
+bool IPCClientHandler::Send(const std::string& send_str) {
   if (is_connected_.load()) {
-    if (client_handle_.SendData(send_buf_, sizeof(send_buf_)) != sizeof(send_buf_)) {
+    char send_buf[SOCK_BUFSIZE] = {0};
+    memcpy(send_buf, send_str.c_str(), send_str.length());
+    if (client_handle_.SendData(send_buf, sizeof(send_buf)) != sizeof(send_buf)) {
       LOGW() << " client send message to server failed.";
       return false;
     }

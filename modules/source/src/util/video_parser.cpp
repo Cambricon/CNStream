@@ -417,6 +417,7 @@ class EsParserImpl {
     }
     open_sucess_ = false;
   }
+  void ParseEos();
   int Parse(const VideoEsPacket &pkt);
 
  private:
@@ -461,24 +462,29 @@ int EsParser::Parse(const VideoEsPacket &pkt) {
   return -1;
 }
 
+inline void EsParserImpl::ParseEos() {
+  if (result_) {
+    VideoEsFrame frame;
+    frame.data = nullptr;
+    frame.len = 0;
+    frame.pts = 0;
+    result_->OnParserFrame(&frame);
+  }
+}
+
 int EsParserImpl::Parse(const VideoEsPacket &pkt) {
   std::unique_lock<std::mutex> guard(mutex_);
-  if (!open_sucess_ || !pkt.data ||!pkt.len) {
-    if (result_) {
-      VideoEsFrame frame;
-      frame.data = nullptr;
-      frame.len = 0;
-      frame.pts = 0;
-      result_->OnParserFrame(&frame);
-    }
+  if (!open_sucess_) {
+    ParseEos();
     return 0;
   }
   uint8_t *cur_ptr = pkt.data;
   int cur_size = pkt.len;
+  if (!pkt.data) cur_size = 0;
 
-  while (cur_size > 0) {
+  do {
     int len = av_parser_parse2(parser_ctx_, codec_ctx_, &packet_.data, &packet_.size,
-                               cur_ptr , cur_size, pkt.pts, AV_NOPTS_VALUE, AV_NOPTS_VALUE);
+                               cur_ptr, cur_size, pkt.pts, AV_NOPTS_VALUE, AV_NOPTS_VALUE);
     cur_ptr += len;
     cur_size -= len;
     if (packet_.size == 0)
@@ -503,35 +509,30 @@ int EsParserImpl::Parse(const VideoEsPacket &pkt) {
         av_packet_unref(&packet_);
         return ret;
       }
-      if (got_picture) {
-        cnstream::VideoInfo info;
-        info.codec_id = codec_id_;
-        switch (codec_ctx_->field_order) {
-        case AV_FIELD_TT:
-        case AV_FIELD_BB:
-        case AV_FIELD_TB:
-        case AV_FIELD_BT:
-          info.progressive = 0;
-          break;
-        case AV_FIELD_PROGRESSIVE:  // fall through
-        default:
-          info.progressive = 1;
-          break;
-        }
-
-        // info.width = codec_ctx_->width;
-        // info.height = codec_ctx_->height;
-
-        info.extra_data = paramset_;
-
-        if (result_) {
-          result_->OnParserInfo(&info);
-        }
-        first_time_ = false;
-      } else {
-        av_packet_unref(&packet_);
-        continue;
+      cnstream::VideoInfo info;
+      info.codec_id = codec_id_;
+      switch (codec_ctx_->field_order) {
+      case AV_FIELD_TT:
+      case AV_FIELD_BB:
+      case AV_FIELD_TB:
+      case AV_FIELD_BT:
+        info.progressive = 0;
+        break;
+      case AV_FIELD_PROGRESSIVE:  // fall through
+      default:
+        info.progressive = 1;
+        break;
       }
+
+      // info.width = codec_ctx_->width;
+      // info.height = codec_ctx_->height;
+
+      info.extra_data = paramset_;
+
+      if (result_) {
+        result_->OnParserInfo(&info);
+      }
+      first_time_ = false;
     }
 
     if (result_) {
@@ -543,7 +544,10 @@ int EsParserImpl::Parse(const VideoEsPacket &pkt) {
       result_->OnParserFrame(&frame);
     }
     av_packet_unref(&packet_);
-  }
+  } while (cur_size > 0);
+
+  if (!pkt.data || !pkt.len)
+    ParseEos();
   return 0;
 }
 

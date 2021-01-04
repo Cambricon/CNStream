@@ -26,6 +26,8 @@
 #include <utility>
 
 #include "data_handler_file.hpp"
+#include "profiler/module_profiler.hpp"
+#include "profiler/pipeline_profiler.hpp"
 
 namespace cnstream {
 
@@ -78,7 +80,6 @@ bool FileHandlerImpl::Open() {
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
 
-  SetPerfManager(source->GetPerfManager(stream_id_));
   SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
 
   // start separate thread
@@ -236,7 +237,13 @@ void FileHandlerImpl::OnParserFrame(VideoEsFrame *frame) {
   pkt.len = frame->len;
   pkt.pts = frame->pts;
 
-  RecordStartTime(module_->GetName(), pkt.pts);
+  if (module_ && module_->GetProfiler()) {
+    auto record_key = std::make_pair(stream_id_, pkt.pts);
+    module_->GetProfiler()->RecordProcessStart(kPROCESS_PROFILER_NAME, record_key);
+    if (module_->GetContainer() && module_->GetContainer()->GetProfiler()) {
+      module_->GetContainer()->GetProfiler()->RecordInput(record_key);
+    }
+  }
 
   decode_failed_ = true;
   if (decoder_  && decoder_->Process(&pkt) == true) {

@@ -43,8 +43,7 @@ installAptLibs() {
     ttf-wqy-zenhei\
     cmake\
     libsdl2-dev\
-    lcov\
-    libsqlite3-dev sqlite3
+    lcov
 }
 
 installYumLibs() {
@@ -55,8 +54,7 @@ installYumLibs() {
     freetype-devel\
     SDL2_gfx-devel.x86_64\
     wqy-zenhei-fonts\
-    lcov\
-    sqlite-devel
+    lcov
   ${SUDO_CMD} yum install -y epel-release rpm
   #remove below line for long time to update
   #${SUDO_CMD} yum update -y 

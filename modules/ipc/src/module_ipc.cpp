@@ -127,8 +127,9 @@ int ModuleIPC::Process(std::shared_ptr<CNFrameInfo> data) {
     handler->CacheProcessedData(data);
   }
 
-  handler->PreparePackageToSend(PkgType::PKG_DATA, data);
-  handler->Send();
+  std::string send_str = "";
+  handler->PreparePackageToSend(PkgType::PKG_DATA, data, &send_str);
+  handler->Send(send_str);
   this->TransmitData(data);
   return 0;
 }

@@ -41,8 +41,8 @@ class PreprocYolov3 : public cnstream::Preproc {
   int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
               const std::shared_ptr<cnstream::CNFrameInfo>& package) {
     // check params
-    auto input_shapes = model->InputShapes();
-    if (net_inputs.size() != 1 || input_shapes[0].c != 3) {
+    auto input_shape = model->InputShape(0);
+    if (net_inputs.size() != 1 || input_shape.C() != 3) {
       LOGE(DEMO) << "[PreprocCpu] model input shape not supported";
       return -1;
     }
@@ -50,54 +50,14 @@ class PreprocYolov3 : public cnstream::Preproc {
 
     int width = frame->width;
     int height = frame->height;
-    int dst_w = input_shapes[0].w;
-    int dst_h = input_shapes[0].h;
-
-    uint8_t* img_data = new (std::nothrow) uint8_t[frame->GetBytes()];
-    if (!img_data) {
-      LOGE(DEMO) << "Failed to alloc memory, size:" << frame->GetBytes();
-      return -1;
-    }
-    uint8_t* t = img_data;
-
-    for (int i = 0; i < frame->GetPlanes(); ++i) {
-      memcpy(t, frame->data[i]->GetCpuData(), frame->GetPlaneBytes(i));
-      t += frame->GetPlaneBytes(i);
-    }
-
-    // convert color space
-    cv::Mat img;
-    switch (frame->fmt) {
-      case cnstream::CNDataFormat::CN_PIXEL_FORMAT_BGR24:
-        img = cv::Mat(height, width, CV_8UC3, img_data);
-        break;
-      case cnstream::CNDataFormat::CN_PIXEL_FORMAT_RGB24:
-        img = cv::Mat(height, width, CV_8UC3, img_data);
-        cv::cvtColor(img, img, cv::COLOR_RGB2BGR);
-        break;
-      case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12: {
-        img = cv::Mat(height * 3 / 2, width, CV_8UC1, img_data);
-        cv::Mat bgr(height, width, CV_8UC3);
-        cv::cvtColor(img, bgr, cv::COLOR_YUV2BGR_NV12);
-        img = bgr;
-      } break;
-      case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21: {
-        img = cv::Mat(height * 3 / 2, width, CV_8UC1, img_data);
-        cv::Mat bgr(height, width, CV_8UC3);
-        cv::cvtColor(img, bgr, cv::COLOR_YUV2BGR_NV21);
-        img = bgr;
-      } break;
-      default:
-        LOGW(DEMO) << "[Encoder] Unsupport pixel format.";
-        delete[] img_data;
-        return -1;
-    }
-
+    int dst_w = input_shape.W();
+    int dst_h = input_shape.H();
+    cv::Mat img = *(frame->ImageBGR());
     // resize
     if (height != dst_h || width != dst_w) {
       cv::Mat dst(dst_h, dst_w, CV_8UC3, cv::Scalar(128, 128, 128));
       const float scaling_factors = std::min(1.0 * dst_w / width, 1.0 * dst_h / height);
-      LOGF_IF(DEMO, scaling_factors < 0 || scaling_factors == 0);
+      LOGF_IF(DEMO, scaling_factors <= 0);
       LOGF_IF(DEMO, scaling_factors > 1);
       cv::Mat resized(height * scaling_factors, width * scaling_factors, CV_8UC3);
       cv::resize(img, resized, cv::Size(resized.cols, resized.rows));
@@ -114,8 +74,6 @@ class PreprocYolov3 : public cnstream::Preproc {
     // since model input data type is float, convert image to float
     cv::Mat dst(dst_h, dst_w, CV_32FC3, net_inputs[0]);
     img.convertTo(dst, CV_32F);
-
-    delete[] img_data;
     return 0;
   }
 

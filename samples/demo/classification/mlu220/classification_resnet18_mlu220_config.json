@@ -1,4 +1,9 @@
 {
+  "profiler_config" : {
+    "enable_profiling" : true,
+    "enable_tracing"   : true
+  },
+
   "source" : {
     "class_name" : "cnstream::DataSource",
     "parallelism" : 0,

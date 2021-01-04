@@ -52,8 +52,8 @@ class ObjPreproc;
 class Postproc;
 class ObjPostproc;
 class InferThreadPool;
-class CNFrameInfo;
-class PerfManager;
+struct CNFrameInfo;
+class ModuleProfiler;
 
 class InferEngine {
  public:
@@ -67,8 +67,8 @@ class InferEngine {
   };  // class ResultWaitingCard
   InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, std::shared_ptr<Preproc> preprocessor,
               std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, uint32_t batching_timeout, bool use_scaler,
-              std::shared_ptr<PerfManager> perf_manager, std::string infer_thread_id,
-              const std::function<void(const std::string& err_msg)>& error_func = NULL, bool keep_aspect_ratio = false,
+              std::string infer_thread_id, const std::function<void(const std::string& err_msg)>& error_func = NULL,
+              bool keep_aspect_ratio = false,
               bool batching_by_obj = false, const std::shared_ptr<ObjPreproc>& obj_preprocessor = nullptr,
               const std::shared_ptr<ObjPostproc>& obj_postprocessor = nullptr,
               const std::shared_ptr<ObjFilter>& obj_filter = nullptr,
@@ -76,7 +76,8 @@ class InferEngine {
               CNDataFormat model_input_pixel_format = CN_PIXEL_FORMAT_RGBA32,
               bool mem_on_mlu_for_postproc = false,
               bool saving_infer_input = false,
-              std::string module_name = "");
+              std::string module_name = "",
+              ModuleProfiler* profiler = nullptr);
   ~InferEngine();
   ResultWaitingCard FeedData(std::shared_ptr<CNFrameInfo> finfo);
 
@@ -116,7 +117,6 @@ class InferEngine {
   std::shared_ptr<ObjFilter> obj_filter_ = nullptr;
   std::vector<std::shared_ptr<CNInferObject>> batched_objs_;
   std::shared_ptr<ObjPostprocessingBatchingDoneStage> obj_postproc_stage_ = nullptr;
-  std::shared_ptr<PerfManager> infer_perf_manager_;
   std::string infer_thread_id_;
   std::string dump_resized_image_dir_ = "";
   CNDataFormat model_input_fmt_ = CN_PIXEL_FORMAT_RGBA32;
@@ -124,6 +124,7 @@ class InferEngine {
   bool mem_on_mlu_for_postproc_ = false;
   bool saving_infer_input_ = false;
   std::string module_name_ = "";
+  ModuleProfiler* profiler_ = nullptr;
 };  // class InferEngine
 
 }  // namespace cnstream

@@ -21,6 +21,7 @@
 #ifndef MODULES_RTSP_SINK_SRC_CN_VIDEO_ENCODER_HPP_
 #define MODULES_RTSP_SINK_SRC_CN_VIDEO_ENCODER_HPP_
 
+#include <memory>
 #include <string>
 
 #include "device/mlu_context.h"
@@ -67,7 +68,7 @@ class CNVideoEncoder : public VideoEncoder {
   uint32_t frame_rate_den_;
   edk::CodecType codec_type_;
   edk::PixelFmt picture_format_;
-  edk::EasyEncode *encoder_ = nullptr;
+  std::unique_ptr<edk::EasyEncode> encoder_ = nullptr;
 
   std::string preproc_type_;
   // edk::MluResizeYuv2Yuv *resize_ = nullptr;

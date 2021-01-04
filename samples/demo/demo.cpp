@@ -26,6 +26,7 @@
 #include <iostream>
 #include <list>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -46,14 +47,15 @@
 #include "module_ipc.hpp"
 #endif
 
+#include "profiler/pipeline_profiler.hpp"
+#include "profiler/profile.hpp"
+
 DEFINE_string(data_path, "", "video file list.");
 DEFINE_string(data_name, "", "video file name.");
 DEFINE_int32(src_frame_rate, 25, "frame rate for send data");
 DEFINE_int32(wait_time, 0, "time of one test case");
 DEFINE_bool(loop, false, "display repeat");
 DEFINE_string(config_fname, "", "pipeline config filename");
-DEFINE_bool(perf, true, "measure performance");
-DEFINE_string(perf_db_dir, "", "directory of performance database");
 DEFINE_bool(jpeg_from_mem, false, "Jpeg bitstream from mem.");
 DEFINE_bool(raw_img_input, false, "feed decompressed image to source");
 DEFINE_bool(use_cv_mat, true, "feed cv mat to source. It is valid only if ``raw_img_input`` is set to true");
@@ -61,6 +63,8 @@ DEFINE_bool(use_cv_mat, true, "feed cv mat to source. It is valid only if ``raw_
 cnstream::Displayer* gdisplayer = nullptr;
 
 std::atomic<bool> thread_running{true};
+
+std::atomic<bool> gstop_perf_print {false};
 
 class UserLogSink: public cnstream::LogSink {
  public:
@@ -102,7 +106,6 @@ class MsgObserver : cnstream::StreamMsgObserver {
           << ", remove it from pipeline.";
         source = dynamic_cast<cnstream::DataSource*>(pipeline_->GetModule(source_name_));
         if (source) source->RemoveSource(smsg.stream_id);
-        pipeline_->RemovePerfManager(smsg.stream_id);
         stream_cnt_--;
         if (stream_cnt_ == 0) {
           LOGI(DEMO) << "[Observer] all streams is removed from pipeline, pipeline will stop.";
@@ -372,21 +375,29 @@ int main(int argc, char** argv) {
   }
 
   /*
-    create perf recorder
-  */
-  if (FLAGS_perf) {
-    if (!pipeline.CreatePerfManager({}, FLAGS_perf_db_dir)) {
-      LOGE(DEMO) << "Pipeline Create Perf Manager failed.";
-      return EXIT_FAILURE;
-    }
-  }
-
-  /*
     start pipeline
   */
   if (!pipeline.Start()) {
     LOGE(DEMO) << "Pipeline start failed.";
     return EXIT_FAILURE;
+  }
+
+  /*
+    start print performance infomations
+   */
+  std::future<void> perf_print_th_ret;
+  if (pipeline.IsProfilingEnabled()) {
+    perf_print_th_ret = std::async(std::launch::async, [&pipeline] {
+      while (!gstop_perf_print) {
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        ::PrintPipelinePerformance("Whole", pipeline.GetProfiler()->GetProfile());
+        if (pipeline.IsTracingEnabled()) {
+          cnstream::Duration duration(2000);
+          ::PrintPipelinePerformance("Last two seconds",
+                                     pipeline.GetProfiler()->GetProfileBefore(cnstream::Clock::now(), duration));
+        }
+      }
+    });
   }
 
   /*
@@ -397,9 +408,6 @@ int main(int argc, char** argv) {
   for (int i = 0; i < streams; i++, url_iter++) {
     const std::string& filename = *url_iter;
     std::string stream_id = "stream_" + std::to_string(i);
-    if (FLAGS_perf) {
-      pipeline.AddPerfManager(stream_id, FLAGS_perf_db_dir);
-    }
 
     int ret = 0;
     if (nullptr != source) {
@@ -420,7 +428,6 @@ int main(int argc, char** argv) {
 
     if (ret != 0) {
       msg_observer.DecreaseStreamCnt();
-      if (FLAGS_perf) pipeline.RemovePerfManager(stream_id);
     }
   }
 
@@ -483,5 +490,10 @@ int main(int argc, char** argv) {
   }
 
   cnstream::ShutdownCNStreamLogging();
+  if (pipeline.IsProfilingEnabled()) {
+    gstop_perf_print = true;
+    perf_print_th_ret.get();
+    ::PrintPipelinePerformance("Whole", pipeline.GetProfiler()->GetProfile());
+  }
   return EXIT_SUCCESS;
 }

@@ -41,9 +41,12 @@ target_link_libraries(${name} ${Example_LINKER_LIBS})
 
 
 add_executable(multi_pipelines ${CMAKE_CURRENT_SOURCE_DIR}/multi_pipelines/multi_pipelines.cpp util.cpp ${preprocess_srcs} ${postprocess_srcs} ${obj_filter_srcs})
-
 add_dependencies(multi_pipelines cnstream_va cnstream_core)
 target_link_libraries(multi_pipelines ${Example_LINKER_LIBS})
+
+add_executable(multi_sources ${CMAKE_CURRENT_SOURCE_DIR}/multi_sources/multi_sources.cpp util.cpp ${preprocess_srcs} ${postprocess_srcs} ${obj_filter_srcs})
+add_dependencies(multi_sources cnstream_va cnstream_core)
+target_link_libraries(multi_sources ${Example_LINKER_LIBS})
 
 if(build_modules_contrib)
   #force load all the modules

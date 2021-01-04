@@ -40,7 +40,7 @@ class IPCHandlerTest : public IPCHandler {
   void Close() {}
   void Shutdown() {}
   void RecvPackageLoop() {}
-  bool Send() { return true; }
+  bool Send(const std::string& send_str) { return true; }
   void SendPackageLoop() {}
 };
 

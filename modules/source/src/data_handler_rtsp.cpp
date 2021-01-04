@@ -36,6 +36,9 @@ extern "C" {
 
 #include "data_handler_rtsp.hpp"
 
+#include "profiler/module_profiler.hpp"
+#include "profiler/pipeline_profiler.hpp"
+
 namespace cnstream {
 
 std::shared_ptr<SourceHandler> RtspHandler::Create(DataSource *module, const std::string &stream_id,
@@ -258,7 +261,6 @@ bool RtspHandlerImpl::Open() {
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
 
-  SetPerfManager(source->GetPerfManager(stream_id_));
   SetThreadName(module_->GetName(), handler_->GetStreamUniqueIdx());
 
   size_t maxSize = 60;  // FIXME
@@ -416,10 +418,13 @@ void RtspHandlerImpl::DecodeLoop() {
     pkt.len = in->pkt_.size;
     pkt.pts = in->pkt_.pts;
 
-    // uncomment to use increased number as pts
-    // pkt.pts = pts_++;
-
-    this->RecordStartTime(module_->GetName(), pkt.pts);
+    if (module_ && module_->GetProfiler()) {
+      auto record_key = std::make_pair(stream_id_, pkt.pts);
+      module_->GetProfiler()->RecordProcessStart(kPROCESS_PROFILER_NAME, record_key);
+      if (module_->GetContainer() && module_->GetContainer()->GetProfiler()) {
+        module_->GetContainer()->GetProfiler()->RecordInput(record_key);
+      }
+    }
 
     if (!decoder_->Process(&pkt)) {
       break;

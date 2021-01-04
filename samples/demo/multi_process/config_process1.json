@@ -14,7 +14,7 @@
 
   "ipc" : {
     "class_name" : "cnstream::ModuleIPC",
-    "parallelism" :1 ,
+    "parallelism" : 1,
     "show_perf_info" : true,
     "max_input_queue_size" : 20,
     "custom_params" : {

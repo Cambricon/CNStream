@@ -27,6 +27,7 @@
 #include <utility>
 #include <vector>
 #include "cnstream_frame_va.hpp"
+#include "profiler/module_profiler.hpp"
 
 namespace edk {
 class ModelLoader;
@@ -47,12 +48,16 @@ class InferTask;
 class CNFrameInfo;
 struct CNInferObject;
 class FrameInfoResource;
-class PerfManager;
 
 struct AutoSetDone {
-  explicit AutoSetDone(const std::shared_ptr<std::promise<void>>& p) : p_(p) {}
-  ~AutoSetDone() { p_->set_value(); }
+  explicit AutoSetDone(const std::shared_ptr<std::promise<void>>& p,
+                       std::shared_ptr<CNFrameInfo> data)
+      : p_(p), data_(data) {}
+  ~AutoSetDone() {
+    p_->set_value();
+  }
   std::shared_ptr<std::promise<void>> p_;
+  std::shared_ptr<CNFrameInfo> data_;
 };  // struct AutoSetDone
 
 using BatchingDoneInput = std::vector<std::pair<std::shared_ptr<CNFrameInfo>, std::shared_ptr<AutoSetDone>>>;
@@ -65,10 +70,6 @@ class BatchingDoneStage {
   virtual ~BatchingDoneStage() {}
 
   virtual std::vector<std::shared_ptr<InferTask>> BatchingDone(const BatchingDoneInput& finfos) = 0;
-  inline void SetPerfContext(std::shared_ptr<PerfManager> manager, std::string type) {
-    perf_manager_ = manager;
-    perf_type_ = type;
-  }
   void SetDumpResizedImageDir(const std::string &dir) {
      dump_resized_image_dir_ = dir;
   }
@@ -78,14 +79,14 @@ class BatchingDoneStage {
     module_name_ = module_name;
   }
 
+  ModuleProfiler* profiler_ = nullptr;
+
  protected:
   std::shared_ptr<edk::ModelLoader> model_;
   uint32_t batchsize_ = 0;
   int dev_id_ = -1;  // only for EasyInfer::Init
   std::string dump_resized_image_dir_ = "";
   bool saving_infer_input_ = false;
-  std::shared_ptr<PerfManager> perf_manager_ = nullptr;
-  std::string perf_type_;
   std::string module_name_ = "";
 };  // class BatchingDoneStage
 

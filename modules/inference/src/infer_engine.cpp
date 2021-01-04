@@ -41,7 +41,7 @@ void InferEngine::ResultWaitingCard::WaitForCall() { promise_->get_future().shar
 
 InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, std::shared_ptr<Preproc> preprocessor,
                          std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, uint32_t batching_timeout,
-                         bool use_scaler, std::shared_ptr<PerfManager> perf_manager, std::string infer_thread_id,
+                         bool use_scaler, std::string infer_thread_id,
                          const std::function<void(const std::string& err_msg)>& error_func, bool keep_aspect_ratio,
                          bool batching_by_obj, const std::shared_ptr<ObjPreproc>& obj_preprocessor,
                          const std::shared_ptr<ObjPostproc>& obj_postprocessor,
@@ -50,7 +50,8 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
                          CNDataFormat model_input_pixel_format,
                          bool mem_on_mlu_for_postproc,
                          bool saving_infer_input,
-                         std::string module_name)
+                         std::string module_name,
+                         ModuleProfiler* profiler)
      :model_(model),
       preprocessor_(preprocessor),
       postprocessor_(postprocessor),
@@ -63,13 +64,13 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
       obj_preprocessor_(obj_preprocessor),
       obj_postprocessor_(obj_postprocessor),
       obj_filter_(obj_filter),
-      infer_perf_manager_(perf_manager),
       infer_thread_id_(infer_thread_id),
       dump_resized_image_dir_(dump_resized_image_dir),
       model_input_fmt_(model_input_pixel_format),
       mem_on_mlu_for_postproc_(mem_on_mlu_for_postproc),
       saving_infer_input_(saving_infer_input),
-      module_name_(module_name) {
+      module_name_(module_name),
+      profiler_(profiler) {
   try {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id);
@@ -151,7 +152,7 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
   auto ret_promise = std::make_shared<std::promise<void>>();
   ResultWaitingCard card(ret_promise);
 
-  auto auto_set_done = std::make_shared<AutoSetDone>(ret_promise);
+  auto auto_set_done = std::make_shared<AutoSetDone>(ret_promise, finfo);
   if (batching_by_obj_) {
     if (finfo->datas.find(CNInferObjsPtrKey) == finfo->datas.end()) {
       timeout_helper_.UnlockOperator();
@@ -164,13 +165,10 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       if (obj_filter_) {
         if (!obj_filter_->Filter(finfo, obj)) continue;
       }
-      try {
-        InferTaskSptr task = obj_batching_stage_->Batching(finfo, obj);
-        tp_->SubmitTask(task);
-      } catch (edk::MluResizeConvertOpError& e) {
-        LOGE(INFERENCER) << std::string(e.what());
-        continue;
-      }
+
+      InferTaskSptr task = obj_batching_stage_->Batching(finfo, obj);
+      tp_->SubmitTask(task);
+
       batched_finfos_.push_back(std::make_pair(finfo, auto_set_done));
       batched_objs_.push_back(obj);
 
@@ -186,14 +184,9 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       timeout_helper_.Reset(NULL);
     }
   } else {
-    try {
-      InferTaskSptr task = batching_stage_->Batching(finfo);
-      tp_->SubmitTask(task);
-    } catch (edk::MluResizeConvertOpError& e) {
-      LOGE(INFERENCER) << std::string(e.what());
-      timeout_helper_.UnlockOperator();
-      return card;
-    }
+    InferTaskSptr task = batching_stage_->Batching(finfo);
+    tp_->SubmitTask(task);
+
     batched_finfos_.push_back(std::make_pair(finfo, auto_set_done));
 
     if (batched_finfos_.size() == batchsize_) {
@@ -203,6 +196,7 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       timeout_helper_.Reset([this]() -> void { BatchingDone(); });
     }
   }
+
   timeout_helper_.UnlockOperator();
   return card;
 }
@@ -255,7 +249,6 @@ void InferEngine::StageAssemble() {
       }
       std::shared_ptr<BatchingDoneStage> rc_done_stage =
           std::make_shared<ResizeConvertBatchingDoneStage>(model_, batchsize_, dev_id_, rcop_res_, mlu_input_res_);
-      rc_done_stage->SetPerfContext(infer_perf_manager_, infer_thread_id_);
       batching_done_stages_.push_back(rc_done_stage);
     }
   }
@@ -263,7 +256,6 @@ void InferEngine::StageAssemble() {
       std::make_shared<InferBatchingDoneStage>(model_, model_input_fmt_,
                                                batchsize_, dev_id_, mlu_input_res_, mlu_output_res_);
   batching_done_stages_.push_back(infer_stage);
-  infer_stage->SetPerfContext(infer_perf_manager_, infer_thread_id_);
   infer_stage->SetDumpResizedImageDir(dump_resized_image_dir_);
   infer_stage->SetSavingInputData(saving_infer_input_, module_name_);
 
@@ -294,6 +286,7 @@ void InferEngine::StageAssemble() {
       batching_done_stages_.push_back(postproc_stage);
     }
   }
+  for (auto it : batching_done_stages_) it->profiler_ = profiler_;
 }
 
 void InferEngine::BatchingDone() {

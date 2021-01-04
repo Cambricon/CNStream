@@ -23,6 +23,9 @@
 
 #define PATH_MAX_LENGTH 1024
 
+#include <profiler/profile.hpp>
+
+#include <iostream>
 #include <list>
 #include <string>
 #include <vector>
@@ -34,5 +37,6 @@ void CheckExePath(const std::string &path);
 std::list<std::string> ReadFileList(const std::string &list);
 std::list<std::string> GetFileNameFromDir(const std::string &dir, const char *filter);
 size_t GetFileSize(const std::string &filename);
+void PrintPipelinePerformance(const std::string& prefix_str, const cnstream::PipelineProfile& profile);
 
 #endif  // SAMPLES_COMMON_UTIL_HPP_

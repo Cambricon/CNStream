@@ -108,7 +108,7 @@ CNVideoEncoder::CNVideoEncoder(const RtspParam &rtsp_param) : VideoEncoder(OUTPU
 
   edk::MluContext context;
   context.SetDeviceId(rtsp_param.device_id);
-  context.ConfigureForThisThread();
+  context.BindDevice();
 
   edk::EasyEncode::Attr attr;
   attr.b_frame_num = 0;
@@ -167,7 +167,7 @@ CNVideoEncoder::CNVideoEncoder(const RtspParam &rtsp_param) : VideoEncoder(OUTPU
   }
   */
   try {
-    encoder_ = edk::EasyEncode::Create(attr);
+    encoder_ = edk::EasyEncode::New(attr);
   } catch (edk::Exception &err) {
     LOGE(RTSP) << "CnEncodeError: " << err.what();
     Destroy();
@@ -187,18 +187,7 @@ CNVideoEncoder::~CNVideoEncoder() {
   Destroy();
 }
 
-void CNVideoEncoder::Destroy() {
-  if (encoder_) {
-    delete encoder_;
-    encoder_ = nullptr;
-  }
-  /*
-  if ("mlu" == pre_type_) {
-    resize_->Destroy();
-    delete resize_;
-  }
-  */
-}
+void CNVideoEncoder::Destroy() {}
 
 VideoEncoder::VideoFrame *CNVideoEncoder::NewFrame() { return new CNVideoFrame(this); }
 
@@ -262,7 +251,7 @@ void CNVideoEncoder::PacketCallback(const edk::CnPacket &packet) {
   if (packet.length == 0 || packet.data == 0) return;
   edk::MluContext context;
   context.SetDeviceId(rtsp_param_.device_id);
-  context.ConfigureForThisThread();
+  context.BindDevice();
   // std::cout << "===got packet: size=" << packet.length << ", pts=" << packet.pts << std::endl;
   if (0 == (uint32_t)packet.slice_type) return;
 
@@ -278,7 +267,7 @@ void CNVideoEncoder::PacketCallback(const edk::CnPacket &packet) {
 void CNVideoEncoder::EosCallback() {
   edk::MluContext context;
   context.SetDeviceId(rtsp_param_.device_id);
-  context.ConfigureForThisThread();
+  context.BindDevice();
   LOGI(RTSP) << "CNVideoEncoder got EOS";
 }
 

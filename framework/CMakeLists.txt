@@ -13,8 +13,6 @@ set(CNSTREAM_TARGET_VERSION "${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}"
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/googletest/include/)
 include_directories(${3RDPARTY_INCLUDE_DIRS})
 
-include_directories(${PROJECT_SOURCE_DIR}/3rdparty/sqlite3/)
-
 set(module_list core)
 
 #FIXME
@@ -25,7 +23,8 @@ foreach(module ${module_list})
   file(GLOB_RECURSE module_src ${PROJECT_SOURCE_DIR}/framework/${module}/*.cpp)
   list(APPEND srcs ${module_src})
 endforeach()
-
+file(GLOB_RECURSE profiler_src ${PROJECT_SOURCE_DIR}/framework/core/profiler/*.cpp)
+list(APPEND srcs ${profiler_src})
 add_library(cnstream_core SHARED ${srcs})
 set_target_properties(cnstream_core PROPERTIES LINK_FLAGS_RELEASE -s)
 
@@ -34,7 +33,7 @@ if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED
 endif()
 
 install(TARGETS cnstream_core LIBRARY DESTINATION lib)
-target_link_libraries(cnstream_core ${SOURCE_LINKER_LIBS} cnrt sqlite3)
+target_link_libraries(cnstream_core ${SOURCE_LINKER_LIBS} cnrt)
 set_target_properties(cnstream_core PROPERTIES VERSION ${CNSTREAM_TARGET_VERSION})
 install(DIRECTORY core/include/ DESTINATION include)
 

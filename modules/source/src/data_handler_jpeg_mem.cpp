@@ -27,8 +27,9 @@
 #include <thread>
 #include <utility>
 
-#include "perf_manager.hpp"
 #include "data_handler_jpeg_mem.hpp"
+#include "profiler/module_profiler.hpp"
+#include "profiler/pipeline_profiler.hpp"
 
 namespace cnstream {
 
@@ -94,7 +95,6 @@ bool ESJpegMemHandlerImpl::Open() {
     return false;
   }
 
-  SetPerfManager(source->GetPerfManager(stream_id_));
   SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
   return InitDecoder();
 }
@@ -124,7 +124,15 @@ bool ESJpegMemHandlerImpl::ProcessImage(ESPacket *in_pkt) {
   pkt.data = in_pkt->data;
   pkt.len = in_pkt->size;
   pkt.pts = in_pkt->pts;
-  RecordStartTime(module_->GetName(), in_pkt->pts);
+
+  if (module_ && module_->GetProfiler()) {
+    auto record_key = std::make_pair(stream_id_, pkt.pts);
+    module_->GetProfiler()->RecordProcessStart(kPROCESS_PROFILER_NAME, record_key);
+    if (module_->GetContainer() && module_->GetContainer()->GetProfiler()) {
+      module_->GetContainer()->GetProfiler()->RecordInput(record_key);
+    }
+  }
+
   if (!decoder_->Process(&pkt)) {
     return false;
   }

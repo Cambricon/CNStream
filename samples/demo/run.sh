@@ -32,8 +32,5 @@ $CURRENT_DIR/../bin/demo  \
     --wait_time 0 \
     --loop=false \
     --raw_img_input=false \
+    --perf_level 0 \
     --config_fname "$CURRENT_DIR/detection_config.json"
-    # uncomment to stop measuring performance
-    #--perf=false \
-    # uncomment to change directory of database file
-    #--perf_db_dir="" \

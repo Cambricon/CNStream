@@ -43,16 +43,16 @@ static volatile bool g_run = false;
 std::pair<double, double> ThreadFunc() {
   edk::MluContext ctx;
   ctx.SetDeviceId(FLAGS_dev_id);
-  ctx.ConfigureForThisThread();
+  ctx.BindDevice();
 
   auto msptr = std::make_shared<edk::ModelLoader>(FLAGS_offline_model, FLAGS_function_name);
   edk::EasyInfer infer;
-  infer.Init(msptr, 1, FLAGS_dev_id);
+  infer.Init(msptr, FLAGS_dev_id);
 
   edk::MluMemoryOp mem_op;
-  mem_op.SetLoader(msptr);
-  void** input = mem_op.AllocMluInput(1);
-  void** output = mem_op.AllocMluOutput(1);
+  mem_op.SetModel(msptr);
+  void** input = mem_op.AllocMluInput();
+  void** output = mem_op.AllocMluOutput();
 
   while (!g_run) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -70,8 +70,8 @@ std::pair<double, double> ThreadFunc() {
     hw_total_time += hw_time;
   }
 
-  mem_op.FreeArrayMlu(input, msptr->InputNum());
-  mem_op.FreeArrayMlu(output, msptr->OutputNum());
+  mem_op.FreeMluInput(input);
+  mem_op.FreeMluOutput(output);
 
   if (FLAGS_iterations) {
     return std::make_pair(sw_total_time / FLAGS_iterations, hw_total_time / FLAGS_iterations);
@@ -105,15 +105,15 @@ int main(int argc, char *argv[]) {
 
     std::cout << "----------------------input num: " << model.InputNum() << '\n';
     for (uint32_t i = 0; i < model.InputNum(); ++i) {
-      std::cout << "model input shape " << i << ": " << model.InputShapes()[i] << std::endl;
+      std::cout << "model input shape " << i << ": " << model.InputShape(i) << std::endl;
     }
 
     std::cout << "---------------------output num: " << model.OutputNum() << '\n';
     for (uint32_t i = 0; i < model.OutputNum(); ++i) {
-      std::cout << "model output shape " << i << ": " << model.OutputShapes()[i] << std::endl;
+      std::cout << "model output shape " << i << ": " << model.OutputShape(i) << std::endl;
     }
 
-    batchsize = model.InputShapes()[0].n;
+    batchsize = model.InputShape(0).N();
   }
 
   std::vector<std::future<std::pair<double, double>>> th_perf_infos;

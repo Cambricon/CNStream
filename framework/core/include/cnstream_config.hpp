@@ -40,6 +40,28 @@
 
 namespace cnstream {
 
+static constexpr char kPROFILER_CONFIG_NAME[] = "profiler_config";
+
+struct ProfilerConfig {
+  bool enable_profiling = false;
+  bool enable_tracing = false;
+  size_t trace_event_capacity = 100000;
+
+  /**
+   * Parses members from JSON string.
+   *
+   * @return Returns true if the JSON file has been parsed successfully. Otherwise, returns false.
+   */
+  bool ParseByJSONStr(const std::string &jstr);
+
+  /**
+   * Parses members from JSON file.
+   *
+   * @return Returns true if the JSON file has been parsed successfully. Otherwise, returns false.
+   */
+  bool ParseByJSONFile(const std::string &jfname);
+};  // struct ProfilerConfig
+
 /// Module parameter set.
 using ModuleParamSet = std::unordered_map<std::string, std::string>;
 
@@ -96,7 +118,9 @@ struct CNModuleConfig {
  *
  * @return Returns true if the JSON file has been parsed successfully. Otherwise, returns false.
  */
-bool ConfigsFromJsonFile(const std::string &config_file, std::vector<CNModuleConfig> &configs);  // NOLINT
+bool ConfigsFromJsonFile(const std::string &config_file,
+                         std::vector<CNModuleConfig> *pmodule_configs,
+                         ProfilerConfig *pprofiler_config);
 
 /**
  * @brief ParamRegister

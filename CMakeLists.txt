@@ -233,8 +233,6 @@ if(build_display)
   endif()
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_SQLITE")
-
 ##Chinses label
 if(WITH_FREETYPE)
   find_package(Freetype REQUIRED)

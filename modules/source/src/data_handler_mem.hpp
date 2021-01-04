@@ -115,8 +115,6 @@ class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public Sour
   uint64_t pts_ = 0;
 
   // for parsing es-block
-  std::unique_ptr<unsigned char[]> frame_bits_buf_ = nullptr;
-  size_t frame_bits_size_ = 0;
   bool eos_reached_ = false;
 
 #ifdef UNIT_TEST

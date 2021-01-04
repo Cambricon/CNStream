@@ -166,6 +166,11 @@ CNFrameInfo::~CNFrameInfo() {
   }
 }
 
+void CNFrameInfo::SetModulesMask(uint64_t mask) {
+  SpinLockGuard guard(mask_lock_);
+  modules_mask_ = mask;
+}
+
 uint64_t CNFrameInfo::MarkPassed(Module* module) {
   SpinLockGuard guard(mask_lock_);
   modules_mask_ |= (uint64_t)1 << module->GetId();

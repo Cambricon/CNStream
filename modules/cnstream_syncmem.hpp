@@ -174,18 +174,6 @@ class CNSyncedMemory : private NonCopyable {
    */
   size_t GetSize() const { return size_; }
 
-#ifdef CNS_MLU220_SOC
-  /**
-   * Sets the MLU data and the CPU data.
-   *
-   * @param mlu_data The data pointer on MLU.
-   * @param cpu_data The data pointer on CPU.
-   *
-   * @return Void.
-   */
-  void SetMluCpuData(void* mlu_data, void* cpu_data);
-#endif
-
  private:
   /**
    * Synchronizes the memory data to CPU.

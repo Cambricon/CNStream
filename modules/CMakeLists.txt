@@ -53,8 +53,6 @@ if(HAVE_OPENCV)
 include_directories(${OpenCV_INCLUDE_DIRS})
 endif()
 
-include_directories(${PROJECT_SOURCE_DIR}/3rdparty/sqlite3/)
-
 set(SOURCE_LINKER_LIBS rt dl cnstream_core ${CN_LIBS} ${3RDPARTY_LIBS} ${OPENCV_LIBS} ${FFMPEG_LIBRARIES} pthread)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 #FIXME
@@ -81,7 +79,7 @@ if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED
 endif()
 
 install(TARGETS cnstream_va LIBRARY DESTINATION lib)
-target_link_libraries(cnstream_va ${SOURCE_LINKER_LIBS} ${Live555_LIBS} ${LIBYUV_LIBS} sqlite3)
+target_link_libraries(cnstream_va ${SOURCE_LINKER_LIBS} ${Live555_LIBS} ${LIBYUV_LIBS})
 set_target_properties(cnstream_va PROPERTIES VERSION ${CNSTREAM_TARGET_VERSION})
 
 if(NOT Live555_LIBS STREQUAL "")

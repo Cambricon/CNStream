@@ -120,7 +120,7 @@ class IPCHandler {
    *  @brief  Send FrameInfoPackage.
    *  @return Return true if send FrameInfoPackage successfully, otherwise, return false.
    */
-  virtual bool Send() = 0;
+  virtual bool Send(const std::string& send_str = "") = 0;
 
   /**
    *  @brief  Process FrameInfoPackage with separate thread.
@@ -132,7 +132,8 @@ class IPCHandler {
    *  @brief  Prepare FrameInfoPackage to send_buf or send_package queue.
    *  @return Void.
    */
-  void PreparePackageToSend(const PkgType& type, const std::shared_ptr<CNFrameInfo> data);
+  void PreparePackageToSend(const PkgType& type, const std::shared_ptr<CNFrameInfo> data,
+                            std::string* send_str = nullptr);
 
   /**
    *  @brief  Trans data from FrameInfoPackage to CNFrameInfo data.

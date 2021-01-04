@@ -45,13 +45,12 @@
 #include "cnstream_eventbus.hpp"
 #include "cnstream_module.hpp"
 #include "cnstream_source.hpp"
-#include "perf_calculator.hpp"
 #include "util/cnstream_rwlock.hpp"
+#include "profiler/pipeline_profiler.hpp"
 
 namespace cnstream {
 
 class Connector;
-class PerfCalculator;
 
 /**
  * Data stream message type.
@@ -212,11 +211,14 @@ class Pipeline : private NonCopyable {
   /**
    * Builds a pipeline by module configurations.
    *
-   * @param configs The configurations of a module.
+   * @param module_configs The configurations of a module.
+   * 
+   * @param profiler_config The configuration of profiler.
    *
    * @return Returns 0 if this function has run successfully. Otherwise, returns -1.
    */
-  int BuildPipeline(const std::vector<CNModuleConfig>& configs);
+  int BuildPipeline(const std::vector<CNModuleConfig>& module_configs,
+                    const ProfilerConfig& profiler_config = ProfilerConfig());
   /**
    * Builds a pipeline from a JSON file.
    * @code
@@ -341,7 +343,20 @@ class Pipeline : private NonCopyable {
    */
   bool QueryLinkStatus(LinkStatus* status, const std::string& link_id);
 
- public:
+  /**
+   * Is profiling enabled.
+   * 
+   * @return Returns true if profiling is enabled.
+   **/
+  bool IsProfilingEnabled() const;
+
+  /**
+   * Is tracing enabled
+   * 
+   * @return Returns true if tracing is enabled.
+   **/
+  bool IsTracingEnabled() const;
+
   /* -----stream message methods------ */
  public:
   /**
@@ -364,84 +379,12 @@ class Pipeline : private NonCopyable {
    */
   StreamMsgObserver* GetStreamMsgObserver() const;
 
-  /**
-   * @brief Creates PerfManager to measure performance of modules and pipeline for each stream.
-   *
-   * This function creates database for each stream.
-   * One thread is for committing sqlite events to increase the speed of inserting data to the database.
-   * Another is for calculating performance of modules and pipeline, and printing performance statistics afterward.
-   *
-   * @param stream_ids The stream IDs.
-   * @param db_dir The directory where database files to be saved.
-   * @param clear_data_interval The interval of clearing data in database. The default value is 10 minutes.
-   *
-   * @return Returns true if this function has run successfully. Otherwise, returns false.
-   */
-  bool CreatePerfManager(std::vector<std::string> stream_ids, std::string db_dir,
-                         uint32_t clear_data_interval = 10/*in minutes*/);
-  /**
-   * @brief Removes PerfManager of the stream.
-   *
-   * @note Calls this function after calling ``RemoveSource`` and receiving eos of this stream.
-   *
-   * @param stream_id The stream ID.
-   *
-   * @return Returns true if PerfManager of the stream has been removed successfully. Otherwise, returns false.
-   */
-  bool RemovePerfManager(std::string stream_id);
-  /**
-   * @brief Adds PerfManager of the stream.
-   *
-   * @note Calls this function after calling ``CreatePerfManager``.
-   * @note Calls this function before calling ``AddSource``, which will add the stream to source.
-   *
-   * @param stream_id The stream ID.
-   * @param db_dir The directory where database files to be saved.
-   *
-   * @return Returns true if PerfManager of the stream has been added successfully. Otherwise, returns false.
-   */
-  bool AddPerfManager(std::string stream_id, std::string db_dir);
-  /**
-   * @brief Commits sqlite events to increase the speed of inserting data to the database.
-   *
-   * This is a thread function. The events are committed every second.
-   *
-   * @return Void.
-   */
-  void PerfSqlCommitLoop();
+  /** profiler **/
+  PipelineProfiler* GetProfiler() const;
 
-  /**
-   * @brief Calculates performance of modules and pipeline, and prints performance statistics every two seconds.
-   *
-   * This is a thread function.
-   *
-   * @return Void.
-   */
-  void CalculatePerfStats();
+  /** tracer **/
+  PipelineTracer* GetTracer() const;
 
-  /**
-   * @brief Calculates the performance of modules and prints the performance statistics.
-   *
-   * This is called by thread function CalculatePerfStats.
-   *
-   * @return Void.
-   */
-  void CalculateModulePerfStats(bool final_print = false);
-  /**
-   * @brief Calculates the performance of pipeline and prints the performance statistics.
-   *
-   * This is called by thread function CalculatePerfStats.
-   *
-   * @return Void.
-   */
-  void CalculatePipelinePerfStats(bool final_print = false);
-
-  /**
-   * @brief Get perf managers from pipeline.
-   *
-   * @return std::unordered_map<std::string, std::shared_ptr<PerfManager>>
-   */
-  std::unordered_map<std::string, std::shared_ptr<PerfManager>> GetPerfManagers();
   /* called by pipeline */
   /**
    * Registers a callback to be called after the frame process is done.
@@ -453,12 +396,28 @@ class Pipeline : private NonCopyable {
     frame_done_callback_ = std::move(callback);
   }
 
+  /**
+   * Return if module is root node of pipeline.
+   * 
+   * @param node_name module name.
+   *
+   * @return True for yes, false for no.
+   **/
+  bool IsRootNode(const std::string& node_name) const;
+
+  /**
+   * Return if module is leaf node of pipeline.
+   * 
+   * @param node_name module name.
+   *
+   * @return True for yes, false for no.
+   **/
+  bool IsLeafNode(const std::string& node_name) const;
+
  private:
+  /** called by BuildPipeline **/
+  void GenerateRouteMask();
   std::vector<std::string> GetModuleNames();
-  void SetStartAndEndNodeNames();
-  bool CreatePerfCalculator(std::string db_dir, std::string node_name, bool is_pipeline);
-  PerfStats CalcLatestThroughput(std::string sql_name, std::string perf_type, std::vector<std::string> keys,
-                                 std::shared_ptr<PerfCalculator> calculator, bool final_print);
 
  private:
   /* ------Internal methods------ */
@@ -466,6 +425,8 @@ class Pipeline : private NonCopyable {
   void StreamMsgHandleFunc();
   bool ShouldTransmit(std::shared_ptr<CNFrameInfo> finfo, Module* module) const;
   bool ShouldTransmit(uint64_t passed_modules_mask, Module* module) const;
+  bool PassedByAllModules(std::shared_ptr<CNFrameInfo> finfo) const;
+  bool PassedByAllModules(uint64_t passed_modules_mask) const;
 
  private:
 #ifdef UNIT_TEST
@@ -513,7 +474,6 @@ class Pipeline : private NonCopyable {
     }
   }
 
-  void PerfDeleteDataLoop();
   /**
    * The module associated information.
    */
@@ -542,30 +502,55 @@ class Pipeline : private NonCopyable {
   std::unordered_map<std::string, ModuleAssociatedInfo> modules_;
   std::unordered_map<std::string, CNModuleConfig> modules_config_;
   std::unordered_map<std::string, std::vector<std::string>> connections_config_;
+  /** first: root node name, second: mask used in Transmit **/
+  std::unordered_map<std::string, uint64_t> route_masks_;
+  uint64_t all_modules_mask_ = 0;
 
   std::vector<std::string> stream_ids_;
-  std::string start_node_;
-  std::vector<std::string> end_nodes_;
-  std::unordered_map<std::string, std::shared_ptr<PerfManager>> perf_managers_;
-  std::unordered_map<std::string, std::shared_ptr<PerfCalculator>> perf_calculators_;
-  std::thread perf_commit_thread_;
-  std::thread perf_del_data_thread_;
-  std::thread calculate_perf_thread_;
-  std::atomic<bool> perf_running_{false};
-  uint32_t clear_data_interval_ = 10;
-  RwLock perf_managers_lock_;
-  std::mutex perf_calculation_lock_;
-  uint64_t all_modules_mask_ = 0;
+
+  ProfilerConfig profiler_config_;
+  std::unique_ptr<PipelineProfiler> profiler_;
 };  // class Pipeline
 
+inline bool Pipeline::IsProfilingEnabled() const {
+  return profiler_config_.enable_profiling;
+}
+
+inline bool Pipeline::IsTracingEnabled() const {
+  return profiler_config_.enable_tracing;
+}
+
+inline PipelineProfiler* Pipeline::GetProfiler() const {
+  return profiler_.get();
+}
+
+inline PipelineTracer* Pipeline::GetTracer() const {
+  return IsTracingEnabled() ? GetProfiler()->GetTracer() : nullptr;
+}
+
 inline bool Pipeline::ShouldTransmit(std::shared_ptr<CNFrameInfo> finfo, Module* module) const {
-  uint64_t passed_modules_mask = finfo->GetModulesMask();   // identifies which modules have passed this frame
-  return ShouldTransmit(passed_modules_mask, module);
+  return ShouldTransmit(finfo->GetModulesMask(), module);
 }
 
 inline bool Pipeline::ShouldTransmit(uint64_t passed_modules_mask, Module* module) const {
-  uint64_t modules_mask = module->GetModulesMask();  // identifies upstream nodes
+  uint64_t modules_mask = module->GetModulesMask();
   return (passed_modules_mask & modules_mask) == modules_mask;
+}
+
+inline bool Pipeline::PassedByAllModules(std::shared_ptr<CNFrameInfo> finfo) const {
+  return PassedByAllModules(finfo->GetModulesMask());
+}
+
+inline bool Pipeline::PassedByAllModules(uint64_t passed_modules_mask) const {
+  return passed_modules_mask == all_modules_mask_;
+}
+
+inline bool Pipeline::IsRootNode(const std::string& node_name) const {
+  return !modules_.find(node_name)->second.input_connectors.size();
+}
+
+inline bool Pipeline::IsLeafNode(const std::string& node_name) const {
+  return !modules_.find(node_name)->second.down_nodes.size();
 }
 
 }  // namespace cnstream

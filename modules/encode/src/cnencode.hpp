@@ -38,6 +38,7 @@ extern "C" {
 #error OpenCV required
 #endif
 
+#include <fstream>
 #include <memory>
 #include <string>
 
@@ -45,7 +46,6 @@ extern "C" {
 #include "encode.hpp"
 #include "easycodec/easy_encode.h"
 #include "easycodec/vformat.h"
-#include "perf_manager.hpp"
 
 namespace cnstream {
 
@@ -77,11 +77,9 @@ class CNEncode {
   void EosCallback();
   void PacketCallback(const edk::CnPacket &packet);
 
-  void SetPerfManager(std::shared_ptr<cnstream::PerfManager> manager) { perf_manager_ = manager; }
   void SetModuleName(std::string name) { module_name_ = name; }
 
  private:
-  void RecordEndTime(int64_t pts);
   bool CreateDir(std::string dir);
   // bool copy_frame_buffer_ = false;
 
@@ -94,15 +92,14 @@ class CNEncode {
 
   std::string output_file_name_ = "";
   size_t written_ = 0;
-  FILE *p_file_ = nullptr;
+  std::ofstream file_;
 
   edk::PixelFmt picture_format_;
-  edk::EasyEncode *mlu_encoder_ = nullptr;
+  std::unique_ptr<edk::EasyEncode> mlu_encoder_ = nullptr;
 
   cv::VideoWriter writer_;
   cv::Size size_;
 
-  std::shared_ptr<cnstream::PerfManager> perf_manager_ = nullptr;
   std::string module_name_ = "";
 };  // class CNEncode
 
