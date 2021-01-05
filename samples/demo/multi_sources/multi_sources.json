@@ -1,0 +1,104 @@
+{
+  "profiler_config" : {
+    "enable_profiling" : true,
+    "enable_tracing"   : true
+  },
+
+  "source0" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "next_modules" : ["detector0"],
+    "show_perf_info" : true,
+    "custom_params" : {
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "output_buf_number" : 8,
+      "device_id" : 0
+    }
+  },
+
+  "detector0" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["osd0"],
+    "show_perf_info" : true,
+    "custom_params" : {
+      "model_path" : "../../../data/models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocSsd",
+      "threshold" : 0.5,
+      "batching_timeout" : 100,
+      "device_id" : 0
+    }
+  },
+
+  "source1" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "next_modules" : ["detector1"],
+    "show_perf_info" : true,
+    "custom_params" : {
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "output_buf_number" : 8,
+      "device_id" : 1
+    }
+  },
+
+  "detector1" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["osd1"],
+    "show_perf_info" : true,
+    "custom_params" : {
+      "model_path" : "../../../data/models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocSsd",
+      "threshold" : 0.5,
+      "batching_timeout" : 100,
+      "device_id" : 1
+    }
+  },
+
+  "osd0" : {
+    "class_name" : "cnstream::Osd",
+    "parallelism" : 4,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["displayer"],
+    "show_perf_info" : true,
+    "custom_params" : {
+      // "chinese_font_path" : "/user/include/wqy_zenhei.ttf",
+      "label_path" : "../../../data/models/MLU270/Primary_Detector/ssd/label_voc.txt"
+    }
+  },
+
+  "osd1" : {
+    "class_name" : "cnstream::Osd",
+    "parallelism" : 4,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["displayer"],
+    "show_perf_info" : true,
+    "custom_params" : {
+      // "chinese_font_path" : "/user/include/wqy_zenhei.ttf",
+      "label_path" : "../../../data/models/MLU270/Primary_Detector/ssd/label_voc.txt"
+    }
+  },
+
+  "displayer" : {
+    "class_name" : "cnstream::Displayer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "show_perf_info" : true,
+    "custom_params" : {
+      "window-width" : 1920,
+      "window-height" : 1080,
+      "refresh-rate" : 25,
+      "max-channels" : 32,
+      "show" : "false",  // Please confirm build_display is ON before setting true
+      "full-screen" : "false"
+    }
+  }
+}
+

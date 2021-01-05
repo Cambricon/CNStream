@@ -47,7 +47,7 @@ int PostprocClassification::Execute(const std::vector<float*>& net_outputs,
   }
 
   auto data = net_outputs[0];
-  auto len = model->OutputShapes()[0].hwc();
+  auto len = model->OutputShape(0).DataCount();
   auto pscore = data;
 
   float mscore = 0;
@@ -93,7 +93,7 @@ int ObjPostprocClassification::Execute(const std::vector<float*>& net_outputs,
   }
 
   auto data = net_outputs[0];
-  auto len = model->OutputShapes()[0].hwc();
+  auto len = model->OutputShape(0).DataCount();
   auto pscore = data;
 
   float mscore = 0;

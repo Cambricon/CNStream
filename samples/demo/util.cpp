@@ -25,16 +25,21 @@
 #include <dirent.h>
 #include <unistd.h>
 #endif
+#include <gflags/gflags.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <string.h>
 #include <cerrno>
 #include <fstream>
+#include <limits>
 #include <list>
 #include <string>
 #include <vector>
 
 #include "cnstream_logging.hpp"
+#include "profiler/module_profiler.hpp"
+
+DEFINE_int32(perf_level, 0, "perf level");
 
 std::string GetExePath() {
   char path[PATH_MAX_LENGTH];
@@ -162,3 +167,98 @@ size_t GetFileSize(const std::string &filename) {
   return file_stat.st_size;
 #endif
 }
+
+static
+std::string FindTheSlowestOne(const cnstream::PipelineProfile& profile) {
+  std::string slowest_module_name = "";
+  double minimum_fps = std::numeric_limits<double>::max();
+  for (const auto& module_profile : profile.module_profiles) {
+    for (const auto& process_profile : module_profile.process_profiles) {
+      if (process_profile.process_name == cnstream::kPROCESS_PROFILER_NAME) {
+        if (minimum_fps > process_profile.fps) {
+          minimum_fps = process_profile.fps;
+          slowest_module_name = module_profile.module_name;
+        }
+      }
+    }
+  }
+  return slowest_module_name;
+}
+
+static
+std::string FillStr(std::string str, uint32_t length, char charactor) {
+  int filled_length = (length - str.length()) / 2;
+  filled_length = filled_length > 0 ? filled_length : 0;
+  int remainder = 0;
+  if (filled_length && (length - str.length()) % 2) remainder = 1;
+  return std::string(filled_length + remainder, charactor) + str + std::string(filled_length, charactor);
+}
+
+static
+void PrintProcessPerformance(std::ostream& os, const cnstream::ProcessProfile& profile) {
+  if (FLAGS_perf_level <= 1) {
+    if (FLAGS_perf_level == 1) {
+      os << "[Latency]: (Avg): " << profile.latency << "ms";
+      os << ", (Min): " << profile.minimum_latency << "ms";
+      os << ", (Max): " << profile.maximum_latency << "ms" << std::endl;
+    }
+    os << "[Counter]: " << profile.counter;
+    os << ", [Throughput]: " << profile.fps << "fps" << std::endl;
+  } else if (FLAGS_perf_level >=2) {
+    os << "[Counter]: " << profile.counter;
+    os << ", [Completed]: " << profile.completed;
+    os << ", [Dropped]: " << profile.dropped;
+    os << ", [Ongoing]: " << profile.ongoing << std::endl;
+    os << "[Latency]: (Avg): " << profile.latency << "ms";
+    os << ", (Min): " << profile.minimum_latency << "ms";
+    os << ", (Max): " << profile.maximum_latency << "ms" << std::endl;
+    os << "[Throughput]: " << profile.fps << "fps" << std::endl;
+  }
+
+  if (FLAGS_perf_level == 3) {
+    uint32_t stream_name_max_length = 15;
+    if (profile.stream_profiles.size()) {
+      os << "\n------ Stream ------\n";
+    }
+    for (const auto& stream_profile : profile.stream_profiles) {
+      std::string stream_name = "[" + stream_profile.stream_name + "]";
+      os << stream_name << std::string(stream_name_max_length - stream_name.length(), ' ');
+      os << "[Counter]: " << stream_profile.counter;
+      os << ", [Completed]: " << stream_profile.completed;
+      os << ", [Dropped]: " << stream_profile.dropped << std::endl;
+      os << std::string(stream_name_max_length, ' ');
+      os << "[Latency]: (Avg): " << stream_profile.latency << "ms";
+      os << ", (Min): " << stream_profile.minimum_latency << "ms";
+      os << ", (Max): " << stream_profile.maximum_latency << "ms" << std::endl;
+      os << std::string(stream_name_max_length, ' ');
+      os << "[Throughput]: " << stream_profile.fps << "fps" << std::endl;
+    }
+  }
+}
+
+void PrintPipelinePerformance(const std::string& prefix_str, const cnstream::PipelineProfile& profile) {
+  auto slowest_module_name = FindTheSlowestOne(profile);
+  std::stringstream ss;
+  int length = 80;
+  ss << "\033[1m\033[36m" << FillStr("  Performance Print Start  (" + prefix_str + ")  ", length, '*') << "\033[0m\n";
+  ss << "\033[1m" << FillStr("  Pipeline: [" + profile.pipeline_name + "]  ", length, '=') << "\033[0m\n";
+
+  for (const auto& module_profile : profile.module_profiles) {
+    ss << "\033[1m\033[32m" << FillStr(" Module: [" + module_profile.module_name + "] ", length, '-');
+    if (slowest_module_name == module_profile.module_name) {
+      ss << "\033[0m\033[41m" << " (slowest) ";
+    }
+    ss << "\033[0m\n";
+
+    for (const auto& process_profile : module_profile.process_profiles) {
+      ss << "\033[1m\033[33m" << std::string(length / 8, '-');
+      ss << "Process Name: [" << process_profile.process_name << "\033[0m" << "]\n";
+      PrintProcessPerformance(ss, process_profile);
+    }
+  }
+  ss << "\n\033[1m\033[32m" << FillStr("  Overall  ", length, '-') << "\033[0m\n";
+  PrintProcessPerformance(ss, profile.overall_profile);
+  ss << "\033[1m\033[36m" << FillStr("  Performance Print End  (" + prefix_str + ")  ", length, '*') << "\033[0m\n";
+  std::cout << ss.str() << std::endl;
+}
+

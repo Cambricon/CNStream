@@ -140,7 +140,7 @@ TEST(EncodeModule, ProcessFailedCase) {
   data->datas[CNDataFramePtrKey] = frame;
   EXPECT_EQ(-1, module_ptr->Process(data));
 
-  //invalid width or height of data
+  // invalid width or height of data
   frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
   frame->width = 0;
   frame->height = 0;
@@ -182,7 +182,6 @@ TEST(EncodeModule, ProcessFailedCase) {
   frame_tmp->width = 0;
   frame_tmp->height = 0;
   data_tmp->datas[CNDataFramePtrKey] = frame_tmp;
-
 
   module_ptr->Open(params);
   EXPECT_EQ(1, module_ptr->Process(data));
@@ -280,7 +279,8 @@ TEST(EncodeModule, CheckParamSetFailedCase) {
   params.clear();
 }
 
-void TestFunc(const ModuleParamSet& params, std::vector<std::pair<uint32_t, uint32_t>> src_wh_vec, bool src_bgr) {
+void TestFunc(const ModuleParamSet &params, std::vector<std::pair<uint32_t, uint32_t>> src_wh_vec, bool src_bgr,
+              int stream_id = 0) {
   int frame_id = 0;
   std::shared_ptr<Module> ptr = std::make_shared<Encode>(gname);
   EXPECT_TRUE(ptr->Open(params)) << " encoder type: " << params.at("encoder_type")
@@ -291,10 +291,10 @@ void TestFunc(const ModuleParamSet& params, std::vector<std::pair<uint32_t, uint
   for (auto &src_wh : src_wh_vec) {
     size_t nbytes = ALIGN(src_wh.first, DEC_ALIGNMENT) * src_wh.second * 3 / 2;
     edk::MluMemoryOp mem_op;
-    void *src = mem_op.AllocMlu(nbytes, 1);
-    auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
+    void *src = mem_op.AllocMlu(nbytes);
+    auto data = cnstream::CNFrameInfo::Create(std::to_string(stream_id));
     std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
-    data->SetStreamIndex(0);
+    data->SetStreamIndex(stream_id);
     frame->frame_id = frame_id++;
     data->timestamp = frame->frame_id;
     frame->width = src_wh.first;
@@ -302,8 +302,8 @@ void TestFunc(const ModuleParamSet& params, std::vector<std::pair<uint32_t, uint
     frame->stride[0] = ALIGN(src_wh.first, DEC_ALIGNMENT);
     frame->stride[1] = ALIGN(src_wh.first, DEC_ALIGNMENT);
     frame->ptr_mlu[0] = src;
-    frame->ptr_mlu[1] = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(src) +
-        ALIGN(src_wh.first, DEC_ALIGNMENT) * src_wh.second);
+    frame->ptr_mlu[1] =
+        reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(src) + ALIGN(src_wh.first, DEC_ALIGNMENT) * src_wh.second);
     frame->ctx.dev_type = DevContext::DevType::MLU;
     frame->ctx.ddr_channel = g_channel_id;
     frame->ctx.dev_id = g_device_id;
@@ -317,8 +317,7 @@ void TestFunc(const ModuleParamSet& params, std::vector<std::pair<uint32_t, uint
 
     EXPECT_EQ(ptr->Process(data), 1) << " encoder type: " << params.at("encoder_type")
                                      << ", preproc type: " << params.at("preproc_type")
-                                     << ", codec type: " << params.at("codec_type")
-                                     << ", image bgr: " << src_bgr
+                                     << ", codec type: " << params.at("codec_type") << ", image bgr: " << src_bgr
                                      << ", src wh: " << src_wh.first << " " << src_wh.second
                                      << ", dst wh: " << params.at("dst_width") << " " << params.at("dst_height");
 
@@ -369,6 +368,7 @@ TEST(EncodeModule, ProcessMluEncode) {
   dst_wh_vec.push_back({"360", "240"});
   std::vector<std::string> codec_type_vec = {"h264", "hevc", "jpeg"};
   std::vector<std::string> use_ffmpeg_vec = {"true", "false"};
+
   ModuleParamSet params;
   params["output_dir"] = "./encode_output";
   params["frame_rate"] = "25";
@@ -378,6 +378,7 @@ TEST(EncodeModule, ProcessMluEncode) {
   params["preproc_type"] = "cpu";
   params["device_id"] = std::to_string(g_device_id);
 
+  int stream_id = 0;
   for (auto &use_ffmpeg : use_ffmpeg_vec) {
     params["use_ffmpeg"] = use_ffmpeg;
     for (auto &codec_type : codec_type_vec) {
@@ -385,8 +386,9 @@ TEST(EncodeModule, ProcessMluEncode) {
       for (auto &dst_wh : dst_wh_vec) {
         params["dst_width"] = dst_wh.first;
         params["dst_height"] = dst_wh.second;
-        TestFunc(params, src_wh, false);
-        TestFunc(params, src_wh, true);
+        TestFunc(params, src_wh, false, stream_id);
+        TestFunc(params, src_wh, true, stream_id + 1);
+        stream_id += 2;
       }
     }
   }

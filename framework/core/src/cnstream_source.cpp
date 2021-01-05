@@ -17,15 +17,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include "cnstream_source.hpp"
-#include "cnstream_eventbus.hpp"
-#include "cnstream_pipeline.hpp"
-
 #include <bitset>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
+
+#include "cnstream_source.hpp"
+#include "cnstream_eventbus.hpp"
+#include "cnstream_pipeline.hpp"
+#include "profiler/module_profiler.hpp"
+
 
 namespace cnstream {
 
@@ -180,6 +183,10 @@ int SourceModule::RemoveSources(bool force) {
 bool SourceModule::SendData(std::shared_ptr<CNFrameInfo> data) {
   if (!data->IsEos() && IsStreamRemoved(data->stream_id)) {
     return false;
+  }
+  auto profiler = this->GetProfiler();
+  if (profiler && !data->IsEos()) {
+    profiler->RecordProcessEnd(kPROCESS_PROFILER_NAME, std::make_pair(data->stream_id, data->timestamp));
   }
   return this->TransmitData(data);
 }

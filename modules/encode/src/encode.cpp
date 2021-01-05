@@ -208,8 +208,6 @@ EncodeContext *Encode::GetEncodeContext(CNFrameInfoPtr data) {
   if (param_->encoder_type == "cpu") {
     ctx->dst_image = cv::Mat(param_->dst_height, param_->dst_width, CV_8UC3);
   }
-  std::shared_ptr<PerfManager> manager = GetPerfManager(data->stream_id);
-  ctx->cnencode->SetPerfManager(manager);
   ctx->cnencode->SetModuleName(GetName());
   ctxs_[data->stream_id] = ctx;
   return ctx;
@@ -532,18 +530,6 @@ bool Encode::CheckParamSet(const ModuleParamSet &paramSet) const {
     ret = false;
   }
   return ret;
-}
-
-void Encode::RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished) {
-  std::shared_ptr<PerfManager> manager = GetPerfManager(data->stream_id);
-  if (!data->IsEos() && manager && !is_finished) {
-    std::stringstream ss;
-    ss << std::this_thread::get_id();
-    std::string thread_id_str = ss.str();
-    manager->Record(is_finished, PerfManager::GetDefaultType(), this->GetName(), data->timestamp);
-    manager->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(data->timestamp),
-                    this->GetName() + PerfManager::GetThreadSuffix(), thread_id_str);
-  }
 }
 
 }  // namespace cnstream

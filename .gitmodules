@@ -1,0 +1,3 @@
+[submodule "easydk"]
+	path = easydk
+  url = https://gitee.com/SolutionSDK/easydk.git

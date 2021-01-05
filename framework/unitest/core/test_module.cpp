@@ -30,13 +30,11 @@
 
 #include "cnstream_module.hpp"
 #include "cnstream_pipeline.hpp"
-#include "perf_manager.hpp"
 
 namespace cnstream {
 
 const EventType T_type = EVENT_WARNING;
 const char *T_messgge = "test_post_event";
-extern std::string gTestPerfDir;
 
 class TestModuleBase : public Module {
  public:
@@ -104,36 +102,5 @@ TEST(CoreModule, postevent) {
   EXPECT_TRUE(ptr->PostEvent(T_type, T_messgge));
   pipe.Stop();
 }
-
-#if 0
-TEST(CoreModule, SetAndGetPerfManager) {
-  Pipeline pipe("pipe");
-  std::shared_ptr<TestModuleBase> ptr(new (TestModuleBase));
-  TestModuleBase module;
-  ModuleParamSet parames;
-  ASSERT_TRUE(ptr->Open(parames));
-  ASSERT_TRUE(pipe.AddModule(ptr));
-  pipe.Start();
-  std::vector<std::string> stream_ids = {"1", "2"};
-  std::vector<std::string> m_names = {"m1", "m2"};
-
-  std::vector<std::string> keys = PerfManager::GetKeys(m_names, {PerfManager::GetStartTimeSuffix(),
-      PerfManager::GetEndTimeSuffix(), PerfManager::GetThreadSuffix()});
-
-  std::unordered_map<std::string, std::shared_ptr<PerfManager>> managers;
-  for (auto it : stream_ids) {
-    managers[it] = std::make_shared<PerfManager>();
-    EXPECT_TRUE(managers[it]->Init(gTestPerfDir + "test_" + it + ".db"));
-    managers[it]->RegisterPerfType(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), keys);
-  }
-  ptr->SetPerfManagers(managers);
-
-  for (auto it : stream_ids) {
-    EXPECT_TRUE(ptr->GetPerfManager(it) != nullptr);
-  }
-  EXPECT_TRUE(ptr->GetPerfManager("wrong_stream") == nullptr);
-  pipe.Stop();
-}
-#endif
 
 }  // namespace cnstream

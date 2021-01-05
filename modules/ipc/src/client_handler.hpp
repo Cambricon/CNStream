@@ -77,7 +77,7 @@ class IPCClientHandler : public IPCHandler {
    *  @brief  Send FrameInfoPackage.
    *  @return Return true if send FrameInfoPackage successfully, otherwise, return false.
    */
-  bool Send() override;
+  bool Send(const std::string& send_str = "") override;
 
   /**
    *  @brief  Process FrameInfoPackage with separate thread.

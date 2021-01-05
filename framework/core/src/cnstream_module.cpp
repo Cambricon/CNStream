@@ -25,6 +25,7 @@
 #include <unordered_map>
 
 #include "cnstream_pipeline.hpp"
+#include "profiler/pipeline_profiler.hpp"
 
 namespace cnstream {
 
@@ -119,9 +120,6 @@ int Module::DoTransmitData(std::shared_ptr<CNFrameInfo> data) {
     // FIMXE
     SetStreamRemoved(data->stream_id, false);
   }
-  if (!data->IsEos() && !data->IsRemoved() && !IsStreamRemoved(data->stream_id)) {
-    RecordTime(data, true);
-  }
   RwLockReadGuard guard(container_lock_);
   if (container_) {
     return container_->ProvideData(this, data);
@@ -141,7 +139,6 @@ int Module::DoProcess(std::shared_ptr<CNFrameInfo> data) {
     }
   }
 
-  RecordTime(data, false);
   if (!HasTransmit()) {
     if (!data->IsEos()) {
       if (!removed) {
@@ -174,28 +171,10 @@ bool Module::TransmitData(std::shared_ptr<CNFrameInfo> data) {
   return false;
 }
 
-void Module::RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished) {
-  std::shared_ptr<PerfManager> manager = GetPerfManager(data->stream_id);
-  if (!data->IsEos() && manager) {
-    manager->Record(is_finished, PerfManager::GetDefaultType(), GetName(), data->timestamp);
-    if (!is_finished) {
-      std::stringstream ss;
-      ss << std::this_thread::get_id();
-      std::string thread_id_str = ss.str();
-      manager->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(data->timestamp),
-                      GetName() + PerfManager::GetThreadSuffix(), thread_id_str);
-    }
-  }
-}
-
-std::shared_ptr<PerfManager> Module::GetPerfManager(const std::string& stream_id) {
+ModuleProfiler* Module::GetProfiler() {
   RwLockReadGuard guard(container_lock_);
-  if (container_) {
-    auto managers = container_->GetPerfManagers();
-    if (managers.find(stream_id) != managers.end()) {
-      return managers[stream_id];
-    }
-  }
+  if (container_ && container_->GetProfiler())
+    return container_->GetProfiler()->GetModuleProfiler(GetName());
   return nullptr;
 }
 

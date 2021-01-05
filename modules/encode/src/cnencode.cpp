@@ -158,16 +158,8 @@ bool CNEncode::CreateMluEncoder() {
   attr.eos_callback = std::bind(&CNEncode::EosCallback, this);
   attr.packet_callback = std::bind(&CNEncode::PacketCallback, this, std::placeholders::_1);
 
-  try {
-    mlu_encoder_ = edk::EasyEncode::Create(attr);
-  } catch (edk::Exception &err) {
-    LOGE(ENCODE) << "[CNEncode] create mlu encode failed. error message:" << err.what();
-    if (mlu_encoder_) {
-      delete mlu_encoder_;
-      mlu_encoder_ = nullptr;
-    }
-    return false;
-  }
+  mlu_encoder_ = edk::EasyEncode::New(attr);
+
   if (!mlu_encoder_) {
     LOGE(ENCODE) << "[CNEncode] create mlu encoder failed.";
     return false;
@@ -233,13 +225,9 @@ CNEncode::~CNEncode() {
     } catch (edk::Exception &err) {
       LOGE(ENCODE) << "[CNEncode][Close] set mlu env failed";
     }
-    if (mlu_encoder_) {
-      delete mlu_encoder_;
-      mlu_encoder_ = nullptr;
-    }
   }
-  if (p_file_) {
-    fclose(p_file_);
+  if (file_.is_open()) {
+    file_.close();
   }
   if (writer_.isOpened()) {
     writer_.release();
@@ -257,7 +245,6 @@ bool CNEncode::Update(const cv::Mat src, int64_t timestamp) {
     }
     writer_.write(src);
   }
-  RecordEndTime(timestamp);
   return true;
 }
 
@@ -303,19 +290,6 @@ bool CNEncode::Update(uint8_t* src_y, uint8_t* src_uv, int64_t timestamp, bool e
 void CNEncode::PacketCallback(const edk::CnPacket &packet) {
   if (packet.length == 0 || packet.data == 0) return;
   if (cnencode_param_.device_id < 0) return;
-  if (packet.codec_type == edk::CodecType::JPEG) {
-    RecordEndTime(packet.pts);
-  } else {
-#if IGNORE_HEAD
-  static bool head_frame = true;
-  if (!head_frame) {
-    RecordEndTime(packet.pts);
-  }
-  head_frame = false;
-#else
-    RecordEndTime(packet.pts);
-#endif
-  }
 
   try {
     edk::MluContext context;
@@ -340,22 +314,16 @@ void CNEncode::PacketCallback(const edk::CnPacket &packet) {
   }
 
   if (packet.codec_type == edk::CodecType::JPEG) {
-    p_file_ = fopen(output_file_name_.c_str(), "wb");
-  } else if (p_file_ == nullptr) {
-    p_file_ = fopen(output_file_name_.c_str(), "wb");
+    file_.open(output_file_name_.c_str());
+  } else if (!file_.is_open()) {
+    file_.open(output_file_name_.c_str());
   }
-  if (p_file_ == nullptr) {
+  if (!file_.is_open()) {
     LOGE(ENCODE) << "[CNEncode][PacketCallback] open output file failed";
   } else {
-    uint32_t length = packet.length;
-    written_ = fwrite(packet.data, 1, length, p_file_);
-    if (written_ != length) {
-      LOGE(ENCODE) << "[CNEncode][PacketCallback] written size: " << written_
-                 << " is not equal to data length: " << length;
-    }
+    file_.write(reinterpret_cast<const char *>(packet.data), packet.length);
     if (packet.codec_type == edk::CodecType::JPEG) {
-      fclose(p_file_);
-      p_file_ = nullptr;
+      file_.close();
     }
   }
 #endif
@@ -364,12 +332,6 @@ void CNEncode::PacketCallback(const edk::CnPacket &packet) {
 
 void CNEncode::EosCallback() {
   LOGI(ENCODE) << "[CNEncode] EosCallback ... ";
-}
-
-void CNEncode::RecordEndTime(int64_t pts) {
-  if (perf_manager_ != nullptr) {
-    perf_manager_->Record(true, cnstream::PerfManager::GetDefaultType(), module_name_, pts);
-  }
 }
 
 }  // namespace cnstream

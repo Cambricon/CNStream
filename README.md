@@ -84,7 +84,13 @@ If you are using Centos, run the following commands:
 
 After finished prerequisites, you can build instructions with the following steps:
 
-1. Run the following command to save a directory for saving the output.
+1. clone submodule easydk with command as below
+
+   ```bash
+   git submodule  update  --init
+   ```
+
+2. Run the following command to save a directory for saving the output.
 
    ```bash
    mkdir build       # Create a directory to save the output.
@@ -92,7 +98,7 @@ After finished prerequisites, you can build instructions with the following step
 
    A Makefile is generated in the build folder.
 
-2. Run the following command to generate a script for building instructions.
+3. Run the following command to generate a script for building instructions.
 
    ```bash
    cd build
@@ -122,7 +128,7 @@ After finished prerequisites, you can build instructions with the following step
    | WITH_FREETYPE        | ON / OFF                                 | OFF     | build with FREETYPE         |
    | WITH_RTSP            | ON / OFF                                 | ON      | build with RTSP             |
 
-3. If you want to build CNStream samples:
+4. If you want to build CNStream samples:
    a. Run the following command:
 
       ```bash
@@ -142,12 +148,12 @@ After finished prerequisites, you can build instructions with the following step
       cmake ${CNSTREAM_DIR} -DCMAKE_TOOLCHAIN_FILE=${CNSTREAM_DIR}/cmake/cross-compile.cmake -Dbuild_tests=OFF -Dbuild_track=OFF -DWITH_TRACKER=OFF -DENABLE_KCF=OFF -DMLU=MLU220_SOC
       ```
 
-4. Run the following command to build instructions:
+5. Run the following command to build instructions:
 
       ```bash
       make
       ```
-5. If wanna install CNStream's head files and libraries to somewhere, please add ``` CMAKE_INSTALL_PREFIX ``` to cmake command as below:
+6. If wanna install CNStream's head files and libraries to somewhere, please add ``` CMAKE_INSTALL_PREFIX ``` to cmake command as below:
      ```bash
      cmake {CNSTREAM_DIR} -DCMAKE_INSTALL_PREFIX=/path/to/install
      make

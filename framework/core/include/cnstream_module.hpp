@@ -43,7 +43,6 @@
 #include "cnstream_config.hpp"
 #include "cnstream_eventbus.hpp"
 #include "cnstream_frame.hpp"
-#include "perf_manager.hpp"
 #include "util/cnstream_queue.hpp"
 #include "util/cnstream_rwlock.hpp"
 
@@ -65,7 +64,7 @@ class IModuleObserver {
 };
 
 class Pipeline;
-class PerfManager;
+class ModuleProfiler;
 
 /**
  * @brief Module virtual base class.
@@ -190,23 +189,12 @@ class Module : private NonCopyable {
    */
   virtual bool CheckParamSet(const ModuleParamSet &paramSet) const { return true; }
 
+  Pipeline* GetContainer() const { return container_; }
+
   /**
-   * @brief Records the start time and the end time of the module
-   *
-   * @param data A pointer to the information of the frame.
-   * @param is_finished If it is false, records start time, otherwise records end time.
-   *
-   * @return void
+   * @brief Gets module profiler
    */
-  virtual void RecordTime(std::shared_ptr<CNFrameInfo> data, bool is_finished);
-  /**
-   * @brief Gets PerfManager by stream ID.
-   *
-   * @param stream_id The stream ID.
-   *
-   * @return Returns the shared_ptr object of PerfManager.
-   */
-  std::shared_ptr<PerfManager> GetPerfManager(const std::string &stream_id);
+  ModuleProfiler* GetProfiler();
 
  public:
   /**
@@ -259,8 +247,10 @@ class Module : private NonCopyable {
    *
    * @see Process
    */
+ public:
   bool HasTransmit() const { return hasTransmit_.load(); }
 
+ protected:
   /**
    * @brief Processes the data.
    *
@@ -277,23 +267,6 @@ class Module : private NonCopyable {
    *             number.
    */
   int DoProcess(std::shared_ptr<CNFrameInfo> data);
-
-  /**
-   * @brief Checks if the display of performance information is enabled.
-   *
-   * @return Returns true if the performance information is displayed. Otherwise, returns false.
-   */
-  bool ShowPerfInfo() { return showPerfInfo_.load(); }
-
-  /**
-   * @brief Enables or disables to display performance information.
-   *
-   * @param enable If this parameter is set to true, the performance information is enabled to display.  
-   *               Otherwise, the performance information is disabled to display.
-   *
-   * @return Void.
-   */
-  void ShowPerfInfo(bool enable) { showPerfInfo_.store(enable); }
 
  protected:
   Pipeline *container_ = nullptr;  ///< The container.
@@ -320,9 +293,6 @@ class Module : private NonCopyable {
     }
   }
   int DoTransmitData(std::shared_ptr<CNFrameInfo> data);
-
- protected:
-  std::atomic<bool> showPerfInfo_{false};
 };
 
 /**

@@ -49,12 +49,12 @@ int main(int argc, char *argv[]) {
 
   std::cout << "----------------------input num: " << model.InputNum() << '\n';
   for (uint32_t i = 0; i < model.InputNum(); ++i) {
-    std::cout << "model input shape " << i << ": " << model.InputShapes()[i] << std::endl;
+    std::cout << "model input shape " << i << ": " << model.InputShape(i) << std::endl;
   }
 
   std::cout << "---------------------output num: " << model.OutputNum() << '\n';
   for (uint32_t i = 0; i < model.OutputNum(); ++i) {
-    std::cout << "model output shape " << i << ": " << model.OutputShapes()[i] << std::endl;
+    std::cout << "model output shape " << i << ": " << model.OutputShape(i) << std::endl;
   }
   std::cout << "model's parallelism: " << model.ModelParallelism() << std::endl;
 

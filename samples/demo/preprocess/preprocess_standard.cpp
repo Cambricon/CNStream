@@ -65,10 +65,16 @@ IMPLEMENT_REFLEX_OBJECT_EX(PreprocCpu, cnstream::Preproc)
 int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
                         const cnstream::CNFrameInfoPtr& package) {
   // check params
-  auto input_shapes = model->InputShapes();
-  if (net_inputs.size() != 1 || (input_shapes[0].c != 3 && input_shapes[0].c != 4)) {
-    LOGE(DEMO) << "[PreprocCpu] model input shape not supported, net_input.size = " << net_inputs.size()
-               << ", input_shapes[0].c = " << input_shapes[0].c;
+  edk::ShapeEx input_shape;
+  try {
+    input_shape = model->InputShape(0);
+    if (net_inputs.size() != 1 || (input_shape.C() != 3 && input_shape.C() != 4)) {
+      LOGE(DEMO) << "[PreprocCpu] model input shape not supported, net_input.size = " << net_inputs.size()
+                 << ", input_shape.c = " << input_shape.C();
+      return -1;
+    }
+  } catch (const edk::Exception& e) {
+    LOGE(DEMO) << e.what();
     return -1;
   }
 
@@ -78,8 +84,8 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
 
   int width = frame->width;
   int height = frame->height;
-  int dst_w = input_shapes[0].w;
-  int dst_h = input_shapes[0].h;
+  int dst_w = input_shape.W();
+  int dst_h = input_shape.H();
 
   uint8_t* img_data = new (std::nothrow) uint8_t[frame->GetBytes()];
   if (!img_data) {
@@ -164,8 +170,8 @@ int ObjPreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::sha
   cv::Mat obj_bgr = frame_bgr(obj_roi);
 
   // resize
-  int input_w = model->InputShapes()[0].w;
-  int input_h = model->InputShapes()[0].h;
+  int input_w = model->InputShape(0).W();
+  int input_h = model->InputShape(0).H();
   cv::Mat obj_bgr_resized;
   cv::resize(obj_bgr, obj_bgr_resized, cv::Size(input_w, input_h));
 

@@ -282,7 +282,8 @@ bool IPCHandler::SerializeToString(const FrameInfoPackage& pkg, std::string* str
   return true;
 }
 
-void IPCHandler::PreparePackageToSend(const PkgType& type, const std::shared_ptr<CNFrameInfo> data) {
+void IPCHandler::PreparePackageToSend(const PkgType& type, const std::shared_ptr<CNFrameInfo> data,
+                                      std::string* send_str) {
   FrameInfoPackage send_pkg;
   switch (type) {
     case PkgType::PKG_DATA: {
@@ -339,10 +340,11 @@ void IPCHandler::PreparePackageToSend(const PkgType& type, const std::shared_ptr
   }
 
   if (IPC_CLIENT == ipc_type_) {
-    std::string send_str;
-    SerializeToString(send_pkg, &send_str);
-    memset(send_buf_, 0, sizeof(send_buf_));
-    memcpy(send_buf_, send_str.c_str(), send_str.length());
+    if (send_str == nullptr) {
+      LOGW(IPC) << "ipc type is client. Please pass send_str pointer.";
+    } else {
+      SerializeToString(send_pkg, send_str);
+    }
   } else if (IPC_SERVER == ipc_type_) {
     send_pkgq_.Push(send_pkg);
   }

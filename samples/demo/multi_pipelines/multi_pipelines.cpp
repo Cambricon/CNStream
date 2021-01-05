@@ -49,8 +49,6 @@ DEFINE_int32(wait_time, 0, "time of one test case");
 DEFINE_bool(loop, false, "display repeat");
 DEFINE_string(config_fname, "", "pipeline config filename");
 DEFINE_string(config_fname1, "", "another pipeline config filename");
-DEFINE_bool(perf, false, "measure performance");
-DEFINE_string(perf_db_dir, "", "directory of performance database");
 DEFINE_bool(jpeg_from_mem, false, "Jpeg bitstream from mem.");
 DEFINE_bool(raw_img_input, false, "feed decompressed image to source");
 DEFINE_bool(use_cv_mat, true, "feed cv mat to source. It is valid only if ``raw_img_input`` is set to true");
@@ -83,7 +81,6 @@ class MsgObserver : cnstream::StreamMsgObserver {
         LOGW(APP) << "[Observer] received stream error from stream: " << smsg.stream_id << ", remove it from pipeline.";
         source = dynamic_cast<cnstream::DataSource *>(pipeline_->GetModule(source_name_));
         if (source) source->RemoveSource(smsg.stream_id);
-        pipeline_->RemovePerfManager(smsg.stream_id);
         stream_cnt_--;
         if (stream_cnt_ == 0) {
           LOGI(APP) << "[Observer] all streams is removed from pipeline, pipeline will stop.";

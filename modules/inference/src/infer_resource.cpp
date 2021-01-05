@@ -43,7 +43,7 @@ CpuInputResource::~CpuInputResource() {}
 IOResValue CpuInputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize) {
   int input_num = model->InputNum();
   edk::MluMemoryOp mem_op;
-  mem_op.SetLoader(model);
+  mem_op.SetModel(model);
   IOResValue value;
   value.datas.resize(input_num);
   value.ptrs = mem_op.AllocCpuInput();
@@ -59,7 +59,7 @@ IOResValue CpuInputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, u
 void CpuInputResource::Deallocate(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
                                   const IOResValue& value) {
   edk::MluMemoryOp mem_op;
-  mem_op.SetLoader(model);
+  mem_op.SetModel(model);
   if (value.ptrs) mem_op.FreeCpuInput(value.ptrs);
 }
 
@@ -71,7 +71,7 @@ CpuOutputResource::~CpuOutputResource() {}
 IOResValue CpuOutputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize) {
   int output_num = model->OutputNum();
   edk::MluMemoryOp mem_op;
-  mem_op.SetLoader(model);
+  mem_op.SetModel(model);
   IOResValue value;
   value.datas.resize(output_num);
   value.ptrs = mem_op.AllocCpuOutput();
@@ -88,7 +88,7 @@ IOResValue CpuOutputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, 
 void CpuOutputResource::Deallocate(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
                                    const IOResValue& value) {
   edk::MluMemoryOp mem_op;
-  mem_op.SetLoader(model);
+  mem_op.SetModel(model);
   if (value.ptrs) mem_op.FreeCpuOutput(value.ptrs);
 }
 
@@ -100,7 +100,7 @@ MluInputResource::~MluInputResource() {}
 IOResValue MluInputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize) {
   int input_num = model->InputNum();
   edk::MluMemoryOp mem_op;
-  mem_op.SetLoader(model);
+  mem_op.SetModel(model);
   IOResValue value;
   value.datas.resize(input_num);
   value.ptrs = mem_op.AllocMluInput();
@@ -115,10 +115,9 @@ IOResValue MluInputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, u
 
 void MluInputResource::Deallocate(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
                                   const IOResValue& value) {
-  int input_num = model->InputNum();
   edk::MluMemoryOp mem_op;
-  mem_op.SetLoader(model);
-  if (value.ptrs) mem_op.FreeArrayMlu(value.ptrs, input_num);
+  mem_op.SetModel(model);
+  if (value.ptrs) mem_op.FreeMluInput(value.ptrs);
 }
 
 MluOutputResource::MluOutputResource(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize)
@@ -129,7 +128,7 @@ MluOutputResource::~MluOutputResource() {}
 IOResValue MluOutputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize) {
   int output_num = model->OutputNum();
   edk::MluMemoryOp mem_op;
-  mem_op.SetLoader(model);
+  mem_op.SetModel(model);
   IOResValue value;
   value.datas.resize(output_num);
   value.ptrs = mem_op.AllocMluOutput();
@@ -144,10 +143,9 @@ IOResValue MluOutputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, 
 
 void MluOutputResource::Deallocate(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
                                    const IOResValue& value) {
-  int input_num = model->InputNum();
   edk::MluMemoryOp mem_op;
-  mem_op.SetLoader(model);
-  if (value.ptrs) mem_op.FreeArrayMlu(value.ptrs, input_num);
+  mem_op.SetModel(model);
+  if (value.ptrs) mem_op.FreeMluOutput(value.ptrs);
 }
 
 RCOpResource::RCOpResource(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,

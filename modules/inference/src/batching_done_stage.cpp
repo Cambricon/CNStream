@@ -38,7 +38,6 @@
 
 #include "batching_done_stage.hpp"
 #include "cnstream_frame_va.hpp"
-#include "perf_manager.hpp"
 
 namespace cnstream {
 
@@ -53,7 +52,7 @@ std::vector<std::shared_ptr<InferTask>> H2DBatchingDoneStage::BatchingDone(const
     IOResValue cpu_value = this->cpu_input_res_->WaitResourceByTicket(&cir_ticket);
     IOResValue mlu_value = this->mlu_input_res_->WaitResourceByTicket(&mir_ticket);
     edk::MluMemoryOp mem_op;
-    mem_op.SetLoader(this->model_);
+    mem_op.SetModel(this->model_);
 
     mem_op.MemcpyInputH2D(mlu_value.ptrs, cpu_value.ptrs);
 
@@ -80,25 +79,17 @@ std::vector<std::shared_ptr<InferTask>> ResizeConvertBatchingDoneStage::Batching
     std::shared_ptr<CNFrameInfo> info = nullptr;
     std::string pts_str;
 
-    if (perf_manager_) {
-      info = finfos.back().first;
-      if (!info->IsEos()) {
-        CNDataFramePtr frame = cnstream::GetCNDataFramePtr(info);;
-        pts_str = std::to_string(frame->frame_id * 100 + info->GetStreamIndex());
-        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_start_time");
-        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_cnt",
-                              std::to_string(finfos.size()));
-      }
+    if (profiler_) {
+      for (auto it : finfos)
+        profiler_->RecordProcessStart("RESIZE CONVERT", std::make_pair(it.first->stream_id, it.first->timestamp));
     }
-
     cnrtMemset(mlu_value.datas[0].ptr, 0, mlu_value.datas[0].batch_offset * finfos.size());
 
     bool ret = rcop_value->op.SyncOneOutput(mlu_value.datas[0].ptr);
-
-    if (perf_manager_) {
-      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "resize_end_time");
+    if (profiler_) {
+      for (auto it : finfos)
+        profiler_->RecordProcessEnd("RESIZE CONVERT", std::make_pair(it.first->stream_id, it.first->timestamp));
     }
-
     this->rcop_res_->DeallingDone();
     this->mlu_input_res_->DeallingDone();
 
@@ -112,18 +103,15 @@ std::vector<std::shared_ptr<InferTask>> ResizeConvertBatchingDoneStage::Batching
 }
 
 InferBatchingDoneStage::InferBatchingDoneStage(std::shared_ptr<edk::ModelLoader> model,
-                                               cnstream::CNDataFormat model_input_fmt,
-                                               uint32_t batchsize, int dev_id,
+                                               cnstream::CNDataFormat model_input_fmt, uint32_t batchsize, int dev_id,
                                                std::shared_ptr<MluInputResource> mlu_input_res,
                                                std::shared_ptr<MluOutputResource> mlu_output_res)
-    : BatchingDoneStage(model, batchsize, dev_id), model_input_fmt_(model_input_fmt),
-      mlu_input_res_(mlu_input_res), mlu_output_res_(mlu_output_res) {
+    : BatchingDoneStage(model, batchsize, dev_id),
+      model_input_fmt_(model_input_fmt),
+      mlu_input_res_(mlu_input_res),
+      mlu_output_res_(mlu_output_res) {
   easyinfer_ = std::make_shared<edk::EasyInfer>();
-#if defined(CNS_MLU270) || defined(CNS_MLU220_SOC)
-  easyinfer_->Init(model_, 1, dev_id);
-#else
-    #error "Platform not supported yet";
-#endif
+  easyinfer_->Init(model_, dev_id);
 }
 
 InferBatchingDoneStage::~InferBatchingDoneStage() {}
@@ -142,16 +130,9 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
     IOResValue mlu_output_value = this->mlu_output_res_->WaitResourceByTicket(&mor_ticket);
 
     std::shared_ptr<CNFrameInfo> info = nullptr;
-    std::string pts_str;
-    if (perf_manager_) {
-      info = finfos.back().first;
-      if (!info->IsEos()) {
-        CNDataFramePtr frame = cnstream::GetCNDataFramePtr(info);
-        pts_str = std::to_string(frame->frame_id * 100 + info->GetStreamIndex());
-        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_start_time");
-        perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_cnt",
-                              std::to_string(finfos.size()));
-      }
+    if (profiler_) {
+      for (auto it : finfos)
+        profiler_->RecordProcessStart("RUN MODEL", std::make_pair(it.first->stream_id, it.first->timestamp));
     }
     if (!dump_resized_image_dir_.empty()) {
       int batch_offset = mlu_input_value.datas[0].batch_offset;
@@ -160,10 +141,10 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
       std::vector<char> cpu_input_value(len);
       for (const auto& data : mlu_input_value.datas) {
         cnrtMemcpy(reinterpret_cast<void*>(cpu_input_value.data()), data.ptr, len, CNRT_MEM_TRANS_DIR_DEV2HOST);
-        for (int  i = 0; i < frame_num; i++) {
+        for (int i = 0; i < frame_num; i++) {
           info = finfos[i].first;
           CNDataFramePtr frame = cnstream::GetCNDataFramePtr(info);
-          char *img = reinterpret_cast<char*>(cpu_input_value.data()) + batch_offset * i;
+          char* img = reinterpret_cast<char*>(cpu_input_value.data()) + batch_offset * i;
           cv::Mat bgr(data.shape.h, data.shape.w, CV_8UC3);
           cv::Mat bgra(data.shape.h, data.shape.w, CV_8UC4, img);
           switch (model_input_fmt_) {
@@ -189,7 +170,8 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
               break;
             }
             default:
-              LOGE(INFERENCER) << "Unsupported fmt, dump resized image failed." << "fmt :" << model_input_fmt_;
+              LOGE(INFERENCER) << "Unsupported fmt, dump resized image failed."
+                               << "fmt :" << model_input_fmt_;
               break;
           }
           std::string stream_index = std::to_string(info->GetStreamIndex());
@@ -197,8 +179,8 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
             mkdir(dump_resized_image_dir_.c_str(), 0777);
           }
           int obj_id = 0;
-          std::string dump_img_path_prefix = dump_resized_image_dir_ + "/stream" + stream_index + "_frame" +
-                                             std::to_string(frame->frame_id);
+          std::string dump_img_path_prefix =
+              dump_resized_image_dir_ + "/stream" + stream_index + "_frame" + std::to_string(frame->frame_id);
           std::string dump_img_path = dump_img_path_prefix + "_obj" + std::to_string(obj_id) + ".jpg";
           while (0 == access(dump_img_path.c_str(), 0)) {
             obj_id++;
@@ -214,12 +196,12 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
     if (saving_infer_input_) {
       int frame_num = finfos.size();
 
-      //alloc cpu memory to save model output
-      CpuOutputResource alloc_cpu_output_mem(this->easyinfer_->Loader(), batchsize_);
+      // alloc cpu memory to save model output
+      CpuOutputResource alloc_cpu_output_mem(this->easyinfer_->Model(), batchsize_);
       alloc_cpu_output_mem.Init();
       IOResValue cpu_output_value = alloc_cpu_output_mem.GetDataDirectly();
       edk::MluMemoryOp mem_op;
-      mem_op.SetLoader(this->easyinfer_->Loader());
+      mem_op.SetModel(this->easyinfer_->Model());
       mem_op.MemcpyOutputD2H(cpu_output_value.ptrs, mlu_output_value.ptrs);
 
       for (size_t i = 0; i < mlu_input_value.datas.size(); ++i) {
@@ -228,25 +210,25 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
           iodata->input_height_ = mlu_input_value.datas[i].shape.h;
           iodata->input_width_ = mlu_input_value.datas[i].shape.w;
 
-          //infer model input_fmt only support RBGA32, ARGB32, BGRA32, ABGR32
+          // infer model input_fmt only support RBGA32, ARGB32, BGRA32, ABGR32
           iodata->input_size_ = iodata->input_height_ * iodata->input_width_ * 4;
           iodata->input_fmt_ = model_input_fmt_;
           iodata->output_num_ = cpu_output_value.datas.size();
           iodata->output_size_ = cpu_output_value.datas[0].shape.hwc();
 
-          // save model input 
+          // save model input
           iodata->input_cpu_addr_ = cnCpuMemAlloc(iodata->input_size_);
           cnrtMemcpy(iodata->input_cpu_addr_.get(), mlu_input_value.datas[i].Offset(j), iodata->input_size_,
                      CNRT_MEM_TRANS_DIR_DEV2HOST);
 
-          // save model output 
+          // save model output
           for (size_t k = 0; k < iodata->output_num_; ++k) {
             std::shared_ptr<void> output_cpu_addr = cnCpuMemAlloc(iodata->output_size_ * sizeof(float*));
             memcpy(output_cpu_addr.get(), cpu_output_value.datas[k].Offset(j), sizeof(float*) * iodata->output_size_);
             iodata->output_cpu_addr_.push_back(output_cpu_addr);
           }
 
-          //save iodata
+          // save iodata
           auto data_map = GetCNInferDataPtr(finfos[j].first);
           if (data_map->datas_map_.find(module_name_) != data_map->datas_map_.end()) {
             data_map->datas_map_[module_name_].push_back(iodata);
@@ -258,9 +240,10 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
       }
       alloc_cpu_output_mem.Destroy();
     }
-    
-    if (perf_manager_) {
-      perf_manager_->Record(perf_type_, PerfManager::GetPrimaryKey(), pts_str, "infer_end_time");
+
+    if (profiler_) {
+      for (auto it : finfos)
+        profiler_->RecordProcessEnd("RUN MODEL", std::make_pair(it.first->stream_id, it.first->timestamp));
     }
 
     this->mlu_input_res_->DeallingDone();
@@ -283,12 +266,8 @@ std::vector<std::shared_ptr<InferTask>> D2HBatchingDoneStage::BatchingDone(const
     IOResValue mlu_output_value = this->mlu_output_res_->WaitResourceByTicket(&mor_ticket);
     IOResValue cpu_output_value = this->cpu_output_res_->WaitResourceByTicket(&cor_ticket);
     edk::MluMemoryOp mem_op;
-    mem_op.SetLoader(this->model_);
-#if defined(CNS_MLU270) || defined(CNS_MLU220_SOC)
+    mem_op.SetModel(this->model_);
     mem_op.MemcpyOutputD2H(cpu_output_value.ptrs, mlu_output_value.ptrs);
-#else
-    #error "Platform not supported yet";
-#endif
     this->mlu_output_res_->DeallingDone();
     this->cpu_output_res_->DeallingDone();
     return 0;
@@ -297,8 +276,7 @@ std::vector<std::shared_ptr<InferTask>> D2HBatchingDoneStage::BatchingDone(const
   return tasks;
 }
 
-std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::BatchingDone(
-    const BatchingDoneInput& finfos) {
+std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::BatchingDone(const BatchingDoneInput& finfos) {
   if (cpu_output_res_ != nullptr) {
     return BatchingDone(finfos, cpu_output_res_);
   } else if (mlu_output_res_ != nullptr) {
@@ -310,8 +288,7 @@ std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::Batchin
 }
 
 std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::BatchingDone(
-    const BatchingDoneInput& finfos,
-    const std::shared_ptr<CpuOutputResource> &cpu_output_res) {
+    const BatchingDoneInput& finfos, const std::shared_ptr<CpuOutputResource>& cpu_output_res) {
   std::vector<InferTaskSptr> tasks;
   for (int bidx = 0; bidx < static_cast<int>(finfos.size()); ++bidx) {
     auto finfo = finfos[bidx];
@@ -321,38 +298,31 @@ std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::Batchin
     } else {
       cpu_output_res_ticket = cpu_output_res->PickUpTicket(true);
     }
-    InferTaskSptr task = std::make_shared<InferTask>([cpu_output_res_ticket,
-                                                      cpu_output_res,
-                                                      this,
-                                                      finfo,
-                                                      bidx]() -> int {
-      QueuingTicket cor_ticket = cpu_output_res_ticket;
-      IOResValue cpu_output_value = cpu_output_res->WaitResourceByTicket(&cor_ticket);
-      std::vector<float*> net_outputs;
-      for (size_t output_idx = 0; output_idx < cpu_output_value.datas.size(); ++output_idx) {
-        net_outputs.push_back(reinterpret_cast<float*>(cpu_output_value.datas[output_idx].Offset(bidx)));
-      }
-      if (!cnstream::IsStreamRemoved(finfo.first->stream_id)) {
-        this->postprocessor_->Execute(net_outputs, this->model_, finfo.first);
-      }
-      cpu_output_res->DeallingDone();
-      return 0;
-    });
+    InferTaskSptr task =
+        std::make_shared<InferTask>([cpu_output_res_ticket, cpu_output_res, this, finfo, bidx]() -> int {
+          QueuingTicket cor_ticket = cpu_output_res_ticket;
+          IOResValue cpu_output_value = cpu_output_res->WaitResourceByTicket(&cor_ticket);
+          std::vector<float*> net_outputs;
+          for (size_t output_idx = 0; output_idx < cpu_output_value.datas.size(); ++output_idx) {
+            net_outputs.push_back(reinterpret_cast<float*>(cpu_output_value.datas[output_idx].Offset(bidx)));
+          }
+          if (!cnstream::IsStreamRemoved(finfo.first->stream_id)) {
+            this->postprocessor_->Execute(net_outputs, this->model_, finfo.first);
+          }
+          cpu_output_res->DeallingDone();
+          return 0;
+        });
     tasks.push_back(task);
   }
   return tasks;
 }
 
 std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::BatchingDone(
-    const BatchingDoneInput& finfos,
-    const std::shared_ptr<MluOutputResource> &mlu_output_res) {
+    const BatchingDoneInput& finfos, const std::shared_ptr<MluOutputResource>& mlu_output_res) {
   QueuingTicket mlu_output_res_ticket = mlu_output_res->PickUpNewTicket(false);
 
   std::vector<InferTaskSptr> tasks;
-  InferTaskSptr task = std::make_shared<InferTask>([mlu_output_res_ticket,
-                                                    mlu_output_res,
-                                                    this,
-                                                    finfos]() -> int {
+  InferTaskSptr task = std::make_shared<InferTask>([mlu_output_res_ticket, mlu_output_res, this, finfos]() -> int {
     QueuingTicket mor_ticket = mlu_output_res_ticket;
     IOResValue mlu_output_value = mlu_output_res->WaitResourceByTicket(&mor_ticket);
     std::vector<void*> net_outputs;
@@ -361,7 +331,7 @@ std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::Batchin
     }
 
     std::vector<CNFrameInfoPtr> batched_finfos;
-    for (const auto &it : finfos) batched_finfos.push_back(it.first);
+    for (const auto& it : finfos) batched_finfos.push_back(it.first);
 
     this->postprocessor_->Execute(net_outputs, this->model_, batched_finfos);
     mlu_output_res->DeallingDone();
@@ -372,8 +342,7 @@ std::vector<std::shared_ptr<InferTask>> PostprocessingBatchingDoneStage::Batchin
 }
 
 std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjBatchingDone(
-    const BatchingDoneInput& finfos,
-    const std::vector<std::shared_ptr<CNInferObject>>& objs) {
+    const BatchingDoneInput& finfos, const std::vector<std::shared_ptr<CNInferObject>>& objs) {
   if (cpu_output_res_ != nullptr) {
     return ObjBatchingDone(finfos, objs, cpu_output_res_);
   } else if (mlu_output_res_ != nullptr) {
@@ -385,9 +354,8 @@ std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjB
 }
 
 std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjBatchingDone(
-    const BatchingDoneInput& finfos,
-    const std::vector<std::shared_ptr<CNInferObject>>& objs,
-    const std::shared_ptr<CpuOutputResource> &cpu_output_res) {
+    const BatchingDoneInput& finfos, const std::vector<std::shared_ptr<CNInferObject>>& objs,
+    const std::shared_ptr<CpuOutputResource>& cpu_output_res) {
   std::vector<InferTaskSptr> tasks;
   for (int bidx = 0; bidx < static_cast<int>(finfos.size()); ++bidx) {
     auto finfo = finfos[bidx];
@@ -398,58 +366,50 @@ std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjB
     } else {
       cpu_output_res_ticket = cpu_output_res_->PickUpTicket(true);
     }
-    InferTaskSptr task = std::make_shared<InferTask>([cpu_output_res_ticket,
-                                                      cpu_output_res,
-                                                      this,
-                                                      finfo,
-                                                      obj,
-                                                      bidx]() -> int {
-      QueuingTicket cor_ticket = cpu_output_res_ticket;
-      IOResValue cpu_output_value = cpu_output_res->WaitResourceByTicket(&cor_ticket);
-      std::vector<float*> net_outputs;
-      for (size_t output_idx = 0; output_idx < cpu_output_value.datas.size(); ++output_idx) {
-        net_outputs.push_back(reinterpret_cast<float*>(cpu_output_value.datas[output_idx].Offset(bidx)));
-      }
-      if (!cnstream::IsStreamRemoved(finfo.first->stream_id)) {
-        this->postprocessor_->Execute(net_outputs, this->model_, finfo.first, obj);
-      }
-      cpu_output_res->DeallingDone();
-      return 0;
-    });
+    InferTaskSptr task =
+        std::make_shared<InferTask>([cpu_output_res_ticket, cpu_output_res, this, finfo, obj, bidx]() -> int {
+          QueuingTicket cor_ticket = cpu_output_res_ticket;
+          IOResValue cpu_output_value = cpu_output_res->WaitResourceByTicket(&cor_ticket);
+          std::vector<float*> net_outputs;
+          for (size_t output_idx = 0; output_idx < cpu_output_value.datas.size(); ++output_idx) {
+            net_outputs.push_back(reinterpret_cast<float*>(cpu_output_value.datas[output_idx].Offset(bidx)));
+          }
+          if (!cnstream::IsStreamRemoved(finfo.first->stream_id)) {
+            this->postprocessor_->Execute(net_outputs, this->model_, finfo.first, obj);
+          }
+          cpu_output_res->DeallingDone();
+          return 0;
+        });
     tasks.push_back(task);
   }
   return tasks;
 }
 
 std::vector<std::shared_ptr<InferTask>> ObjPostprocessingBatchingDoneStage::ObjBatchingDone(
-    const BatchingDoneInput& finfos,
-    const std::vector<std::shared_ptr<CNInferObject>>& objs,
-    const std::shared_ptr<MluOutputResource> &mlu_output_res) {
+    const BatchingDoneInput& finfos, const std::vector<std::shared_ptr<CNInferObject>>& objs,
+    const std::shared_ptr<MluOutputResource>& mlu_output_res) {
   std::vector<InferTaskSptr> tasks;
   QueuingTicket mlu_output_res_ticket = mlu_output_res_->PickUpNewTicket(false);
-  InferTaskSptr task = std::make_shared<InferTask>([mlu_output_res_ticket,
-                                                    mlu_output_res,
-                                                    this,
-                                                    finfos,
-                                                    objs]() -> int {
-    QueuingTicket mor_ticket = mlu_output_res_ticket;
-    IOResValue mlu_output_value = mlu_output_res->WaitResourceByTicket(&mor_ticket);
-    std::vector<void*> net_outputs;
-    for (size_t output_idx = 0; output_idx < mlu_output_value.datas.size(); ++output_idx) {
-      net_outputs.push_back(mlu_output_value.datas[output_idx].ptr);
-    }
+  InferTaskSptr task =
+      std::make_shared<InferTask>([mlu_output_res_ticket, mlu_output_res, this, finfos, objs]() -> int {
+        QueuingTicket mor_ticket = mlu_output_res_ticket;
+        IOResValue mlu_output_value = mlu_output_res->WaitResourceByTicket(&mor_ticket);
+        std::vector<void*> net_outputs;
+        for (size_t output_idx = 0; output_idx < mlu_output_value.datas.size(); ++output_idx) {
+          net_outputs.push_back(mlu_output_value.datas[output_idx].ptr);
+        }
 
-    std::vector<std::pair<CNFrameInfoPtr, std::shared_ptr<CNInferObject>>> batched_objs;
-    for (int bidx = 0; bidx < static_cast<int>(finfos.size()); ++bidx) {
-      auto finfo = finfos[bidx];
-      auto obj = objs[bidx];
-      batched_objs.push_back(std::make_pair(std::move(finfo.first), std::move(obj)));
-    }
+        std::vector<std::pair<CNFrameInfoPtr, std::shared_ptr<CNInferObject>>> batched_objs;
+        for (int bidx = 0; bidx < static_cast<int>(finfos.size()); ++bidx) {
+          auto finfo = finfos[bidx];
+          auto obj = objs[bidx];
+          batched_objs.push_back(std::make_pair(std::move(finfo.first), std::move(obj)));
+        }
 
-    this->postprocessor_->Execute(net_outputs, this->model_, batched_objs);
-    mlu_output_res->DeallingDone();
-    return 0;
-  });
+        this->postprocessor_->Execute(net_outputs, this->model_, batched_objs);
+        mlu_output_res->DeallingDone();
+        return 0;
+      });
   tasks.push_back(task);
 
   return tasks;

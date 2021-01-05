@@ -39,6 +39,63 @@
 
 namespace cnstream {
 
+bool ProfilerConfig::ParseByJSONStr(const std::string& jstr) {
+  rapidjson::Document doc;
+  if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
+    LOGE(CORE) << "Parse profiler configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
+               << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. JSON:" << jstr;
+    return false;
+  }
+
+  for (rapidjson::Document::ConstMemberIterator iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter) {
+    if ("enable_profiling" == iter->name) {
+      if (iter->value.IsBool()) {
+        this->enable_profiling = iter->value.GetBool();
+      } else {
+        LOGE(CORE) << "enable_profiling must be boolean type.";
+        return false;
+      }
+    } else if ("enable_tracing"  == iter->name) {
+      if (iter->value.IsBool()) {
+        this->enable_tracing = iter->value.GetBool();
+      } else {
+        LOGE(CORE) << "enable_tracing must be boolean type.";
+        return false;
+      }
+    } else if ("trace_event_capacity" == iter->name) {
+      if (iter->value.IsUint64()) {
+        this->trace_event_capacity = iter->value.GetUint64();
+      } else {
+        LOGE(CORE) << "trace_event_capacity must be uint64 type.";
+        return false;
+      }
+    } else {
+      LOGE(CORE) << "Unknown parameter named [" << iter->name.GetString() << "] for profiler_config.";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool ProfilerConfig::ParseByJSONFile(const std::string& jfname) {
+  std::ifstream ifs(jfname);
+
+  if (!ifs.is_open()) {
+    LOGE(CORE) << "File open failed :" << jfname;
+    return false;
+  }
+
+  std::string jstr((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  ifs.close();
+
+  if (!ParseByJSONStr(jstr)) {
+    return false;
+  }
+
+  return true;
+}
+
 bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
@@ -87,17 +144,6 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
     this->maxInputQueueSize = doc["max_input_queue_size"].GetUint();
   } else {
     this->maxInputQueueSize = 20;
-  }
-
-  // enablePerfInfo
-  if (end != doc.FindMember("show_perf_info")) {
-    if (!doc["show_perf_info"].IsBool()) {
-      LOGE(CORE) << "show_perf_info must be Boolean type.";
-      return false;
-    }
-    this->showPerfInfo = doc["show_perf_info"].GetBool();
-  } else {
-    this->showPerfInfo = false;
   }
 
   // next
@@ -181,7 +227,12 @@ bool CNModuleConfig::ParseByJSONFile(const std::string& jfname) {
   return true;
 }
 
-bool ConfigsFromJsonFile(const std::string& config_file, std::vector<CNModuleConfig>& configs) {  // NOLINT
+bool ConfigsFromJsonFile(const std::string& config_file,
+                         std::vector<CNModuleConfig>* pmodule_configs,
+                         ProfilerConfig* pprofiler_config) {
+  auto& module_configs = *pmodule_configs;
+  auto& profiler_config = *pprofiler_config;
+
   std::ifstream ifs(config_file);
   if (!ifs.is_open()) {
     LOGE(CORE) << "Failed to open file: " << config_file;
@@ -191,7 +242,7 @@ bool ConfigsFromJsonFile(const std::string& config_file, std::vector<CNModuleCon
   std::string jstr((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
   ifs.close();
 
-  /* traversing modules */
+  /* traversing config items */
   std::vector<std::string> namelist;
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
@@ -201,18 +252,27 @@ bool ConfigsFromJsonFile(const std::string& config_file, std::vector<CNModuleCon
   }
 
   for (rapidjson::Document::ConstMemberIterator iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter) {
+    rapidjson::StringBuffer sbuf;
+    rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
+    iter->value.Accept(jwriter);
+
+    std::string item_name = iter->name.GetString();
+    if (kPROFILER_CONFIG_NAME == item_name) {
+      if (!profiler_config.ParseByJSONStr(std::string(sbuf.GetString()))) {
+        LOGE(CORE) << "Parse profiler config failed.";
+        return false;
+      }
+      continue;
+    }
+
     CNModuleConfig mconf;
-    mconf.name = iter->name.GetString();
+    mconf.name = item_name;
     if (find(namelist.begin(), namelist.end(), mconf.name) != namelist.end()) {
-      LOGE(CORE) << "Module name should be unique in Jason file. Module name : [" << mconf.name + "]"
+      LOGE(CORE) << "Module name should be unique in Json file. Module name : [" << mconf.name + "]"
                  << " appeared more than one time.";
       return false;
     }
     namelist.push_back(mconf.name);
-
-    rapidjson::StringBuffer sbuf;
-    rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
-    iter->value.Accept(jwriter);
 
     if (!mconf.ParseByJSONStr(std::string(sbuf.GetString()))) {
       LOGE(CORE) << "Parse module config failed. Module name : [" << mconf.name << "]";
@@ -239,7 +299,7 @@ bool ConfigsFromJsonFile(const std::string& config_file, std::vector<CNModuleCon
     }
 
     mconf.parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;
-    configs.push_back(mconf);
+    module_configs.push_back(mconf);
   }
   return true;
 }

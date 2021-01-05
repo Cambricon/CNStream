@@ -30,7 +30,8 @@
 #include <utility>
 
 #include "cnstream_frame_va.hpp"
-#include "perf_manager.hpp"
+#include "profiler/module_profiler.hpp"
+#include "profiler/pipeline_profiler.hpp"
 
 #define STRIDE_ALIGN_FOR_SCALER_NV12 128
 #define STRIDE_ALIGN 64
@@ -199,7 +200,6 @@ bool RawImgMemHandlerImpl::Open() {
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
   this->interval_ = param_.interval_;
-  SetPerfManager(source->GetPerfManager(stream_id_));
   SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
   return true;
 }
@@ -235,7 +235,13 @@ int RawImgMemHandlerImpl::Write(const cv::Mat *mat_data, const uint64_t pts) {
     int width = mat_data->cols;
     int height = mat_data->rows;
     int size = mat_data->step * height;
-    RecordStartTime(module_->GetName(), pts);
+    if (module_ && module_->GetProfiler()) {
+      auto record_key = std::make_pair(stream_id_, pts);
+      module_->GetProfiler()->RecordProcessStart(kPROCESS_PROFILER_NAME, record_key);
+      if (module_->GetContainer() && module_->GetContainer()->GetProfiler()) {
+        module_->GetContainer()->GetProfiler()->RecordInput(record_key);
+      }
+    }
     return ProcessImage(mat_data->data, size, width, height, CN_PIXEL_FORMAT_BGR24, pts);
   }
   return -2;
@@ -255,7 +261,13 @@ int RawImgMemHandlerImpl::Write(const uint8_t *img_data, const int size, const u
     LOGI(SOURCE) << "Rawing handler stream id: " << stream_id_ << " EOS reached";
     return 0;
   } else if (CheckRawImageParams(img_data, size, w, h, pixel_fmt)) {
-    RecordStartTime(module_->GetName(), pts);
+    if (module_ && module_->GetProfiler()) {
+      auto record_key = std::make_pair(stream_id_, pts);
+      module_->GetProfiler()->RecordProcessStart(kPROCESS_PROFILER_NAME, record_key);
+      if (module_->GetContainer() && module_->GetContainer()->GetProfiler()) {
+        module_->GetContainer()->GetProfiler()->RecordInput(record_key);
+      }
+    }
     return ProcessImage(img_data, size, w, h, pixel_fmt, pts);
   }
 
@@ -315,11 +327,7 @@ bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size,
   if (!dataframe) return false;
 
   if (param_.output_type_ == OUTPUT_MLU) {
-#ifdef CNS_MLU220_SOC    
-    dataframe->ctx.dev_type = DevContext::MLU_CPU;
-#else
     dataframe->ctx.dev_type = DevContext::MLU;
-#endif
     dataframe->ctx.dev_id = param_.device_id_;
     dataframe->ctx.ddr_channel = -1;  // FIXME
   } else {

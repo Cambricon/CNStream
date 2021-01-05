@@ -194,25 +194,13 @@ class SourceRender {
     return handler_->SendData(data);
   }
 
-  //
-  void SetPerfManager(std::shared_ptr<PerfManager> perf_manager) {
-    perf_manager_ = perf_manager;
-  }
   void SetThreadName(std::string module_name, uint64_t stream_idx) {
     thread_name_ = "cn-" + module_name + "-" + NumToFormatStr(stream_idx, 2);
-  }
-  void RecordStartTime(const std::string &module_name, int64_t pts) {
-    if (perf_manager_ != nullptr) {
-      perf_manager_->Record(false, PerfManager::GetDefaultType(), module_name, pts);
-      perf_manager_->Record(PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(pts),
-                            module_name + PerfManager::GetThreadSuffix(), thread_name_);
-    }
   }
 
  protected:
   SourceHandler *handler_;
   bool eos_sent_ = false;
-  std::shared_ptr<PerfManager> perf_manager_;
   std::string thread_name_;
 
  protected:

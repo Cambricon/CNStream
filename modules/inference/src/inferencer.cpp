@@ -38,9 +38,8 @@
 #include "cnstream_frame_va.hpp"
 #include "inferencer.hpp"
 #include "infer_params.hpp"
-#include "perf_calculator.hpp"
-#include "perf_manager.hpp"
-#include "util/cnstream_time_utility.hpp"
+
+#include "profiler/module_profiler.hpp"
 
 namespace cnstream {
 
@@ -69,11 +68,6 @@ class InferencerPrivate {
   std::string dump_resized_image_dir_ = "";
   std::string module_name_ = "";
 
-  std::shared_ptr<PerfManager> infer_perf_manager_ = nullptr;
-  std::unordered_map<std::string, std::shared_ptr<PerfCalculator>> perf_calculator_;
-  std::thread cal_perf_th_;
-  std::atomic<bool> perf_th_running_{false};
-
   std::map<std::thread::id, InferContextSptr> ctxs_;
   std::mutex ctx_mtx_;
 
@@ -99,7 +93,6 @@ class InferencerPrivate {
         model_loader->SetCpuOutputLayout(layout, index);
       }
 
-      model_loader->InitLayout();
       bsize_ = model_loader->InputShapes()[0].n;
       model_loader_ = model_loader;
     } catch (edk::Exception &e) {
@@ -160,52 +153,6 @@ class InferencerPrivate {
       dump_resized_image_dir_ = GetPathRelativeToTheJSONFile(params.dump_resized_image_dir, param_set);
     }
 
-    if (params.show_stats) {
-      infer_perf_manager_ = std::make_shared<PerfManager>();
-
-      std::string stats_db_dir = "perf_database/";
-      std::string stats_db_path = stats_db_dir + PerfManager::GetDbFileNamePrefix() +
-                                  q_ptr_->GetName() + "_" + TimeStamp::CurrentToDate() + ".db";
-      if (!params.stats_db_name.empty()) {
-        std::string db_name = params.stats_db_name;
-        if (db_name.length() > db_name.find_last_of(".") && db_name.substr(db_name.find_last_of(".") + 1) == "db") {
-          size_t dir_pos = db_name.length() > db_name.find_last_of("/") ? db_name.find_last_of("/") + 1 : 0;
-          db_name.insert(dir_pos, PerfManager::GetDbFileNamePrefix());
-          stats_db_dir = db_name.substr(0, dir_pos);
-          stats_db_path = db_name;
-        } else {
-          LOGW(INFERENCER) << "[Inferencer]: parameter stats_db_name should end with '.db'."
-                       << " Database file will be stored at [perf_database] directory instead.";
-        }
-      }
-      stats_db_path = GetPathRelativeToTheJSONFile(stats_db_path, param_set);
-      PerfManager::ClearDbFiles(GetPathRelativeToTheJSONFile(stats_db_dir, param_set));
-
-      LOGI(INFERENCER) << "[" << q_ptr_->GetName() << "] save performance info database file to : " << stats_db_path;
-      if (!infer_perf_manager_->Init(stats_db_path)) {
-        LOGE(INFERENCER) << "[" << q_ptr_->GetName() << "] Init infer perf manager failed.";
-        return false;
-      }
-
-      infer_perf_manager_->SqlBeginTrans();
-      std::shared_ptr<PerfUtils> perf_utils = std::make_shared<PerfUtils>();
-      perf_utils->AddSql(q_ptr_->GetName(), infer_perf_manager_->GetSql());
-
-      perf_calculator_["rsz_cvt"] = std::make_shared<PerfCalculatorForInfer>();
-      perf_calculator_["infer"] = std::make_shared<PerfCalculatorForInfer>();
-      perf_calculator_["rsz_cvt_batch"] = std::make_shared<PerfCalculatorForInfer>();
-
-      for (auto it : perf_calculator_) {
-        if (!it.second->SetPerfUtils(perf_utils)) {
-          LOGE(INFERENCER) << "Set perf utils failed.";
-          return false;
-        }
-      }
-
-      perf_th_running_.store(true);
-      cal_perf_th_ = std::thread(&InferencerPrivate::CalcPerf, this);
-    }
-
     return true;
   }
 
@@ -230,7 +177,6 @@ class InferencerPrivate {
           bsize_,
           params_.batching_timeout,
           params_.use_scaler,
-          infer_perf_manager_,
           tid_str,
           std::bind(&InferencerPrivate::InferEngineErrorHnadleFunc, this, std::placeholders::_1),
           params_.keep_aspect_ratio,
@@ -242,14 +188,10 @@ class InferencerPrivate {
           params_.model_input_pixel_format,
           params_.mem_on_mlu_for_postproc,
           params_.saving_infer_input,
-          module_name_);
+          module_name_,
+          q_ptr_->GetProfiler());
       ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_, bsize_);
       ctxs_[tid] = ctx;
-      if (infer_perf_manager_) {
-        infer_perf_manager_->RegisterPerfType(
-            tid_str, PerfManager::GetPrimaryKey(),
-            {"resize_start_time", "resize_end_time", "resize_cnt", "infer_start_time", "infer_end_time", "infer_cnt"});
-      }
     }
     return ctx;
   }
@@ -261,97 +203,6 @@ class InferencerPrivate {
  private:
   DECLARE_PUBLIC(q_ptr_, Inferencer);
 };  // class InferencerPrivate
-
-void InferencerPrivate::PrintPerf(std::string name, std::vector<std::string> keys) {
-  if (perf_calculator_.find(name) == perf_calculator_.end()) {
-    LOGE(INFERENCER) << "[Inferencer] [" << q_ptr_->GetName() << "] Can not find perf calculator " << name << std::endl;
-    return;
-  }
-  std::shared_ptr<PerfCalculator> calculator = perf_calculator_[name];
-  std::shared_ptr<PerfUtils> perf_utils = calculator->GetPerfUtils();
-  std::vector<std::string> thread_ids = perf_utils->GetTableNames(q_ptr_->GetName());
-
-  std::vector<std::pair<std::string, PerfStats>> latest_fps, entire_fps, latency_vec;
-  std::vector<uint32_t> latest_frame_cnt_digit, entire_frame_cnt_digit, latency_frame_cnt_digit;
-  for (auto thread_id : thread_ids) {
-    PerfStats fps_stats = calculator->CalcThroughput(q_ptr_->GetName(), thread_id, keys);
-    PerfStats latency_stats = calculator->CalcLatency(q_ptr_->GetName(), thread_id, keys);
-    PerfStats avg_fps = calculator->GetAvgThroughput(q_ptr_->GetName(), thread_id);
-
-    if (name == "rsz_cvt_batch") {
-      latency_stats.frame_cnt *= bsize_;
-      fps_stats.frame_cnt *= bsize_;
-      fps_stats.fps *= bsize_;
-      avg_fps.fps *= bsize_;
-      avg_fps.frame_cnt *= bsize_;
-    }
-
-    latency_vec.push_back(std::make_pair(thread_id, latency_stats));
-    latest_fps.push_back(std::make_pair(thread_id, fps_stats));
-    entire_fps.push_back(std::make_pair(thread_id, avg_fps));
-
-    latency_frame_cnt_digit.push_back(std::to_string(latency_stats.frame_cnt).length());
-    latest_frame_cnt_digit.push_back(std::to_string(fps_stats.frame_cnt).length());
-    entire_frame_cnt_digit.push_back(std::to_string(avg_fps.frame_cnt).length());
-  }
-
-  PerfStats total_stats = calculator->CalcThroughput(q_ptr_->GetName(), "", keys);
-  PerfStats total_avg_fps = calculator->GetAvgThroughput(q_ptr_->GetName(), "");
-
-  if (name == "rsz_cvt_batch") {
-    total_stats.fps *= bsize_;
-    total_stats.frame_cnt *= bsize_;
-    total_avg_fps.fps *= bsize_;
-    total_avg_fps.frame_cnt *= bsize_;
-  }
-
-  uint32_t max_digit = PerfUtils::Max(latency_frame_cnt_digit);
-  for (auto &it : latency_vec) {
-    PrintStr(it.first);
-    PrintLatency(it.second, max_digit);
-  }
-  PrintTitleForLatestThroughput();
-  max_digit = PerfUtils::Max(latest_frame_cnt_digit);
-  for (auto &it : latest_fps) {
-    PrintStr(it.first);
-    PrintThroughput(it.second, max_digit);
-  }
-  PrintTitleForTotal();
-  PrintThroughput(total_stats);
-
-  PrintTitleForAverageThroughput();
-  max_digit = PerfUtils::Max(entire_frame_cnt_digit);
-  for (auto &it : entire_fps) {
-    PrintStr(it.first);
-    PrintThroughput(it.second, max_digit);
-  }
-  PrintTitleForTotal();
-  PrintThroughput(total_avg_fps);
-}
-
-void InferencerPrivate::PrintPerf() {
-  std::cout << "\033[1;35m" << "\n\n#################################################"
-            << "#################################################\n" << "\033[0m" << std::endl;
-  PrintStr("Inferencer performance.    Module name : " + q_ptr_->GetName());
-  PrintTitle("resize and convert (theoretical)");
-  PrintPerf("rsz_cvt_batch", {"resize_start_time", "resize_end_time"});
-  PrintTitle("resize and convert (realistic)");
-  PrintPerf("rsz_cvt", {"resize_start_time", "resize_end_time", "resize_cnt"});
-  PrintTitle("run inference");
-  PrintPerf("infer", {"infer_start_time", "infer_end_time", "infer_cnt"});
-}
-
-void InferencerPrivate::CalcPerf() {
-  std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-  while (perf_th_running_) {
-    PrintPerf();
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    infer_perf_manager_->SqlCommitTrans();
-    infer_perf_manager_->SqlBeginTrans();
-  }
-  infer_perf_manager_->SqlCommitTrans();
-  PrintPerf();
-}
 
 Inferencer::Inferencer(const std::string& name) : Module(name) {
   d_ptr_ = nullptr;
@@ -392,6 +243,10 @@ bool Inferencer::Open(ModuleParamSet raw_params) {
   if (container_ == nullptr) {
     LOGI(INFERENCER) << name_ << " has not been added into pipeline.";
   } else {
+    if (GetProfiler()) {
+      GetProfiler()->RegisterProcessName("RESIZE CONVERT");
+      GetProfiler()->RegisterProcessName("RUN MODEL");
+    }
   }
 
   return true;
@@ -399,9 +254,6 @@ bool Inferencer::Open(ModuleParamSet raw_params) {
 
 void Inferencer::Close() {
   if (nullptr == d_ptr_) return;
-
-  d_ptr_->perf_th_running_.store(false);
-  if (d_ptr_->cal_perf_th_.joinable()) d_ptr_->cal_perf_th_.join();
 
   /*destroy infer contexts*/
   d_ptr_->ctx_mtx_.lock();

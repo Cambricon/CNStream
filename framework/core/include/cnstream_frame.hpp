@@ -113,11 +113,13 @@ class CNFrameInfo : private NonCopyable {
    */
   friend class Pipeline;
   mutable uint32_t channel_idx = INVALID_STREAM_IDX;        ///< The index of the channel, stream_index
+  void SetModulesMask(uint64_t mask);
   uint64_t MarkPassed(Module* current);  // return changed mask
   uint64_t GetModulesMask();
 
  private:
   SpinLock mask_lock_;
+  /* Identifies which modules have processed this data */
   uint64_t modules_mask_ = 0;
 
  private:

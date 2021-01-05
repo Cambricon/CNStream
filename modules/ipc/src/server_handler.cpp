@@ -24,7 +24,6 @@
 #include "cnstream_frame.hpp"
 #include "device/mlu_context.h"
 #include "module_ipc.hpp"
-#include "perf_manager.hpp"
 #include "server_handler.hpp"
 
 namespace cnstream {
@@ -197,15 +196,6 @@ void IPCServerHandler::ProcessFrameInfoPackage(size_t thread_idx) {
     }
 
     this->PackageToCNData(recv_pkg, data);
-
-    auto perf_manager_ = ipc_module_->GetPerfManager(recv_pkg.stream_id);
-    if (!data->IsEos() && (nullptr != perf_manager_)) {
-      std::string thread_name = "cn-" + ipc_module_->GetName() + "-" + NumToFormatStr(thread_idx, 2);
-      perf_manager_->Record(false, PerfManager::GetDefaultType(), ipc_module_->GetName(), recv_pkg.timestamp);
-      perf_manager_->Record(
-          PerfManager::GetDefaultType(), PerfManager::GetPrimaryKey(), std::to_string(recv_pkg.timestamp),
-          ipc_module_->GetName() + PerfManager::GetThreadSuffix(), thread_name);
-    }
 
     ipc_module_->SendData(data);
   }

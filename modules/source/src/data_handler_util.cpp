@@ -56,20 +56,13 @@ int SourceRender::Process(std::shared_ptr<CNFrameInfo> frame_info,
         return -1;
       }
     }
-#ifdef CNS_MLU220_SOC    
-    dataframe->ctx.dev_type = DevContext::MLU_CPU;
-#else
     dataframe->ctx.dev_type = DevContext::MLU;
-#endif
     // device_id in callback-frame incorrect, use device_id saved in params instead
     dataframe->ctx.dev_id = param_.device_id_;
     dataframe->ctx.ddr_channel = -1;
     for (int i = 0; i < dataframe->GetPlanes(); i++) {
       dataframe->stride[i] = frame->stride[i];
       dataframe->ptr_mlu[i] = reinterpret_cast<void *>(frame->plane[i]);
-#ifdef CNS_MLU220_SOC    
-      dataframe->ptr_cpu[i] = reinterpret_cast<void *>(frame->plane[i]);
-#endif
     }
 
     if (OUTPUT_MLU == param_.output_type_) {
