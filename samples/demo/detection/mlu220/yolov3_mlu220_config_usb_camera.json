@@ -21,11 +21,12 @@
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "custom_params" : {
-      "model_path" : "../../../../data/models/MLU220/Primary_Detector/YOLOv3/yolov3_bs4core4_v1.5.0.cambricon",
+      "model_path" : "../../../../data/models/MLU220/Primary_Detector/YOLOv3/yolov3_4c4b_argb_220_v1.5.0.cambricon",
       "func_name" : "subnet0",
       "postproc_name" : "PostprocYolov3",
-      "use_scaler" : "true",
-      "batching_timeout" : 100,
+      "keep_aspect_ratio" : "true",
+      "model_input_pixel_format" : "ARGB32",
+      "batching_timeout" : 300,
       "device_id" : 0
     }
   },
@@ -34,7 +35,6 @@
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["rtsp_sink"],
-    "show_perf_info" : true,
     "custom_params" : {
       "label_path" : "../../../../data/models/MLU220/Primary_Detector/YOLOv3/label_map_coco.txt"
     }

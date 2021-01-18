@@ -190,7 +190,6 @@ bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
       LOGE(SOURCE) << "[DataSource] [decoder_type] " << dec_type << " not supported.";
       ret = false;
     }
-
     if (dec_type == "mlu" && device_id < 0) {
       LOGE(SOURCE) << "[DataSource] [decoder_type] MLU : device_id must be set";
       ret = false;

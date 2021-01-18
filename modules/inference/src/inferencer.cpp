@@ -244,7 +244,9 @@ bool Inferencer::Open(ModuleParamSet raw_params) {
     LOGI(INFERENCER) << name_ << " has not been added into pipeline.";
   } else {
     if (GetProfiler()) {
-      GetProfiler()->RegisterProcessName("RESIZE CONVERT");
+      if (!params.use_scaler && params.preproc_name.empty()) {
+        GetProfiler()->RegisterProcessName("RESIZE CONVERT");
+      }
       GetProfiler()->RegisterProcessName("RUN MODEL");
     }
   }

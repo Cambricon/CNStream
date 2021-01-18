@@ -146,6 +146,9 @@ void RtspSink::SetParam(const ModuleParamSet &paramSet, std::string name, std::s
 }
 
 bool RtspSink::Open(ModuleParamSet paramSet) {
+  if (!CheckParamSet(paramSet)) {
+    return false;
+  }
   SetParam(paramSet, "udp_port", &params_.udp_port, 9554);
   SetParam(paramSet, "http_port", &params_.http_port, 8080);
   SetParam(paramSet, "frame_rate", &params_.frame_rate, 25);
@@ -246,7 +249,6 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
       ret = false;
     }
   }
-
   if (paramSet.find("preproc_type") != paramSet.end()) {
     if (paramSet.at("preproc_type") != "cpu") {
       LOGE(RTSP) << "[RtspSink] (ERROR) Not support preprocess type: \"" << paramSet.at("preproc_type")

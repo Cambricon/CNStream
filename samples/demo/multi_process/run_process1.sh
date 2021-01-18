@@ -17,5 +17,4 @@ $CURRENT_FILE/../../bin/demo  \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/config_process1.json" \
-    --alsologtostderr \
-    --perf_db_dir="$CURRENT_FILE/process1"
+    --alsologtostderr

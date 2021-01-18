@@ -72,7 +72,7 @@ class Observer : public cnstream::IModuleObserver {
 };
 
 int main(int argc, char **argv) {
-  cnstream::InitCNStreamLogging(argv[0]);
+  cnstream::InitCNStreamLogging(nullptr);
   gflags::ParseCommandLineFlags(&argc, &argv, false);
 
   std::cout << "\033[01;31m"

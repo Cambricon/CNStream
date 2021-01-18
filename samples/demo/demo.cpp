@@ -49,6 +49,7 @@
 
 #include "profiler/pipeline_profiler.hpp"
 #include "profiler/profile.hpp"
+#include "profiler/trace_serialize_helper.hpp"
 
 DEFINE_string(data_path, "", "video file list.");
 DEFINE_string(data_name, "", "video file name.");
@@ -59,6 +60,7 @@ DEFINE_string(config_fname, "", "pipeline config filename");
 DEFINE_bool(jpeg_from_mem, false, "Jpeg bitstream from mem.");
 DEFINE_bool(raw_img_input, false, "feed decompressed image to source");
 DEFINE_bool(use_cv_mat, true, "feed cv mat to source. It is valid only if ``raw_img_input`` is set to true");
+DEFINE_string(trace_data_dir, "", "dump trace data to specified dir. An empty string means that no data is stored");
 
 cnstream::Displayer* gdisplayer = nullptr;
 
@@ -386,8 +388,12 @@ int main(int argc, char** argv) {
     start print performance infomations
    */
   std::future<void> perf_print_th_ret;
+  int trace_data_file_cnt = 0;
   if (pipeline.IsProfilingEnabled()) {
-    perf_print_th_ret = std::async(std::launch::async, [&pipeline] {
+    perf_print_th_ret = std::async(std::launch::async, [&pipeline, &trace_data_file_cnt] {
+      cnstream::Time last_time = cnstream::Clock::now();
+      int trace_data_dump_times = 0;
+      cnstream::TraceSerializeHelper trace_dumper;
       while (!gstop_perf_print) {
         std::this_thread::sleep_for(std::chrono::seconds(2));
         ::PrintPipelinePerformance("Whole", pipeline.GetProfiler()->GetProfile());
@@ -395,7 +401,22 @@ int main(int argc, char** argv) {
           cnstream::Duration duration(2000);
           ::PrintPipelinePerformance("Last two seconds",
                                      pipeline.GetProfiler()->GetProfileBefore(cnstream::Clock::now(), duration));
+          if (!FLAGS_trace_data_dir.empty()) {
+            cnstream::Time now_time = cnstream::Clock::now();
+            trace_dumper.Serialize(pipeline.GetTracer()->GetTrace(last_time, now_time));
+            last_time = now_time;
+            if (++trace_data_dump_times == 10) {
+              trace_dumper.ToFile(FLAGS_trace_data_dir + "/cnstream_trace_data_"
+                                  + std::to_string(trace_data_file_cnt++));
+              trace_dumper.Reset();
+              trace_data_dump_times = 0;
+            }
+          }
         }
+      }
+      if (pipeline.IsTracingEnabled() && !FLAGS_trace_data_dir.empty() && trace_data_dump_times) {
+        trace_dumper.ToFile(FLAGS_trace_data_dir + "/cnstream_trace_data_" + std::to_string(trace_data_file_cnt++));
+        trace_dumper.Reset();
       }
     });
   }
@@ -494,6 +515,21 @@ int main(int argc, char** argv) {
     gstop_perf_print = true;
     perf_print_th_ret.get();
     ::PrintPipelinePerformance("Whole", pipeline.GetProfiler()->GetProfile());
+  }
+
+  if (pipeline.IsTracingEnabled() && !FLAGS_trace_data_dir.empty()) {
+    LOGI(DEMO) << "Wait for trace data merge ...";
+    cnstream::TraceSerializeHelper helper;
+    for (int file_index = 0; file_index < trace_data_file_cnt; ++file_index) {
+      std::string filename = FLAGS_trace_data_dir + "/cnstream_trace_data_" + std::to_string(file_index);
+      cnstream::TraceSerializeHelper t;
+      cnstream::TraceSerializeHelper::DeserializeFromJSONFile(filename, &t);
+      helper.Merge(t);
+      remove(filename.c_str());
+    }
+    if (!helper.ToFile(FLAGS_trace_data_dir + "/cnstream_trace_data.json")) {
+      LOGE(DEMO) << "Dump trace data failed.";
+    }
   }
   return EXIT_SUCCESS;
 }

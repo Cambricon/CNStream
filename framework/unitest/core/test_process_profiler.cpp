@@ -292,6 +292,21 @@ TEST(CoreProcessProfiler, OnStreamEos) {
   EXPECT_EQ(profiler.GetProfile().stream_profiles.size(), 0);
 }
 
+TEST(CoreProcessProfiler, OnStreamEosBorderCase) {
+  PipelineTracer tracer;
+  ProfilerConfig config;
+  config.enable_profiling = true;
+  config.enable_tracing = true;
+  const std::string profiler_name = "profiler";
+  ProcessProfiler profiler(config, profiler_name, &tracer);
+  profiler.SetTraceLevel(TraceEvent::Level::PIPELINE);
+  const std::string stream_name = "stream0";
+
+  EXPECT_EQ(profiler.GetProfile().stream_profiles.size(), 0);
+  profiler.OnStreamEos(stream_name);
+  EXPECT_EQ(profiler.GetProfile().stream_profiles.size(), 0);
+}
+
 TEST(CoreProcessProfiler, NullTracer) {
   ProfilerConfig config;
   config.enable_profiling = true;

@@ -311,7 +311,7 @@ TEST(RTSP, RTSP) {
   params["gop_size"] = "30";
   params["dst_width"] = "352";
   params["dst_height"] = "288";
-  params["color_mode"] = "rgb";
+  params["color_mode"] = "bgr";
   params["view_rows"] = "2";
   params["view_cols"] = "3";
   params["encoder_type"] = "ffmpeg";
@@ -324,7 +324,7 @@ TEST(RTSP, RTSP) {
   params["gop_size"] = "30";
   params["dst_width"] = "352";
   params["dst_height"] = "288";
-  params["color_mode"] = "rgb";
+  params["color_mode"] = "bgr";
   params["view_rows"] = "2";
   params["view_cols"] = "3";
   params["encoder_type"] = "mlu";
@@ -337,7 +337,7 @@ TEST(RTSP, RTSP) {
   params["gop_size"] = "30";
   params["dst_width"] = "352";
   params["dst_height"] = "288";
-  params["color_mode"] = "rgb";
+  params["color_mode"] = "bgr";
   params["encoder_type"] = "ffmpeg";
   TestAllCase(ptr, params, __LINE__);
 
@@ -348,7 +348,7 @@ TEST(RTSP, RTSP) {
   params["gop_size"] = "30";
   params["dst_width"] = "352";
   params["dst_height"] = "288";
-  params["color_mode"] = "rgb";
+  params["color_mode"] = "bgr";
   params["encoder_type"] = "mlu";
   TestAllCase(ptr, params, __LINE__);
 }

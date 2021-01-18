@@ -61,7 +61,6 @@ bool InferParamsEQ(const InferParams &p1, const InferParams &p2) {
          p1.object_infer == p2.object_infer &&
          p1.threshold == p2.threshold &&
          p1.use_scaler == p2.use_scaler &&
-         p1.show_stats == p2.show_stats &&
          p1.infer_interval == p2.infer_interval &&
          p1.batching_timeout == p2.batching_timeout &&
          p1.keep_aspect_ratio == p2.keep_aspect_ratio &&
@@ -70,7 +69,6 @@ bool InferParamsEQ(const InferParams &p1, const InferParams &p2) {
          p1.model_path == p2.model_path &&
          p1.preproc_name == p2.preproc_name &&
          p1.postproc_name == p2.postproc_name &&
-         p1.stats_db_name == p2.stats_db_name &&
          p1.obj_filter_name == p2.obj_filter_name &&
          p1.dump_resized_image_dir == p2.dump_resized_image_dir &&
          p1.model_input_pixel_format == p2.model_input_pixel_format;
@@ -86,7 +84,6 @@ TEST(Inferencer, infer_param_manager) {
     "object_infer",
     "threshold",
     "use_scaler",
-    "show_stats",
     "infer_interval",
     "batching_timeout",
     "keep_aspect_ratio",
@@ -95,7 +92,6 @@ TEST(Inferencer, infer_param_manager) {
     "model_path",
     "preproc_name",
     "postproc_name",
-    "stats_db_name",
     "obj_filter_name",
     "dump_resized_image_dir",
     "model_input_pixel_format"
@@ -110,7 +106,6 @@ TEST(Inferencer, infer_param_manager) {
   expect_ret.object_infer = true;
   expect_ret.threshold = 0.5;
   expect_ret.use_scaler = true;
-  expect_ret.show_stats = false;
   expect_ret.infer_interval = 1;
   expect_ret.batching_timeout = 3;
   expect_ret.keep_aspect_ratio = false;
@@ -119,7 +114,6 @@ TEST(Inferencer, infer_param_manager) {
   expect_ret.model_path = "fake_path";
   expect_ret.preproc_name = "fake_name";
   expect_ret.postproc_name = "fake_name";
-  expect_ret.stats_db_name = "db_name";
   expect_ret.obj_filter_name = "filter_name";
   expect_ret.dump_resized_image_dir = "dir";
   expect_ret.model_input_pixel_format = CNDataFormat::CN_PIXEL_FORMAT_BGRA32;
@@ -129,7 +123,6 @@ TEST(Inferencer, infer_param_manager) {
   raw_params["object_infer"] = std::to_string(expect_ret.object_infer);
   raw_params["threshold"] = std::to_string(expect_ret.threshold);
   raw_params["use_scaler"] = std::to_string(expect_ret.use_scaler);
-  raw_params["show_stats"] = std::to_string(expect_ret.show_stats);
   raw_params["infer_interval"] = std::to_string(expect_ret.infer_interval);
   raw_params["batching_timeout"] = std::to_string(expect_ret.batching_timeout);
   raw_params["keep_aspect_ratio"] = std::to_string(expect_ret.keep_aspect_ratio);
@@ -138,7 +131,6 @@ TEST(Inferencer, infer_param_manager) {
   raw_params["model_path"] = expect_ret.model_path;
   raw_params["preproc_name"] = expect_ret.preproc_name;
   raw_params["postproc_name"] = expect_ret.postproc_name;
-  raw_params["stats_db_name"] = expect_ret.stats_db_name;
   raw_params["obj_filter_name"] = expect_ret.obj_filter_name;
   raw_params["dump_resized_image_dir"] = expect_ret.dump_resized_image_dir;
   raw_params["model_input_pixel_format"] = "BGRA32";
@@ -157,7 +149,6 @@ TEST(Inferencer, infer_param_manager) {
     default_value.object_infer = false;
     default_value.threshold = 0.0;
     default_value.use_scaler = false;
-    default_value.show_stats = false;
     default_value.infer_interval = 1;
     default_value.batching_timeout = 3000;
     default_value.keep_aspect_ratio = false;
@@ -166,7 +157,6 @@ TEST(Inferencer, infer_param_manager) {
     default_value.model_path = "";
     default_value.preproc_name = "";
     default_value.postproc_name = "";
-    default_value.stats_db_name = "";
     default_value.obj_filter_name = "";
     default_value.dump_resized_image_dir = "";
     default_value.model_input_pixel_format = CNDataFormat::CN_PIXEL_FORMAT_RGBA32;
@@ -202,13 +192,6 @@ TEST(Inferencer, infer_param_manager) {
   {
     InferParams ret;
     raw_params["use_scaler"] = "wrong";
-    EXPECT_FALSE(manager.ParseBy(raw_params, &ret));
-  }
-
-  raw_params.clear();
-  {
-    InferParams ret;
-    raw_params["show_stats"] = "wrong";
     EXPECT_FALSE(manager.ParseBy(raw_params, &ret));
   }
 

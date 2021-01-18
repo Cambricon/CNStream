@@ -3,7 +3,6 @@
     "class_name" : "cnstream::DataSource",
     "parallelism" : 0,
     "next_modules" : ["detector"],
-    "show_perf_info" : true,
     "custom_params" : {
       "output_type" : "mlu",
       "decoder_type" : "mlu",
@@ -17,7 +16,6 @@
     "parallelism" : 1,
     "max_input_queue_size" : 20,
     "next_modules" : ["osd"],
-    "show_perf_info" : true,
     "custom_params" : {
       "model_path" : "../../../data/models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon",
       "func_name" : "subnet0",
@@ -33,7 +31,6 @@
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["displayer"],
-    "show_perf_info" : true,
     "custom_params" : {
       // "chinese_font_path" : "/user/include/wqy_zenhei.ttf",
       "label_path" : "../../../data/models/MLU270/Primary_Detector/ssd/label_voc.txt"
@@ -44,7 +41,6 @@
     "class_name" : "cnstream::Displayer",
     "parallelism" : 1,
     "max_input_queue_size" : 20,
-    "show_perf_info" : true,
     "custom_params" : {
       "window-width" : 1920,
       "window-height" : 1080,

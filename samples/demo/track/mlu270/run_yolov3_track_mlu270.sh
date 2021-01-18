@@ -12,7 +12,7 @@
 CURRENT_FILE=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 SAMPLES_DIR=$CURRENT_FILE/../../..
 MODEL_PATH=$CURRENT_FILE/../../../../data/models/MLU270/yolov3/
-MODEL_NAME=yolov3_offline_u4_v1.3.0.cambricon
+MODEL_NAME=yolov3_4c4b_argb_270_v1.5.0.cambricon
 mkdir -p $MODEL_PATH
 cd $MODEL_PATH
     if [ ! -f "${MODEL_NAME}" ]; then
@@ -22,16 +22,18 @@ cd $MODEL_PATH
     fi
 cd -
 
-source ${SAMPLES_DIR}/demo/env.sh
-MODEL_PATH=$CURRENT_DIR/../../data/models/MLU270/feature_extract
+MODEL_PATH=$CURRENT_FILE/../../../../data/models/MLU270/feature_extract
 mkdir -p $MODEL_PATH
+MODEL_NAME=feature_extract_4c4b_argb_270_v1.5.0.cambricon
 cd $MODEL_PATH
-    if [ ! -f "feature_extract_v1.3.0.cambricon" ]; then
-      wget -O feature_extract_v1.3.0.cambricon  http://video.cambricon.com/models/MLU270/feature_extract/feature_extract_v1.3.0.cambricon
+    if [ ! -f ${MODEL_NAME} ]; then
+      wget -O ${MODEL_NAME}  http://video.cambricon.com/models/MLU270/feature_extract/${MODEL_NAME}
     else
-      echo "feature extarct offline model exists."
+      echo "${MODEL_NAME} exists."
     fi
 cd -
+
+source ${SAMPLES_DIR}/demo/env.sh
 
 mkdir -p $CURRENT_FILE/output
 ${SAMPLES_DIR}/bin/demo  \

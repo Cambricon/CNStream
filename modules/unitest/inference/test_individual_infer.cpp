@@ -47,12 +47,27 @@
 
 namespace cnstream {
 
-static const char *g_model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
 static const char *g_func_name = "subnet0";
 static const char *g_postproc_name = "PostprocClassification";
 
 static constexpr int g_dev_id = 0;
 static constexpr int g_channel_id = 0;
+
+static std::string GetModelPath() {
+  edk::MluContext ctx;
+  edk::CoreVersion core_ver = ctx.GetCoreVersion();
+  std::string model_path = "";
+  switch (core_ver) {
+    case edk::CoreVersion::MLU220:
+      model_path = "../../data/models/MLU220/classification/resnet18/resnet18_bs4_c4.cambricon";
+      break;
+    case edk::CoreVersion::MLU270:
+    default:
+      model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
+      break;
+  }
+  return model_path;
+}
 
 class InferObserver : public IModuleObserver {
  public:
@@ -89,7 +104,7 @@ void GetResult(std::shared_ptr<InferObserver> observer) {
 }
 
 TEST(Inferencer, Demo) {
-  std::string model_path = GetExePath() + g_model_path;
+  std::string model_path = GetExePath() + GetModelPath();
 
   std::shared_ptr<Module> infer = std::make_shared<Inferencer>("test_infer");
   std::shared_ptr<InferObserver> observer = std::make_shared<InferObserver>();

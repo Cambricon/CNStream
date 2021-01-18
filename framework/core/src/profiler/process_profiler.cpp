@@ -268,6 +268,7 @@ ProcessProfile ProcessProfiler::GetProfile(const ProcessTrace& trace) const {
 void ProcessProfiler::OnStreamEos(const std::string& stream_name) {
   if (!config_.enable_tracing && !config_.enable_profiling) return;
   SpinLockGuard lk(lk_);
+  if (stream_profilers_.find(stream_name) == stream_profilers_.end()) return;
   uint64_t number_remaining = 0;
   record_policy_->OnStreamEos(stream_name, &number_remaining);
   AddDropped(stream_name, number_remaining);

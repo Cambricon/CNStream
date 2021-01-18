@@ -462,8 +462,10 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
       if (IsLeafNode(moduleName) && PassedByAllModules(changed_mask)) {
         profiler_->RecordOutput(profiling_record_key);
       }
-      profiler_->GetModuleProfiler(moduleName)
-               ->RecordProcessEnd(kPROCESS_PROFILER_NAME, profiling_record_key);
+      if (!IsRootNode(moduleName)) {
+        profiler_->GetModuleProfiler(moduleName)
+                 ->RecordProcessEnd(kPROCESS_PROFILER_NAME, profiling_record_key);
+      }
     }
   }
 

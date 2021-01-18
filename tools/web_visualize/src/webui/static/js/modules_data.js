@@ -71,7 +71,7 @@ custom_params: {
   max_input_queue_size: 20,
   show_perf_info: true,
   custom_params: {
-    model_path: "../../models/MLU270/feature_extract/feature_extract_v1.3.0.cambricon",
+    model_path: "../../models/MLU270/feature_extract/feature_extract_4c4b_argb_270_v1.5.0.cambricon",
     func_name: "subnet0",
     track_name: "",
     max_cosine_distance: "",

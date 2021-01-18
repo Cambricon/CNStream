@@ -11,7 +11,7 @@
 CURRENT_FILE=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 SAMPLES_DIR=$CURRENT_FILE/../../..
 MODEL_PATH=$CURRENT_FILE/../../../../data/models/MLU220/Primary_Detector/YOLOv3/
-MODEL_NAME=yolov3_bs4core4_v1.5.0.cambricon
+MODEL_NAME=yolov3_4c4b_argb_220_v1.5.0.cambricon
 mkdir -p $MODEL_PATH
 
 cd $MODEL_PATH

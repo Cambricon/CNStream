@@ -30,11 +30,11 @@
 
 #include "cnstream_frame.hpp"
 #include "cnstream_frame_va.hpp"
+#include "easybang/resize_and_colorcvt.h"
 #include "easyinfer/easy_infer.h"
 #include "easyinfer/mlu_memory_op.h"
 #include "easyinfer/model_loader.h"
 
-#define CLIP(x) ((x) < 0 ? 0 : ((x) > 1 ? 1 : (x)))
 namespace cnstream {
 
 using CNInferObjectPtr = std::shared_ptr<CNInferObject>;
@@ -46,38 +46,37 @@ class FeatureExtractor {
                             int device_id = 0);
   ~FeatureExtractor();
 
+  bool Init(CNDataFormat src_fmt, edk::CoreVersion core_ver);
   /*******************************************************
-   * @brief inference and extract feature of an object
+   * @brief inference and extract features of objects
    * @param
    *   frame[in] full image
-   *   obj[in] detected object
-   * @return return a 128 dimension vector as feature of
+   *   objs_holder[in] detected objects
+   * @return return a 512 dimension vector as feature of
    *         object.
    * *****************************************************/
-  void ExtractFeature(const cv::Mat& image, const CNInferObjsPtr& objs_holder,
+  void ExtractFeature(const CNDataFramePtr& frame, const CNInferObjsPtr& objs_holder,
                       std::vector<std::vector<float>>* features);
 
 
  private:
-  void ExtractFeatureOnMlu(const cv::Mat& image, const CNInferObjsPtr& objs_holder,
+  void ExtractFeatureOnMlu(const CNDataFramePtr& frame, const CNInferObjsPtr& objs_holder,
                            std::vector<std::vector<float>>* features);
-  void ExtractFeatureOnCpu(const cv::Mat& image, const CNInferObjsPtr& objs_holder,
+  void ExtractFeatureOnCpu(const CNDataFramePtr& frame, const CNInferObjsPtr& objs_holder,
                            std::vector<std::vector<float>>* features);
-  int RunBatch(const std::vector<std::vector<float*>>& inputs,
-                               std::vector<std::vector<float>>* outputs);
-  cv::Mat CropImage(const cv::Mat& image, const CNInferBoundingBox& bbox);
-  cv::Mat Preprocess(const cv::Mat& image);
+  int RunBatch(const uint32_t& inputs_size, std::vector<std::vector<float>>* outputs);
   float CalcFeatureOfRow(const cv::Mat& image, int n);
 
   edk::EasyInfer infer_;
+  std::unique_ptr<edk::MluResizeConvertOp> rc_;
   edk::MluMemoryOp mem_op_;
   std::shared_ptr<edk::ModelLoader> model_loader_ = nullptr;
   int batch_size_ = 1;
   int device_id_;
-  void** input_cpu_ptr_;
   void** output_cpu_ptr_;
   void** input_mlu_ptr_;
   void** output_mlu_ptr_;
+  bool is_initialized_ = false;
 };  // class FeatureExtractor
 
 }  // namespace cnstream

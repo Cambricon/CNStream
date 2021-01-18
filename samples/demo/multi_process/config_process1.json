@@ -2,7 +2,6 @@
   "source" : {
     "class_name" : "cnstream::DataSource",
     "parallelism" : 0,
-    "show_perf_info" : true,
     "next_modules" : ["ipc"],
     "custom_params" : {
       "reuse_cndec_buf" : "false",
@@ -15,7 +14,6 @@
   "ipc" : {
     "class_name" : "cnstream::ModuleIPC",
     "parallelism" : 1,
-    "show_perf_info" : true,
     "max_input_queue_size" : 20,
     "custom_params" : {
       "ipc_type" : "client",

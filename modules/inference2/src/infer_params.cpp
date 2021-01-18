@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2020] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2021] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,12 +24,14 @@
 #include <limits>
 #include <set>
 #include <string>
+#include <unordered_map>
 
 #include "infer_params.hpp"
 #define ASSERT(value) {                                 \
   bool __attribute__((unused)) ret = (value);           \
   assert(ret);                                          \
 }
+using ModuleParamSet = std::unordered_map<std::string, std::string>;
 
 namespace cnstream {
 
@@ -76,13 +78,13 @@ static bool STR2FLOAT(const std::string &value, float *ret) {
   return true;
 }
 
-void InferParamManager::RegisterAll(ParamRegister *pregister) {
-  InferParamDesc param;
+void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
+  Infer2ParamDesc param;
   param.name = "model_path";
   param.desc_str = "Required. The path of the offline model.";
   param.default_value = "";
   param.type = "string";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     param_set->model_path = value;
     return true;
   };
@@ -93,7 +95,7 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
                    "It could be found in Cambricon twins file. For most cases, it is \"subnet0\".";
   param.default_value = "subnet0";
   param.type = "string";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     if (value.empty()) return false;
     param_set->func_name = value;
     return true;
@@ -107,7 +109,7 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
                    "cnstream::ObjPostproc.";
   param.default_value = "";
   param.type = "string";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     param_set->postproc_name = value;
     return true;
   };
@@ -121,7 +123,7 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
                    "set and use_scaler set to false.";
   param.default_value = "";
   param.type = "string";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     param_set->preproc_name = value;
     return true;
   };
@@ -132,7 +134,7 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
                    "preproc_name not set. 1/true/TRUE/True/0/false/FALSE/False these values are accepted.";
   param.default_value = "false";
   param.type = "bool";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     return STR2BOOL(value, &param_set->use_scaler);
   };
   ASSERT(RegisterParam(pregister, param));
@@ -141,7 +143,16 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
   param.desc_str = "Optional. MLU device ordinal number.";
   param.default_value = "0";
   param.type = "uint32";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
+    return STR2U32(value, &param_set->device_id);
+  };
+  ASSERT(RegisterParam(pregister, param));
+
+  param.name = "engine_num";
+  param.desc_str = "Optional. infer server engine number.";
+  param.default_value = "1";
+  param.type = "uint32";
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     return STR2U32(value, &param_set->device_id);
   };
   ASSERT(RegisterParam(pregister, param));
@@ -150,8 +161,24 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
   param.desc_str = "Optional. The batching timeout. unit[ms].";
   param.default_value = "3000";
   param.type = "uint32";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     return STR2U32(value, &param_set->batching_timeout);
+  };
+  ASSERT(RegisterParam(pregister, param));
+
+  param.name = "batch_strategy";
+  param.desc_str = "The batch strategy for modules.";
+  param.default_value = "static";
+  param.type = "string";
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
+    if ("static" == value || "STATIC" == value) {
+      param_set->batch_strategy = "static";
+      return true;
+    } else if ("dynamic" == value || "DYNAMIC" == value) {
+      param_set->batch_strategy = "dynamic";
+      return true;
+    }
+    return false;
   };
   ASSERT(RegisterParam(pregister, param));
 
@@ -159,7 +186,7 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
   param.desc_str = "Optional. The order in which the output data of the model are placed.value range : NCHW/NHWC.";
   param.default_value = "NHWC";
   param.type = "string";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     if ("NCHW" == value) {
       param_set->data_order = edk::DimOrder::NCHW;
       return true;
@@ -175,7 +202,7 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
   param.desc_str = "Optional. The threshold pass to postprocessing function.";
   param.default_value = "0";
   param.type = "float";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     return STR2FLOAT(value, &param_set->threshold);
   };
   ASSERT(RegisterParam(pregister, param));
@@ -184,8 +211,18 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
   param.desc_str = "Optional. Inferencing one frame every [infer_interval] frames.";
   param.default_value = "1";
   param.type = "uint32";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     return STR2U32(value, &param_set->infer_interval);
+  };
+  ASSERT(RegisterParam(pregister, param));
+
+  param.name = "show_stats";
+  param.desc_str = "Optional. Whether show inferencer performance statistics. "
+                   "1/true/TRUE/True/0/false/FALSE/False these values are accepted.";
+  param.default_value = "false";
+  param.type = "bool";
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
+    return STR2BOOL(value, &param_set->show_stats);
   };
   ASSERT(RegisterParam(pregister, param));
 
@@ -195,7 +232,7 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
                    " 1/true/TRUE/True/0/false/FALSE/False these values are accepted.";
   param.default_value = "false";
   param.type = "bool";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     return STR2BOOL(value, &param_set->object_infer);
   };
   ASSERT(RegisterParam(pregister, param));
@@ -206,7 +243,7 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
                    "No object will be filtered when this parameter not set.";
   param.default_value = "";
   param.type = "string";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     param_set->obj_filter_name = value;
     return true;
   };
@@ -217,18 +254,8 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
                    "1/true/TRUE/True/0/false/FALSE/False these values are accepted.";
   param.default_value = "false";
   param.type = "bool";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     return STR2BOOL(value, &param_set->keep_aspect_ratio);
-  };
-  ASSERT(RegisterParam(pregister, param));
-
-  param.name = "dump_resized_image_dir";
-  param.desc_str = "Optional. Where to dump the resized image.";
-  param.default_value = "";
-  param.type = "string";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
-    param_set->dump_resized_image_dir = value;
-    return true;
   };
   ASSERT(RegisterParam(pregister, param));
 
@@ -236,7 +263,7 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
   param.desc_str = "Optional. The pixel format of the model input image. ARGB32/ABGR32/RGBA32/BGRA32 are supported.";
   param.default_value = "RGBA32";
   param.type = "string";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
+  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     if ("RGBA32" == value) param_set->model_input_pixel_format = CN_PIXEL_FORMAT_RGBA32;
     else if ("BGRA32" == value) param_set->model_input_pixel_format = CN_PIXEL_FORMAT_BGRA32;
     else if ("ARGB32" == value) param_set->model_input_pixel_format = CN_PIXEL_FORMAT_ARGB32;
@@ -246,28 +273,9 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
     return true;
   };
   ASSERT(RegisterParam(pregister, param));
-
-  param.name = "mem_on_mlu_for_postproc";
-  param.desc_str = "Optional. Pass a batch mlu pointer directly to post-processing function "
-                   "without making d2h copies. see Postproc for details.";
-  param.default_value = "false";
-  param.type = "bool";
-  param.parser = [] (const std::string &value, InferParams *param_set) -> bool {
-    return STR2BOOL(value, &param_set->mem_on_mlu_for_postproc);
-  };
-  ASSERT(RegisterParam(pregister, param));
-
-  param.name = "saving_infer_input";
-  param.desc_str = "Optional. Save the data close to inferencing ";
-  param.default_value = "false";
-  param.type = "bool";
-  param.parser = [](const std::string &value, InferParams *param_set) -> bool {
-    return STR2BOOL(value, &param_set->saving_infer_input);
-  };
-  ASSERT(RegisterParam(pregister, param));
 }
 
-bool InferParamManager::RegisterParam(ParamRegister *pregister, const InferParamDesc &param_desc) {
+bool Infer2ParamManager::RegisterParam(ParamRegister *pregister, const Infer2ParamDesc &param_desc) {
   if (!pregister) return false;
   if (!param_desc.IsLegal()) return false;
   auto insert_ret = param_descs_.insert(param_desc);
@@ -279,10 +287,10 @@ bool InferParamManager::RegisterParam(ParamRegister *pregister, const InferParam
   return true;
 }
 
-bool InferParamManager::ParseBy(const ModuleParamSet &raw_params, InferParams *pout) {
+bool Infer2ParamManager::ParseBy(const ModuleParamSet &raw_params, Infer2Params *pout) {
   if (!pout) return false;
   ModuleParamSet raws = raw_params;
-  for (const InferParamDesc &desc : param_descs_) {
+  for (const Infer2ParamDesc &desc : param_descs_) {
     std::string value = desc.default_value;
     auto it = raws.find(desc.name);
     if (it != raws.end()) {
@@ -290,13 +298,13 @@ bool InferParamManager::ParseBy(const ModuleParamSet &raw_params, InferParams *p
       raws.erase(it);
     }
     if (!desc.parser(value, pout)) {
-      LOGE(INFERENCER) << "Parse parameter [" << desc.name << "] failed. value is [" << value << "]";
+      LOGE(INFERENCER2) << "Parse parameter [" << desc.name << "] failed. value is [" << value << "]";
       return false;
     }
   }
   for (const auto &it : raws) {
-    if (it.first != CNS_JSON_DIR_PARAM_NAME) {
-      LOGE(INFERENCER) << "Parameter named [" << it.first << "] did not registered.";
+    if (it.first != "json_file_dir") {
+      LOGE(INFERENCER2) << "Parameter named [" << it.first << "] did not registered.";
       return false;
     }
   }

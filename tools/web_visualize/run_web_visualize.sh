@@ -64,7 +64,7 @@ pushd $dst_dir
     fi
   popd
   feature_extract_model_path="models/MLU270/feature_extract"
-  feature_extract_model_name="feature_extract_v1.3.0.cambricon"
+  feature_extract_model_name="feature_extract_4c4b_argb_270_v1.5.0.cambricon"
   mkdir -p $src_dir/$feature_extract_model_path
   pushd $src_dir/$feature_extract_model_path
     if [ ! -f $feature_extract_model_name ]; then

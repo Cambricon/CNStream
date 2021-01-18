@@ -23,7 +23,6 @@
     "parallelism" : 1,
     "max_input_queue_size" : 20,
     "next_modules" : ["osd"],
-    "show_perf_info" : true,
     "custom_params" : {
       "model_path" : "../../../data/models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon",
       "func_name" : "subnet0",
@@ -39,7 +38,6 @@
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["rtsp_sink"],
-    "show_perf_info" : true,
     "custom_params" : {
       "label_path" : "../../../data/models/MLU270/Primary_Detector/ssd/label_voc.txt"
     }

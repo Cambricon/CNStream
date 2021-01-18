@@ -8,7 +8,6 @@
     "class_name" : "cnstream::DataSource",
     "parallelism" : 0,
     "next_modules" : ["detector"],
-    "show_perf_info" : true,
     "custom_params" : {
       "reuse_cndec_buf" : "true",
       "output_type" : "mlu",
@@ -24,7 +23,6 @@
     "parallelism" : 2,
     "max_input_queue_size" : 200,
     "next_modules" : ["classifier"],
-    "show_perf_info" : true,
     "custom_params" : {
       "model_path" : "../../../data/models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon",
       "func_name" : "subnet0",
@@ -39,7 +37,6 @@
     "class_name" : "cnstream::Inferencer",
     "parallelism" : 4,
     "max_input_queue_size" : 200,
-    "show_perf_info" : true,
     "next_modules" : ["osd"],
     "custom_params" : {
       "object_infer" : true,
@@ -56,7 +53,6 @@
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["rtsp_sink"],
-    "show_perf_info" : true,
     "custom_params" : {
       "label_path" : "../../../data/models/MLU270/Primary_Detector/ssd/label_voc.txt",
       "secondary_label_path" : "../../../data/models/MLU270/Classification/resnet50/synset_words.txt",

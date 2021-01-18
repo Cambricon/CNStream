@@ -7,8 +7,7 @@ $CURRENT_FILE/../../bin/demo  \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/config_process1.json" \
-    --alsologtostderr \
-    --perf_db_dir="$CURRENT_FILE/process1"
+    --alsologtostderr
 }
 
 start_process2() {
@@ -18,8 +17,7 @@ $CURRENT_FILE/../../bin/demo  \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/config_process2.json" \
-    --alsologtostderr \
-    --perf_db_dir="$CURRENT_FILE/process2"
+    --alsologtostderr
 }
 
 SAMPLES_DIR=$CURRENT_FILE/../..

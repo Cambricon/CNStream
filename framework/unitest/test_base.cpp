@@ -35,7 +35,7 @@ std::string GetExePath() {
   if (cnt < 0 || cnt >= PATH_MAX_LENGTH) {
     return "";
   }
-  for (int i = cnt; i >= 0; --i) {
+  for (int i = cnt - 1; i >= 0; --i) {
     if ('/' == path[i]) {
       path[i + 1] = '\0';
       break;

@@ -39,8 +39,8 @@ const std::vector<std::array<std::string, 3>> model_info = {
     {"resnet50_offline_v1.3.0.cambricon", "/Classification/resnet50/",
      "http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon"},
     {"yuv2gray.cambricon", "/KCF/", "http://video.cambricon.com/models/MLU270/KCF/yuv2gray.cambricon"},
-    {"feature_extract_v1.3.0.cambricon", "/feature_extract/",
-     "http://video.cambricon.com/models/MLU270/feature_extract/feature_extract_v1.3.0.cambricon"},
+    {"feature_extract_4c4b_argb_270_v1.5.0.cambricon", "/feature_extract/",
+     "http://video.cambricon.com/models/MLU270/feature_extract/feature_extract_4c4b_argb_270_v1.5.0.cambricon"},
 };
 
 class TestEnvironment : public testing::Environment {
@@ -61,6 +61,11 @@ std::string GetExecPath() {
   int cnt = readlink("/proc/self/exe", path, PATH_MAX_SIZE);
   if (cnt < 0 || cnt >= PATH_MAX_SIZE) {
     return "";
+  }
+  if (path[cnt - 1] == '/') {
+    path[cnt - 1] = '\0';
+  } else {
+    path[cnt] = '\0';
   }
   std::string result = std::string(path);
   return result.substr(0, result.rfind('/') + 1);
@@ -120,12 +125,13 @@ void GetModuleExists(const std::vector<std::array<std::string, 3>> model_info) {
 int main(int argc, char **argv) {
   // GetModuleExists(model_name, modulepath_pair);
   GetModuleExists(model_info);
-  cnstream::InitCNStreamLogging(argv[0]);
+  // fork process and write log to file in child proccess is not supported in log system
+  // cnstream::InitCNStreamLogging(GetExecPath().c_str());
   testing::InitGoogleTest(&argc, argv);
   ::gflags::ParseCommandLineFlags(&argc, &argv, false);
   // FLAGS_alsologtostderr = true;
   testing::AddGlobalTestEnvironment(new TestEnvironment);
   int ret = RUN_ALL_TESTS();
-  cnstream::ShutdownCNStreamLogging();
+  // cnstream::ShutdownCNStreamLogging();
   return ret;
 }

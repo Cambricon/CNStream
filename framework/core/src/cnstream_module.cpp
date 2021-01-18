@@ -153,9 +153,9 @@ int Module::DoProcess(std::shared_ptr<CNFrameInfo> data) {
       return DoTransmitData(data);
     }
   } else {
-      if (removed) {
-        data->flags |= CN_FRAME_FLAG_REMOVED;
-      }
+    if (removed) {
+      data->flags |= CN_FRAME_FLAG_REMOVED;
+    }
     return Process(data);
   }
   return -1;
