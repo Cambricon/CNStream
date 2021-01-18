@@ -21,9 +21,10 @@
 #include <gflags/gflags.h>
 #include "gtest/gtest.h"
 #include "cnstream_logging.hpp"
+#include "test_base.hpp"
 
 int main(int argc, char **argv) {
-  cnstream::InitCNStreamLogging(argv[0]);
+  cnstream::InitCNStreamLogging(GetExePath().c_str());
   testing::InitGoogleTest(&argc, argv);
   ::gflags::ParseCommandLineFlags(&argc, &argv, false);
   // FLAGS_alsologtostderr = true;

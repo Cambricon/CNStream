@@ -27,6 +27,8 @@
 #include "feature_extractor.hpp"
 #include "track.hpp"
 
+#define CLIP(x) ((x) < 0 ? 0 : ((x) > 1 ? 1 : (x)))
+
 namespace cnstream {
 
 struct TrackerContext {
@@ -61,10 +63,18 @@ TrackerContext *Tracker::GetContext(CNFrameInfoPtr data) {
   }
   if (!g_tl_feature_extractor) {
     if (!model_loader_) {
-      LOGI(TRACK) << "[FeatureExtractor] model not set, extract feature on CPU";
+      LOGI(TRACK) << "[Track] FeatureExtract model not set, extract feature on CPU";
       g_tl_feature_extractor.reset(new FeatureExtractor());
     } else {
       g_tl_feature_extractor.reset(new FeatureExtractor(model_loader_, device_id_));
+      if (data->IsEos()) {
+        return nullptr;
+      }
+      edk::CoreVersion core_ver = g_tl_mlu_env->GetCoreVersion();
+      if (!g_tl_feature_extractor->Init(GetCNDataFramePtr(data)->fmt, core_ver)) {
+        LOGE(TRACK) << "[Track] Extract feature on MLU. Init resize and convert op failed.";
+        return nullptr;
+      }
     }
   }
 
@@ -168,6 +178,7 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
     bbox.w = (bbox.x + bbox.w > 1.0) ? (1.0 - bbox.x) : bbox.w;
     bbox.h = (bbox.y + bbox.h > 1.0) ? (1.0 - bbox.y) : bbox.h;
   }
+
   TrackerContext *ctx = GetContext(data);
   if (nullptr == ctx || nullptr == ctx->processer_) {
     LOGE(TRACK) << "Get Tracker Context Failed.";
@@ -176,7 +187,12 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
 
   if (track_name_ == "FeatureMatch") {
     std::vector<std::vector<float>> features;
-    g_tl_feature_extractor->ExtractFeature(*frame->ImageBGR(), objs_holder, &features);
+    g_tl_feature_extractor->ExtractFeature(frame, objs_holder, &features);
+
+    if (features.size() != objs_holder->objs_.size()) {
+      LOGE(TRACK) << "Extract feature Failed.";
+      return -1;
+    }
 
     std::vector<edk::DetectObject> in, out;
     for (size_t i = 0; i < objs_holder->objs_.size(); i++) {

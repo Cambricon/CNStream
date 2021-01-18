@@ -109,7 +109,7 @@ TEST(RtspSink, Process) {
   data = cnstream::CNFrameInfo::Create(std::to_string(col * row + 1), true);
   ptr->Close();
 
-  params["color_mode"] = "wrong";
+  params["color_mode"] = "nv";
   EXPECT_TRUE(ptr->Open(params));
 
   data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));

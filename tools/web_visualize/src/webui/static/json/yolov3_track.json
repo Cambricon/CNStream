@@ -1,4 +1,9 @@
 {
+  "profiler_config" : {
+    "enable_profiling" : true,
+    "enable_tracing"   : true
+  },
+{
   "source" : {
     "class_name" : "cnstream::DataSource",
     "parallelism" : 0,
@@ -19,11 +24,13 @@
     "show_perf_info" : true,
     "next_modules" : ["tracker"],
     "custom_params" : {
-      "model_path" : "../models/MLU270/yolov3/yolov3_offline_u4_v1.3.0.cambricon",
+      "model_path" : "../models/MLU270/yolov3/yolov3_4c4b_argb_270_v1.5.0.cambricon",
       "func_name" : "subnet0",
       "postproc_name" : "PostprocYolov3",
       "batching_timeout" : 300,
-      "threshold" : 0.6,
+      "threshold" : 0.7,
+      "keep_aspect_ratio" : "true",
+      "model_input_pixel_format" : "ARGB32",
       "device_id" : 0
     }
   },
@@ -35,7 +42,8 @@
     "show_perf_info" : true,
     "next_modules" : ["osd"],
     "custom_params" : {
-      "model_path" : "../models/MLU270/feature_extract/feature_extract_v1.3.0.cambricon",
+      "model_path" : "../models/MLU270/feature_extract/feature_extract_4c4b_argb_270_v1.5.0.cambricon",
+      "max_cosine_distance": "0.06",
       "device_id" : 0
     }
   },

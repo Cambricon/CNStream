@@ -37,6 +37,8 @@
 
 namespace cnstream {
 
+const int kFeatureSizeForCpu = 512;
+
 FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& model_loader,
                                    int device_id)
     : model_loader_(model_loader) {
@@ -50,10 +52,13 @@ FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& mode
       LOGE(TRACK) << "[FeatureExtractor] model should have exactly one input";
       return;
     }
+    if (model_loader_->OutputNum() != 1) {
+      LOGE(TRACK) << "[FeatureExtractor] model should have exactly one output";
+      return;
+    }
 
     // 2.prepare input and output memory
     mem_op_.SetModel(model_loader_);
-    input_cpu_ptr_ = mem_op_.AllocCpuInput();
     input_mlu_ptr_ = mem_op_.AllocMluInput();
     output_mlu_ptr_ = mem_op_.AllocMluOutput();
     output_cpu_ptr_ = mem_op_.AllocCpuOutput();
@@ -61,6 +66,8 @@ FeatureExtractor::FeatureExtractor(const std::shared_ptr<edk::ModelLoader>& mode
     // 3.init cninfer
     infer_.Init(model_loader_, device_id_);
     LOGI(TRACK) << "[FeatureExtractor] to extract feature on MLU";
+
+    batch_size_ = static_cast<int>(model_loader_->InputShape(0).N());
   }
 }
 
@@ -69,99 +76,115 @@ FeatureExtractor::~FeatureExtractor() {
   if (model_loader_) {
     if (input_mlu_ptr_) mem_op_.FreeMluInput(input_mlu_ptr_);
     if (output_mlu_ptr_) mem_op_.FreeMluOutput(output_mlu_ptr_);
-    if (input_cpu_ptr_) mem_op_.FreeCpuInput(input_cpu_ptr_);
     if (output_cpu_ptr_) mem_op_.FreeCpuOutput(output_cpu_ptr_);
-    input_mlu_ptr_ = output_mlu_ptr_ = input_cpu_ptr_ = output_cpu_ptr_ = nullptr;
+    input_mlu_ptr_ = output_mlu_ptr_ = output_cpu_ptr_ = nullptr;
+    if (rc_) {
+      rc_->Destroy();
+    }
   }
 }
 
-void FeatureExtractor::ExtractFeature(const cv::Mat& image,
+bool FeatureExtractor::Init(CNDataFormat src_fmt, edk::CoreVersion core_ver) {
+  if (!model_loader_) {
+    return true;
+  }
+  if (is_initialized_) {
+    LOGW(TRACK) << "[FeatureExtractor] should not init twice.";
+  }
+  edk::MluResizeConvertOp::Attr attr;
+  attr.core_version = core_ver;
+
+  if (src_fmt == CN_PIXEL_FORMAT_YUV420_NV21) {
+    attr.color_mode = edk::MluResizeConvertOp::ColorMode::YUV2ARGB_NV21;
+  } else if (src_fmt == CN_PIXEL_FORMAT_YUV420_NV12) {
+    attr.color_mode = edk::MluResizeConvertOp::ColorMode::YUV2ARGB_NV12;
+  } else {
+    LOGE(TRACK) << "[FeatureExtractor] Init failed, unsupported src format.";
+    return false;
+  }
+
+  attr.data_mode = edk::MluResizeConvertOp::DataMode::UINT8ToUINT8;
+  attr.dst_w = static_cast<int>(model_loader_->InputShape(0).W());
+  attr.dst_h = static_cast<int>(model_loader_->InputShape(0).H());
+  attr.batch_size = batch_size_;
+  attr.keep_aspect_ratio = false;
+
+  rc_.reset(new edk::MluResizeConvertOp);
+  if (rc_->Init(attr)) {
+    is_initialized_ = true;
+    return true;
+  }
+  return false;
+}
+
+void FeatureExtractor::ExtractFeature(const CNDataFramePtr& frame,
                                       const CNInferObjsPtr& objs_holder,
                                       std::vector<std::vector<float>>* features) {
   features->clear();
   if (!model_loader_) {
-    ExtractFeatureOnCpu(image, objs_holder, features);
+    ExtractFeatureOnCpu(frame, objs_holder, features);
   } else {
-    ExtractFeatureOnMlu(image, objs_holder, features);
+    ExtractFeatureOnMlu(frame, objs_holder, features);
   }
 }
 
-void FeatureExtractor::ExtractFeatureOnMlu(const cv::Mat& image,
+void FeatureExtractor::ExtractFeatureOnMlu(const CNDataFramePtr& frame,
                                            const CNInferObjsPtr& objs_holder,
                                            std::vector<std::vector<float>>* features) {
-  uint32_t n = model_loader_->InputShapes()[0].n;
-  std::vector<std::vector<float*>> batch_inputs;
+  if (!is_initialized_) {
+    LOGW(TRACK) << "[FeatureExtractor] Please Init first.";
+    return;
+  }
   std::vector<std::vector<float>> batch_outputs;
-  std::vector<cv::Mat> batch_mats;
-  for (size_t i = 0; i < objs_holder->objs_.size(); i += n) {
-    for (size_t j = 0; j < n; ++j) {
-      size_t idx = i + j;
-      if (idx < objs_holder->objs_.size()) {
-        auto obj = objs_holder->objs_[idx];
-        cv::Mat obj_image = CropImage(image, obj->bbox);
-        cv::Mat preproc_image = Preprocess(obj_image);
-        batch_mats.push_back(preproc_image);
-        batch_inputs.push_back({reinterpret_cast<float*>(preproc_image.data)});
+  edk::MluResizeConvertOp::InputData input_data;
+  for (unsigned idx = 0; idx < objs_holder->objs_.size(); ++idx) {
+    auto &obj = objs_holder->objs_[idx];
+    input_data.src_w = frame->width;
+    input_data.src_h = frame->height;
+    input_data.src_stride = frame->stride[0];
+    input_data.crop_x = obj->bbox.x * frame->width;
+    input_data.crop_y = obj->bbox.y * frame->height;
+    input_data.crop_w = obj->bbox.w * frame->width;
+    input_data.crop_h = obj->bbox.h * frame->height;
+    input_data.planes[0] = const_cast<void*>(frame->data[0]->GetMluData());
+    input_data.planes[1] = const_cast<void*>(frame->data[1]->GetMluData());
+    rc_->BatchingUp(input_data);
+    if ((idx + 1) % batch_size_ == 0 || (idx + 1) == objs_holder->objs_.size()) {
+      if (!rc_->SyncOneOutput(input_mlu_ptr_[0])) {
+        LOGE(TRACK) << "[FeatureExtractor] RC: " << rc_->GetLastError();
       }
+      uint32_t batch_input_size = idx % batch_size_ + 1;
+      RunBatch(batch_input_size, &batch_outputs);
+      features->insert(features->end(), batch_outputs.begin(), batch_outputs.end());
+      batch_outputs.clear();
     }
-    RunBatch(batch_inputs, &batch_outputs);
-    features->insert(features->end(), batch_outputs.begin(), batch_outputs.end());
-    batch_inputs.clear();
-    batch_outputs.clear();
-    batch_mats.clear();
   }
 }
 
-void FeatureExtractor::ExtractFeatureOnCpu(const cv::Mat& image,
+void FeatureExtractor::ExtractFeatureOnCpu(const CNDataFramePtr& frame,
                                            const CNInferObjsPtr& objs_holder,
                                            std::vector<std::vector<float>>* features) {
+  const cv::Mat image = *frame->ImageBGR();
   for (uint32_t num = 0; num < objs_holder->objs_.size(); ++num) {
     auto obj = objs_holder->objs_[num];
     cv::Rect rect = cv::Rect(obj->bbox.x * image.cols, obj->bbox.y * image.rows, obj->bbox.w * image.cols,
                              obj->bbox.h * image.rows);
     cv::Mat obj_img(image, rect);
 #if (CV_MAJOR_VERSION == 2)  // NOLINT
-    cv::Ptr<cv::ORB> processer = new cv::ORB(128);
+    cv::Ptr<cv::ORB> processer = new cv::ORB(kFeatureSizeForCpu);
 #elif (CV_MAJOR_VERSION >= 3)  //  NOLINT
-    cv::Ptr<cv::ORB> processer = cv::ORB::create(128);
+    cv::Ptr<cv::ORB> processer = cv::ORB::create(kFeatureSizeForCpu);
 #endif
     std::vector<cv::KeyPoint> keypoints;
     processer->detect(obj_img, keypoints);
     cv::Mat desc;
     processer->compute(obj_img, keypoints, desc);
     std::vector<float> feature;
-    for (int i = 0; i < 128; i++) {
+    for (int i = 0; i < kFeatureSizeForCpu; i++) {
       feature.push_back((i < desc.rows ? CalcFeatureOfRow(desc, i) : 0));
     }
     features->push_back(feature);
   }
-}
-
-cv::Mat FeatureExtractor::CropImage(const cv::Mat& image, const CNInferBoundingBox& bbox) {
-  int x = CLIP(bbox.x) * image.cols;
-  int y = CLIP(bbox.y) * image.rows;
-  int w = CLIP(bbox.w) * image.cols;
-  int h = CLIP(bbox.h) * image.rows;
-
-  cv::Rect rect(x, y, w, h);
-  return image(rect);
-}
-
-cv::Mat FeatureExtractor::Preprocess(const cv::Mat& image) {
-  // resize image
-  edk::Shape in_shape = model_loader_->InputShapes()[0];
-  cv::Mat image_resized;
-  if (image.rows != static_cast<int>(in_shape.h) || image.cols != static_cast<int>(in_shape.w)) {
-    cv::resize(image, image_resized, cv::Size(in_shape.w, in_shape.h));
-  } else {
-    image_resized = image;
-  }
-
-  // convert data type to float 32 and normalize
-  cv::Mat image_normalized;
-  image_resized.convertTo(image_normalized, CV_32FC3, 1 / 255.0);
-  cv::cvtColor(image_normalized, image_normalized, CV_BGR2BGRA);
-  return image_normalized;
 }
 
 float FeatureExtractor::CalcFeatureOfRow(const cv::Mat& image, int n) {
@@ -173,39 +196,18 @@ float FeatureExtractor::CalcFeatureOfRow(const cv::Mat& image, int n) {
   return result;
 }
 
-
-int FeatureExtractor::RunBatch(const std::vector<std::vector<float*>>& inputs,
-                               std::vector<std::vector<float>>* outputs) {
-  if (inputs.empty()) {
-    return 0;
-  }
-
-  // prepare inputs
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    for (size_t j = 0; j < model_loader_->InputNum(); ++j) {
-      uint64_t data_count = model_loader_->InputShapes()[j].hwc();
-      float *cpu_input = static_cast<float*>(input_cpu_ptr_[j]) + i * data_count;
-      memcpy(cpu_input, inputs[i][j], data_count * sizeof(float));
-    }
-  }
-
-  // do copy and inference
-  mem_op_.MemcpyInputH2D(input_mlu_ptr_, input_cpu_ptr_);
+int FeatureExtractor::RunBatch(const uint32_t& inputs_size, std::vector<std::vector<float>>* outputs) {
   infer_.Run(input_mlu_ptr_, output_mlu_ptr_);
   mem_op_.MemcpyOutputD2H(output_cpu_ptr_, output_mlu_ptr_);
 
   // parse outputs
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    std::vector<std::vector<float>> output;
-    for (size_t j = 0; j < model_loader_->OutputNum(); ++j) {
-      uint64_t data_count = model_loader_->OutputShapes()[j].hwc();
-      float *cpu_output = static_cast<float*>(output_cpu_ptr_[j]) + i * data_count;
-      output.push_back(std::vector<float>(cpu_output, cpu_output + data_count));
-    }
-    outputs->push_back(output[0]);
+  uint64_t data_count = model_loader_->OutputShapes()[0].hwc();
+  for (size_t i = 0; i < inputs_size; ++i) {
+    float *cpu_output = static_cast<float*>(output_cpu_ptr_[0]) + i * data_count;
+    std::vector<float> output(cpu_output, cpu_output + data_count);
+    outputs->push_back(output);
   }
   return 0;
 }
-
 
 }  // namespace cnstream

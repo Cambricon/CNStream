@@ -4,6 +4,7 @@ link_directories("${Example_DIR}/../lib")
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/inference/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/inference2/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/osd/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/source/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/encode/include")

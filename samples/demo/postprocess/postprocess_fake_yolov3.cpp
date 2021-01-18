@@ -82,3 +82,36 @@ int PostprocFakeYolov3::Execute(const std::vector<float*>& net_outputs, const st
   }
   return 0;
 }
+
+class VideoPostprocFakeYolov3 : public cnstream::VideoPostproc {
+ public:
+  bool ExecuteInObserverNotify(infer_server::InferDataPtr result, const std::shared_ptr<infer_server::ModelInfo>& model,
+                               cnstream::CNFrameInfoPtr frame) {
+    auto model_output = infer_server::any_cast<infer_server::ModelIO>(result->data);
+    cnstream::CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(frame);
+    cnstream::CNObjsVec& objs = objs_holder->objs_;
+    float* data = reinterpret_cast<float*>(model_output.buffers[0].MutableData());
+    unsigned box_num = static_cast<unsigned>(data[0]);
+    data += 64;
+
+    for (decltype(box_num) bi = 0; bi < box_num; ++bi) {
+      if (threshold_ > 0 && data[2] < threshold_) continue;
+      std::shared_ptr<cnstream::CNInferObject> object = std::make_shared<cnstream::CNInferObject>();
+      object->id = std::to_string(data[1]);
+      object->score = data[2];
+      object->bbox.x = data[3];
+      object->bbox.y = data[4];
+      object->bbox.w = data[5] - object->bbox.x;
+      object->bbox.h = data[6] - object->bbox.y;
+
+      objs.push_back(object);
+      data += 7;
+    }
+    return true;
+  }
+
+ private:
+  DECLARE_REFLEX_OBJECT_EX(VideoPostprocFakeYolov3, cnstream::VideoPostproc);
+};  // class VideoPostprocFakeYolov3
+
+IMPLEMENT_REFLEX_OBJECT_EX(VideoPostprocFakeYolov3, cnstream::VideoPostproc);

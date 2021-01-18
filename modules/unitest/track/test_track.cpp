@@ -44,7 +44,7 @@ namespace cnstream {
 static constexpr const char *gname = "track";
 static constexpr const char *gfunc_name = "subnet0";
 static constexpr const char *g_dsmodel_path =
-    "../../data/models/MLU270/feature_extract/feature_extract_v1.3.0.cambricon";
+    "../../data/models/MLU270/feature_extract/feature_extract_4c4b_argb_270_v1.5.0.cambricon";
 static constexpr const char *g_kcfmodel_path = "../../data/models/MLU270/KCF/yuv2gray.cambricon";
 static constexpr const char *ds_track = "FeatureMatch";
 static constexpr const char *kcf_track = "KCF";
@@ -165,7 +165,9 @@ std::shared_ptr<CNFrameInfo> GenTestYUVData(int iter, int obj_num) {
   frame->width = width;
   frame->height = height;
   frame->ptr_cpu[0] = img.data;
+  frame->ptr_cpu[1] = img.data + height* width;
   frame->stride[0] = width;
+  frame->stride[1] = width;
   frame->ctx.dev_type = DevContext::DevType::CPU;
   frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
   frame->dst_device_id = g_dev_id;
@@ -230,7 +232,7 @@ TEST(Tracker, ProcessMluFeature) {
   int repeat_time = 10;
 
   for (int n = 0; n < repeat_time; ++n) {
-    auto data = GenTestData(n, obj_num);
+    auto data = GenTestYUVData(n, obj_num);
     EXPECT_EQ(track->Process(data), 0);
 
     CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(data);
@@ -371,28 +373,21 @@ TEST(Tracker, ProcessFeatureMatchMLU1) {
   ASSERT_TRUE(track->Open(param));
   int iter = 0;
   int obj_num = 3;
-  auto data = GenTestData(iter, obj_num);
-  EXPECT_EQ(track->Process(data), 0);
-  // Illegal width and height
+  auto data = GenTestYUVData(iter, obj_num);
+
   CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
+  // invalid fmt
+  frame->fmt = CN_PIXEL_FORMAT_RGB24;
+  EXPECT_EQ(track->Process(data), -1);
+  frame->fmt = CN_PIXEL_FORMAT_BGR24;
+  EXPECT_EQ(track->Process(data), -1);
+  frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+  // invalid width and height
   frame->width = -1;
   EXPECT_EQ(track->Process(data), -1);
-  frame->width = 1920;
-  EXPECT_EQ(track->Process(data), 0);
 
   frame->height = -1;
   EXPECT_EQ(track->Process(data), -1);
-  frame->height = 1080;
-  EXPECT_EQ(track->Process(data), 0);
-
-  frame->width = 1920;
-  frame->height = 1080;
-  EXPECT_EQ(track->Process(data), 0);
-  // Illegal fmt ???
-  // frame->fmt = CN_PIXEL_FORMAT_RGB24; //
-  // EXPECT_EQ(track->Process(data), -1); //
-  // frame->fmt = CN_PIXEL_FORMAT_BGR24; //
-  // EXPECT_EQ(track->Process(data), 0); //
 }
 
 TEST(Tracker, ProcessFeatureMatchMLU2) {
@@ -404,37 +399,15 @@ TEST(Tracker, ProcessFeatureMatchMLU2) {
   param["func_name"] = gfunc_name;
   ASSERT_TRUE(track->Open(param));
   int iter = 0;
-  int obj_num = 3;
-  auto data = GenTestData(iter, obj_num);
-  EXPECT_EQ(track->Process(data), 0);
-  auto obj = std::make_shared<CNInferObject>();
-
-  CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(data);
-  obj->id = std::to_string(5);
-  CNInferBoundingBox bbox = {0.6, 0.6, -0.1, -0.1};
-  obj->bbox = bbox;
-  objs_holder->objs_.push_back(obj);
-  EXPECT_ANY_THROW(track->Process(data));
-}
-
-TEST(Tracker, ProcessFeatureMatchMLU3) {
-  // create track
-  std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
-  ModuleParamSet param;
-  param["track_name"] = "FeatureMatch";
-  param["model_path"] = GetExePath() + g_dsmodel_path;
-  param["func_name"] = gfunc_name;
-  ASSERT_TRUE(track->Open(param));
-  int iter = 0;
   int obj_num = 0;
-  auto data = GenTestData(iter, obj_num);
+  auto data = GenTestYUVData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
   size_t zero = 0;
   CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(data);
   EXPECT_EQ(objs_holder->objs_.size(), zero);
 }
 
-TEST(Tracker, ProcessFeatureMatchMLU4) {
+TEST(Tracker, ProcessFeatureMatchMLU3) {
   // create track
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   ModuleParamSet param;
@@ -446,7 +419,7 @@ TEST(Tracker, ProcessFeatureMatchMLU4) {
   int repeat_time = 10;
   int obj_num = 4;
   for (int n = 0; n < repeat_time; ++n) {
-    auto data = GenTestData(n, obj_num);
+    auto data = GenTestYUVData(n, obj_num);
     EXPECT_EQ(track->Process(data), 0);
     CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(data);
     for (size_t idx = 0; idx < objs_holder->objs_.size(); ++idx) {

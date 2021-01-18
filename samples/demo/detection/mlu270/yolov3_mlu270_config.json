@@ -18,16 +18,20 @@
   },
 
   "detector" : {
-    "class_name" : "cnstream::Inferencer",
+    // "class_name" : "cnstream::Inferencer",
+    "class_name" : "cnstream::Inferencer2",
     "parallelism" : 1,
     "next_modules" : ["osd"],
     "max_input_queue_size" : 20,
     "custom_params" : {
-      "model_path" : "../../../../data/models/MLU270/yolov3/yolov3_offline_u4_v1.3.0.cambricon",
+      "model_path" : "../../../../data/models/MLU270/yolov3/yolov3_16c16b_argb_270_v1.5.0.cambricon",
       "func_name" : "subnet0",
-      "postproc_name" : "PostprocYolov3",
+      // "postproc_name" : "PostprocYolov3",
+      "postproc_name" : "VideoPostprocYolov3",
       "threshold" : 0.5,
       "batching_timeout" : 300,
+      "keep_aspect_ratio" : "true",
+      "model_input_pixel_format" : "ARGB32",
       "device_id" : 0
     }
   },

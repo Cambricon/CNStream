@@ -136,16 +136,27 @@ IMPLEMENT_REFLEX_OBJECT_EX(FakeObjFilter, ObjFilter);
 
 static const char *name = "test-infer";
 static const char *g_image_path = "../../data/images/3.jpg";
-#ifdef CNS_MLU100
-static const char *g_model_path = "../../data/models/MLU100/Primary_Detector/resnet34ssd/resnet34_ssd.cambricon";
-#elif CNS_MLU270
-static const char *g_model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
-#endif
 static const char *g_func_name = "subnet0";
 static const char *g_postproc_name = "FakePostproc";
 
 static constexpr int g_dev_id = 0;
 static constexpr int g_channel_id = 0;
+
+static std::string GetModelPath() {
+  edk::MluContext ctx;
+  edk::CoreVersion core_ver = ctx.GetCoreVersion();
+  std::string model_path = "";
+  switch (core_ver) {
+    case edk::CoreVersion::MLU220:
+      model_path = "../../data/models/MLU220/classification/resnet18/resnet18_bs4_c4.cambricon";
+      break;
+    case edk::CoreVersion::MLU270:
+    default:
+      model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
+      break;
+  }
+  return model_path;
+}
 
 TEST(Inferencer, Construct) {
   std::shared_ptr<Module> infer = std::make_shared<Inferencer>(name);
@@ -161,7 +172,7 @@ TEST(Inferencer, CheckParamSet) {
   EXPECT_FALSE(infer->CheckParamSet(param));
   param.clear();
 
-  param["model_path"] = GetExePath() + g_model_path;
+  param["model_path"] = GetExePath() + GetModelPath();
   param["func_name"] = g_func_name;
   param["postproc_name"] = g_postproc_name;
   EXPECT_TRUE(infer->CheckParamSet(param));
@@ -189,7 +200,7 @@ TEST(Inferencer, Open) {
   param["func_name"] = g_func_name;
   EXPECT_FALSE(infer->Open(param));
 
-  param["model_path"] = GetExePath() + g_model_path;
+  param["model_path"] = GetExePath() + GetModelPath();
   param["func_name"] = g_func_name;
   param["device_id"] = std::to_string(g_dev_id);
 
@@ -205,17 +216,11 @@ TEST(Inferencer, Open) {
   param["preproc_name"] = "test-preproc-name";
   EXPECT_FALSE(infer->Open(param));
 
-  param.erase("preproc_name");
-  param["show_stats"] = "true";
-  EXPECT_TRUE(infer->Open(param));
-  param["stats_db_name"] = gTestPerfDir + "test_infer.db";
-  EXPECT_TRUE(infer->Open(param));
-
   infer->Close();
 }
 
 TEST(Inferencer, ProcessFrame) {
-  std::string model_path = GetExePath() + g_model_path;
+  std::string model_path = GetExePath() + GetModelPath();
   std::string image_path = GetExePath() + g_image_path;
 
   // test with MLU preproc (resize & convert)
@@ -227,8 +232,6 @@ TEST(Inferencer, ProcessFrame) {
     param["postproc_name"] = g_postproc_name;
     param["device_id"] = std::to_string(g_dev_id);
     param["batching_timeout"] = "30";
-    param["show_stats"] = "true";
-    param["stats_db_name"] = gTestPerfDir + "test_infer.db";
     ASSERT_TRUE(infer->Open(param));
 
     const int width = 1280, height = 720;
@@ -432,7 +435,7 @@ TEST(Inferencer, ProcessFrame) {
 }
 
 TEST(Inferencer, ProcessObject) {
-  std::string model_path = GetExePath() + g_model_path;
+  std::string model_path = GetExePath() + GetModelPath();
   std::string image_path = GetExePath() + g_image_path;
 
   auto obj = std::make_shared<CNInferObject>();
@@ -452,8 +455,6 @@ TEST(Inferencer, ProcessObject) {
     param["postproc_name"] = "FakeObjPostproc";
     param["device_id"] = std::to_string(g_dev_id);
     param["batching_timeout"] = "30";
-    param["show_stats"] = "true";
-    param["stats_db_name"] = gTestPerfDir + "test_infer.db";
     param["object_infer"] = "true";
     param["obj_filter_name"] = "FakeObjFilter";
     ASSERT_TRUE(infer->Open(param));
@@ -652,7 +653,7 @@ TEST(Inferencer, ProcessObject) {
 }
 
 TEST(Inferencer, ProcessPerf) {
-  std::string model_path = GetExePath() + g_model_path;
+  std::string model_path = GetExePath() + GetModelPath();
   std::string image_path = GetExePath() + g_image_path;
 
   std::shared_ptr<Module> infer = std::make_shared<Inferencer>(name);
@@ -662,8 +663,6 @@ TEST(Inferencer, ProcessPerf) {
   param["postproc_name"] = g_postproc_name;
   param["device_id"] = std::to_string(g_dev_id);
   param["batching_timeout"] = "30";
-  param["show_stats"] = "true";
-  param["stats_db_name"] = gTestPerfDir + "test_infer.db";
   ASSERT_TRUE(infer->Open(param));
 
   const int width = 1280, height = 720;

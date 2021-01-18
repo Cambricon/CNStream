@@ -31,7 +31,16 @@ FFmpegVideoEncoder::FFmpegVideoFrame::FFmpegVideoFrame(FFmpegVideoEncoder *encod
   frame_->height = encoder_->avcodec_ctx_->height;
   frame_->format = encoder_->picture_format_;
   int align = (encoder_->picture_format_ == AV_PIX_FMT_RGB24 || encoder_->picture_format_ == AV_PIX_FMT_BGR24) ? 24 : 8;
-  av_image_alloc(frame_->data, frame_->linesize, frame_->width, frame_->height, (AVPixelFormat)frame_->format, align);
+  int ret = av_image_alloc(frame_->data, frame_->linesize, frame_->width, frame_->height, (AVPixelFormat)frame_->format,
+                           align);
+  if (ret < 0) {
+    if (frame_) {
+      av_freep(&(frame_->data[0]));
+      av_frame_unref(frame_);
+      av_free(frame_);
+    }
+    LOGF(RTSP) << "av_image_alloc() failed, ret=" << ret;
+  }
 }
 
 FFmpegVideoEncoder::FFmpegVideoFrame::~FFmpegVideoFrame() {
@@ -147,7 +156,6 @@ FFmpegVideoEncoder::FFmpegVideoEncoder(const RtspParam &rtsp_param) : VideoEncod
   avcodec_ctx_->gop_size = rtsp_param.gop;
   avcodec_ctx_->pix_fmt = AV_PIX_FMT_YUV420P;
   avcodec_ctx_->max_b_frames = 1;
-  // avcodec_ctx_->thread_count = 1;
 
   av_dict_set(&avcodec_opts_, "preset", "veryfast", 0);
   av_dict_set(&avcodec_opts_, "tune", "zerolatency", 0);
@@ -242,14 +250,42 @@ uint32_t FFmpegVideoEncoder::GetOffset(const uint8_t *data) {
 void FFmpegVideoEncoder::EncodeFrame(VideoFrame *frame) {
   FFmpegVideoFrame *ffpic = dynamic_cast<FFmpegVideoFrame *>(frame);
   AVFrame *picture = ffpic->Get();
-
   if (sws_ctx_) {
     sws_scale(sws_ctx_, picture->data, picture->linesize, 0, picture->height, avframe_->data, avframe_->linesize);
     avframe_->pts = picture->pts;
     picture = avframe_;
+    picture->format = avcodec_ctx_->pix_fmt;
   }
-
-  int ret = 0, got_packet;
+  int ret = 0;
+#if LIBAVCODEC_VERSION_MAJOR >= 57
+  ret = avcodec_send_frame(avcodec_ctx_, picture);
+  if (ret < 0) {
+    LOGE(RTSP) << "avcodec_send_frame() failed, ret=" << ret;
+    return;
+  }
+  if (ret >= 0) {
+    ret = avcodec_receive_packet(avcodec_ctx_, avpacket_);
+    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+      return;
+    } else if (ret < 0) {
+      LOGE(RTSP) << "avcodec_receive_packet() failed, ret=" << ret;
+      return;
+    }
+    if (!ret && avpacket_->size) {
+      int offset = 0;
+      uint8_t *packet_data = nullptr;
+      packet_data = reinterpret_cast<uint8_t *>(avpacket_->data);
+      offset = GetOffset(packet_data);
+      size_t length = avpacket_->size - offset;
+      uint8_t *data = avpacket_->data + offset;
+      PushOutputBuffer(data, length, frame_count_, avpacket_->pts);
+      frame_count_++;
+      Callback(NEW_FRAME);
+    }
+  }
+  av_packet_unref(avpacket_);
+#else
+  int got_packet = 0;
   ret = avcodec_encode_video2(avcodec_ctx_, avpacket_, picture, &got_packet);
   if (ret < 0) {
     LOGE(RTSP) << "avcodec_encode_video2() failed, ret=" << ret;
@@ -257,7 +293,6 @@ void FFmpegVideoEncoder::EncodeFrame(VideoFrame *frame) {
   }
 
   if (!ret && got_packet && avpacket_->size) {
-    // LOGI(RTSP) << "===got packet: size=" << avpacket_->size << ", pts=" << avpacket_->pts;
     int offset = 0;
     uint8_t *packet_data = nullptr;
     packet_data = reinterpret_cast<uint8_t *>(avpacket_->data);
@@ -269,6 +304,6 @@ void FFmpegVideoEncoder::EncodeFrame(VideoFrame *frame) {
     Callback(NEW_FRAME);
   }
   av_packet_unref(avpacket_);
+#endif
 }
-
 }  // namespace cnstream

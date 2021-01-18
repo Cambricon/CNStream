@@ -37,6 +37,9 @@
 
 #include "cnstream_frame.hpp"
 #include "cnstream_frame_va.hpp"
+#include "infer_server.h"
+#include "buffer.h"
+#include "processor.h"
 
 namespace cnstream {
 /**
@@ -162,13 +165,86 @@ class ObjPostproc : virtual public ReflexObjectEx<ObjPostproc> {
            see the inferencer parameter description for detail.
    */
   virtual int Execute(const std::vector<void*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
-                      const std::vector<std::pair<CNFrameInfoPtr, std::shared_ptr<CNInferObject>>> &obj_infos) {
+                      const std::vector<std::pair<CNFrameInfoPtr, std::shared_ptr<CNInferObject>>>& obj_infos) {
     return 0;
   }
 
  protected:
   float threshold_ = 0;
 };  // class ObjPostproc
+
+class VideoPostproc : virtual public ReflexObjectEx<VideoPostproc> {
+ public:
+  /**
+   * @brief do nothong
+   */
+  virtual ~VideoPostproc() = 0;
+  /**
+   * @brief create relative postprocess
+   *
+   * @param proc_name postprocess class name
+   *
+   * @return None
+   */
+  static VideoPostproc* Create(const std::string& proc_name);
+  /**
+   * @brief set threshold
+   *
+   * @param threshold the value between 0 and 1
+   *
+   * @return void
+   */
+  void SetThreshold(const float threshold);
+
+  /**
+   * @brief Execute postproc on inferserver
+   *
+   * @param output_data: the data or postproc result can take out to host.
+   * @param model_output: the result inferserver output.
+   * @param model_info: model informathion
+   *
+   * @note function ExecteInferServer() is run in inferserver, if you don't overwrite, it will send ModelInfo out.
+   */
+  virtual bool ExecuteByInferServer(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
+                                    const infer_server::ModelInfo& model_info) {
+    output_data->Set(model_output);
+    return true;
+  }
+
+  /**
+   * @brief Execute postproc in observer notify
+   *
+   * @param result: the data you get from inferserver output, in here is ModelInfo
+   * @param model: model information
+   * @param frame: the frame data, you set from userdata
+   *
+   * @note the function using in first inference
+   */
+  virtual bool ExecuteInObserverNotify(infer_server::InferDataPtr result,
+                                       const std::shared_ptr<infer_server::ModelInfo>& model,
+                                       cnstream::CNFrameInfoPtr frame) {
+    return false;
+  }
+
+  /**
+   * @brief Execute postproc in observer notify
+   *
+   * @param result: the data you get from inferserver output, in here is ModelInfo
+   * @param model: model information
+   * @param frame: the frame data, you set from userdata
+   * @param obj: the one InferObject you send to infer server
+   *
+   * @note the function using in second inference
+   */
+  virtual bool ExecuteInObserverNotify(infer_server::InferDataPtr result,
+                                       const std::shared_ptr<infer_server::ModelInfo>& model,
+                                       cnstream::CNFrameInfoPtr frame, std::shared_ptr<cnstream::CNInferObject> obj) {
+    return false;
+  }
+
+ protected:
+  float threshold_ = 0;
+};  // class VideoPostproc
 
 }  // namespace cnstream
 
