@@ -286,7 +286,7 @@ bool GetVideoStreamInfo(const AVFormatContext *ic, int &video_index, VideoStream
   int extradata_size = st->codec->extradata_size;
 #endif
   if (extradata && extradata_size) {
-    info.extra_data.reserve(extradata_size);
+    info.extra_data.resize(extradata_size);
     memcpy(info.extra_data.data(), extradata, extradata_size);
   }
   return true;

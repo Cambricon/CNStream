@@ -109,7 +109,10 @@ class FFmpegDemuxer : public IDemuxer {
     // open input
     ret_code = avformat_open_input(&p_format_ctx_, url_name_.c_str(), NULL, &options_);
     if (0 != ret_code) {
-      LOG(ERROR) << "Couldn't open input stream.";
+      char errstr[1024];
+      snprintf(errstr, sizeof(errstr), "%s", "no error.");
+      av_strerror(ret_code, errstr, sizeof(errstr));
+      LOG(ERROR) << "Couldn't open input stream: " << std::string(errstr);
       return false;
     }
 

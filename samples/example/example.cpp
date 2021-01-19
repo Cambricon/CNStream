@@ -19,6 +19,7 @@
  *************************************************************************/
 
 #include <memory>
+#include <string>
 
 #include "module_complex.hpp"
 #include "module_simple.hpp"
