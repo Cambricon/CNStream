@@ -132,9 +132,9 @@ std::shared_ptr<InferTask> ResizeConvertObjBatchingStage::Batching(std::shared_p
   return NULL;
 }
 
-ScalerObjBatchingStage::ScalerObjBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
+ScalerObjBatchingStage::ScalerObjBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, int dev_id,
                                                std::shared_ptr<MluInputResource> mlu_input_res)
-    : IOObjBatchingStage(model, batchsize, mlu_input_res) {}
+    : IOObjBatchingStage(model, batchsize, mlu_input_res), dev_id_(dev_id) {}
 
 ScalerObjBatchingStage::~ScalerObjBatchingStage() {}
 
@@ -167,7 +167,7 @@ void ScalerObjBatchingStage::ProcessOneObject(std::shared_ptr<CNFrameInfo> finfo
   src_frame.stride[0] = frame->stride[0];
   src_frame.stride[1] = frame->stride[1];
   src_frame.channel = 1;
-  src_frame.deviceId = 0;  // FIXME
+  src_frame.deviceId = dev_id_;
 
   const auto sp = value.datas[0].shape;  // model input shape
   auto align_to_128 = [](uint32_t x) { return (x + 127) & ~127; };
@@ -179,8 +179,10 @@ void ScalerObjBatchingStage::ProcessOneObject(std::shared_ptr<CNFrameInfo> finfo
   dst_frame.plane[0].size = row_align * sp.h;
   dst_frame.stride[0] = row_align;
   dst_frame.plane[0].addr = reinterpret_cast<u64_t>(dst);
+  dst_frame.deviceId = dev_id_;
 
   work_info.inMsg.instance = 0;
+  work_info.inMsg.cardId = dev_id_;
 
   cncodecRectangle roi;
   roi.left = obj->bbox.x * src_frame.width;
