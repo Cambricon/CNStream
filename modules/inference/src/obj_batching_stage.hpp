@@ -95,18 +95,19 @@ class ResizeConvertObjBatchingStage : public ObjBatchingStage {
 
  private:
   std::shared_ptr<RCOpResource> rcop_res_;
-  int dev_id_;
+  int dev_id_ = 0;
 };  // class ResizeConvertObjBatchingStage
 
 class ScalerObjBatchingStage : public IOObjBatchingStage {
  public:
-  ScalerObjBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
+  ScalerObjBatchingStage(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, int dev_id,
                          std::shared_ptr<MluInputResource> mlu_input_res);
   ~ScalerObjBatchingStage();
 
  private:
   void ProcessOneObject(std::shared_ptr<CNFrameInfo> finfo, std::shared_ptr<CNInferObject> obj, uint32_t batch_idx,
                         const IOResValue& value) override;
+  int dev_id_ = 0;
 };  // class ScalerObjBatchingStage
 
 }  // namespace cnstream

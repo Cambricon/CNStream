@@ -212,7 +212,7 @@ Modify the `files.list_video` file, which is under the cnstream/samples/demo dir
 
 
 ## Documentation ##
-[CNStream Read-the-Docs](http://cnstream.readthedocs.io) or [Cambricon Forum Docs](http://forum.cambricon.com/index.php?m=content&c=index&a=lists&catid=85)
+[Cambricon Forum Docs](http://forum.cambricon.com/list-64-1.html) or [CNStream Read-the-Docs](http://cnstream.readthedocs.io)
 
 Check out the Examples page for tutorials on how to use CNStream. Concepts page for basic definitions
 
