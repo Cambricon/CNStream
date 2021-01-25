@@ -237,9 +237,9 @@ void InferEngine::StageAssemble() {
     if (use_scaler_) {
       // use scaler (MLU220 only)
       if (batching_by_obj_) {
-        obj_batching_stage_ = std::make_shared<ScalerObjBatchingStage>(model_, batchsize_, mlu_input_res_);
+        obj_batching_stage_ = std::make_shared<ScalerObjBatchingStage>(model_, batchsize_, dev_id_, mlu_input_res_);
       } else {
-        batching_stage_ = std::make_shared<ScalerBatchingStage>(model_, batchsize_, mlu_input_res_);
+        batching_stage_ = std::make_shared<ScalerBatchingStage>(model_, batchsize_, dev_id_, mlu_input_res_);
       }
     } else {
       // use resize convert
