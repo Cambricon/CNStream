@@ -47,8 +47,6 @@ class MluResizeConvertPrivate;
  */
 class MluResizeConvertOp {
  public:
-  static constexpr float MAXIMUM_SCALE_UP_FACTOR = 100.0f;  ///<  Maximum magnification supported by operator
-  static constexpr uint32_t MAXIMUM_WIDTH = 7680;  ///< Maximum input width supported by operator
   /**
    * @brief Construct a new Mlu Resize Convert Operator object
    */
@@ -272,51 +270,6 @@ class MluResizeConvertOpError : public Exception {
   Attr attr_;
   InputData data_;
 };  // class MluResizeConvertOpError
-
-/**
- * @brief Exception class for scale-up
- *
- * @see MluResizeConvertOp::BatchingUp(const InputData&)
- **/
-class RCOpScaleUpError : public MluResizeConvertOpError {
- public:
-  explicit RCOpScaleUpError(const Attr& attr, const InputData& input_data) :
-      MluResizeConvertOpError(attr, input_data) {
-    err_str_ = "Maximum magnification limit exceeded. Maximum magnification: "
-               + std::to_string(MluResizeConvertOp::MAXIMUM_SCALE_UP_FACTOR) + ". Current magnification: "
-               + std::to_string(ScaleUpFactor()) + ".";
-  }
-
-  /**
-   * @brief Get scale-up factor
-   **/
-  inline float ScaleUpFactor() const {
-    float scale_w = 1.0f * GetRCOpAttr().dst_w / GetInputData().crop_w;
-    float scale_h = 1.0f * GetRCOpAttr().dst_h / GetInputData().crop_h;
-    if (GetRCOpAttr().keep_aspect_ratio) {
-      return std::min(scale_w, scale_h);
-    }
-    return scale_w;
-  }
-};  // class ScaleUpError
-
-/**
- * @brief Exception class for the width of the input image
- *        exceeds the maximum width supported by the operator
- *
- * @see MluResizeConvertOp::BatchingUp(const InputData&)
- **/
-class RCOpWidthOverLimitError : public MluResizeConvertOpError {
- public:
-  explicit RCOpWidthOverLimitError(const Attr& attr, const InputData& input_data) :
-      MluResizeConvertOpError(attr, input_data) {
-    err_str_ = "Maximum input width limit exceeded. Maximum input width: "
-               + std::to_string(MluResizeConvertOp::MAXIMUM_WIDTH) + ". Current input width: "
-               + std::to_string(GetWidth()) + ".";
-  }
-
-  inline uint32_t GetWidth() const { return GetInputData().crop_w; }
-};  // class WidthOverLimitError
 
 }  // namespace edk
 

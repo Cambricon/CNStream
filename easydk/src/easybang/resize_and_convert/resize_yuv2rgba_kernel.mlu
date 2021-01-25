@@ -1,0 +1,908 @@
+/*************************************************************************
+ * Copyright (C) [2019] by Cambricon, Inc.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *************************************************************************/
+#include <mlu.h>
+#include <sys/time.h>
+
+#include "resize_yuv2rgba_table.h"
+#include "mlisa_func.h"
+
+#define SRAM_SIZE 2048 * 1024
+#define NRAM_SIZE 508 * 1024
+#define UINT8_PAD_SIZE 128
+#define HALF_PAD_SIZE 64 
+#define PAD_SIZE 64 
+#define CI 32
+#define CO 128
+#define LT_NUM 64
+#define MULTCI 64
+#define MULT_LIMIT 64 // wram limit
+#define PAD_UP(x, y) (x / y + static_cast<int>((x) % y > 0)) * y
+#define PAD_DN(x, y) (x / y) * y
+
+#define CHANNEL 4
+
+/*------------------------------ HELP FUNCTIONS ------------------------------*/
+// load convert filter and bias from gdram
+__mlu_func__ void loadCvtFilter(half* yuv_filter_wram,
+                                half* yuv_bias_nram,
+                                half* yuv_filter_gdram,
+                                half* yuv_bias_gdram) {
+  // load filter and bias for yuv2rgba conv
+  __memcpy(yuv_bias_nram, yuv_bias_gdram,
+           CO * sizeof(half), GDRAM2NRAM);
+  __memcpy(yuv_filter_wram, yuv_filter_gdram,
+           2 * CI * CO * sizeof(half), GDRAM2WRAM);
+
+  // loadConst2Nram(yuv_bias_nram, (half*)yuv2rgba_bias,
+  //                CO * sizeof(half));
+  // loadConst2Wram(yuv_filter_wram, (half*)yuv2rgba_filter,
+  //                2 * CI * CO * sizeof(half));
+}
+
+
+// load mult copy filter from gdram if needed
+// mult: the multipiler used in upscaling mode
+__mlu_func__ void loadCopyFilter(int8_t* copy_filter_wram,
+                                 int8_t* copy_filter_addr,
+                                 int mult) {
+  // load copy filter if need src expansion
+  if (mult > 1 && mult <= MULT_LIMIT) {
+    __memcpy(copy_filter_wram, copy_filter_addr,
+             LT_NUM * LT_NUM * mult * sizeof(int8_t), GDRAM2WRAM);
+  }
+}
+
+
+// find w nram max load num
+// mult: the multipiler used in upscaling mode
+__mlu_func__ int nram_find_limit(int src_roi_w_, 
+                                 int src_roi_w,
+                                 int dst_roi_w, 
+                                 int mult) {
+  int const_size = HALF_PAD_SIZE * sizeof(half) +     // acuracy compensation
+                   HALF_PAD_SIZE * sizeof(half) +     // threshold max
+                   HALF_PAD_SIZE * sizeof(half) +     // half2uint8 temp
+                   CO * sizeof(half);                 // yuv2rgba bias
+
+  int lower_bound = 1;
+  int upper_bound = src_roi_w_ / 2;
+
+  int limit = upper_bound;
+
+  if (mult == 1) {
+    while (lower_bound < upper_bound - 1) {
+      int src_num = limit * 2;
+      int dst_num = __float2int_up((float)src_num * dst_roi_w / src_roi_w);
+
+      // rgba should align to 2 ct lines
+      int src_num_pad = PAD_UP(src_num * CHANNEL, HALF_PAD_SIZE) / CHANNEL;
+      int dst_num_pad = PAD_UP(dst_num * CHANNEL, HALF_PAD_SIZE) / CHANNEL;
+
+      // 2 point(left + right)
+      int mask_size = 2 * src_num_pad * CHANNEL * sizeof(half);
+      int weight_size = 2 * dst_num_pad * CHANNEL * sizeof(half);
+
+      // 2line y or 2 line uv should align to CI
+      int yuv_num_pad = PAD_UP(src_num_pad * 2, CI);
+
+      // origin yuv input(2 line y and 2 line uv) align to UINT8_PAD_SIZE
+      // or output(2 line and 2 point)
+      int ram_size1 = std::max(PAD_UP(2 * yuv_num_pad, UINT8_PAD_SIZE),
+                               2 * 2 * dst_num_pad * CHANNEL) * sizeof(half);
+
+      // rgba input(2 line)
+      int ram_size2 = 2 * src_num_pad * CHANNEL * sizeof(half);
+
+      int malloc_size = mask_size + weight_size + ram_size1 + ram_size2;
+
+      if (malloc_size <= NRAM_SIZE - const_size)
+        lower_bound = limit;
+      else
+        upper_bound = limit;
+
+      limit = (lower_bound + upper_bound) / 2;
+    }
+  } else {  // mult != 1
+    while (lower_bound < upper_bound - 1) {
+      int src_num = limit * 2;
+      int dst_num = __float2int_up((float)src_num * dst_roi_w / src_roi_w);
+
+      // rgba should align to 2 ct lines
+      int src_num_pad = PAD_UP(src_num * CHANNEL, HALF_PAD_SIZE) / CHANNEL;
+      int dst_num_pad = PAD_UP(dst_num * CHANNEL, HALF_PAD_SIZE) / CHANNEL;
+
+      // 2 point(left + right)
+      int mask_size = 2 * mult * src_num_pad * CHANNEL * sizeof(half);
+      int weight_size = 2 * dst_num_pad * CHANNEL * sizeof(half);
+
+      // 2line y or 2 line uv should align to CI
+      int yuv_num_pad = PAD_UP(src_num_pad * 2, CI);
+
+      // origin yuv input(2 line y and 2 line uv) align to UINT8_PAD_SIZE
+      // or mult rgba input(2 line)
+      int ram_size1 = std::max(PAD_UP(2 * yuv_num_pad, UINT8_PAD_SIZE),
+                               2 * mult * src_num_pad * CHANNEL) * sizeof(half);
+      
+      // rgba input(2 line) or output(2 line and 2 point)
+      int ram_size2 = std::max(2 * src_num_pad * CHANNEL,
+                               2 * 2 * dst_num_pad * CHANNEL) * sizeof(half);
+
+      int malloc_size = mask_size + weight_size + ram_size1 + ram_size2;
+
+      if (malloc_size <= NRAM_SIZE - const_size)
+        lower_bound = limit;
+      else
+        upper_bound = limit;
+
+      limit = (lower_bound + upper_bound) / 2;
+    }
+  }   // mult != 1
+
+  return limit * 2;
+}
+
+// find h sram max load num
+// mult: the multipiler used in upscaling mode
+__mlu_func__ int sram_find_limit(int src_roi_w_, 
+                                 int src_roi_w,
+                                 int dst_roi_w, 
+                                 int mult) {
+  int lower_bound = 1;
+  int upper_bound = src_roi_w_ / 2;
+
+  int limit = upper_bound;
+
+  return limit * 2;
+}
+
+
+
+/*---------------------------- MLU ENTRY FUNCTION ----------------------------*/
+/*!
+ *  @brief A function.
+ *
+ *  A fusionOp of resize and yuv2rgb
+ *
+ *  @param[out] dst_gdram
+ *    Output. dst image addrs in gdram.
+ *  @param[in]  src_y_gdram
+ *    Input. src image Y channel addrs in gdram.
+ *  @param[in]  src_uv_gdram
+ *    Input. src image UV channel addrs in gdram.
+ *  @param[in]  src_wh_gdram
+ *    Input. src image W and H size addrs in gdram.
+ *  @param[in]  roi_rect_gdram
+ *    Input. roi rect X, Y, W and H of src image addrs in gdram.
+ *  @param[in]  fill_color_gdram
+ *    Input. the fill color of padding addrs when keep aspect ratio in gdram.
+ *  @param[in]  yuv_filter_gdram
+ *    Input. the filter used to do yuv2rgb conversion addrs in gdram.
+ *  @param[in]  yuv_bias_gdram
+ *    Input. the bias needed by yuv2rgb conversion addrs in gdram.
+ *  @param[in]  mult_gdram
+ *    Input. the src pixel copy times when dst col > roi w addrs in gdram.
+ *  @param[in]  mask_gdram
+ *    Input. the mask addrs used to select src pixel addrs in gdram.
+ *  @param[in]  weight_gdram
+ *    Input. the weight used to do bilinear interp addrs in gdram.
+ *  @param[in]  copy_filter_gdram
+ *    Input. the filter used to using conv to mult src pixels addrs in gdram.
+ *  @param[in]  dst_row
+ *    Input. number of row of dst image.
+ *  @param[in]  dst_col
+ *    Input. number of col of dst image.
+ *  @param[in]  intput2half
+ *    Input. 1 for uint8 input, 0 for fp16 input.
+ *  @param[in]  output2uint
+ *    Input. 1 for uint8 output, 0 for fp16 output.
+ *  @param[in]  batch_num
+ *    Input. batch number.
+ *  @param[in]  keep_aspect_ratio
+ *    Input. 1 for keep dst and src aspect ratio the same and padding,
+ *           0 for not padding.
+ *  @param[in]  pad_method
+ *    Input. 1 for keep dst roi in center, 0 for keep dst roi in left and top.
+ */
+__mlu_global__ void ResizeYuvToRgbaKernel(
+    half* dst_gdram,
+    half** src_y_gdram,
+    half** src_uv_gdram,
+    int** src_wh_gdram,
+    int** roi_rect_gdram,
+    half* fill_color_gdram,
+    half* yuv_filter_gdram,
+    half* yuv_bias_gdram,
+    int* mult_gdram,
+    half** mask_gdram,
+    half** weight_gdram,
+    int8_t** copy_filter_gdram,
+    int dst_row,
+    int dst_col,
+    int input2half,
+    int output2uint,
+    int batch_num,
+    int keep_aspect_ratio,
+    int pad_method) {
+  /**---------------------- Initialization ----------------------**/
+  __mlu_shared__ uint8_t sram_buffer[SRAM_SIZE];
+  __nram__ uint8_t nram_buffer[NRAM_SIZE];
+
+  __wram__ int16_t yuv_filter_wram[CO * 2 * CI];
+  __wram__ int8_t copy_filter_wram[MULT_LIMIT * LT_NUM * LT_NUM];
+
+  // Memory usage
+  // Put all const variables(bias, weight, mask) at front of the buffer
+  // so that space after them can be used freely without concerning
+  // overwritting const variables
+  half* round_nram = (half*)nram_buffer;
+  half* max_value_nram = (half*)round_nram + HALF_PAD_SIZE;
+  half* cvt_temp_nram = (half*)max_value_nram + HALF_PAD_SIZE;
+  half* yuv_bias_nram = (half*)cvt_temp_nram + HALF_PAD_SIZE;
+  half* compute_temp_nram = (half*)yuv_bias_nram + CO;
+
+  // init round_nram data
+  // __nramset_half((half*)round_nram, HALF_PAD_SIZE, 0.5);
+  // for (int i = 0; i < HALF_PAD_SIZE / 4; i++) {
+  //   round_nram[i * 4 + 3] = 0.0;
+  // }
+
+  // init max value data
+  __nramset_half((half*)max_value_nram, HALF_PAD_SIZE, 255);
+
+  // init convert temp data
+  __nramset_half((half*)cvt_temp_nram, HALF_PAD_SIZE, 128);
+
+  // load yuv2rgba filter and bias
+  loadCvtFilter((half*)yuv_filter_wram, (half*)yuv_bias_nram,
+                (half*)yuv_filter_gdram, (half*)yuv_bias_gdram);
+
+  // batch segment
+  int batch_seg = batch_num / taskDimY;
+  int batch_rem = batch_num % taskDimY;
+
+  int start_batch = taskIdY * batch_seg + (taskIdY < batch_rem ? taskIdY : batch_rem);
+  int end_batch = start_batch + batch_seg + (taskIdY < batch_rem ? 1 : 0);
+
+  // for batch_num
+  for (int batch = start_batch; batch < end_batch; batch++) {
+    // each batch param mlu addr
+    half* src_y_addr = src_y_gdram[batch];
+    half* src_uv_addr = src_uv_gdram[batch];
+
+    half* mask_left_addr = mask_gdram[batch * 2];
+    half* mask_right_addr = mask_gdram[batch * 2 + 1];
+    half* weight_left_addr = weight_gdram[batch * 2];
+    half* weight_right_addr = weight_gdram[batch * 2 + 1];
+    int8_t* copy_filter_addr = copy_filter_gdram[batch];
+
+    // each batch param
+    int src_col = src_wh_gdram[batch][0];
+    int src_row = src_wh_gdram[batch][1];
+    int src_roi_x = roi_rect_gdram[batch][0];
+    int src_roi_y = roi_rect_gdram[batch][1];
+    int src_roi_w = roi_rect_gdram[batch][2];
+    int src_roi_h = roi_rect_gdram[batch][3];
+
+    int src_roi_x_ = src_roi_x / 2 * 2;
+    int src_roi_w_ = (src_roi_x % 2 + src_roi_w + 1) / 2 * 2;
+
+    int dst_roi_w = dst_col;
+    int dst_roi_h = dst_row;
+
+    float src_aspect_ratio = (float)src_roi_w / src_roi_h;
+    float dst_aspect_ratio = (float)dst_col / dst_row;
+
+    int pad_mode = 0;
+    int pad_half1 = 0;
+    int pad_half2 = 0;
+
+    if (keep_aspect_ratio && (src_aspect_ratio != dst_aspect_ratio)) {
+      if (src_aspect_ratio >= dst_aspect_ratio) {
+        // pad top && bottom
+        // pad_mode = 0;
+        // dst_roi_w = dst_col;
+        dst_roi_h = __float2int_rd(dst_col / src_aspect_ratio);
+
+        if (pad_method == 0) {
+          pad_half1 = (dst_row - dst_roi_h) / 2;
+          pad_half2 = dst_row - dst_roi_h - pad_half1;
+        } else {
+          pad_half1 = 0;
+          pad_half2 = dst_row - dst_roi_h;
+        }
+
+        if (coreId == 0x80) {
+          uint8_t* item_line = (uint8_t*)sram_buffer;
+          uint8_t* fill_line = (uint8_t*)item_line + UINT8_PAD_SIZE;
+
+          item_line[0] = ((uint8_t*)fill_color_gdram)[0];
+          item_line[1] = ((uint8_t*)fill_color_gdram)[1];
+          item_line[2] = ((uint8_t*)fill_color_gdram)[2];
+          item_line[3] = 0;
+
+          // SRAM2SRAM fill color copy
+          __memcpy((uint8_t*)fill_line, 
+                   (uint8_t*)item_line, 
+                   CHANNEL * sizeof(uint8_t),   // size
+                   SRAM2SRAM,                   // direction       
+                   CHANNEL * sizeof(uint8_t),   // dst stride
+                   0,                           // src stride
+                   dst_roi_w - 1,               // seg number
+                   clusterId);
+
+          // fill top
+          if (pad_half1 != 0) {
+            __memcpy((uint8_t*)dst_gdram + batch * dst_row * dst_col * CHANNEL,
+                     (uint8_t*)fill_line,
+                     dst_roi_w * CHANNEL * sizeof(uint8_t),   // size
+                     SRAM2GDRAM,                              // direction
+                     dst_roi_w * CHANNEL * sizeof(uint8_t),   // dst stride
+                     0,                                       // src stride
+                     pad_half1 - 1);                          // seg number
+          }
+
+          // fill bottom
+          if (pad_half2 != 0) {
+            __memcpy((uint8_t*)dst_gdram + batch * dst_row * dst_col * CHANNEL
+                     + (dst_roi_h + pad_half1) * dst_roi_w * CHANNEL,
+                     (uint8_t*)fill_line,
+                     dst_roi_w * CHANNEL * sizeof(uint8_t),   // size
+                     SRAM2GDRAM,                              // direction
+                     dst_roi_w * CHANNEL * sizeof(uint8_t),   // dst stride
+                     0,                                       // src stride
+                     pad_half2 - 1);                          // seg number
+          }
+        }
+      } else {  // src_aspect_ratio < dst_aspect_ratio
+        // pad left && right
+        pad_mode = 1;
+        dst_roi_w = __float2int_rd(dst_row * src_aspect_ratio);
+        // dst_roi_h = dst_row;
+        
+        if (pad_method == 0) {
+          pad_half1 = (dst_col - dst_roi_w) / 2;
+          pad_half2 = dst_col - dst_roi_w - pad_half1;
+        } else if (pad_method == 1) {
+          pad_half1 = 0;
+          pad_half2 = dst_col - dst_roi_w;
+        }
+
+        if (coreId == 0x80) {
+          uint8_t* item_line = (uint8_t*)sram_buffer;
+          uint8_t* left_line = (uint8_t*)item_line + UINT8_PAD_SIZE;
+          uint8_t* right_line = (uint8_t*)left_line + 
+                                PAD_UP(pad_half1 * CHANNEL, UINT8_PAD_SIZE);
+
+          item_line[0] = ((uint8_t*)fill_color_gdram)[0];
+          item_line[1] = ((uint8_t*)fill_color_gdram)[1];
+          item_line[2] = ((uint8_t*)fill_color_gdram)[2];
+          item_line[3] = 0;
+
+          // fill left
+          if (pad_half1 != 0) {
+            // SRAM2SRAM fill color copy
+            __memcpy((uint8_t*)left_line, 
+                     (uint8_t*)item_line, 
+                     CHANNEL * sizeof(uint8_t),   // size
+                     SRAM2SRAM,                   // direction
+                     CHANNEL * sizeof(uint8_t),   // dst stride
+                     0,                           // src stride
+                     pad_half1 - 1,               // seg number
+                     clusterId);
+
+            __memcpy((uint8_t*)dst_gdram + batch * dst_row * dst_col * CHANNEL,
+                     (uint8_t*)left_line,
+                     pad_half1 * CHANNEL * sizeof(uint8_t),   // size
+                     SRAM2GDRAM,                              // direction
+                     dst_col * CHANNEL * sizeof(uint8_t),     // dst stride
+                     0,                                       // src stride
+                     dst_roi_h - 1);                          // seg number
+          }
+          
+          // fill right
+          if (pad_half2 != 0) {
+            // SRAM2SRAM fill color copy
+            __memcpy((uint8_t*)right_line, 
+                     (uint8_t*)item_line, 
+                     CHANNEL * sizeof(uint8_t),               // size
+                     SRAM2SRAM,                               // direction
+                     CHANNEL * sizeof(uint8_t),               // dst stride
+                     0,                                       // src stride
+                     pad_half2 - 1,                           // seg number
+                     clusterId);
+
+            __memcpy((uint8_t*)dst_gdram + batch * dst_row * dst_col * CHANNEL
+                     + (dst_roi_w + pad_half1) * CHANNEL,
+                     (uint8_t*)right_line,
+                     pad_half2 * CHANNEL * sizeof(uint8_t),   // size
+                     SRAM2GDRAM,                              // direction
+                     dst_col * CHANNEL * sizeof(uint8_t),     // dst stride
+                     0,                                       // src stride
+                     dst_roi_h - 1);                          // seg number
+          }
+        }
+      } // src_aspect_ratio < dst_aspect_ratio
+    } // keep_aspect_ratio
+
+    // only YUV2RGB0?
+    int only_yuv2rgba = (src_roi_w == dst_roi_w && src_roi_h == dst_roi_h);
+
+    // use float to keep accuracy
+    float src_dst_scale_h = float(src_roi_h) / dst_roi_h;
+    float dst_src_scale_w = float(dst_roi_w) / src_roi_w;
+
+/*
+#ifdef ZERO_COORDINATE
+    int mult = ceil(float(dst_roi_w) / float(cur_roi_w));
+#else
+    int mult = (int)(cur_roi_w < dst_roi_w) * 
+               (ceil(1.5 * float(dst_roi_w) / float(cur_roi_w) + 0.5) - 1) + 
+               (int)(cur_roi_w >= dst_roi_w);
+#endif
+*/
+
+    // mult is computed in host cpu
+    int mult = mult_gdram[batch];
+
+    // load copy mult filter
+    loadCopyFilter(copy_filter_wram, copy_filter_addr, mult);
+
+    // find w nram max load num 
+    int w_nram_max_load_num = nram_find_limit(src_roi_w_, src_roi_w, 
+                                              dst_roi_w, mult);
+    int w_nram_max_store_num = __float2int_up((float)w_nram_max_load_num * 
+                                              dst_roi_w / src_roi_w);
+
+    // rgba should align to 2 ct lines
+    int w_src_max_num_pad = PAD_UP(w_nram_max_load_num * CHANNEL, 
+                                   HALF_PAD_SIZE) / CHANNEL;
+    int w_dst_max_num_pad = PAD_UP(w_nram_max_store_num * CHANNEL, 
+                                   HALF_PAD_SIZE) / CHANNEL;
+
+    // Memory usage
+    // 1 point(left or right)
+    int mask_max_num = mult * w_src_max_num_pad * CHANNEL;
+    int weight_max_num = w_dst_max_num_pad * CHANNEL;
+
+    // 2line y or 2 line uv should align to CI(conv inst require)
+    int yuv_2line_max_num_pad = PAD_UP(w_src_max_num_pad * 2, CI);
+    
+    // origin yuv input(2 line y and 2 line uv) align to UINT8_PAD_SIZE
+    // or output(2 line and 2 point)
+    int ram1_num = std::max(PAD_UP(2 * yuv_2line_max_num_pad, UINT8_PAD_SIZE), 
+                            2 * 2 * w_dst_max_num_pad * CHANNEL);
+    
+    // rgba input(2 line)
+    int ram2_num = 2 * w_src_max_num_pad * CHANNEL;
+
+    if (mult > 1) {
+      // origin yuv input(2 line y and 2 line uv) align to UINT8_PAD_SIZE
+      // or mult rgba input(2 line)
+      ram1_num = std::max(PAD_UP(2 * yuv_2line_max_num_pad, UINT8_PAD_SIZE),
+                          2 * mult * w_src_max_num_pad * CHANNEL);
+
+      // rgba input(2 line) or output(2 line and 2 point)
+      ram2_num = std::max(2 * w_src_max_num_pad * CHANNEL, 
+                          2 * 2 * w_dst_max_num_pad * CHANNEL);
+    }
+
+    // Memory usage
+    half* mask_nram = (half*)compute_temp_nram;
+    half* weight_nram = (half*)mask_nram + 2 * mask_max_num;
+    half* ram1_nram = (half*)weight_nram + 2 * weight_max_num;
+    half* ram2_nram = (half*)ram1_nram + ram1_num;
+
+    // divide src_roi_w_ to 
+    // w_nram_load_repeat * w_nram_max_load_num + w_nram_load_remainder
+    int w_nram_load_repeat = src_roi_w_ / w_nram_max_load_num;
+    int w_nram_load_remainder = src_roi_w_ % w_nram_max_load_num;
+    if (w_nram_load_repeat != 0 && w_nram_load_remainder == 0) {
+      w_nram_load_repeat -= 1;
+      w_nram_load_remainder = w_nram_max_load_num;
+    }
+
+    // Multi-core related params
+    int dst_roi_h_seg = dst_roi_h / coreDim;
+    int dst_roi_h_rem = dst_roi_h % coreDim;
+    int dst_roi_h_deal = dst_roi_h_seg + (coreId < dst_roi_h_rem ? 1 : 0);
+    int dst_roi_h_offset = dst_roi_h_seg * coreId +
+                           (coreId < dst_roi_h_rem ? coreId : dst_roi_h_rem);
+
+    // dst RGBA addr
+    uint8_t* dst_addr = (uint8_t*)dst_gdram + 
+                        batch * dst_row * dst_col * CHANNEL;
+
+    // pad offset
+    int pad_offset = (keep_aspect_ratio) * pad_half1 * CHANNEL *
+                     (pad_mode ? 1 : dst_col);
+    dst_addr = (uint8_t*)dst_addr + pad_offset;
+
+    // multi-core segment offset
+    int seg_offset = dst_roi_h_offset * dst_col * CHANNEL;
+    dst_addr = (uint8_t*)dst_addr + seg_offset;
+
+#ifdef ZERO_COORDINATE
+    float dst_pos_w_offset = 0;
+#else
+    float dst_pos_w_offset = (dst_src_scale_w * 0.5) - 0.5;
+#endif
+    int src_idx_w = 0;    
+    int dst_idx_w_start = 0;
+
+    // current weight addr and mask addr(gdram)
+    half* cur_weight_left_addr = weight_left_addr;
+    half* cur_weight_right_addr = weight_right_addr;
+
+    half* cur_mask_left_addr = mask_left_addr;
+    half* cur_mask_right_addr = mask_right_addr;
+
+    // divide src_roi_w_ to 
+    // w_nram_load_repeat * w_nram_max_load_num + w_nram_load_remainder
+    for (int w_iter = 0; w_iter < w_nram_load_repeat + 1; w_iter++) {
+      /* src_roi_w_ part
+       * | w_load_num_00 | w_load_num_01| ... | w_load_remainder_0 |
+       *   .               .                    .
+       *   .               .                    .
+       *   .               .                    .
+       * | w_load_num_N0 | w_load_num_N1| ... | w_load_remainder_N |
+       *
+       * Note: w_load_num_00 ... w_load_num_N0 share the same mask and weights
+       * so the order of LOAD/COMPUTE/STORE looks like:
+       * |   /|   /|  ...
+       * |  / |  / |  ...
+       * | /  | /  |  ...
+       * |/   |/   |/ ...
+       */
+
+      /*###############################*/
+      /*#[Module 1]: loadMaskAndWeights#*/
+      /*###############################*/
+      // nram left mask and right mask
+      half* mask_left_nram = mask_nram;
+      half* mask_right_nram = mask_left_nram + mask_max_num;
+
+      // mask load num each w iter
+      int yuv_load_num = (w_iter < w_nram_load_repeat) ? 
+                         w_nram_max_load_num : w_nram_load_remainder;
+      int mask_load_num = mult * CHANNEL * yuv_load_num;
+      int mask_num_pad = PAD_UP(mask_load_num, HALF_PAD_SIZE);
+
+      // write zero
+      __bang_write_zero(mask_left_nram, mask_num_pad);
+
+      // load left mask and right mask
+      __memcpy((half*)mask_left_nram, (half*)cur_mask_left_addr,
+               mask_load_num * sizeof(half), GDRAM2NRAM);
+      __memcpy((half*)mask_right_nram, (half*)cur_mask_right_addr,
+               mask_load_num * sizeof(half), GDRAM2NRAM);
+
+      // update src w idx
+      src_idx_w = src_idx_w + yuv_load_num;
+
+      // compute dst w idx end
+      int dst_idx_w_end = ceil(src_idx_w * dst_src_scale_w + dst_pos_w_offset);
+
+      // fix dst w idx end when dst_roi_w > src_roi_w
+      dst_idx_w_end = (dst_idx_w_end > dst_roi_w) ? dst_roi_w : dst_idx_w_end;
+
+      // compute dst store num
+      int dst_store_num = (dst_idx_w_end - dst_idx_w_start) * CHANNEL;
+      
+      // update dst w idx start
+      dst_idx_w_start = dst_idx_w_end;
+
+      // current mask addr fix
+      cur_mask_left_addr += mult * w_nram_max_load_num * CHANNEL;
+      cur_mask_right_addr += mult * w_nram_max_load_num * CHANNEL;
+      
+      if (dst_store_num > 0) {
+        // weight load num each w iter
+        int weight_load_num = dst_store_num;
+        int weight_num_pad = PAD_UP(weight_load_num, HALF_PAD_SIZE);
+
+        // nram left weight and right weight
+        half* weight_left_nram = weight_nram;
+        half* weight_right_nram = weight_left_nram + weight_num_pad;
+
+        // load left weight and right weight
+        __memcpy((half*)weight_left_nram, (half*)cur_weight_left_addr,
+                  weight_load_num * sizeof(half), GDRAM2NRAM);
+        __memcpy((half*)weight_right_nram, (half*)cur_weight_right_addr,
+                  weight_load_num * sizeof(half), GDRAM2NRAM);
+
+        // current weight addr fix
+        cur_weight_left_addr += weight_load_num;
+        cur_weight_right_addr += weight_load_num;
+
+        /*############################################*/
+        /*#[Module 2]: loadTwoLines(Four in YUV mode)#*/
+        /*############################################*/
+        // src_pos_h locate height segmentation
+        // src_pos_h_int records the position
+#ifdef ZERO_COORDINATE
+        float src_pos_h_offset = dst_roi_h_offset * src_dst_scale_h;
+#else
+        float src_pos_h_offset = dst_roi_h_offset * src_dst_scale_h + 
+                                 (src_dst_scale_h * 0.5) - 0.5;
+#endif
+        int dst_idx_h = 0;
+
+        int src_pos_h_int = 0;
+        half h_weight0 = 0.0;
+        half h_weight1 = 0.0;
+
+        for (int h_iter = 0; h_iter < dst_roi_h_deal; ++h_iter) {
+          float src_pos_h = dst_idx_h * src_dst_scale_h + src_pos_h_offset;
+          src_pos_h_int = floor(src_pos_h) * (int)(src_pos_h > 0);
+          src_pos_h_int = std::min(src_pos_h_int, src_roi_h - 1);
+
+          // compute offsets for each row
+          int y1_h = src_pos_h_int + src_roi_y;
+          int y2_h = std::min(src_pos_h_int + 1, src_roi_h - 1) + src_roi_y;
+          int uv1_h = y1_h / 2;
+          int uv2_h = y2_h / 2;
+          int y1_offset = y1_h * src_col + src_roi_x_;
+          int y2_offset = y2_h * src_col + src_roi_x_;
+          int uv1_offset = uv1_h * src_col + src_roi_x_;
+          int uv2_offset = uv2_h * src_col + src_roi_x_;
+
+          // compute handle size
+          int yuv_num_pad = PAD_UP(yuv_load_num * CHANNEL, HALF_PAD_SIZE)
+                            / CHANNEL;
+          int rgba_num_pad = yuv_num_pad * CHANNEL;
+          
+          // 2 line y or 2 line uv should align to CI(conv inst require)
+          int yuv_2line_num_pad = PAD_UP(yuv_num_pad * 2, CI);
+
+          // nram remap, put load y and load uv in second half
+          half* y_nram = (half*)ram1_nram;
+          uint8_t* load_y_nram = (uint8_t*)((half*)ram1_nram + 
+                                            yuv_2line_max_num_pad);
+          uint8_t* load_uv_nram = (uint8_t*)load_y_nram + yuv_2line_num_pad;
+
+          // Load two lines of Y and two line of UV
+          __memcpy((uint8_t*)load_y_nram,
+              (uint8_t*)src_y_addr + w_iter * w_nram_max_load_num + y1_offset,
+              yuv_load_num * sizeof(char), GDRAM2NRAM);
+          
+          __memcpy((uint8_t*)load_uv_nram,
+              (uint8_t*)src_uv_addr + w_iter * w_nram_max_load_num + uv1_offset,
+              yuv_load_num * sizeof(char), GDRAM2NRAM);
+          
+          __memcpy((uint8_t*)load_y_nram + yuv_num_pad,
+              (uint8_t*)src_y_addr + w_iter * w_nram_max_load_num + y2_offset,
+              yuv_load_num * sizeof(char), GDRAM2NRAM);
+          
+          __memcpy((uint8_t*)load_uv_nram + yuv_num_pad,
+              (uint8_t*)src_uv_addr + w_iter * w_nram_max_load_num + uv2_offset,
+              yuv_load_num * sizeof(char), GDRAM2NRAM);
+
+          /*#################################*/
+          /*#[Module 3]: Preprocess(For YUV)#*/
+          /*#################################*/
+          // convert uint8 yuv data to half
+          __bang_uchar2half((half*)y_nram, (unsigned char*)load_y_nram,
+              PAD_UP(2 * yuv_2line_num_pad, UINT8_PAD_SIZE));
+
+          // convert half yuv data to int16(position is -7)
+          __bang_half2int16_rd((int16_t*)y_nram, (half*)y_nram,
+              2 * yuv_2line_num_pad, -7);
+
+          /*######################*/
+          /*#[Module 4]: YUV2RGB0#*/
+          /*######################*/
+          /* Fold input YUV data so that the input channel becomes CI
+           * Memory is continuous in this (-->) direction (in_width /= CI)
+           * [Y1,1 Y1,2 ... Y1,31 Y1,32] ... [Y2,1 Y2,2 ... Y2,31 Y2,32] ...
+           * [U1,1 V1,1 ... U1,16 V1,16] ... [U2,1 U2,2 ... U2,16 V2,16] ...
+           * Input shape: 1(N) x 2(H) x src_col/CI(W) x CI(C)
+           *
+           * For each CI of input, we need 4 X CI kernels to convert
+           * CI gray pixcels into 4 X CI RGBA pixcels. Each kernel has
+           * a shape of: 1 x 2 x 1 x CI. For example,
+           * [ 1.164  0     0 ... 0] -> 1.164 * Y1,1 -> R1,1
+           * [ 0      1.586   ... 0]  + 1.586 * V1,1
+           * [ 1.164  0     0 ... 0] -> 1.164 * Y1,1 -> G1,1
+           * [-0.392 -0.813 0 ... 0]  - 0.392 * U1,1
+           *                          - 0.813 * V1,1
+           * ...
+           * ...
+           * [ 0 0 1.164 0     0 ... 0] -> 1.164 * Y1,3 -> R1,3
+           * [ 0 0 0     1.586 0 ... 0]  + 1.586 * V1,2
+           * ...
+           * Total 4 X CI pixcels hence 4 X CI kernels
+           */
+          half* rgba_nram = (half*)ram2_nram;
+
+          // conv params in order
+          // in_channel = CI;
+          // in_height = 2;
+          // in_width = yuv_2line_num_pad / CI;
+          // filter_height = 2;
+          // filter_width = 1;
+          // stride_height = 1;
+          // stride_width = 1;
+          // out_channel = CO;
+          __bang_conv((half*)rgba_nram, (int16_t*)y_nram,
+              (int16_t*)yuv_filter_wram, (half*)yuv_bias_nram,
+              CI, 2, yuv_2line_num_pad / CI, 2, 1, 1, 1,
+              CO, -20);
+
+          // truncate values < 0
+          __bang_active_relu((half*)rgba_nram, (half*)rgba_nram, 
+              2 * rgba_num_pad);
+
+          // truncate values > 255
+          __bang_cycle_minequal((half*)rgba_nram, (half*)rgba_nram, 
+              (half*)max_value_nram, 2 * rgba_num_pad, HALF_PAD_SIZE);
+
+          /*#################################*/
+          /*#[Module 5]: src image expansion#*/
+          /*#################################*/
+          half* src_rgba_nram = (half*)rgba_nram;
+          half* select_rgba_nram = (half*)ram1_nram;
+
+          if (mult > 1 && mult <= MULT_LIMIT) {
+            src_rgba_nram = (half*)ram1_nram;
+            select_rgba_nram = (half*)ram2_nram;
+
+            __bang_conv((int16_t*)src_rgba_nram, (int16_t*)rgba_nram,
+                (int8_t*)copy_filter_wram,
+                LT_NUM, 1, 2 * rgba_num_pad / LT_NUM, 1, 1, 1, 1,
+                LT_NUM * mult, 0);
+          } else if (mult > MULT_LIMIT) {
+            src_rgba_nram = (half*)ram1_nram;
+            select_rgba_nram = (half*)ram2_nram;
+
+            for (int m = 0; m < mult; m++) {
+              __memcpy((half*)src_rgba_nram + m * CHANNEL, 
+                       (half*)rgba_nram,
+                       CHANNEL * sizeof(half),          // size
+                       NRAM2NRAM,                       // direction
+                       mult * CHANNEL * sizeof(half),   // dst stride
+                       CHANNEL * sizeof(half),          // src stride
+                       2 * yuv_num_pad - 1);            // seg number
+            }
+          }
+
+          /*####################################*/
+          /*#[Module 6]. Bilinear Interpolation#*/
+          /*####################################*/
+          // Select data using the mask gegerated in [1]
+          // For example,
+          /* Before:
+           * [Y0X0 Y0X1] ... [Y0X4 Y0X5] ... [Y0X8 Y0X9] ...
+           * [Y1X0 Y1X1] ... [Y1X4 Y1X5] ... [Y1X8 Y1X9] ...
+           *  .    .          .    .          .    .
+           *  .    .          .    .          .    .
+           *
+           * After:
+           * Y0X0 Y0X4 Y0X8 ... Y0X1 Y0X5 Y0X9 ...
+           * Y1X0 Y1X4 Y1X8 ... Y1X1 Y1X5 Y1X9 ...
+           * .    .    .        .    .    .
+           * .    .    .        .    .    .
+           */
+          __bang_collect((half*)select_rgba_nram,                       // dst
+                         (half*)src_rgba_nram,                          // src
+                         (half*)mask_left_nram, mask_num_pad);
+          __bang_collect((half*)select_rgba_nram + weight_num_pad,      // dst
+                         (half*)src_rgba_nram,                          // src
+                         (half*)mask_right_nram, mask_num_pad);
+
+          __bang_collect((half*)select_rgba_nram + 2 * weight_num_pad,  // dst
+                         (half*)src_rgba_nram + rgba_num_pad * mult,    // src
+                         (half*)mask_left_nram, mask_num_pad);
+          __bang_collect((half*)select_rgba_nram + 3 * weight_num_pad,  // dst
+                         (half*)src_rgba_nram + rgba_num_pad * mult,    // src
+                         (half*)mask_right_nram, mask_num_pad);
+
+          // y0 = Y0X0 * weight_left + Y0X1 * weight_right
+          __bang_mul((half*)select_rgba_nram,                   
+                     (half*)select_rgba_nram,
+                     (half*)weight_nram, 2 * weight_num_pad);
+
+          // y1 = Y1X0 * weight_left + Y1X1 * weight_right
+          __bang_mul((half*)select_rgba_nram + 2 * weight_num_pad,
+                     (half*)select_rgba_nram + 2 * weight_num_pad,
+                     (half*)weight_nram, 2 * weight_num_pad);
+
+          // int next_src_pos_h_int = std::min(src_pos_h_int + 1, src_roi_h - 1);
+          // int src_h_reuse_num = floor((next_src_pos_h_int - src_pos_h) / 
+          //                             src_dst_scale_h);
+          // src_h_reuse_num = std::max(1, src_h_reuse_num);
+          
+          // src_h_reuse_num = 1;
+
+          // for (int src_reuse = 0; src_reuse < src_h_reuse_num; src_reuse++) {
+          //   // up-sclaing mode.
+          //   src_pos_h = dst_idx_h * src_dst_scale_h + src_pos_h_offset;
+          //   src_pos_h_int = floor(src_pos_h) * (int)(src_pos_h > 0);
+          //   src_pos_h_int = std::min(src_pos_h_int, src_roi_h - 1);
+            
+            h_weight1 = (half)(src_pos_h - src_pos_h_int) * 
+                         (int)(src_pos_h > 0);
+            h_weight1 = h_weight1 * (int)(src_pos_h_int < src_roi_h)
+                         + (int)(src_pos_h_int >= src_roi_h);
+
+            h_weight0 = (half)1.f - h_weight1;
+
+            dst_idx_h += 1;
+
+            // interp = y0 * h_weight0 + y1 * h_weight1
+            __bang_mul_const((half*)select_rgba_nram, 
+                             (half*)select_rgba_nram,
+                             h_weight0 * 4, 2 * weight_num_pad);
+            __bang_mul_const((half*)select_rgba_nram + 2 * weight_num_pad,
+                             (half*)select_rgba_nram + 2 * weight_num_pad,
+                             h_weight1 * 4, 2 * weight_num_pad);
+
+            // avgpool param
+            // channel = weight_num_pad
+            // height = 1
+            // width = 4
+            // kernel_height = 1
+            // kernel_width = 4
+            // stride_x = 1
+            // stride_y = 1
+            __bang_avgpool((half*)select_rgba_nram, 
+                           (half*)select_rgba_nram,
+                           weight_num_pad, 1, 4, 1, 4, 1, 1);
+
+            /*###############################################################*/
+            /*#[Module 7]: Postprocess && Store Data#*/
+            /*###############################################################*/
+            half* dst_nram = select_rgba_nram;
+            half* dst_mask_nram = dst_nram + weight_num_pad;
+
+            // if (output2uint) {
+              __bang_cycle_ge((half*)dst_mask_nram, (half*)dst_nram, 
+                              (half*)cvt_temp_nram, weight_num_pad, HALF_PAD_SIZE);
+              __bang_mul_const((half*)dst_mask_nram, (half*)dst_mask_nram, 
+                               256, weight_num_pad);
+              __bang_sub((half*)dst_mask_nram, (half*)dst_nram, 
+                         (half*)dst_mask_nram, weight_num_pad);
+
+              __bang_half2uchar_dn((signed char*)dst_nram, 
+                                   (half*)dst_mask_nram,
+                                   PAD_UP(weight_num_pad, UINT8_PAD_SIZE));
+
+              // __bang_half2uchar_dn((unsigned char*)dst_nram, 
+              //                      (half*)dst_nram,
+              //                      dst_mask_nram, weight_num_pad);
+            // }
+
+            __memcpy((uint8_t*)dst_addr + h_iter * dst_col * CHANNEL,
+                     (uint8_t*)dst_nram,
+                     dst_store_num * sizeof(uint8_t),       // size
+                     NRAM2GDRAM,                            // direction
+                     dst_col * CHANNEL * sizeof(uint8_t),   // dst stride
+                     weight_num_pad * sizeof(uint8_t),      // src stride 
+                     0);                                    // seg number
+          // } // src_reuse
+        } // dst_store_num > 0
+        
+        dst_addr += dst_store_num;
+      } // for h_iter
+    } // for w_iter
+  } // for batch
+}

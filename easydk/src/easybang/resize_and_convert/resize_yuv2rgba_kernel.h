@@ -18,43 +18,32 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <stdint.h>
+#include "half.hpp"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef uint16_t half;
-
-void ResizeYuvToRgbaKernel_V2_MLU270(
-     half* dst_gdram,
-     half** srcY_gdram,
-     half** srcUV_gdram,
-     int** srcWH_gdram,
-     int** roiRect_gdram,
-     half* fill_color_gdram,
-     half* yuvFilter_gdram,
-     half* yuvBias_gdram,
-     int d_row_final, int d_col_final,
-     int input2half, int output2uint,
-     int batchNum,
-     int keepAspectRatio,
-     int padMethod);
-
-void ResizeYuvToRgbaKernel_V2_MLU220(
-     half* dst_gdram,
-     half** srcY_gdram,
-     half** srcUV_gdram,
-     int** srcWH_gdram,
-     int** roiRect_gdram,
-     half* fill_color_gdram,
-     half* yuvFilter_gdram,
-     half* yuvBias_gdram,
-     int d_row_final, int d_col_final,
-     int input2half, int output2uint,
-     int batchNum,
-     int keepAspectRatio,
-     int padMethod);
+void ResizeYuvToRgbaKernel(
+    half* dst_gdram,
+    half** src_y_gdram,
+    half** src_uv_gdram,
+    int** src_wh_gdram,
+    int** roi_rect_gdram,
+    half* fill_color_gdram,
+    half* yuv_filter_gdram,
+    half* yuv_bias_gdram,
+    int* mult_gdram,
+    half** mask_gdram,
+    half** weight_gdram,
+    int8_t** copy_filter_gdram,
+    int dst_row,
+    int dst_col,
+    int input2half,
+    int output2uint,
+    int batch_num,
+    int keep_aspect_ratio,
+    int pad_method);
 
 #ifdef __cplusplus
 }
