@@ -36,9 +36,7 @@ struct Infer2Params {
   uint32_t device_id = 0;
   bool object_infer = false;
   float threshold = 0.0f;
-  bool use_scaler = false;
   bool show_stats = false;
-  uint32_t infer_interval = 1;
   uint32_t engine_num = 1;
   std::string batch_strategy = "dynamic";
   uint32_t batching_timeout = 3000;  // ms
@@ -49,7 +47,6 @@ struct Infer2Params {
   std::string model_path;
   std::string preproc_name;
   std::string postproc_name;
-  std::string obj_filter_name;
 };  // struct Infer2Params
 
 struct Infer2ParamDesc {

@@ -79,13 +79,18 @@ bool Inferencer2::Open(ModuleParamSet raw_params) {
   edk::MluContext mlu_ctx;
   mlu_ctx.SetDeviceId(params.device_id);
   mlu_ctx.BindDevice();
-  if (params.preproc_name.empty()) {
+
+  if (params.preproc_name.empty()) {           // empty use default
     if (edk::CoreVersion::MLU220 == mlu_ctx.GetCoreVersion()) {
       infer_params_.preproc_name = "SCALER";
     } else if (edk::CoreVersion::MLU270 == mlu_ctx.GetCoreVersion()) {
       infer_params_.preproc_name = "RCOP";
     }
-  } else if (params.preproc_name != "RCOP" && params.preproc_name != "SCALER") {
+  } else if (params.preproc_name == "RCOP") {   // use RCOP
+    infer_params_.preproc_name == "RCOP";
+  } else if (params.preproc_name == "SCALER") {  // use SCALER
+    infer_params_.preproc_name == "SCALER";
+  } else {                                       // use your preproc class
     pre_processor = std::shared_ptr<Preproc>(Preproc::Create(params.preproc_name));
     if (!pre_processor) {
       LOGE(INFERENCER2) << "Can not find Preproc implemention by name: " << params.preproc_name;

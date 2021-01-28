@@ -124,18 +124,14 @@ void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   param.default_value = "";
   param.type = "string";
   param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
-    param_set->preproc_name = value;
+    if ("SCALER" == value || "scaler" == value) {
+      param_set->preproc_name = "SCALER";
+    } else if ("rcop" == value || "RCOP" == value) {
+      param_set->preproc_name = "RCOP";
+    } else {
+      param_set->preproc_name = value;
+    }
     return true;
-  };
-  ASSERT(RegisterParam(pregister, param));
-
-  param.name = "use_scaler";
-  param.desc_str = "Optional. Use scaler to do preprocessing when this parameter set to true and "
-                   "preproc_name not set. 1/true/TRUE/True/0/false/FALSE/False these values are accepted.";
-  param.default_value = "false";
-  param.type = "bool";
-  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
-    return STR2BOOL(value, &param_set->use_scaler);
   };
   ASSERT(RegisterParam(pregister, param));
 
@@ -153,7 +149,7 @@ void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   param.default_value = "1";
   param.type = "uint32";
   param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
-    return STR2U32(value, &param_set->device_id);
+    return STR2U32(value, &param_set->engine_num);
   };
   ASSERT(RegisterParam(pregister, param));
 
@@ -167,8 +163,8 @@ void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   ASSERT(RegisterParam(pregister, param));
 
   param.name = "batch_strategy";
-  param.desc_str = "The batch strategy for modules.";
-  param.default_value = "static";
+  param.desc_str = "Optional. The batch strategy for modules. ";
+  param.default_value = "dynamic";
   param.type = "string";
   param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     if ("static" == value || "STATIC" == value) {
@@ -207,15 +203,6 @@ void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   };
   ASSERT(RegisterParam(pregister, param));
 
-  param.name = "infer_interval";
-  param.desc_str = "Optional. Inferencing one frame every [infer_interval] frames.";
-  param.default_value = "1";
-  param.type = "uint32";
-  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
-    return STR2U32(value, &param_set->infer_interval);
-  };
-  ASSERT(RegisterParam(pregister, param));
-
   param.name = "show_stats";
   param.desc_str = "Optional. Whether show inferencer performance statistics. "
                    "1/true/TRUE/True/0/false/FALSE/False these values are accepted.";
@@ -234,18 +221,6 @@ void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   param.type = "bool";
   param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
     return STR2BOOL(value, &param_set->object_infer);
-  };
-  ASSERT(RegisterParam(pregister, param));
-
-  param.name = "obj_filter_name";
-  param.desc_str = "Optional. The class name for object filter. See cnstream::ObjFilter. "
-                   "This parameter is valid when this parameter is true. "
-                   "No object will be filtered when this parameter not set.";
-  param.default_value = "";
-  param.type = "string";
-  param.parser = [] (const std::string &value, Infer2Params *param_set) -> bool {
-    param_set->obj_filter_name = value;
-    return true;
   };
   ASSERT(RegisterParam(pregister, param));
 

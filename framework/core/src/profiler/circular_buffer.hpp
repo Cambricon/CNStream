@@ -1,3 +1,19 @@
+/*************************************************************************
+ * Copyright (C) [2020] by Cambricon, Inc. All rights reserved
+ *
+ * This source code is licensed under the Apache-2.0 license found in the
+ * LICENSE file in the root directory of this source tree.
+ *
+ * A part of this source code is referenced from mediapipe project.
+ * https://github.com/google/mediapipe/blob/master/mediapipe/framework/profiler/circular_buffer.h
+ *
+ * Copyright (C) 2018, MediaPipe Team.
+ *
+ * This source code is licensed under the Apache-2.0 license found in the
+ * LICENSE file in the root directory of this source tree.
+ *
+ *************************************************************************/
+
 #ifndef CNSTREAM_FRAMEWORK_PROFILER_CIRCULAR_BUFFER_HPP_
 #define CNSTREAM_FRAMEWORK_PROFILER_CIRCULAR_BUFFER_HPP_
 
