@@ -80,8 +80,8 @@ struct InferParamerters {
   InferDimOrder data_order = InferDimOrder::NHWC;
   std::string func_name;
   std::string model_path;
-  std::string preproc_name;
-  bool object_infer;
+  std::string preproc_name = "";
+  bool object_infer = false;
 };  // struct InferParams
 
 class Inferencer2;
