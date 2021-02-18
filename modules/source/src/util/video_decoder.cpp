@@ -318,22 +318,7 @@ bool MluDecoderImpl::Process(VideoEsPacket *pkt) {
         LOGI(SOURCE) << "cnvideoDecFeedData(data) timeout 3 times, prepare abort decoder.";
         // don't processframe
         cndec_abort_flag_ = 1;
-        // make sure all cndec buffers released before abort
-        while (this->cndec_buf_ref_count_.load()) {
-          std::this_thread::yield();
-        }
-        std::lock_guard<std::mutex> lk(instance_mutex_);
-        cnvideoDecAbort(instance_);
-        instance_ = nullptr;
-        if (!Create(&info_, &extra_)) {
-          LOGE(SOURCE) << "cnvideoDecFeedData(data) timeout 3 times, restart failed.";
-          if (result_) {
-            result_->OnDecodeEos();
-          }          
-          return false;
-        }
-        LOGI(SOURCE) << "cnvideoDecFeedData(data) timeout 3 times, restart success.";
-        return true;
+        return false;
       }
     }
   }
@@ -392,22 +377,7 @@ bool MluDecoderImpl::Process(VideoEsPacket *pkt) {
         LOGI(SOURCE) << "cnjpegDecFeedData(data) timeout 3 times, prepare abort decoder.";
         // don't processframe
         cndec_abort_flag_ = 1;
-        // make sure all cndec buffers released before abort
-        while (this->cndec_buf_ref_count_.load()) {
-          std::this_thread::yield();
-        }
-        std::lock_guard<std::mutex> lk(instance_mutex_);
-        cnjpegDecAbort(jpg_instance_);
-        jpg_instance_ = nullptr;
-        if (!Create(&info_, &extra_)) {
-          LOGE(SOURCE) << "cnjpegDecFeedData(data) timeout 3 times, restart failed.";
-          if (result_) {
-            result_->OnDecodeEos();
-          }
-          return false;
-        }
-        LOGI(SOURCE) << "cnjpegDecFeedData(data) timeout 3 times, restart success.";
-        return true;
+        return false;
       }
     }
   }
@@ -502,6 +472,10 @@ void MluDecoderImpl::CorruptCallback(const cnvideoDecStreamCorruptInfo &streamco
 }
 
 void MluDecoderImpl::VideoFrameCallback(cnvideoDecOutput *output) {
+  if (cndec_abort_flag_.load() || cndec_error_flag_.load()) {
+    return;
+  }
+
   if (output->frame.width == 0 || output->frame.height == 0) {
     LOGW(SOURCE) << "Skip frame! " << (int64_t)this << " width x height:" << output->frame.width << " x "
                   << output->frame.height << " timestamp:" << output->pts << std::endl;
@@ -726,6 +700,10 @@ void MluDecoderImpl::JpegResetCallback() {
 }
 
 void MluDecoderImpl::JpegFrameCallback(cnjpegDecOutput *output) {
+  if (cndec_abort_flag_.load() || cndec_error_flag_.load()) {
+    return;
+  }
+
   if (output->result != 0) {
     /*
      If JPU decode failed, create a empty FrameInfo which only including

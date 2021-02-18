@@ -53,7 +53,6 @@ class RtspSinkJoinStream {
   bool UpdateYUV(uint8_t *image, int64_t timestamp);
   // bool UpdateYUVs(void *y, void *yu, int64_t timestamp);
   bool UpdateBGR(cv::Mat image, int64_t timestamp, int channel_id = -1);
-  void Bgr2Yuv420nv(const cv::Mat &bgr, uint8_t *nv_data);
   void ResizeYuvNearest(uint8_t *src, uint8_t *dst);
 
  private:

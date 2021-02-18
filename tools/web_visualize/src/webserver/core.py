@@ -108,7 +108,7 @@ def process(filename, config_json):
   run_demo_subprocess = subprocess.Popen(["../../../samples/bin/demo", "--data_name=" + cwd + filename,
       "--data_path=../files.list_video", "--perf_db_dir=./perf_cache",
       "--src_frame_rate=30", "--wait_time=0", "--config_fname", config_json,
-      "--alsologtostderr"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      "--log_to_stderr=true"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   
   while run_demo_subprocess.poll() is None:
     output_stdout = run_demo_subprocess.stdout.readline().strip()

@@ -18,6 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include <libyuv.h>
+
 #include "rtsp_sink_stream.hpp"
 
 #include "cnstream_logging.hpp"
@@ -73,18 +75,97 @@ bool RtspSinkJoinStream::Open(const RtspParam& rtsp_params) {
   return true;
 }
 
-void RtspSinkJoinStream::EncodeFrameBGR(const cv::Mat& bgr24, int64_t timestamp) {
-  cv::Mat bgr_tmp = cv::Mat(rtsp_param_->dst_height, rtsp_param_->dst_width, CV_8UC3);
-  if (rtsp_param_->src_width != rtsp_param_->dst_width || rtsp_param_->src_height != rtsp_param_->dst_height) {
-    cv::resize(bgr24, bgr_tmp, cv::Size(rtsp_param_->dst_width, rtsp_param_->dst_height), cv::INTER_CUBIC);
+/**
+ * nv21: true for nv21, false for nv12
+ **/
+static
+void ResizeAndConvertByLibyuv(const cv::Mat& bgr, const int dst_width, const int dst_height, uint8_t* dst, bool nv21) {
+  const int src_width = bgr.cols;
+  const int src_height = bgr.rows;
+  const int src_storage_height = bgr.rows & 1 ? bgr.rows + 1 : bgr.rows;
+  const int src_nv12_size = src_width * src_storage_height * 3 / 2;
+
+  // to I420
+  uint8_t* i420_yplane = new uint8_t[src_width * src_storage_height];
+  uint8_t* i420_uplane = new uint8_t[src_width * src_storage_height / 4];
+  uint8_t* i420_vplane = new uint8_t[src_width * src_storage_height / 4];
+  // RGB data in libyuv: BGRBGRBGRBGRBGRBGR.......
+  libyuv::RGB24ToI420(bgr.data, src_width * 3,
+                      i420_yplane, src_width,
+                      i420_uplane, src_width >> 1,
+                      i420_vplane, src_width >> 1,
+                      src_width, src_height);
+
+  bool should_resize = src_width != dst_width || src_height != dst_height;
+
+  // to nv12
+  uint8_t* src_nv12 = nullptr;
+  if (should_resize) {
+    src_nv12 = new uint8_t[src_nv12_size];
   } else {
-    bgr_tmp = bgr24.clone();
+    src_nv12 = dst;
   }
+  uint8_t* src_yplane = src_nv12;
+  uint8_t* src_uvplane = src_nv12 + src_width * src_storage_height;
+  auto I420ToNV = &libyuv::I420ToNV12;
+  if (nv21)
+    I420ToNV = &libyuv::I420ToNV21;
+  I420ToNV(i420_yplane, src_width,
+           i420_uplane, src_width >> 1,
+           i420_vplane, src_width >> 1,
+           src_yplane, src_width,
+           src_uvplane, src_width,
+           src_width, src_height);
+
+  delete[] i420_yplane;
+  delete[] i420_uplane;
+  delete[] i420_vplane;
+
+  if (should_resize) {
+    // split uv plane
+    uint8_t* split_temp_uvplane = new uint8_t[src_width * src_storage_height / 2];
+    uint8_t* split_temp_uplane = split_temp_uvplane;
+    uint8_t* split_temp_vplane = split_temp_uvplane + src_width * src_storage_height / 4;
+    libyuv::SplitUVPlane(src_uvplane, src_width,
+                         split_temp_uplane, src_width >> 1,
+                         split_temp_vplane, src_width >> 1,
+                         src_width >> 1, src_height >> 1);
+
+    // resize planes
+    uint8_t* dst_nv_data = dst;
+    uint8_t* dst_yplane = dst_nv_data;
+    uint8_t* dst_uvplane = dst_nv_data + dst_width * dst_height;
+    uint8_t* resize_temp_uvplane = new uint8_t[dst_width * dst_height / 2];
+    uint8_t* resize_temp_uplane = resize_temp_uvplane;
+    uint8_t* resize_temp_vplane = resize_temp_uvplane + dst_width * dst_height / 4;
+    // libyuv::FilterMode::kFilterNone: fastest but lowest quality
+    libyuv::ScalePlane(src_yplane, src_width, src_width, src_height,
+                       dst_yplane, dst_width, dst_width, dst_height,
+                       libyuv::FilterMode::kFilterNone);
+    libyuv::ScalePlane(split_temp_uplane, src_width >> 1, src_width >> 1, src_height >> 1,
+                       resize_temp_uplane, dst_width >> 1, dst_width >> 1, dst_height >> 1,
+                       libyuv::FilterMode::kFilterNone);
+    libyuv::ScalePlane(split_temp_vplane, src_width >> 1, src_width >> 1, src_height >> 1,
+                       resize_temp_vplane, dst_width >> 1, dst_width >> 1, dst_height >> 1,
+                       libyuv::FilterMode::kFilterNone);
+
+    // merge u v planes
+    libyuv::MergeUVPlane(resize_temp_uplane, dst_width >> 1,
+                         resize_temp_vplane, dst_width >> 1,
+                         dst_uvplane, dst_width, dst_width >> 1, dst_height >> 1);
+
+    delete[] src_nv12;
+    delete[] split_temp_uvplane;
+    delete[] resize_temp_uvplane;
+  }
+}
+
+void RtspSinkJoinStream::EncodeFrameBGR(const cv::Mat& bgr24, int64_t timestamp) {
   uint8_t* nv_data = new uint8_t[rtsp_param_->dst_width * rtsp_param_->dst_height * 3 / 2];
-  Bgr2Yuv420nv(bgr_tmp, nv_data);
+  bool nv21 = NV12 != rtsp_param_->color_format;
+  ResizeAndConvertByLibyuv(bgr24, rtsp_param_->dst_width, rtsp_param_->dst_height, nv_data, nv21);
   StreamPipePutPacket(ctx_, nv_data, timestamp);
   delete[] nv_data;
-  bgr_tmp.release();
 }
 
 void RtspSinkJoinStream::EncodeFrameYUV(uint8_t* s_data, int64_t timestamp) {
@@ -202,42 +283,6 @@ void RtspSinkJoinStream::RefreshLoop() {
       delay_us = index * 1e6 / rtsp_param_->frame_rate - pts_us;
     }
   }
-}
-
-void RtspSinkJoinStream::Bgr2Yuv420nv(const cv::Mat& bgr, uint8_t* nv_data) {
-  uint32_t width, height, stride;
-  width = bgr.cols;
-  height = bgr.rows;
-  stride = bgr.cols;
-
-  uint8_t *src_y, *src_u, *src_v, *dst_y, *dst_uv;
-  cv::Mat yuvI420 = cv::Mat(height * 3 / 2, width, CV_8UC1);
-  cv::cvtColor(bgr, yuvI420, cv::COLOR_BGR2YUV_I420);
-
-  src_y = yuvI420.data;
-  src_u = yuvI420.data + width * height;
-  src_v = yuvI420.data + width * height * 5 / 4;
-
-  dst_y = nv_data;
-  dst_uv = nv_data + stride * height;
-
-  for (uint32_t i = 0; i < height; i++) {
-    // y data
-    memcpy(dst_y + i * stride, src_y + i * width, width);
-    // uv data
-    if (i % 2 == 0) {
-      for (uint32_t j = 0; j < width / 2; j++) {
-        if (rtsp_param_->color_format == NV21) {
-          *(dst_uv + i * stride / 2 + 2 * j) = *(src_v + i * width / 4 + j);
-          *(dst_uv + i * stride / 2 + 2 * j + 1) = *(src_u + i * width / 4 + j);
-        } else {
-          *(dst_uv + i * stride / 2 + 2 * j) = *(src_u + i * width / 4 + j);
-          *(dst_uv + i * stride / 2 + 2 * j + 1) = *(src_v + i * width / 4 + j);
-        }
-      }
-    }
-  }
-  yuvI420.release();
 }
 
 void RtspSinkJoinStream::ResizeYuvNearest(uint8_t* src, uint8_t* dst) {

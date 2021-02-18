@@ -44,14 +44,6 @@ Postproc* Postproc::Create(const std::string& proc_name) { return ReflexObjectEx
 
 void Postproc::SetThreshold(const float threshold) { threshold_ = threshold; }
 
-VideoPostproc::~VideoPostproc() {}
-
-VideoPostproc* VideoPostproc::Create(const std::string& proc_name) {
-  return ReflexObjectEx<VideoPostproc>::CreateObject(proc_name);
-}
-
-void VideoPostproc::SetThreshold(const float threshold) { threshold_ = threshold; }
-
 ObjPostproc::~ObjPostproc() {}
 
 ObjPostproc* ObjPostproc::Create(const std::string& proc_name) {

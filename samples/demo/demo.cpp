@@ -138,6 +138,7 @@ class MsgObserver : cnstream::StreamMsgObserver {
     std::unique_lock<std::mutex> lk(mutex_);
     stop_ = false;
     wakener_.wait(lk, [this]() {return stop_; });
+    lk.unlock();
     pipeline_->Stop();
   }
 
@@ -177,24 +178,27 @@ int AddSourceForVideoInMem(cnstream::DataSource *source, const std::string &stre
   if (ret != 0) return ret;
   // Start another thread to read data from file to memory and feed data to pipeline.
   std::thread thread_source([=]() {
-    FILE* fp = fopen(filename.c_str(), "rb");
-    if (!fp) return;
     auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
     memHandler->SetDataType(cnstream::ESMemHandler::H264);
-    unsigned char buf[4096];
-    while (thread_running.load()) {
-      if (!feof(fp)) {
-        int size = fread(buf, 1, 4096, fp);
-        if (memHandler->Write(buf, size) != 0) {
+    FILE* fp = fopen(filename.c_str(), "rb");
+    if (!fp) {
+      LOGE(DEMO) << "Open file failed. file name : " << filename;
+    } else {
+      unsigned char buf[4096];
+      while (thread_running.load()) {
+        if (!feof(fp)) {
+          int size = fread(buf, 1, 4096, fp);
+          if (memHandler->Write(buf, size) != 0) {
+            break;
+          }
+        } else if (loop) {
+          fseek(fp, 0, SEEK_SET);
+        } else {
           break;
         }
-      } else if (loop) {
-        fseek(fp, 0, SEEK_SET);
-      } else {
-        break;
       }
+      fclose(fp);
     }
-    fclose(fp);
     memHandler->Write(nullptr, 0);
   });
   thread_source.detach();

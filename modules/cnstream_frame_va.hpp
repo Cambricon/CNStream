@@ -186,7 +186,7 @@ class CNDataFrame : public NonCopyable {
 
   /* The 'dst_device_id' is for SyncedMemory.
   */
-  int dst_device_id = -1;                                    ///< The device context of SyncMemory.
+  std::atomic<int> dst_device_id{-1};                        ///< The device context of SyncMemory.
 
   /**
    * Gets plane count for a specified frame.
@@ -474,8 +474,8 @@ struct CNInferObject {
 };
 
 struct CNInferObjs : public NonCopyable {
-  std::vector<std::shared_ptr<CNInferObject>> objs_;
-  std::mutex mutex_;
+  std::vector<std::shared_ptr<CNInferObject>> objs_;  /// the objects storing inference results
+  std::mutex mutex_;   /// mutex of CNInferObjs
 };
 
 /**

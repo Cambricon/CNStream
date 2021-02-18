@@ -10,7 +10,7 @@
     "next_modules" : ["detector"],
     "custom_params" : {
       "reuse_cndec_buf" : "true",
-      "output_type" : "cpu",
+      "output_type" : "mlu",
       "decoder_type" : "mlu",
       "device_id" : 0,
       "output_buf_number" : 8
@@ -18,16 +18,14 @@
   },
 
   "detector" : {
-    // "class_name" : "cnstream::Inferencer",
-    "class_name" : "cnstream::Inferencer2",
+    "class_name" : "cnstream::Inferencer",
     "parallelism" : 1,
     "next_modules" : ["osd"],
     "max_input_queue_size" : 20,
     "custom_params" : {
       "model_path" : "../../../../data/models/MLU270/yolov3/yolov3_16c16b_argb_270_v1.5.0.cambricon",
       "func_name" : "subnet0",
-      // "postproc_name" : "PostprocYolov3",
-      "postproc_name" : "VideoPostprocYolov3",
+      "postproc_name" : "PostprocYolov3",
       "threshold" : 0.5,
       "batching_timeout" : 300,
       "keep_aspect_ratio" : "true",
@@ -58,8 +56,6 @@
       "gop_size" : 30,
       "kbit_rate" : 3000,
       "view_mode" : "single",
-      "dst_width" : 1920,
-      "dst_height": 1080,
       "color_mode" : "bgr",
       "encoder_type" : "ffmpeg",
       "device_id": 0

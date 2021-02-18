@@ -25,7 +25,6 @@
 #include <string>
 
 #include "inferencer2.hpp"
-#include "postproc.hpp"
 
 namespace cnstream {
 
@@ -36,8 +35,9 @@ class InferDataObserver;
  */
 class InferHandlerImpl : public InferHandler {
  public:
-  explicit InferHandlerImpl(Inferencer2* module, InferParamerters infer_params,
-                            std::shared_ptr<VideoPostproc> post_processor, std::shared_ptr<Preproc> pre_processor)
+  explicit InferHandlerImpl(Inferencer2* module, Infer2Param infer_params,
+                            std::shared_ptr<VideoPostproc> post_processor,
+                            std::shared_ptr<VideoPreproc> pre_processor)
       : InferHandler(module, infer_params, post_processor, pre_processor) {}
 
   virtual ~InferHandlerImpl();
@@ -53,14 +53,10 @@ class InferHandlerImpl : public InferHandler {
   bool LinkInferServer();
 
  private:
-  InferModelInfoPtr model_info_ = nullptr;
   std::unique_ptr<InferEngine> infer_server_ = nullptr;
   std::shared_ptr<InferDataObserver> data_observer_ = nullptr;
   InferEngineSession session_ = nullptr;
   InferPreprocessType scale_platform_ = InferPreprocessType::UNKNOWN;
-  bool get_response = false;
-  std::mutex response_mutex;
-  std::condition_variable response_cond;
 };
 
 }  // namespace cnstream

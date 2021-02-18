@@ -29,4 +29,4 @@ ${SAMPLES_DIR}/bin/demo  \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/classification_resnet18_mlu220_config.json" \
-    --alsologtostderr
+    --log_to_stderr=true

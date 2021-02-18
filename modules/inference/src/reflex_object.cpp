@@ -26,6 +26,8 @@
 #include <string>
 #include <utility>
 
+#include "cnstream_logging.hpp"
+
 namespace cnstream {
 
 static std::map<std::string, ClassInfo<ReflexObject>> sg_obj_map;
@@ -43,14 +45,14 @@ ReflexObject* ReflexObject::CreateObject(const std::string& name) {
 bool ReflexObject::Register(const ClassInfo<ReflexObject>& info) {
   auto& obj_map = sg_obj_map;
   if (obj_map.find(info.name()) != obj_map.end()) {
-    std::cout << "Register object named [" << info.name() << "] failed!!!"
-              << "Object name has been registered." << std::endl;
+    LOGI(REFLEX_OBJECT) << "Register object named [" << info.name() << "] failed!!!"
+              << "Object name has been registered.";
     return false;
   }
 
   obj_map.insert(std::pair<std::string, ClassInfo<ReflexObject>>(info.name(), info));
 
-  std::cout << "Register object named [" << info.name() << "]" << std::endl;
+  LOGI(REFLEX_OBJECT) << "Register object named [" << info.name() << "]";
   return true;
 }
 

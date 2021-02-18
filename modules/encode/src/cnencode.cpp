@@ -137,7 +137,7 @@ bool CNEncode::CreateMluEncoder() {
   attr.output_buffer_num = 6;
   attr.gop_type = edk::GopType::BIDIRECTIONAL;
   if (cnencode_param_.codec_type == H264) {
-    attr.insertSpsPpsWhenIDR = 1;
+    attr.insert_spspps_when_idr = 1;
     attr.level = edk::VideoLevel::H264_41;
     attr.profile = edk::VideoProfile::H264_MAIN;
   } else if (cnencode_param_.codec_type == HEVC) {
@@ -151,8 +151,6 @@ bool CNEncode::CreateMluEncoder() {
   attr.rate_control.frame_rate_den = frame_rate_den;
   attr.rate_control.bit_rate = cnencode_param_.bit_rate;
   attr.rate_control.max_bit_rate = cnencode_param_.bit_rate;
-  memset(&attr.crop_config, 0, sizeof(edk::CropConfig));
-  attr.crop_config.enable = false;
   attr.silent = false;
   attr.jpeg_qfactor = 50;
   attr.eos_callback = std::bind(&CNEncode::EosCallback, this);

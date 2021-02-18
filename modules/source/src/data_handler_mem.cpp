@@ -151,10 +151,6 @@ int ESMemHandlerImpl::Write(ESPacket *pkt) {
     return -1;
   }
 
-  if (!pkt->data || !pkt->size) {
-    eos_reached_ = true;
-    return 0;
-  }
   return 0;
 }
 
@@ -184,9 +180,15 @@ void ESMemHandlerImpl::OnParserFrame(VideoEsFrame *frame) {
     pkt.data = frame->data;
     pkt.size = frame->len;
     pkt.pts = generate_pts_ ? (fake_pts_ ++) : frame->pts;
-    pkt.flags = frame->flags ? ESPacket::FLAG_KEY_FRAME : 0;
+    if (frame->IsEos()) {
+      pkt.flags = ESPacket::FLAG_EOS;
+      eos_reached_ = true;
+    } else {
+      pkt.flags = frame->flags ? ESPacket::FLAG_KEY_FRAME : 0;
+    }
   } else {
     pkt.flags = ESPacket::FLAG_EOS;
+    eos_reached_ = true;
   }
   while (running_) {
     int timeoutMs = 1000;
@@ -234,7 +236,7 @@ void ESMemHandlerImpl::DecodeLoop() {
 
 bool ESMemHandlerImpl::PrepareResources() {
   VideoInfo info;
-  while (running_.load()) {
+  while (running_.load() && !eos_reached_) {
     if (info_set_.load()) {
       std::unique_lock<std::mutex> lk(info_mutex_);
       info = info_;
@@ -244,6 +246,11 @@ bool ESMemHandlerImpl::PrepareResources() {
   }
 
   if (!running_.load()) {
+    return false;
+  }
+
+  if (eos_reached_) {
+    OnDecodeEos();
     return false;
   }
 

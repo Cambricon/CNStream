@@ -3,6 +3,7 @@ set(Example_DIR "${PROJECT_SOURCE_DIR}/samples")
 link_directories("${Example_DIR}/../lib")
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/util/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/inference/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/inference2/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../modules/osd/include")
@@ -33,9 +34,7 @@ get_filename_component(name "${SRC}" NAME_WE)
 message("target :  ${name}")
 add_executable(${name} ${srcs} ${preprocess_srcs} ${postprocess_srcs} ${obj_filter_srcs})
 
-if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED)
-    add_sanitizers(${name})
-endif()
+add_sanitizers(${name})
 
 add_dependencies(${name} cnstream_va cnstream_core)
 target_link_libraries(${name} ${Example_LINKER_LIBS})

@@ -28,10 +28,6 @@ list(APPEND srcs ${profiler_src})
 add_library(cnstream_core SHARED ${srcs})
 set_target_properties(cnstream_core PROPERTIES LINK_FLAGS_RELEASE -s)
 
-if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED)
-    add_sanitizers(cnstream_core)
-endif()
-
 install(TARGETS cnstream_core LIBRARY DESTINATION lib)
 target_link_libraries(cnstream_core ${SOURCE_LINKER_LIBS} cnrt)
 set_target_properties(cnstream_core PROPERTIES VERSION ${CNSTREAM_TARGET_VERSION})

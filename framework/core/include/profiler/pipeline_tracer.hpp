@@ -33,6 +33,9 @@ namespace cnstream {
 template<typename T>
 class CircularBuffer;
 
+/**
+ * PipelineTracer can be used to record trace events for pipeline.
+ */
 class PipelineTracer : private NonCopyable {
  public:
   /**

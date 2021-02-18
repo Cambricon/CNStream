@@ -396,8 +396,10 @@ bool Pipeline::Stop() {
   // stop data transmit
   for (const std::pair<std::string, ModuleAssociatedInfo>& it : modules_) {
     if (it.second.connector) {
-      it.second.connector->EmptyDataQueue();
+      // push data will be rejected after Stop()
+      // stop first to ensure connector will be empty
       it.second.connector->Stop();
+      it.second.connector->EmptyDataQueue();
     }
   }
   running_.store(false);

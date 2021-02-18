@@ -44,72 +44,44 @@ Inferencer2::Inferencer2(const std::string& name) : Module(name) {
 }
 
 bool Inferencer2::Open(ModuleParamSet raw_params) {
-  Infer2Params params;
+  Infer2Param params;
   if (!param_manager_->ParseBy(raw_params, &params)) {
     LOGE(INFERENCER2) << "[" << GetName() << "] parse parameters failed.";
     return false;
   }
 
-  // InferParamerters infer_params;
-  infer_params_.model_path = cnstream::GetPathRelativeToTheJSONFile(params.model_path, raw_params);
-  infer_params_.device_id = params.device_id;
-  infer_params_.show_stats = params.show_stats;
-  infer_params_.priority = 0;
-  infer_params_.batch_timeout = params.batching_timeout;
-  infer_params_.keep_aspect_ratio = params.keep_aspect_ratio;
-  infer_params_.model_input_pixel_format = params.model_input_pixel_format;
-  infer_params_.func_name = params.func_name;
-  infer_params_.preproc_name = params.preproc_name;
-  infer_params_.engine_num = params.engine_num;
-  infer_params_.object_infer = params.object_infer;
-  if (params.data_order == edk::DimOrder::NCHW) {
-    infer_params_.data_order = InferDimOrder::NCHW;
-  } else {
-    infer_params_.data_order = InferDimOrder::NHWC;
-  }
-
-  if (params.batch_strategy == "dynamic") {
-    infer_params_.batch_strategy = InferBatchStrategy::DYNAMIC;
-  } else if (params.batch_strategy == "static") {
-    infer_params_.batch_strategy = InferBatchStrategy::STATIC;
-  }
+  infer_params_ = params;
 
   // check preprocess
-  std::shared_ptr<Preproc> pre_processor = nullptr;
+  std::shared_ptr<VideoPreproc> pre_processor = nullptr;
   edk::MluContext mlu_ctx;
   mlu_ctx.SetDeviceId(params.device_id);
   mlu_ctx.BindDevice();
 
-  if (params.preproc_name.empty()) {           // empty use default
-    if (edk::CoreVersion::MLU220 == mlu_ctx.GetCoreVersion()) {
-      infer_params_.preproc_name = "SCALER";
-    } else if (edk::CoreVersion::MLU270 == mlu_ctx.GetCoreVersion()) {
-      infer_params_.preproc_name = "RCOP";
-    }
-  } else if (params.preproc_name == "RCOP") {   // use RCOP
-    infer_params_.preproc_name == "RCOP";
-  } else if (params.preproc_name == "SCALER") {  // use SCALER
-    infer_params_.preproc_name == "SCALER";
-  } else {                                       // use your preproc class
-    pre_processor = std::shared_ptr<Preproc>(Preproc::Create(params.preproc_name));
+  if (params.preproc_name.empty()) {
+    LOGE(INFERENCER2) << "Preproc name can't be empty string. Please set preproc_name.";
+    return false;
+  }
+  if (params.preproc_name != "RCOP" && params.preproc_name != "SCALER") {
+    pre_processor = std::shared_ptr<VideoPreproc>(VideoPreproc::Create(params.preproc_name));
     if (!pre_processor) {
-      LOGE(INFERENCER2) << "Can not find Preproc implemention by name: " << params.preproc_name;
+      LOGE(INFERENCER2) << "Can not find VideoPreproc implemention by name: " << params.preproc_name;
       return false;
     }
+    pre_processor->SetModelInputPixelFormat(params.model_input_pixel_format);
   }
 
   std::shared_ptr<VideoPostproc> post_processor = nullptr;
-  if (!params.postproc_name.empty()) {
-    post_processor = std::shared_ptr<VideoPostproc>(VideoPostproc::Create(params.postproc_name));
-    if (!post_processor) {
-      LOGE(INFERENCER2) << "Can not find Postproc implemention by name: " << params.postproc_name;
-      return false;
-    }
-    post_processor->SetThreshold(params.threshold);
-  } else {
-    LOGE(INFERENCER2) << "Postproc name can't be nullptr, check it!";
+  if (params.postproc_name.empty()) {
+    LOGE(INFERENCER2) << "Postproc name can't be empty string. Please set postproc_name.";
     return false;
   }
+  post_processor = std::shared_ptr<VideoPostproc>(VideoPostproc::Create(params.postproc_name));
+  if (!post_processor) {
+    LOGE(INFERENCER2) << "Can not find Postproc implemention by name: " << params.postproc_name;
+    return false;
+  }
+  post_processor->SetThreshold(params.threshold);
 
   infer_handler_ = std::make_shared<InferHandlerImpl>(this, infer_params_, post_processor, pre_processor);
   return infer_handler_->Open();
@@ -123,14 +95,15 @@ int Inferencer2::Process(std::shared_ptr<CNFrameInfo> data) {
   if (!data) return -1;
 
   if (!data->IsEos()) {
-    CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
-    if (static_cast<uint32_t>(frame->data[0]->GetMluDevId()) != infer_params_.device_id &&
-        frame->data[0]->GetHead() == CNSyncedMemory::SyncedHead::HEAD_AT_MLU) {
-      frame->CopyToSyncMemOnDevice(infer_params_.device_id);
-    } else if (frame->data[0]->GetHead() == CNSyncedMemory::SyncedHead::HEAD_AT_CPU) {
+    CNDataFramePtr frame = GetCNDataFramePtr(data);
+    if (frame->dst_device_id < 0) {  /* origin data is on Cpu */
       for (int i = 0; i < frame->GetPlanes(); i++) {
         frame->data[i]->SetMluDevContext(infer_params_.device_id);
       }
+      frame->dst_device_id = infer_params_.device_id;
+    } else if ((unsigned)frame->dst_device_id != infer_params_.device_id) {  /* origin data is on another device */
+      frame->CopyToSyncMemOnDevice(infer_params_.device_id);
+      frame->dst_device_id = infer_params_.device_id;
     }
     infer_handler_->Process(data, infer_params_.object_infer);
   } else {
@@ -150,7 +123,7 @@ Inferencer2::~Inferencer2() {
 }
 
 bool Inferencer2::CheckParamSet(const ModuleParamSet& param_set) const {
-  Infer2Params params;
+  Infer2Param params;
   return param_manager_->ParseBy(param_set, &params);
 }
 

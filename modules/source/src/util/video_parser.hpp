@@ -53,7 +53,13 @@ struct VideoEsFrame {
   int64_t pts = 0;
   uint32_t flags = 0;
   enum {FLAG_KEY_FRAME = 0x01};
+  bool IsEos();
 };
+
+inline
+bool VideoEsFrame::IsEos() {
+  return data == nullptr && len == 0;
+}
 
 class IParserResult {
  public:

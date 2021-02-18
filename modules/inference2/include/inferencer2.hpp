@@ -24,7 +24,6 @@
  *  This file contains a declaration of class Inferencer2
  */
 
-#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -91,8 +90,7 @@ class Inferencer2 : public Module, public ModuleCreator<Inferencer2> {
 
  private:
   std::shared_ptr<InferHandler> infer_handler_ = nullptr;  ///< inference2 handler
-  InferParamerters infer_params_;
-  edk::MluContext mlu_ctx_;
+  Infer2Param infer_params_;
   std::shared_ptr<Infer2ParamManager> param_manager_ = nullptr;
 };  // class Inferencer2
 

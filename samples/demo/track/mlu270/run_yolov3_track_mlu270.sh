@@ -42,4 +42,4 @@ ${SAMPLES_DIR}/bin/demo  \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/yolov3_track_mlu270.json" \
-    --alsologtostderr
+    --log_to_stderr=true

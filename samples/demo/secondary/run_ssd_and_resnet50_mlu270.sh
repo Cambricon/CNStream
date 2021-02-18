@@ -41,4 +41,4 @@ $CURRENT_FILE/../../bin/demo  \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/ssd_resnet34_and_resnet50_mlu270_config.json" \
-    --alsologtostderr
+    --log_to_stderr=true

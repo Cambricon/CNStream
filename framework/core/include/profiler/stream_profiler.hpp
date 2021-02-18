@@ -38,18 +38,59 @@ class StreamProfiler {
   using Duration = std::chrono::duration<double, std::milli>;
 
  public:
+  /**
+   * StreamProfiler constructor.
+   *
+   * @param stream_name Stream name.
+   */
   explicit StreamProfiler(const std::string& stream_name);
 
+  /**
+   * Accumulate latency data.
+   *
+   * @param latency Latency.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   StreamProfiler& AddLatency(const Duration& latency);
 
+  /**
+   * Update pyhsical time this stream used.
+   *
+   * @param time The pyhsical time this stream used.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   StreamProfiler& UpdatePhysicalTime(const Duration& time);
 
+  /**
+   * Accumulate drop frame count.
+   *
+   * @param dropped drop frame count.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   StreamProfiler& AddDropped(uint64_t dropped);
 
+  /**
+   * Accumulate completed frame count with 1.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   StreamProfiler& AddCompleted();
 
+  /**
+   * Gets stream name.
+   *
+   * @return Returns stream name.
+   */
   std::string GetName() const;
 
+  /**
+   * Gets statistical performance data for this stream.
+   *
+   * @return Returns statistical performance data for this stream.
+   */
   StreamProfile GetProfile();
 
  private:

@@ -38,12 +38,39 @@ struct StreamProfile {
   double minimum_latency = 0.0;    ///< minimum latency. (ms)
   double fps = 0.0;                ///< fps.
 
+  /*
+   * StreamProfile constructor.
+   */
   StreamProfile() = default;
+  /**
+   * StreamProfile copy constructor.
+   *
+   * @param it which instance copy from.
+   */
   StreamProfile(const StreamProfile& it) = default;
+  /**
+   * StreamProfile operator =.
+   *
+   * @param it Which instance copy from.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   StreamProfile& operator=(const StreamProfile& it) = default;
+  /**
+   * StreamProfile move constructor.
+   *
+   * @param it which instance move from.
+   */
   inline StreamProfile(StreamProfile&& it) {
     *this = std::forward<StreamProfile>(it);
   }
+  /**
+   * StreamProfile operator =.
+   *
+   * @param it Which instance move from.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   inline StreamProfile& operator=(StreamProfile&& it) {
     stream_name = std::move(it.stream_name);
     counter = it.counter;
@@ -70,12 +97,39 @@ struct ProcessProfile {
   double fps = 0.0;                              ///< fps.
   std::vector<StreamProfile> stream_profiles;    ///< stream profiles.
 
+  /*
+   * ProcessProfile constructor.
+   */
   ProcessProfile() = default;
+  /**
+   * ProcessProfile copy constructor.
+   *
+   * @param it which instance copy from.
+   */
   ProcessProfile(const ProcessProfile& it) = default;
+  /**
+   * ProcessProfile operator =.
+   *
+   * @param it Which instance copy from.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   ProcessProfile& operator=(const ProcessProfile& it) = default;
+  /**
+   * ProcessProfile move constructor.
+   *
+   * @param it which instance move from.
+   */
   inline ProcessProfile(ProcessProfile&& it) {
     *this = std::forward<ProcessProfile>(it);
   }
+  /**
+   * ProcessProfile operator =.
+   *
+   * @param it Which instance move from.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   inline ProcessProfile& operator=(ProcessProfile&& it) {
     process_name = std::move(it.process_name);
     stream_profiles = std::move(it.stream_profiles);
@@ -96,12 +150,39 @@ struct ModuleProfile {
   std::string module_name;                         ///< module name.
   std::vector<ProcessProfile> process_profiles;    ///< process profiles.
 
+  /*
+   * ModuleProfile constructor.
+   */
   ModuleProfile() = default;
+  /**
+   * ModuleProfile copy constructor.
+   *
+   * @param it which instance copy from.
+   */
   ModuleProfile(const ModuleProfile& it) = default;
+  /**
+   * ModuleProfile operator =.
+   *
+   * @param it Which instance copy from.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   ModuleProfile& operator=(const ModuleProfile& it) = default;
+  /**
+   * ModuleProfile move constructor.
+   *
+   * @param it which instance move from.
+   */
   inline ModuleProfile(ModuleProfile&& it) {
     *this = std::forward<ModuleProfile>(it);
   }
+  /**
+   * ModuleProfile operator =.
+   *
+   * @param it Which instance move from.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   inline ModuleProfile& operator=(ModuleProfile&& it) {
     module_name = std::move(it.module_name);
     process_profiles = std::move(it.process_profiles);
@@ -115,12 +196,39 @@ struct PipelineProfile {
   std::vector<ModuleProfile> module_profiles;      ///< module profiles.
   ProcessProfile overall_profile;                  ///< profile of the whole pipeline.
 
+  /*
+   * PipelineProfile constructor.
+   */
   PipelineProfile() = default;
+  /**
+   * PipelineProfile copy constructor.
+   *
+   * @param it which instance copy from.
+   */
   PipelineProfile(const PipelineProfile& it) = default;
+  /**
+   * PipelineProfile operator =.
+   *
+   * @param it Which instance copy from.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   PipelineProfile& operator=(const PipelineProfile& it) = default;
+  /**
+   * PipelineProfile move constructor.
+   *
+   * @param it which instance move from.
+   */
   inline PipelineProfile(PipelineProfile&& it) {
     *this = std::forward<PipelineProfile>(it);
   }
+  /**
+   * PipelineProfile operator =.
+   *
+   * @param it Which instance move from.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   inline PipelineProfile& operator=(PipelineProfile&& it) {
     pipeline_name = std::move(it.pipeline_name);
     module_profiles = std::move(it.module_profiles);

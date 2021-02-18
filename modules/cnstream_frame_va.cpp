@@ -18,9 +18,8 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include "cnstream_frame_va.hpp"
-
 #include <cnrt.h>
+#include <libyuv.h>
 
 #include <fcntl.h>
 #include <stdlib.h>
@@ -38,6 +37,7 @@
 #include <utility>
 #include <vector>
 
+#include "cnstream_frame_va.hpp"
 #include "cnstream_logging.hpp"
 #include "cnstream_module.hpp"
 
@@ -62,64 +62,81 @@ CNDataFrame::~CNDataFrame() {
 }
 
 #ifdef HAVE_OPENCV
+namespace color_cvt {
+static
+cv::Mat BGRToBGR(const CNDataFrame& frame) {
+  const cv::Mat bgr(frame.height, frame.stride[0], CV_8UC3, const_cast<void*>(frame.data[0]->GetCpuData()));
+  return bgr(cv::Rect(0, 0, frame.width, frame.height)).clone();
+}
+
+static
+cv::Mat RGBToBGR(const CNDataFrame& frame) {
+  const cv::Mat rgb(frame.height, frame.stride[0], CV_8UC3, const_cast<void*>(frame.data[0]->GetCpuData()));
+  cv::Mat bgr;
+  cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
+  return bgr(cv::Rect(0, 0, frame.width, frame.height)).clone();
+}
+
+static
+cv::Mat YUV420SPToBGR(const CNDataFrame& frame, bool nv21) {
+  const uint8_t* y_plane = reinterpret_cast<const uint8_t*>(frame.data[0]->GetCpuData());
+  const uint8_t* uv_plane = reinterpret_cast<const uint8_t*>(frame.data[1]->GetCpuData());
+  int width = frame.width;
+  int height = frame.height;
+  int y_stride = frame.stride[0];
+  int uv_stride = frame.stride[1];
+  cv::Mat bgr(height, width, CV_8UC3);
+  uint8_t* dst_bgr24 = bgr.data;
+  int dst_stride = width * 3;
+  // kYvuH709Constants make it to BGR
+  if (nv21)
+    libyuv::NV21ToRGB24Matrix(y_plane, y_stride, uv_plane, uv_stride,
+                              dst_bgr24, dst_stride, &libyuv::kYvuH709Constants, width, height);
+  else
+    libyuv::NV12ToRGB24Matrix(y_plane, y_stride, uv_plane, uv_stride,
+                              dst_bgr24, dst_stride, &libyuv::kYvuH709Constants, width, height);
+  return bgr;
+}
+
+static inline
+cv::Mat NV12ToBGR(const CNDataFrame& frame) {
+  return YUV420SPToBGR(frame, false);
+}
+
+static inline
+cv::Mat NV21ToBGR(const CNDataFrame& frame) {
+  return YUV420SPToBGR(frame, true);
+}
+
+static inline
+cv::Mat FrameToImageBGR(const CNDataFrame& frame) {
+  switch (frame.fmt) {
+    case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
+      return BGRToBGR(frame);
+    case CNDataFormat::CN_PIXEL_FORMAT_RGB24:
+      return RGBToBGR(frame);
+    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
+      return NV12ToBGR(frame);
+    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
+      return NV21ToBGR(frame);
+    default:
+      LOGF(FRAME) << "Unsupport pixel format. fmt[" << static_cast<int>(frame.fmt) << "]";
+  }
+  // never be here
+  abort();
+  return cv::Mat();
+}
+
+}  // namespace color_cvt
+
 cv::Mat* CNDataFrame::ImageBGR() {
   std::lock_guard<std::mutex> lk(mtx);
   if (bgr_mat != nullptr) {
     return bgr_mat;
   }
-  int stride_ = stride[0];
-  cv::Mat bgr(height, stride_, CV_8UC3);
-  uint8_t* img_data = new (std::nothrow) uint8_t[GetBytes()];
-  LOGF_IF(FRAME, nullptr == img_data) << "CNDataFrame::ImageBGR() failed to alloc memory";
-  uint8_t* t = img_data;
-  for (int i = 0; i < GetPlanes(); ++i) {
-    memcpy(t, data[i]->GetCpuData(), GetPlaneBytes(i));
-    t += GetPlaneBytes(i);
-  }
-  switch (fmt) {
-    case CNDataFormat::CN_PIXEL_FORMAT_BGR24: {
-      bgr = cv::Mat(height, stride_, CV_8UC3, img_data);
-    } break;
-    case CNDataFormat::CN_PIXEL_FORMAT_RGB24: {
-      cv::Mat src = cv::Mat(height, stride_, CV_8UC3, img_data);
-      cv::cvtColor(src, bgr, cv::COLOR_RGB2BGR);
-    } break;
-    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12: {
-      if (height % 2 != 0) {
-        uint8_t* p = new uint8_t[(height + 1) * stride_ * 3 / 2];
-        std::memcpy(p, img_data, height * stride_);
-        std::memcpy(p + (height + 1) * stride_, img_data + height * stride_, (height * stride_) / 2);
-        cv::Mat src = cv::Mat((height + 1) * 3 / 2, stride_, CV_8UC1, p);
-        cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV12);
-        delete[] p;
-      } else {
-        cv::Mat src = cv::Mat(height * 3 / 2, stride_, CV_8UC1, img_data);
-        cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV12);
-      }
-    } break;
-    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21: {
-      if (height % 2 != 0) {
-        uint8_t* p = new uint8_t[(height + 1) * stride_ * 3 / 2];
-        std::memcpy(p, img_data, height * stride_);
-        std::memcpy(p + (height + 1) * stride_, img_data + height * stride_, (height * stride_) / 2);
-        cv::Mat src = cv::Mat((height + 1) * 3 / 2, stride_, CV_8UC1, p);
-        cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV21);
-        delete[] p;
-      } else {
-        cv::Mat src = cv::Mat(height * 3 / 2, stride_, CV_8UC1, img_data);
-        cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR_NV21);
-      }
-    } break;
-    default: {
-      LOGW(FRAME) << "Unsupport pixel format.";
-      delete[] img_data;
-      return nullptr;
-    }
-  }
   bgr_mat = new (std::nothrow) cv::Mat();
   LOGF_IF(FRAME, nullptr == bgr_mat) << "CNDataFrame::ImageBGR() failed to alloc cv::Mat";
-  *bgr_mat = bgr(cv::Rect(0, 0, width, height)).clone();
-  delete[] img_data;
+  *bgr_mat = color_cvt::FrameToImageBGR(*this);
   return bgr_mat;
 }
 #endif
