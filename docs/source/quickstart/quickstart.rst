@@ -16,7 +16,7 @@
 安装和配置环境依赖和依赖库
 ----------------------------
 
-用户需要安装和配置环境依赖和寒武纪Neuware安装包后使用CNStream。本节描述了如何在Debian、Ubuntu、CentOS以及Docker环境下配置CNStream。
+用户需要安装和配置环境依赖和寒武纪Neuware安装包后使用CNStream。本节描述了如何在Ubuntu、CentOS以及Docker环境下配置CNStream。
 
 .. _环境依赖:
 
@@ -136,13 +136,13 @@ CNStream提供以下Dockerfile，其中``${CNSTREAM_DIR}`` 代表CNStream源码�
 
          ::
 	     
-             docker build -f docker/Dockerfile --build-arg toolkit_package=${cntoolkit_package_name} -t ubuntu_cnstream:v1 
+             docker build -f Dockerfile.18.04 --build-arg toolkit_package=${cntoolkit_package_name} -t ubuntu_cnstream:v1 
 
    -  如果选择不将寒武纪CNToolkit包安装进镜像中，运行下面命令编译镜像：
 
       ::
 	     
-             docker build -f docker/Dockerfile.18.04 -t ubuntu_cnstream:v1
+             docker build -f Dockerfile.18.04 -t ubuntu_cnstream:v1
 			
 4. 运行下面命令，开启容器：
 
