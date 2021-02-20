@@ -122,7 +122,7 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
       img = bgr;
     } break;
     default:
-      LOGW(DEMO) << "[Encoder] Unsupport pixel format.";
+      LOGW(DEMO) << "[PreprocCpu] Unsupport pixel format.";
       delete[] img_data;
       return -1;
   }

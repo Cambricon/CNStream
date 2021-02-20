@@ -65,8 +65,9 @@ int PostprocClassification::Execute(const std::vector<float*>& net_outputs,
   obj->id = std::to_string(label);
   obj->score = mscore;
 
-  cnstream::CNInferObjsPtr objs_ptr = cnstream::GetCNInferObjsPtr(package);
-  objs_ptr->objs_.push_back(obj);
+  cnstream::CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(package);
+  std::lock_guard<std::mutex> objs_mutex(objs_holder->mutex_);
+  objs_holder->objs_.push_back(obj);
   return 0;
 }
 
@@ -86,8 +87,7 @@ int ObjPostprocClassification::Execute(const std::vector<float*>& net_outputs,
                                        const std::shared_ptr<cnstream::CNInferObject>& obj) {
   if (net_outputs.size() != 1) {
     LOGE(DEMO) << "[Warning] classification neuron network only has one output,"
-                  " but get " +
-                      std::to_string(net_outputs.size());
+                  " but get " + std::to_string(net_outputs.size());
     return -1;
   }
 
@@ -112,48 +112,4 @@ int ObjPostprocClassification::Execute(const std::vector<float*>& net_outputs,
   attr.score = mscore;
   obj->AddAttribute("classification", attr);
   return 0;
-}
-
-class VideoPostprocClassification : public cnstream::VideoPostproc {
- public:
-  bool ExecuteInObserverNotify(infer_server::InferDataPtr result, const std::shared_ptr<infer_server::ModelInfo>& model,
-                               cnstream::CNFrameInfoPtr frame, std::shared_ptr<cnstream::CNInferObject> obj) override;
-
-  DECLARE_REFLEX_OBJECT_EX(VideoPostprocClassification, cnstream::VideoPostproc)
-};  // classd PostprocClassification
-
-IMPLEMENT_REFLEX_OBJECT_EX(VideoPostprocClassification, cnstream::VideoPostproc)
-
-bool VideoPostprocClassification::ExecuteInObserverNotify(infer_server::InferDataPtr result,
-                                                          const std::shared_ptr<infer_server::ModelInfo>& model,
-                                                          cnstream::CNFrameInfoPtr frame,
-                                                          std::shared_ptr<cnstream::CNInferObject> obj) {
-  auto model_output = infer_server::any_cast<infer_server::ModelIO>(result->data);
-  if (model_output.buffers.size() != 1) {
-    LOGE(DEMO) << "[Warning] classification neuron network only has one output,"
-                  " but get " + std::to_string(model_output.buffers.size());
-    return false;
-  }
-  float* data = reinterpret_cast<float*>(model_output.buffers[0].MutableData());
-
-  auto len = model->OutputShape(0).DataCount();
-  auto pscore = data;
-
-  float mscore = 0;
-  int label = 0;
-  for (decltype(len) i = 0; i < len; ++i) {
-    auto score = *(pscore + i);
-    if (score > mscore) {
-      mscore = score;
-      label = i;
-    }
-  }
-
-  if (0 == label) return -1;
-  cnstream::CNInferAttr attr;
-  attr.id = 0;
-  attr.value = label;
-  attr.score = mscore;
-  obj->AddAttribute("classification", attr);
-  return true;
 }

@@ -19,13 +19,9 @@
  *************************************************************************/
 #include "data_handler_util.hpp"
 
-#include <memory>
+#include <libyuv.h>
 
-#if HAVE_LIBYUV
-  #include "libyuv.h"
-#else
-  #error "LIBYUV must be selected";
-#endif
+#include <memory>
 
 #include "cnstream_allocator.hpp"
 

@@ -129,7 +129,7 @@ TEST(CoreFrame, ConvertImageToBGRFailed) {
   frame.dst_device_id = g_dev_id;
   frame.CopyToSyncMem();
   frame.fmt = CN_INVALID;
-  EXPECT_EQ(frame.ImageBGR(), nullptr);
+  EXPECT_DEATH(frame.ImageBGR(), ".*Unsupport pixel format.*");
   free(frame.ptr_cpu[0]);
   free(frame.ptr_cpu[1]);
 }

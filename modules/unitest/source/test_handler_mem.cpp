@@ -42,8 +42,8 @@ static void ResetParam(ModuleParamSet &param) {  // NOLINT
   param["device_id"] = "0";
   param["interval"] = "1";
   param["decoder_type"] = "mlu";
-  param["input_buf_number"] = "100";
-  param["output_buf_number"] = "100";
+  param["input_buf_number"] = "32";   // Max is 32 due to Codec's limitation
+  param["output_buf_number"] = "32";  // Max is 32 due to Codec's limitation
 }
 
 TEST(DataHandlerMem, Write) {
@@ -66,6 +66,9 @@ TEST(DataHandlerMem, Write) {
     int size = fread(buf, 1, 4096, fp);
     EXPECT_EQ(memHandler->Write(buf, size), 0);
   }
+
+  std::chrono::seconds sec(2);
+  std::this_thread::sleep_for(sec);
   memHandler->Close();
   fclose(fp);
 }

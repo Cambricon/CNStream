@@ -47,7 +47,6 @@ option(WITH_FFMPEG_AVDEVICE "with ffmpeg avdevice" OFF)
 option(WITH_OPENCV "with opencv" ON)
 option(WITH_FREETYPE "with freetype" OFF)
 option(WITH_RTSP "with rtsp" ON)
-option(WITH_LIBYUV "with libyuv" ON)
 
 # To use sanitizers, the version of GCC is required to be no less than 4.9
 option(SANITIZE_MEMORY "Enable MemorySanitizer for sanitized targets." OFF)
@@ -134,13 +133,9 @@ if(WITH_RTSP)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_LIVE555")
 endif()
 
-set(LIBYUV_LIBS "")
-if(WITH_LIBYUV)
-  include_directories(${PROJECT_SOURCE_DIR}/3rdparty/libyuv/include)
-  link_directories(${PROJECT_SOURCE_DIR}/3rdparty/libyuv/lib)
-  set(LIBYUV_LIBS yuv)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_LIBYUV")
-endif()
+include_directories(${PROJECT_SOURCE_DIR}/3rdparty/libyuv/include)
+link_directories(${PROJECT_SOURCE_DIR}/3rdparty/libyuv/lib)
+set(LIBYUV_LIBS yuv)
 
 ##OpenCV
 if(WITH_OPENCV)
@@ -251,10 +246,8 @@ if(WITH_FREETYPE)
   endif (FREETYPE_FOUND)
 endif()
 
-if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED) 
-    set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/sanitizers" ${CMAKE_MODULE_PATH})
-    find_package(Sanitizers)
-endif()
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/sanitizers" ${CMAKE_MODULE_PATH})
+find_package(Sanitizers)
 
 # ---[ dependencies
 # neuware include/libs

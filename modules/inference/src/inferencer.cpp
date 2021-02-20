@@ -190,15 +190,11 @@ class InferencerPrivate {
           params_.saving_infer_input,
           module_name_,
           q_ptr_->GetProfiler());
-      ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_, bsize_);
+      ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_, params_.infer_interval * bsize_ * 2);
       ctxs_[tid] = ctx;
     }
     return ctx;
   }
-
-  void CalcPerf();
-  void PrintPerf();
-  void PrintPerf(std::string name, std::vector<std::string> keys);
 
  private:
   DECLARE_PUBLIC(q_ptr_, Inferencer);

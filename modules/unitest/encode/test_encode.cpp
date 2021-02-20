@@ -356,7 +356,7 @@ TEST(EncodeModule, ProcessCpuEncode) {
     }
   }
 }
-
+/*
 TEST(EncodeModule, ProcessMluEncode) {
   std::vector<std::pair<uint32_t, uint32_t>> src_wh;
   src_wh.push_back({720, 480});
@@ -393,4 +393,5 @@ TEST(EncodeModule, ProcessMluEncode) {
     }
   }
 }
+*/
 }  // namespace cnstream

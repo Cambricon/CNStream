@@ -33,4 +33,4 @@ ${SAMPLES_DIR}/bin/demo  \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/RTSP_mosaic.json" \
-    --alsologtostderr
+    --log_to_stderr=true

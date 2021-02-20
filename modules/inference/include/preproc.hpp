@@ -33,13 +33,9 @@
 #include <vector>
 
 #include "easyinfer/model_loader.h"
-#include "reflex_object.h"
-
 #include "cnstream_frame.hpp"
 #include "cnstream_frame_va.hpp"
-
-#include "infer_server.h"
-#include "processor.h"
+#include "reflex_object.h"
 
 namespace cnstream {
 
@@ -61,13 +57,9 @@ class Preproc : virtual public ReflexObjectEx<Preproc> {
    *
    * @param proc_name preprocess class name
    *
-   * @return None
+   * @return relative preprocess object pointer
    */
   static Preproc* Create(const std::string& proc_name);
-
-  void SetModelInfo(const infer_server::ModelPtr& model_info) {
-    model_info_ = model_info;
-  }
 
   /**
    * @brief Execute preproc on neural network inputs
@@ -80,14 +72,6 @@ class Preproc : virtual public ReflexObjectEx<Preproc> {
    */
   virtual int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
                       const CNFrameInfoPtr& package) = 0;
-
-  virtual bool ExecuteInferServer(infer_server::ModelIO*, const infer_server::InferData& in_data,
-                                  const infer_server::ModelInfo& model_info) {
-    return true;
-  }
-
- public:
-  infer_server::ModelPtr model_info_;
 };  // class Preproc
 
 /**
@@ -120,11 +104,6 @@ class ObjPreproc : virtual public ReflexObjectEx<ObjPreproc> {
    */
   virtual int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
                       const CNFrameInfoPtr& finfo, const std::shared_ptr<CNInferObject>& pobj) = 0;
-
-  virtual bool ExecuteInferServer(infer_server::ModelIO*, const infer_server::InferData& in_data,
-                                  const infer_server::ModelInfo& model_info) {
-    return true;
-  }
 };  // class ObjPreproc
 
 }  // namespace cnstream

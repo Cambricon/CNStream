@@ -27,40 +27,24 @@
 
 #include "cnstream_config.hpp"
 #include "cnstream_frame_va.hpp"
-#include "easyinfer/model_loader.h"
 #include "cnstream_logging.hpp"
+#include "easyinfer/model_loader.h"
+#include "infer_base.hpp"
 
 namespace cnstream {
-
-struct Infer2Params {
-  uint32_t device_id = 0;
-  bool object_infer = false;
-  float threshold = 0.0f;
-  bool show_stats = false;
-  uint32_t engine_num = 1;
-  std::string batch_strategy = "dynamic";
-  uint32_t batching_timeout = 3000;  // ms
-  bool keep_aspect_ratio = false;  // mlu preprocessing, keep aspect ratio
-  CNDataFormat model_input_pixel_format = CN_PIXEL_FORMAT_RGBA32;
-  edk::DimOrder data_order = edk::DimOrder::NHWC;
-  std::string func_name;
-  std::string model_path;
-  std::string preproc_name;
-  std::string postproc_name;
-};  // struct Infer2Params
 
 struct Infer2ParamDesc {
   std::string name;
   std::string desc_str;
   std::string default_value;
-  std::string type;  // eg. bool
-  std::function<bool(const std::string &value, Infer2Params *param_set)> parser = NULL;
+  std::string type;  // e.g. bool
+  std::function<bool(const std::string &value, Infer2Param *param_set)> parser = NULL;
   bool IsLegal() const {
     return name != "" && type != "" && parser;
   }
 };  // struct Infer2ParamDesc
 
-struct InferParam2DescLessCompare {
+struct Infer2ParamDescLessCompare {
   bool operator() (const Infer2ParamDesc &p1, const Infer2ParamDesc &p2) {
     return p1.name < p2.name;
   }
@@ -70,11 +54,11 @@ class Infer2ParamManager {
  public:
   void RegisterAll(ParamRegister *pregister);
 
-  bool ParseBy(const ModuleParamSet &raw_params, Infer2Params *pout);
+  bool ParseBy(const ModuleParamSet &raw_params, Infer2Param *pout);
 
  private:
   bool RegisterParam(ParamRegister *pregister, const Infer2ParamDesc &param_desc);
-  std::set<Infer2ParamDesc, InferParam2DescLessCompare> param_descs_;
+  std::set<Infer2ParamDesc, Infer2ParamDescLessCompare> param_descs_;
 };  // struct Infer2ParamManager
 
 }  // namespace cnstream

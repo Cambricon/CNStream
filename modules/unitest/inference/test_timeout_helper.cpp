@@ -89,54 +89,21 @@ TEST(Inferencer, TimeoutHelper_Reset) {
 }
 
 TEST(Inferencer, TimeoutHelper_HandleFunc) {
-  double wait_time = 600.0;  // ms
-  std::shared_ptr<TimeoutHelper> th = std::make_shared<TimeoutHelper>();
-  // default state is STATE_NO_FUNC
-  TimeoutHelperTest th_test(th.get());
-  th_test.setTime(wait_time);
-  std::atomic<bool> HandleCall(false);
-  std::function<void()> Func = []() -> void {};
-
-  std::thread& Threadhandle = th_test.getThread();
-  if (Threadhandle.joinable()) Threadhandle.detach();
-
-  std::function<double()> wait_for_time([&]() -> double {
-    // HandleCall.store(true);
-    auto stime = std::chrono::steady_clock::now();
-    th_test.ConditionNotify();  // unlock the last wait
-    th_test.setState(1);
-    HandleCall.store(true);
-    // get the next state(until wait_for time end)
-    while (static_cast<int>(th_test.getState()) != 2) std::this_thread::sleep_for(std::chrono::nanoseconds(1));
-    th->Reset(Func);  // for the next test
-    auto etime = std::chrono::steady_clock::now();
-    std::chrono::duration<double, std::nano> diff = etime - stime;
-    return diff.count();
-  });
-  // one loop finish with state_do
-  std::future<double> handle_func = std::async(std::launch::async, wait_for_time);
-  while (!HandleCall.load()) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-  }
-  // wait until the value is get
-  double real_wait_time = handle_func.get();
-  EXPECT_GE(real_wait_time, static_cast<double>(wait_time));
-
-  // wait for wait_for time end
-  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-  // test state_do
-  EXPECT_EQ(th_test.get_timeout_print_cnt(), 1);
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  Func = []() -> void {};
-  th->Reset(Func);
-  th_test.set_timeout_print_cnt(99);
-  th_test.setState(2);  // state_do
-  th_test.ConditionNotify();
-  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-  EXPECT_EQ(th_test.get_timeout_print_cnt(), 0);
-
-  EXPECT_EQ(static_cast<int>(th_test.getState()), 0);
+  TimeoutHelper helper;
+  const double timeout = 40;  // ms
+  helper.SetTimeout(timeout);
+  helper.LockOperator();
+  std::promise<std::chrono::steady_clock::time_point> task_call_promise;
+  auto task = [&task_call_promise] () {
+    task_call_promise.set_value(std::chrono::steady_clock::now());
+    return;
+  };
+  auto task_submit_time = std::chrono::steady_clock::now();
+  helper.Reset(task);
+  helper.UnlockOperator();
+  auto task_call_time = task_call_promise.get_future().get();
+  std::chrono::duration<double, std::milli> used_time = task_call_time - task_submit_time;
+  EXPECT_GE(used_time.count(), timeout);
 }
 
 }  // namespace cnstream

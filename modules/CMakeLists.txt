@@ -69,6 +69,8 @@ endif()
 include_directories(${PROJECT_SOURCE_DIR}/modules)
 file(GLOB srcs ${PROJECT_SOURCE_DIR}/modules/*.cpp)
 
+include_directories(${PROJECT_SOURCE_DIR}/modules/util/include)
+
 foreach(module ${module_list})
   include_directories(${PROJECT_SOURCE_DIR}/modules/${module}/include)
   file(GLOB_RECURSE module_src ${PROJECT_SOURCE_DIR}/modules/${module}/*.cpp)
@@ -77,10 +79,6 @@ endforeach()
 
 add_library(cnstream_va SHARED ${srcs})
 set_target_properties(cnstream_va PROPERTIES LINK_FLAGS_RELEASE -s)
-
-if (SANITIZE_MEMORY OR SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_UNDEFINED)
-    add_sanitizers(cnstream_va)
-endif()
 
 install(TARGETS cnstream_va LIBRARY DESTINATION lib)
 target_link_libraries(cnstream_va ${SOURCE_LINKER_LIBS} ${Live555_LIBS} ${LIBYUV_LIBS})

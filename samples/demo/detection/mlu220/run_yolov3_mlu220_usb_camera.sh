@@ -31,4 +31,4 @@ ${SAMPLES_DIR}/bin/demo  \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/yolov3_mlu220_config_usb_camera.json" \
-    --alsologtostderr
+    --log_to_stderr=true

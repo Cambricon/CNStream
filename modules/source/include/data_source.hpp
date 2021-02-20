@@ -47,11 +47,17 @@ namespace cnstream {
 /**
  * @brief storage type of output frame data for modules, storage on cpu or mlu.
  */
-enum OutputType { OUTPUT_CPU, OUTPUT_MLU };
+enum OutputType {
+  OUTPUT_CPU,  /// output decoded buffer to CPU
+  OUTPUT_MLU   /// output decoded buffer to MLU
+};
 /**
  * @brief decoder type used in source module.
  */
-enum DecoderType { DECODER_CPU, DECODER_MLU };
+enum DecoderType {
+  DECODER_CPU,  /// use CPU decoder
+  DECODER_MLU   /// use MLU decoder
+};
 /**
  * @brief a structure for private usage
  */
