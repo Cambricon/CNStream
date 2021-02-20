@@ -154,7 +154,7 @@ texinfo_documents = [
 latex_engine = 'xelatex'
 
  # 如果没有使用自定义封面，可以加上封面 logo。这里可以是 pdf 或者 png，jpeg 等
-latex_logo = "./logo.png"
+latex_logo = "./images/logo.png"
 
 
 latex_show_urls = 'footnote'
