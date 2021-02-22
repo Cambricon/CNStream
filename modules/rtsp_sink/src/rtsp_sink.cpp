@@ -81,6 +81,24 @@ RtspSinkContext* RtspSink::CreateRtspSinkContext(CNFrameInfoPtr data) {
   return context;
 }
 
+void RtspSink::OnStreamEos(CNFrameInfoPtr data) {
+  assert(data->IsEos());
+  if (is_mosaic_style_) return;
+  const uint32_t channel_idx = data->GetStreamIndex();
+  rtsp_lock_.wrlock();
+  auto search = contexts_.find(channel_idx);
+  RtspSinkContext* ctx = nullptr;
+  if (search != contexts_.end()) {
+    ctx = search->second;
+    contexts_.erase(channel_idx);
+  }
+  rtsp_lock_.unlock();
+  if (ctx) {
+    LOGI(RTSP) << "[" << data->stream_id << "]: Remove rtsp stream";
+    delete ctx;
+  }
+}
+
 RtspParam RtspSink::GetRtspParam(CNFrameInfoPtr data) {
   CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
   switch (frame->fmt) {
@@ -186,6 +204,11 @@ void RtspSink::Close() {
 }
 
 int RtspSink::Process(CNFrameInfoPtr data) {
+  if (data->IsEos()) {
+    OnStreamEos(data);
+    TransmitData(data);
+    return 0;
+  }
   RtspSinkContext* ctx = GetRtspSinkContext(data);
   if (!ctx) return -1;
   CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
@@ -215,6 +238,7 @@ int RtspSink::Process(CNFrameInfoPtr data) {
       data->frame.deAllocator_.reset();
     */
   }
+  TransmitData(data);
   return 0;
 }
 
@@ -286,7 +310,7 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
   return ret;
 }
 
-RtspSink::RtspSink(const std::string &name) : Module(name) {
+RtspSink::RtspSink(const std::string &name) : ModuleEx(name) {
   param_register_.SetModuleDesc("RtspSink is a module to deliver stream by RTSP protocol.");
   param_register_.Register("http_port", "Http port.");
   param_register_.Register("udp_port", "UDP port.");
@@ -306,7 +330,6 @@ RtspSink::RtspSink(const std::string &name) : Module(name) {
   param_register_.Register("gop_size",
                            "Group of pictures is known as GOP."
                            "gop_size is the number of frames between two I-frames.");
-  hasTransmit_.store(0);  // for receive eos
 }
 
 }  // namespace cnstream

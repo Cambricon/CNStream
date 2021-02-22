@@ -41,9 +41,8 @@ class FileHandlerImpl : public IParserResult, public IDecodeResult, public Sourc
   explicit FileHandlerImpl(DataSource *module, const std::string &filename, int framerate, bool loop,
                            FileHandler *handler)  // NOLINT
       :SourceRender(handler), module_(module), filename_(filename),
-       framerate_(framerate), loop_(loop), handler_(*handler) {
-    stream_id_ = handler_.GetStreamId();
-  }
+       framerate_(framerate), loop_(loop), handler_(*handler),
+       stream_id_(handler_.GetStreamId()), parser_(stream_id_) {}
   ~FileHandlerImpl() {}
   bool Open();
   void Close();

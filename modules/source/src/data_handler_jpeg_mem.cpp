@@ -57,16 +57,19 @@ ESJpegMemHandler::~ESJpegMemHandler() {
 
 bool ESJpegMemHandler::Open() {
   if (!this->module_) {
-    LOGE(SOURCE) << "module_ null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOGE(SOURCE) << "impl_ null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "ESJpegMemHandler open failed, no memory left";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOGE(SOURCE) << "invalid stream_idx";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "invalid stream_idx";
     return false;
   }
 
@@ -91,7 +94,8 @@ bool ESJpegMemHandlerImpl::Open() {
   if (nullptr != source) {
     param_ = source->GetSourceParam();
   } else {
-    LOGE(SOURCE) << "source module is null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "source module is null";
     return false;
   }
 
@@ -116,6 +120,8 @@ int ESJpegMemHandlerImpl::Write(ESPacket *pkt) {
 
 bool ESJpegMemHandlerImpl::ProcessImage(ESPacket *in_pkt) {
   if (in_pkt->flags & ESPacket::FLAG_EOS) {
+    LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                 << "EOS reached in ESJpegMemHandler";
     decoder_->Process(nullptr);
     return false;
   }
@@ -142,9 +148,9 @@ bool ESJpegMemHandlerImpl::ProcessImage(ESPacket *in_pkt) {
 
 bool ESJpegMemHandlerImpl::InitDecoder() {
   if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
-    decoder_ = std::make_shared<MluDecoder>(this);
+    decoder_ = std::make_shared<MluDecoder>(stream_id_, this);
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
-    decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
+    decoder_ = std::make_shared<FFmpegCpuDecoder>(stream_id_, this);
   } else {
     LOGE(SOURCE) << "unsupported decoder_type";
     return false;

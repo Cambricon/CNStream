@@ -130,7 +130,7 @@ InferEngine::~InferEngine() {
     if (mlu_output_res_)
       mlu_output_res_->Destroy();
     if (rcop_res_.get()) rcop_res_->Destroy();
-    LOGI(INFERENCER) << "Destroied resources";
+    LOGD(INFERENCER) << "Destroied resources";
   } catch (CnstreamError& e) {
     if (error_func_) {
       error_func_(e.what());

@@ -10,7 +10,7 @@
 #*************************************************************************#
 CURRENT_FILE=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 SAMPLES_DIR=$CURRENT_FILE/../../..
-MODEL_PATH=$CURRENT_FILE/../../data/models/MLU220/classification/resnet18/
+MODEL_PATH=$CURRENT_FILE/../../../../data/models/MLU220/classification/resnet18/
 mkdir -p $MODEL_PATH
 
 cd $MODEL_PATH

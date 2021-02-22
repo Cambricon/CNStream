@@ -92,7 +92,7 @@ struct RtspParam {
 /**
  * @brief RtspSink is a module to deliver stream by RTSP protocol
  */
-class RtspSink : public Module, public ModuleCreator<RtspSink> {
+class RtspSink : public ModuleEx, public ModuleCreator<RtspSink> {
  public:
   /**
    * @brief RtspSink constructor
@@ -143,6 +143,7 @@ class RtspSink : public Module, public ModuleCreator<RtspSink> {
   RtspSinkContext* GetRtspSinkContext(CNFrameInfoPtr data);
   RtspParam GetRtspParam(CNFrameInfoPtr data);
   RtspSinkContext* CreateRtspSinkContext(CNFrameInfoPtr data);
+  void OnStreamEos(CNFrameInfoPtr data);
   void SetParam(const ModuleParamSet& paramSet, std::string name, int* variable, int default_value);
   void SetParam(const ModuleParamSet& paramSet, std::string name, std::string* variable, std::string default_value);
 

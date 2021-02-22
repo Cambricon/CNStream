@@ -85,20 +85,21 @@ class IDecodeResult {
 
 class Decoder {
  public:
-  explicit Decoder(IDecodeResult *cb) : result_(cb) {}
+  explicit Decoder(const std::string& stream_id, IDecodeResult *cb) : stream_id_(stream_id), result_(cb) {}
   virtual ~Decoder() = default;
   virtual bool Create(VideoInfo *info, ExtraDecoderInfo *extra = nullptr) = 0;
   virtual bool Process(VideoEsPacket *pkt)  = 0;
   virtual void Destroy() = 0;
 
  protected:
+  std::string stream_id_ = "";
   IDecodeResult *result_;
 };
 
 class MluDecoderImpl;
 class MluDecoder : public Decoder {
  public:
-  explicit MluDecoder(IDecodeResult *cb);
+  explicit MluDecoder(const std::string& stream_id, IDecodeResult *cb);
   ~MluDecoder();
   bool Create(VideoInfo *info, ExtraDecoderInfo *extra = nullptr) override;
   void Destroy() override;
@@ -114,7 +115,7 @@ class MluDecoder : public Decoder {
 
 class FFmpegCpuDecoder : public Decoder {
  public:
-  explicit FFmpegCpuDecoder(IDecodeResult *cb) : Decoder(cb) {}
+  explicit FFmpegCpuDecoder(const std::string& stream_id, IDecodeResult *cb) : Decoder(stream_id, cb) {}
   ~FFmpegCpuDecoder() {}
   bool Create(VideoInfo *info, ExtraDecoderInfo *extra = nullptr) override;
   void Destroy() override;

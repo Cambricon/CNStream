@@ -142,7 +142,7 @@ CNStream通过 ``ModuleProfiler::RegisterProcessName`` 函数来自定义模块�
        AffineTransformation(frame_info);
    
        if (this->GetProfiler()) {
-         this->GetProfiler()->RecordProcessStart(my_process_name);
+         this->GetProfiler()->RecordProcessEnd(my_process_name);
        }
    
        ...

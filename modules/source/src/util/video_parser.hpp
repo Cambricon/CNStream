@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace cnstream {
@@ -78,7 +79,7 @@ struct VideoEsPacket {
 class FFParserImpl;
 class FFParser {
  public:
-  FFParser();
+  explicit FFParser(const std::string& stream_id);
   ~FFParser();
   int Open(const std::string &url, IParserResult *result);
   void Close();

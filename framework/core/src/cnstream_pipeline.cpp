@@ -102,7 +102,7 @@ void IdxManager::ReturnModuleIdx(size_t id_) {
 }
 
 void Pipeline::UpdateByStreamMsg(const StreamMsg& msg) {
-  LOGI(CORE) << "[" << GetName() << "] "
+  LOGD(CORE) << "[" << GetName() << "] "
             << "stream: " << msg.stream_id << " got message: " << msg.type;
   msgq_.Push(msg);
 }
@@ -132,7 +132,7 @@ void Pipeline::StreamMsgHandleFunc() {
       case StreamMsgType::USER_MSG7:
       case StreamMsgType::USER_MSG8:
       case StreamMsgType::USER_MSG9:
-        LOGI(CORE) << "[" << GetName() << "] "
+        LOGD(CORE) << "[" << GetName() << "] "
                   << "stream: " << msg.stream_id << " notify message: " << msg.type;
         if (smsg_observer_) {
           smsg_observer_->Update(msg);
@@ -187,21 +187,21 @@ EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
       smsg.module_name = event.module_name;
       UpdateByStreamMsg(smsg);
       LOGE(CORE) << "[" << event.module_name << "]: "
-                 << "Error: " << event.message;
+                 << event.message;
       ret = EVENT_HANDLE_STOP;
       break;
     case EventType::EVENT_WARNING:
       LOGW(CORE) << "[" << event.module_name << "]: "
-                   << "Warning: " + event.message;
+                 << event.message;
       ret = EVENT_HANDLE_SYNCED;
       break;
     case EventType::EVENT_STOP:
       LOGI(CORE) << "[" << event.module_name << "]: "
-                << "Info: " << event.message;
+                 << event.message;
       ret = EVENT_HANDLE_STOP;
       break;
     case EventType::EVENT_EOS: {
-      LOGI(CORE) << "Pipeline received eos from module " + event.module_name << " of stream " << event.stream_id;
+      LOGD(CORE) << "Pipeline received eos from module " + event.module_name << " of stream " << event.stream_id;
       ret = EVENT_HANDLE_SYNCED;
       break;
     }
@@ -210,14 +210,14 @@ EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
       smsg.module_name = event.module_name;
       smsg.stream_id = event.stream_id;
       UpdateByStreamMsg(smsg);
-      LOGI(CORE) << "Pipeline received stream error from module " + event.module_name
-        << " of stream " << event.stream_id;
+      LOGD(CORE) << "Pipeline received stream error from module " + event.module_name
+                 << " of stream " << event.stream_id;
       ret = EVENT_HANDLE_SYNCED;
       break;
     }
     case EventType::EVENT_INVALID:
       LOGE(CORE) << "[" << event.module_name << "]: "
-                 << "Info: " << event.message;
+                 << event.message;
     default:
       ret = EVENT_HANDLE_NULL;
       break;
@@ -437,7 +437,7 @@ void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo>
       module->GetProfiler()->OnStreamEos(data->stream_id);
 
     LOGI(CORE) << "[" << moduleName << "]"
-              << " StreamId " << data->stream_id << " got eos.";
+               << " [" << data->stream_id << "] got eos.";
     Event e;
     e.type = EventType::EVENT_EOS;
     e.module_name = moduleName;

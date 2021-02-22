@@ -156,16 +156,19 @@ RawImgMemHandler::~RawImgMemHandler() {
 
 bool RawImgMemHandler::Open() {
   if (!this->module_) {
-    LOGE(SOURCE) << "module_ null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOGE(SOURCE) << "impl_ null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "ESJpegMemHandler open failed, no memory left";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOGE(SOURCE) << "invalid stream_idx";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "invalid stream_idx";
     return false;
   }
 
@@ -226,9 +229,10 @@ int RawImgMemHandlerImpl::Write(const cv::Mat *mat_data, const uint64_t pts) {
   }
 
   if (nullptr == mat_data) {
+    LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                 << "Got eos image data";
     SendFlowEos();
     eos_got_.store(true);
-    LOGI(SOURCE) << "Rawing handler stream id: " << stream_id_ << " EOS reached";
     return 0;
   } else if (mat_data && mat_data->data && (3 == mat_data->channels())
       && (CV_8UC3 == mat_data->type()) && mat_data->isContinuous()) {
@@ -251,14 +255,16 @@ int RawImgMemHandlerImpl::Write(const cv::Mat *mat_data, const uint64_t pts) {
 int RawImgMemHandlerImpl::Write(const uint8_t *img_data, const int size, const uint64_t pts,
     const int w, const int h, const CNDataFormat pixel_fmt) {
   if (eos_got_.load()) {
-    LOGW(SOURCE) << "eos got, can not feed data any more.";
+    LOGW(SOURCE) << "[" << stream_id_ << "]: "
+                 << "eos got, can not feed data any more.";
     return -1;
   }
 
   if (nullptr == img_data && 0 == size) {
+    LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                 << "EOS reached in RawImgMemHandler";
     SendFlowEos();
     eos_got_.store(true);
-    LOGI(SOURCE) << "Rawing handler stream id: " << stream_id_ << " EOS reached";
     return 0;
   } else if (CheckRawImageParams(img_data, size, w, h, pixel_fmt)) {
     if (module_ && module_->GetProfiler()) {
@@ -305,14 +311,16 @@ bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size,
   size_t frame_size = dst_stride * height * 3 / 2;
   std::shared_ptr<void> sp_data = cnCpuMemAlloc(frame_size);
   if (!sp_data) {
-    LOGE(SOURCE) << "Malloc dst nv12 data buffer failed, size:" << frame_size;
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "Malloc dst nv12 data buffer failed, size:" << frame_size;
     return false;
   }
 
   // convert raw image data to NV12 data with stride
   uint8_t *sp_data_ = static_cast<uint8_t*>(sp_data.get());
   if (!CvtColorWithStride(img_data, size, width, height, pixel_fmt, sp_data_, dst_stride)) {
-    LOGE(SOURCE) << "convert raw image to NV12 format with stride failed.";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "convert raw image to NV12 format with stride failed.";
     return false;
   }
 
@@ -345,13 +353,15 @@ bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size,
   if (param_.output_type_ == OUTPUT_MLU) {
     dataframe->mlu_data = cnMluMemAlloc(frame_size, dataframe->ctx.dev_id);
     if (nullptr == dataframe->mlu_data) {
-      LOGE(SOURCE) << "RawImgMemHandlerImpl failed to alloc mlu memory, size: " << frame_size;
+      LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                   << "RawImgMemHandlerImpl failed to alloc mlu memory, size: " << frame_size;
       return false;
     }
 
     cnrtRet_t ret = cnrtMemcpy(dataframe->mlu_data.get(), sp_data.get(), frame_size, CNRT_MEM_TRANS_DIR_HOST2DEV);
     if (ret != CNRT_RET_SUCCESS) {
-      LOGE(SOURCE) << "RawImgMemHandlerImpl failed to cnrtMemcpy";
+      LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                   << "RawImgMemHandlerImpl failed to cnrtMemcpy";
       return false;
     }
 
@@ -360,7 +370,8 @@ bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size,
       size_t plane_size = dataframe->GetPlaneBytes(i);
       CNSyncedMemory *CNSyncedMemory_ptr =
           new (std::nothrow) CNSyncedMemory(plane_size, dataframe->ctx.dev_id, dataframe->ctx.ddr_channel);
-      LOGF_IF(SOURCE, nullptr == CNSyncedMemory_ptr) << "RawImgMemHandlerImpl new CNSyncedMemory failed";
+      LOGF_IF(SOURCE, nullptr == CNSyncedMemory_ptr) << "[" << stream_id_ << "]: "
+                                                     << "RawImgMemHandlerImpl new CNSyncedMemory failed";
       dataframe->data[i].reset(CNSyncedMemory_ptr);
       dataframe->data[i]->SetMluData(t);
       t += plane_size;
@@ -371,13 +382,15 @@ bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size,
     for (int i = 0; i < dataframe->GetPlanes(); ++i) {
       size_t plane_size = dataframe->GetPlaneBytes(i);
       CNSyncedMemory *CNSyncedMemory_ptr = new (std::nothrow) CNSyncedMemory(plane_size);
-      LOGF_IF(SOURCE, nullptr == CNSyncedMemory_ptr) << "RawImgMemHandlerImpl new CNSyncedMemory failed";
+      LOGF_IF(SOURCE, nullptr == CNSyncedMemory_ptr) << "[" << stream_id_ << "]: "
+                                                     << "RawImgMemHandlerImpl new CNSyncedMemory failed";
       dataframe->data[i].reset(CNSyncedMemory_ptr);
       dataframe->data[i]->SetCpuData(t);
       t += plane_size;
     }
   } else {
-    LOGE(SOURCE) << "DevContex::INVALID";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "DevContex::INVALID";
     return false;
   }
 

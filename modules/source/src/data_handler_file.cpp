@@ -54,16 +54,19 @@ FileHandler::~FileHandler() {
 
 bool FileHandler::Open() {
   if (!this->module_) {
-    LOGE(SOURCE) << "module_ null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOGE(SOURCE) << "impl_ null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "File handler open failed, no memory left";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOGE(SOURCE) << "invalid stream_idx";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "Invalid stream_idx";
     return false;
   }
 
@@ -114,14 +117,16 @@ void FileHandlerImpl::Loop() {
       e.thread_id = std::this_thread::get_id();
       module_->PostEvent(e);
     }
-    LOGE(SOURCE) << "PrepareResources failed.";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "PrepareResources failed.";
     return;
   }
 
   FrController controller(framerate_);
   if (framerate_ > 0) controller.Start();
 
-  LOGD(SOURCE) << "File handler DecodeLoop";
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "File handler DecodeLoop";
   while (running_.load()) {
     if (!Process()) {
       break;
@@ -129,12 +134,17 @@ void FileHandlerImpl::Loop() {
     if (framerate_ > 0) controller.Control();
   }
 
-  LOGD(SOURCE) << "File handler DecoderLoop Exit.";
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "File handler DecoderLoop Exit.";
   ClearResources();
 }
 
 bool FileHandlerImpl::PrepareResources(bool demux_only) {
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "Begin preprare resources";
   int ret = parser_.Open(filename_, this);
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "Finish preprare resources";
   if (ret < 0 || dec_create_failed_) {
     return false;
   }
@@ -142,19 +152,23 @@ bool FileHandlerImpl::PrepareResources(bool demux_only) {
 }
 
 void FileHandlerImpl::ClearResources(bool demux_only) {
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "Begin clear resources";
   if (!demux_only && decoder_) {
     decoder_->Destroy();
     decoder_.reset();
   }
   parser_.Close();
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "Finish clear resources";
 }
 
 bool FileHandlerImpl::Process() {
   parser_.Parse();
   if (eos_reached_) {
-    LOGI(SOURCE) << "Read EOS from file stream_id: " << stream_id_;
     if (this->loop_) {
-      LOGI(SOURCE) << "Clear resources and restart";
+      LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                   << "Loop: Clear resources and restart";
       ClearResources(true);
       if (!PrepareResources(true)) {
         ClearResources();
@@ -162,15 +176,15 @@ bool FileHandlerImpl::Process() {
           Event e;
           e.type = EventType::EVENT_STREAM_ERROR;
           e.module_name = module_->GetName();
-          e.message = "Prepare codec resources failed.";
+          e.message = "Prepare codec resources failed";
           e.stream_id = stream_id_;
           e.thread_id = std::this_thread::get_id();
           module_->PostEvent(e);
         }
-        LOGE(SOURCE) << "PrepareResources failed.";
+        LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                     << "PrepareResources failed";
         return false;
       }
-      LOGI(SOURCE) << "Loop...";
       eos_reached_ = false;
       return true;
     } else {
@@ -180,7 +194,8 @@ bool FileHandlerImpl::Process() {
     return false;
   }
   if (decode_failed_ || dec_create_failed_) {
-    LOGE(SOURCE) << "Decode failed.";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "Decode failed";
     return false;
   }
   return true;
@@ -191,11 +206,13 @@ void FileHandlerImpl::OnParserInfo(VideoInfo *info) {
   if (decoder_) {
     return;  // for the case:  loop and reset demux only
   }
+  LOGI(SOURCE) << "[" << stream_id_ << "]: "
+               << "Got video info.";
   dec_create_failed_ = false;
   if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
-    decoder_ = std::make_shared<MluDecoder>(this);
+    decoder_ = std::make_shared<MluDecoder>(stream_id_, this);
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
-    decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
+    decoder_ = std::make_shared<FFmpegCpuDecoder>(stream_id_, this);
   } else {
     LOGE(SOURCE) << "unsupported decoder_type";
     dec_create_failed_ = true;
@@ -221,7 +238,8 @@ void FileHandlerImpl::OnParserInfo(VideoInfo *info) {
       pkt.pts = 0;
       if (!decoder_->Process(&pkt)) {
         decode_failed_ = true;
-        LOGE(SOURCE) << "decode_failed_";
+        LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                     << "Decode extra data failed";
       }
     }
   }
@@ -229,6 +247,8 @@ void FileHandlerImpl::OnParserInfo(VideoInfo *info) {
 
 void FileHandlerImpl::OnParserFrame(VideoEsFrame *frame) {
   if (!frame) {
+    LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                 << "eos reached in file handler.";
     eos_reached_ = true;
     return;  // EOS will be handled in Process()
   }
@@ -254,7 +274,8 @@ void FileHandlerImpl::OnParserFrame(VideoEsFrame *frame) {
 // IDecodeResult methods
 void FileHandlerImpl::OnDecodeError(DecodeErrorCode error_code) {
   // FIXME,  handle decode error ...
-  LOGI("FileHandlerImpl::OnDecodeError() called");
+  LOGE(SOURCE) << "[" << stream_id_ << "]: "
+               << "FileHandlerImpl::OnDecodeError() called";
   interrupt_.store(true);
 }
 

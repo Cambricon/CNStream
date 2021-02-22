@@ -67,7 +67,7 @@ class PrepareEnvFile {
 
       src->Open(param);
       file_handler->impl_->SetDecodeParam(src->GetSourceParam());
-      mlu_decoder = std::make_shared<MluDecoder>(file_handler->impl_);
+      mlu_decoder = std::make_shared<MluDecoder>("fake_id", file_handler->impl_);
     } else {
       ModuleParamSet param;
       param["output_type"] = "cpu";
@@ -76,7 +76,7 @@ class PrepareEnvFile {
 
       src->Open(param);
       file_handler->impl_->SetDecodeParam(src->GetSourceParam());
-      ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>(file_handler->impl_);
+      ffmpeg_cpu_decoder = std::make_shared<FFmpegCpuDecoder>("fake_id", file_handler->impl_);
     }
     info.codec_id = AV_CODEC_ID_H264;
   }
@@ -110,7 +110,7 @@ class PrepareEnvMem {
 
     src->Open(param);
     mem_handler->impl_->SetDecodeParam(src->GetSourceParam());
-    mlu_decoder = std::make_shared<MluDecoder>(mem_handler->impl_);
+    mlu_decoder = std::make_shared<MluDecoder>("fake_id", mem_handler->impl_);
 
     info.codec_id = AV_CODEC_ID_H264;
   }

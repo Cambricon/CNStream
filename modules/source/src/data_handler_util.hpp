@@ -183,11 +183,14 @@ class SourceRender {
     if (eos_sent_) return;
     auto data = CreateFrameInfo(true);
     if (!data) {
-      LOGE("SOURCE") << "SendFlowEos: Create CNFrameInfo failed";
+      LOGE(SOURCE) << "[" << handler_->GetStreamId() << "]: "
+                   << "SendFlowEos: Create CNFrameInfo failed";
       return;
     }
     SendFrameInfo(data);
     eos_sent_ = true;
+    LOGI(SOURCE) << "[" << handler_->GetStreamId() << "]: "
+                  << "Sent EOS frame info";
   }
 
   bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) {
