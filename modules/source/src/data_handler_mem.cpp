@@ -53,16 +53,19 @@ ESMemHandler::~ESMemHandler() {
 
 bool ESMemHandler::Open() {
   if (!this->module_) {
-    LOGE(SOURCE) << "module_ null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOGE(SOURCE) << "impl_ null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "ESJpegMemHandler open failed, no memory left";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOGE(SOURCE) << "invalid stream_idx";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "invalid stream_idx";
     return false;
   }
 
@@ -166,12 +169,15 @@ int ESMemHandlerImpl::Write(unsigned char *data, int len) {
 void ESMemHandlerImpl::OnParserInfo(VideoInfo *video_info) {
   // FIXME
   if (!video_info) {
-    LOGE(SOURCE) << "ESMemHandlerImpl::OnParserInfo null info ";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "ESMemHandlerImpl::OnParserInfo null info ";
     return;
   }
   std::unique_lock<std::mutex> lk(info_mutex_);
   info_ = *video_info;
   info_set_.store(true);
+  LOGI(SOURCE) << "[" << stream_id_ << "]: "
+               << "Got video info.";
 }
 
 void ESMemHandlerImpl::OnParserFrame(VideoEsFrame *frame) {
@@ -183,12 +189,16 @@ void ESMemHandlerImpl::OnParserFrame(VideoEsFrame *frame) {
     if (frame->IsEos()) {
       pkt.flags = ESPacket::FLAG_EOS;
       eos_reached_ = true;
+      LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                   << "EOS reached in ESMemHandler";
     } else {
       pkt.flags = frame->flags ? ESPacket::FLAG_KEY_FRAME : 0;
     }
   } else {
     pkt.flags = ESPacket::FLAG_EOS;
     eos_reached_ = true;
+    LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                 << "EOS reached in ESMemHandler";
   }
   while (running_) {
     int timeoutMs = 1000;
@@ -223,18 +233,22 @@ void ESMemHandlerImpl::DecodeLoop() {
     return;
   }
 
-  LOGD(SOURCE) << "Mem handler DecodeLoop.";
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "Mem handler DecodeLoop.";
   while (running_.load()) {
     if (!Process()) {
       break;
     }
   }
 
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "Mem handler DecodeLoop Exit.";
   ClearResources();
-  LOGD(SOURCE) << "Mem handler DecodeLoop Exit.";
 }
 
 bool ESMemHandlerImpl::PrepareResources() {
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "Begin preprare resources";
   VideoInfo info;
   while (running_.load() && !eos_reached_) {
     if (info_set_.load()) {
@@ -255,9 +269,9 @@ bool ESMemHandlerImpl::PrepareResources() {
   }
 
   if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
-    decoder_ = std::make_shared<MluDecoder>(this);
+    decoder_ = std::make_shared<MluDecoder>(stream_id_, this);
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
-    decoder_ = std::make_shared<FFmpegCpuDecoder>(this);
+    decoder_ = std::make_shared<FFmpegCpuDecoder>(stream_id_, this);
   } else {
     LOGE(SOURCE) << "unsupported decoder_type";
     return false;
@@ -284,13 +298,19 @@ bool ESMemHandlerImpl::PrepareResources() {
       return false;
     }
   }
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "Finish preprare resources";
   return true;
 }
 
 void ESMemHandlerImpl::ClearResources() {
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "Begin clear resources";
   if (decoder_.get()) {
     decoder_->Destroy();
   }
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "Finish clear resources";
 }
 
 bool ESMemHandlerImpl::Process() {
@@ -306,7 +326,8 @@ bool ESMemHandlerImpl::Process() {
   }
 
   if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-    LOGI(SOURCE) << "Mem handler stream id: " << stream_id_ << " EOS reached";
+    LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                 << " EOS reached in ESMemHandler";
     decoder_->Process(nullptr);
     return false;
   }  // if (!ret)
@@ -355,6 +376,8 @@ void ESMemHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
 
   int ret = SourceRender::Process(data, frame, frame_id_++, param_);
   if (ret < 0) {
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "Render frame failed";
     return;
   }
   this->SendFrameInfo(data);

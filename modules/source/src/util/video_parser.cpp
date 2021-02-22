@@ -17,11 +17,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include "video_parser.hpp"
 
 #include <iostream>
 #include <mutex>
 #include <vector>
+
+#include "cnstream_logging.hpp"
+#include "video_parser.hpp"
 
 namespace cnstream {
 
@@ -62,7 +64,7 @@ static uint64_t GetTickCount() {
 
 class FFParserImpl {
  public:
-  FFParserImpl() = default;
+  explicit FFParserImpl(const std::string& stream_id) : stream_id_(stream_id) {}
   ~FFParserImpl() = default;
 
   static int InterruptCallBack(void* ctx) {
@@ -97,17 +99,17 @@ class FFParserImpl {
   #if defined(__linux) || defined(__unix)
     ifmt = av_find_input_format("video4linux2");
     if (!ifmt) {
-      LOGE(SOURCE) << "Could not find v4l2 format.";
+      LOGE(SOURCE) << "[" << stream_id_ << "]: Could not find v4l2 format.";
       return false;
     }
   #elif defined(_WIN32) || defined(_WIN64)
     ifmt = av_find_input_format("dshow");
     if (!ifmt) {
-      LOGE(SOURCE) << "Could not find dshow.";
+      LOGE(SOURCE) << "[" << stream_id_ << "]: Could not find dshow.";
       return false;
     }
   #else
-    LOGE(SOURCE) << "Unsupported Platform";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: Unsupported Platform";
     return false;
   #endif
 #else
@@ -131,13 +133,13 @@ class FFParserImpl {
     // open input
     ret_code = avformat_open_input(&fmt_ctx_, url_name_.c_str(), ifmt, &options_);
     if (0 != ret_code) {
-      std::cout << "Couldn't open input stream -- " << url_name_ << std::endl;
+      LOGI(SOURCE) << "[" << stream_id_ << "]: Couldn't open input stream -- " << url_name_;
       return -1;
     }
     // find video stream information
     ret_code = avformat_find_stream_info(fmt_ctx_, NULL);
     if (ret_code < 0) {
-      std::cout << "Couldn't find stream information." << std::endl;
+      LOGI(SOURCE) << "[" << stream_id_ << "]: Couldn't find stream information -- " << url_name_;
       return -1;
     }
 
@@ -148,29 +150,29 @@ class FFParserImpl {
     AVStream* st = nullptr;
     for (uint32_t loop_i = 0; loop_i < fmt_ctx_->nb_streams; loop_i++) {
       st = fmt_ctx_->streams[loop_i];
-  #if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
+#if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
       if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-  #else
+#else
       if (st->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-  #endif
+#endif
         video_index = loop_i;
         break;
       }
     }
     if (video_index == -1) {
-      std::cout << "Didn't find a video stream." << std::endl;
+      LOGI(SOURCE) << "[" << stream_id_ << "]: Couldn't find a video stream -- " << url_name_;
       return -1;
     }
     video_index_ = video_index;
 
-  #if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
+#if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
     info->codec_id = st->codecpar->codec_id;
     int field_order = st->codecpar->field_order;
-  #else
+#else
     info->codec_id = st->codec->codec_id;
     int field_order = st->codec->field_order;
-  #endif
-  
+#endif
+
     /*At this moment, if the demuxer does not set this value (avctx->field_order == UNKNOWN),
     *   the input stream will be assumed as progressive one.
     */
@@ -186,14 +188,14 @@ class FFParserImpl {
       info->progressive = 1;
       break;
     }
-  
-  #if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
+
+#if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
     uint8_t* extradata = st->codecpar->extradata;
     int extradata_size = st->codecpar->extradata_size;
-  #else
+#else
     unsigned char* extradata = st->codec->extradata;
     int extradata_size = st->codec->extradata_size;
-  #endif
+#endif
     if (extradata && extradata_size) {
       info->extra_data.resize(extradata_size);
       memcpy(info->extra_data.data(), extradata, extradata_size);
@@ -312,16 +314,17 @@ class FFParserImpl {
   uint8_t max_receive_time_out_ = 3;
   bool find_pts_ = false;
   uint64_t pts_ = 0;
+  std::string stream_id_ = "";
   std::string url_name_;
   IParserResult *result_ = nullptr;
   AVPacket packet_;
   bool eos_reached_ = false;
   bool open_success_ = false;
   std::mutex mutex_;
-};  // class FFmpegDemuxerImpl
+};  // class FFmpegDemuxerImpl  // NOLINT
 
-FFParser::FFParser() {
-  impl_ = new FFParserImpl();
+FFParser::FFParser(const std::string& stream_id) {
+  impl_ = new FFParserImpl(stream_id);
 }
 
 FFParser::~FFParser() {

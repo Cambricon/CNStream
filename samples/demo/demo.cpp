@@ -93,40 +93,41 @@ class MsgObserver : cnstream::StreamMsgObserver {
     std::lock_guard<std::mutex> lg(mutex_);
     if (stop_) return;
     cnstream::DataSource* source = nullptr;
+    source = dynamic_cast<cnstream::DataSource*>(pipeline_->GetModule(source_name_));
     switch (smsg.type) {
       case cnstream::StreamMsgType::EOS_MSG:
         eos_stream_.push_back(smsg.stream_id);
-        LOGI(DEMO) << "[Observer] received EOS from stream:" << smsg.stream_id;
+        LOGI(DEMO) << "[" << pipeline_->GetName() << "] received EOS message from stream: [" << smsg.stream_id << "]";
+        if (source) source->RemoveSource(smsg.stream_id);
         if (static_cast<int>(eos_stream_.size()) == stream_cnt_) {
-          LOGI(DEMO) << "[Observer] received all EOS";
+          LOGI(DEMO) << "[" << pipeline_->GetName() << "] received all EOS";
           stop_ = true;
         }
         break;
 
       case cnstream::StreamMsgType::STREAM_ERR_MSG:
-        LOGW(DEMO) << "[Observer] received stream error from stream: " << smsg.stream_id
+        LOGW(DEMO) << "[" << pipeline_->GetName() << "] received stream error from stream: " << smsg.stream_id
           << ", remove it from pipeline.";
-        source = dynamic_cast<cnstream::DataSource*>(pipeline_->GetModule(source_name_));
         if (source) source->RemoveSource(smsg.stream_id);
         stream_cnt_--;
         if (stream_cnt_ == 0) {
-          LOGI(DEMO) << "[Observer] all streams is removed from pipeline, pipeline will stop.";
+          LOGI(DEMO) << "[" << pipeline_->GetName() << "] all streams is removed from pipeline, pipeline will stop.";
           stop_ = true;
         }
         break;
 
       case cnstream::StreamMsgType::ERROR_MSG:
-        LOGE(DEMO) << "[Observer] received ERROR_MSG";
+        LOGE(DEMO) << "[" << pipeline_->GetName() << "] received ERROR_MSG";
         stop_ = true;
         break;
 
       case cnstream::StreamMsgType::FRAME_ERR_MSG:
-        LOGW(DEMO) << "[Observer] received frame error from stream: " << smsg.stream_id
-          << ", pts: " << smsg.pts << ".";
+        LOGW(DEMO) << "[" << pipeline_->GetName() << "] received frame error from stream: " << smsg.stream_id
+                   << ", pts: " << smsg.pts << ".";
         break;
 
       default:
-        LOGE(DEMO) << "[Observer] unkonw message type.";
+        LOGE(DEMO) << "[" << pipeline_->GetName() << "] unkonw message type.";
         break;
     }
     if (stop_) {

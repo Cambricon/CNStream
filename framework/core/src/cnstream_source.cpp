@@ -96,13 +96,14 @@ int SourceModule::AddSource(std::shared_ptr<SourceHandler> handler) {
   std::string stream_id = handler->GetStreamId();
   std::unique_lock<std::mutex> lock(mutex_);
   if (source_map_.find(stream_id) != source_map_.end()) {
-    LOGE(CORE) << "Duplicate stream_id\n";
+    LOGE(CORE) << "[" << stream_id << "]: "
+               << "Duplicate stream_id";
     return -1;
   }
 
   if (source_map_.size() >= GetMaxStreamNumber()) {
-    LOGW(CORE) << handler->GetStreamId()
-                 << " doesn't add to pipeline because of maximum limitation: " << GetMaxStreamNumber();
+    LOGW(CORE) << "[" << stream_id << "]: "
+               << " doesn't add to pipeline because of maximum limitation: " << GetMaxStreamNumber();
     return -1;
   }
 
@@ -110,11 +111,15 @@ int SourceModule::AddSource(std::shared_ptr<SourceHandler> handler) {
   source_idx_++;
 
   SetStreamRemoved(stream_id, false);
+  LOGI(CORE) << "[" << handler->GetStreamId() << "]: "
+             << "Stream opening...";
   if (handler->Open() != true) {
-    LOGE(CORE) << "source Open failed";
+    LOGE(CORE) << "[" << stream_id << "]: "
+               << "stream Open failed";
     return -1;
   }
   source_map_[stream_id] = handler;
+  LOGI(CORE) << "Add stream success, stream id : [" << stream_id << "]";
   return 0;
 }
 
@@ -134,16 +139,22 @@ std::shared_ptr<SourceHandler> SourceModule::GetSourceHandler(const std::string 
 }
 
 int SourceModule::RemoveSource(const std::string &stream_id, bool force) {
+  LOGI(CORE) << "Begin to remove stream, stream id : [" << stream_id << "]";
   SetStreamRemoved(stream_id, force);
   // Close handler first
   {
     std::unique_lock<std::mutex> lock(mutex_);
     auto iter = source_map_.find(stream_id);
     if (iter == source_map_.end()) {
-      LOGW(CORE) << "source does not exist\n";
+      LOGW(CORE) << "stream named [" << stream_id << "] does not exist\n";
       return 0;
     }
+
+    LOGI(CORE) << "[" << stream_id << "]: "
+               << "Stream closing...";
     iter->second->Close();
+    LOGI(CORE) << "[" << stream_id << "]: "
+               << "Stream close done";
   }
   // wait for eos reached
   CheckStreamEosReached(stream_id, force);
@@ -151,8 +162,13 @@ int SourceModule::RemoveSource(const std::string &stream_id, bool force) {
   {
     std::unique_lock<std::mutex> lock(mutex_);
     auto iter = source_map_.find(stream_id);
+    if (iter == source_map_.end()) {
+      LOGW(CORE) << "source does not exist\n";
+      return 0;
+    }
     source_map_.erase(iter);
   }
+  LOGI(CORE) << "Finish remove stream, stream id : [" << stream_id << "]";
   return 0;
 }
 

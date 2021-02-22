@@ -81,8 +81,8 @@ class IDemuxer {
 
 class FFmpegDemuxer : public rtsp_detail::IDemuxer, public IParserResult {
  public:
-  FFmpegDemuxer(FrameQueue *queue, const std::string &url)
-    :rtsp_detail::IDemuxer(), queue_(queue), url_name_(url) {
+  FFmpegDemuxer(const std::string& stream_id, FrameQueue *queue, const std::string &url)
+    :rtsp_detail::IDemuxer(), queue_(queue), url_name_(url), parser_(stream_id) {
   }
 
   ~FFmpegDemuxer() { }
@@ -139,13 +139,15 @@ class FFmpegDemuxer : public rtsp_detail::IDemuxer, public IParserResult {
 
 class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
  public:
-  Live555Demuxer(FrameQueue *queue, const std::string &url, int reconnect)
-    :rtsp_detail::IDemuxer(), queue_(queue), url_(url), reconnect_(reconnect) {
+  Live555Demuxer(const std::string& stream_id, FrameQueue *queue, const std::string &url, int reconnect)
+    :rtsp_detail::IDemuxer(), stream_id_(stream_id), queue_(queue), url_(url), reconnect_(reconnect) {
   }
 
   virtual ~Live555Demuxer() {}
 
   bool PrepareResources(std::atomic<int> &exit_flag) override {
+    LOGD(SOURCE) << "[" << stream_id_ << "]: "
+                 << "Begin prepare resources";
     // start rtsp_client
     cnstream::OpenParam param;
     param.url = url_;
@@ -153,7 +155,6 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
     param.cb = dynamic_cast<IRtspCB*>(this);
     rtsp_session_.Open(param);
 
-    // waiting for stream info...
     while (1) {
       if (info_set_) {
         break;
@@ -168,11 +169,18 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
     if (exit_flag) {
       return false;
     }
+
+    LOGD(SOURCE) << "[" << stream_id_ << "]: "
+                 << "Finish prepare resources";
     return true;
   }
 
   void ClearResources(std::atomic<int> &exit_flag) override {
+    LOGD(SOURCE) << "[" << stream_id_ << "]: "
+                 << "Begin clear resources";
     rtsp_session_.Close();
+    LOGD(SOURCE) << "[" << stream_id_ << "]: "
+                 << "Finish clear resources";
   }
 
   bool Process() override {
@@ -196,11 +204,17 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
       if (frame->flags & AV_PKT_FLAG_KEY) {
         pkt.flags |= ESPacket::FLAG_KEY_FRAME;
       }
-      if (!connect_done_) connect_done_.store(true);
+      if (!connect_done_) {
+        connect_done_.store(true);
+        LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                     << "Rtsp connect success";
+      }
     } else {
       pkt.flags = ESPacket::FLAG_EOS;
       if (!connect_done_) {
         // Failed to connect server...
+        LOGW(SOURCE) << "[" << stream_id_ << "]: "
+                     << "Rtsp connect failed";
         connect_failed_.store(true);
       }
     }
@@ -212,6 +226,7 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
   void OnRtspEvent(int type) override {}
 
  private:
+  std::string stream_id_;
   FrameQueue *queue_ = nullptr;
   std::string url_;
   int reconnect_ = 0;
@@ -235,16 +250,19 @@ RtspHandler::~RtspHandler() {
 
 bool RtspHandler::Open() {
   if (!this->module_) {
-    LOGE(SOURCE) << "module_ null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOGE(SOURCE) << "impl_ null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "RtspHandler open failed, no memory left";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOGE(SOURCE) << "invalid stream_idx";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "invalid stream_idx";
     return false;
   }
 
@@ -295,15 +313,17 @@ void RtspHandlerImpl::Close() {
 }
 
 void RtspHandlerImpl::DemuxLoop() {
-  LOGD(SOURCE) << "DemuxLoop Start...";
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+                << "Create demuxer...";
   std::unique_ptr<rtsp_detail::IDemuxer> demuxer;
   if (use_ffmpeg_) {
-    demuxer.reset(new FFmpegDemuxer(queue_, url_name_));
+    demuxer.reset(new FFmpegDemuxer(stream_id_, queue_, url_name_));
   } else {
-    demuxer.reset(new Live555Demuxer(queue_, url_name_, reconnect_));
+    demuxer.reset(new Live555Demuxer(stream_id_, queue_, url_name_, reconnect_));
   }
   if (!demuxer) {
-    LOGE(SOURCE) << "Failed to create demuxer";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "Failed to create demuxer";
     return;
   }
   if (!demuxer->PrepareResources(demux_exit_flag_)) {
@@ -316,31 +336,40 @@ void RtspHandlerImpl::DemuxLoop() {
       e.thread_id = std::this_thread::get_id();
       module_->PostEvent(e);
     }
-    LOGI(SOURCE) << "PrepareResources failed.";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "PrepareResources failed";
     return;
   }
+
+  LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                << "Wait stream info...";
+
   do {
-    std::unique_lock<std::mutex> lk(mutex_);
-    if (demuxer->GetInfo(stream_info_) == true) {
-      break;
+    {
+      std::lock_guard<std::mutex> lk(mutex_);
+      if (demuxer->GetInfo(stream_info_) == true) {
+        break;
+      }
     }
     usleep(1000);
   }while(1);
   stream_info_set_.store(true);
 
-  LOGD(SOURCE) << "RTSP handler DemuxLoop.";
+  LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                << "Got stream info";
 
   while (!demux_exit_flag_) {
     if (demuxer->Process() != true) {
       break;
     }
   }
+
+  LOGD(SOURCE) << "[" << stream_id_ << "]: "
+               << "RTSP handler DemuxLoop Exit";
   demuxer->ClearResources(demux_exit_flag_);
-  LOGD(SOURCE) << "RTSP handler DemuxLoop Exit";
 }
 
 void RtspHandlerImpl::DecodeLoop() {
-  LOGD(SOURCE) << "RTSP handler DecodeLoop Start...";
   /*meet cnrt requirement,
    *  for cpu case(device_id < 0), MluDeviceGuard will do nothing
    */
@@ -359,9 +388,9 @@ void RtspHandlerImpl::DecodeLoop() {
 
   std::unique_ptr<Decoder> decoder_ = nullptr;
   if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
-    decoder_.reset(new MluDecoder(this));
+    decoder_.reset(new MluDecoder(stream_id_, this));
   } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
-    decoder_.reset(new FFmpegCpuDecoder(this));
+    decoder_.reset(new FFmpegCpuDecoder(stream_id_, this));
   } else {
     LOGE(SOURCE) << "unsupported decoder_type";
     return;
@@ -376,12 +405,14 @@ void RtspHandlerImpl::DecodeLoop() {
     std::unique_lock<std::mutex> lk(mutex_);
     bool ret = decoder_->Create(&stream_info_, &extra);
     if (!ret) {
-      LOGE(SOURCE) << "Failed to create cndecoder";
+      LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                   << "Failed to create decoder";
       decoder_->Destroy();
       return;
     }
   } else {
-    LOGE(SOURCE) << "Failed to create decoder";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: "
+                 << "Failed to create decoder";
     decoder_->Destroy();
     return;
   }
@@ -403,12 +434,14 @@ void RtspHandlerImpl::DecodeLoop() {
     int timeoutMs = 1000;
     bool ret = this->queue_->Pop(timeoutMs, in);
     if (!ret) {
-      LOGD(SOURCE) << "Read Timeout";
+      LOGD(SOURCE) << "[" << stream_id_ << "]: "
+                   << "Read packet Timeout";
       continue;
     }
 
     if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-      LOGI(SOURCE) << "RTSP handler stream_id: " << stream_id_ << " EOS reached";
+      LOGI(SOURCE) << "[" << stream_id_ << "]: "
+                   << "EOS reached in RtspHandler";
       decoder_->Process(nullptr);
       break;
     }  // if (eos)
@@ -432,10 +465,10 @@ void RtspHandlerImpl::DecodeLoop() {
     std::this_thread::yield();
   }
 
+  LOGD(SOURCE) << "RTSP handler DecodeLoop Exit";
   if (decoder_.get()) {
     decoder_->Destroy();
   }
-  LOGD(SOURCE) << "RTSP handler DecodeLoop Exit";
 }
 
 // IDecodeResult methods
