@@ -7,7 +7,7 @@ $CURRENT_FILE/../../bin/demo  \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/config_process1.json" \
-    --alsologtostderr
+    --log_to_stderr=true
 }
 
 start_process2() {
@@ -17,7 +17,7 @@ $CURRENT_FILE/../../bin/demo  \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/config_process2.json" \
-    --alsologtostderr
+    --log_to_stderr=true
 }
 
 SAMPLES_DIR=$CURRENT_FILE/../..

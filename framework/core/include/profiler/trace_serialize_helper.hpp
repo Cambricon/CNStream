@@ -35,6 +35,10 @@
 
 namespace cnstream {
 
+/**
+ * Serialize trace data into json format.
+ * You can load json file by chrome-tracing to show the trace data.
+ */
 class TraceSerializeHelper {
  public:
   /**
@@ -56,11 +60,41 @@ class TraceSerializeHelper {
    * @return True for deserialized successfully. False for deserialized failed.
    **/
   static bool DeserializeFromJSONFile(const std::string& filename, TraceSerializeHelper* pout);
+  /*
+   * TraceSerializeHelper constructor.
+   */
   TraceSerializeHelper();
+  /**
+   * TraceSerializeHelper copy constructor.
+   *
+   * @param t which instance copy from.
+   */
   TraceSerializeHelper(const TraceSerializeHelper& t);
+  /**
+   * TraceSerializeHelper move constructor.
+   *
+   * @param t which instance move from.
+   */
   TraceSerializeHelper(TraceSerializeHelper&& t);
+  /**
+   * TraceSerializeHelper operator =.
+   *
+   * @param t Which instance copy from.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   TraceSerializeHelper& operator=(const TraceSerializeHelper& t);
+  /**
+   * TraceSerializeHelper operator =.
+   *
+   * @param t Which instance move from.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   TraceSerializeHelper& operator=(TraceSerializeHelper&& t);
+  /*
+   * TraceSerializeHelper destructor.
+   */
   ~TraceSerializeHelper() = default;
 
   /**

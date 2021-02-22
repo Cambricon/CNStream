@@ -17,4 +17,4 @@ $CURRENT_FILE/../../bin/demo  \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/config_process1.json" \
-    --alsologtostderr
+    --log_to_stderr=true

@@ -69,6 +69,8 @@ endif()
 include_directories(${PROJECT_SOURCE_DIR}/modules)
 file(GLOB srcs ${PROJECT_SOURCE_DIR}/modules/*.cpp)
 
+include_directories(${PROJECT_SOURCE_DIR}/modules/util/include)
+
 foreach(module ${module_list})
   include_directories(${PROJECT_SOURCE_DIR}/modules/${module}/include)
   file(GLOB_RECURSE module_src ${PROJECT_SOURCE_DIR}/modules/${module}/*.cpp)

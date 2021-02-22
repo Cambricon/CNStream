@@ -16,7 +16,7 @@
 安装和配置环境依赖和依赖库
 ----------------------------
 
-用户需要安装和配置环境依赖和寒武纪Neuware安装包后使用CNStream。本节描述了如何在Debian、Ubuntu、CentOS以及Docker环境下配置CNStream。
+用户需要安装和配置环境依赖和寒武纪Neuware安装包后使用CNStream。本节描述了如何在Ubuntu、CentOS以及Docker环境下配置CNStream。
 
 .. _环境依赖:
 
@@ -29,7 +29,7 @@ CNStream有以下环境依赖。
 - GFlags2.1.2
 - GLog0.3.4
 - CMake2.8.7+
-- SDL22.0.4+
+- SDL2 2.0.4+
 
 用户需要配置所有环境依赖后再使用CNStream。
 
@@ -38,20 +38,21 @@ CNStream有以下环境依赖。
 寒武纪安装包
 ^^^^^^^^^^^^^
 
-CNStream的使用依赖于寒武纪Neuware安装包中CNRT库和CNCodec库。Neuware安装包是寒武纪公司发布的基于寒武纪硬件产品的神经网络开发工具包。用户需要在使用CNStream之前安装寒武纪Neuware安装包。发送邮件到 service@cambricon.com 或者 solution-sdk@cambricon.com，联系寒武纪工程师获得Neuware安装包和安装指南。
+CNStream的使用依赖于寒武纪CNToolkit安装包中CNRT库和CNCodec库。CNToolkit安装包是寒武纪公司发布的基于寒武纪硬件产品的神经网络开发工具包。用户需要在使用CNStream之前安装寒武纪CNToolkit安装包。发送邮件到 service@cambricon.com，联系寒武纪工程师获得CNToolkit安装包和安装指南。
 
-Debian或Ubuntu环境下安装和配置
+Ubuntu环境下安装和配置
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-执行下面命令，中Debian或Ubuntu环境下安装和配置环境依赖和依赖库：
+执行下面命令，在Ubuntu环境下安装和配置环境依赖和依赖库：
 
 1.  运行下面指令从github仓库检出CNStream源码。``${CNSTREAM_DIR}`` 代表CNStream源码目录。
 
     ::
 
         git clone https://github.com/Cambricon/CNStream.git
+        git submodule update --init
 
-#.  安装寒武纪Neuware安装包。详情查看 :ref:`寒武纪依赖库` 。
+#.  安装寒武纪CNToolkit安装包。详情查看 :ref:`寒武纪依赖库` 。
 
 #.  运行下面指令安装环境依赖。CNStream依赖的环境详情，查看 :ref:`环境依赖`。
 
@@ -67,21 +68,21 @@ Debian或Ubuntu环境下安装和配置
     ::
 
         sudo apt-get install libopencv-dev libgflags-dev libgoogle-glog-dev cmake
-        sudo apt-get install libfreetype6 ttf-wqy-zenhei libsdl2-dev
+        sudo apt-get install libfreetype6 ttf-wqy-zenhei libsdl2-dev curl
 
-CentOS环境配置下安装和配置
+CentOS环境下安装和配置
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-执行下面步骤中CentOS环境下安装和配置环境依赖和依赖库：
+执行下面步骤，在CentOS环境下安装和配置环境依赖和依赖库：
 
 1.  运行下面指令从github仓库检出CNStream源码。``${CNSTREAM_DIR}`` 代表CNStream源码目录。
 
     ::
 
         git clone https://github.com/Cambricon/CNStream.git
+        git submodule update --init
 
-
-#.  安装寒武纪Neuware安装包。详情查看 :ref:`寒武纪依赖库`。
+#.  安装寒武纪CNToolkit安装包。详情查看 :ref:`寒武纪依赖库`。
 
 #.  运行下面指令安装环境依赖。CNStream依赖的环境详情，查看 :ref:`环境依赖`。
 
@@ -99,7 +100,7 @@ CentOS环境配置下安装和配置
 
       sudo yum install opencv-devel.x86_64 gflags.x86_64 glog.x86_64 cmake3.x86_64
       sudo yum install freetype-devel SDL2_gfx-devel.x86_64 wqy-zenhei-fonts
-      sudo yum install ffmpeg ffmpeg-devel
+      sudo yum install ffmpeg ffmpeg-devel curl
 
 
 Docker环境下安装和配置
@@ -119,28 +120,29 @@ CNStream提供以下Dockerfile，其中``${CNSTREAM_DIR}`` 代表CNStream源码�
    ::
           
       git clone https://github.com/Cambricon/CNStream.git
+      git submodule update --init
  
 3. 编译Docker镜像。用户可以选择以下其中一种方式编译镜像。
 
-   -  如果选择将寒武纪Neuware包安装进镜像中：
+   -  如果选择将寒武纪CNToolkit包安装进镜像中：
 
-      1. 运行下面命令，拷贝寒武纪Neuware安装包到CNStream源码目录下。
+      1. 运行下面命令，拷贝寒武纪CNToolkit安装包到CNStream源码目录下。
   
          ::
  
-	        cp ${neuware_package} CNStream
+	        cp ${toolkit_package} CNStream
 	  
-      2. 运行下面命令将寒武纪Neuware安装包安装到镜像中，其中 ``${neuware_package_name}`` 为寒武纪Neuware安装包及其存放路径。
+      2. 运行下面命令将寒武纪CNToolkit安装包安装到镜像中，其中 ``${cntoolkit_package_name}`` 为寒武纪CNToolkit安装包及其存放路径。
 
          ::
 	     
-             docker build -f docker/Dockerfile --build-arg neuware_package=${neuware_package_name} -t ubuntu_cnstream:v1 
+             docker build -f Dockerfile.18.04 --build-arg toolkit_package=${cntoolkit_package_name} -t ubuntu_cnstream:v1 
 
-   -  如果选择不将寒武纪Neuware包安装进镜像中，运行下面命令编译镜像：
+   -  如果选择不将寒武纪CNToolkit包安装进镜像中，运行下面命令编译镜像：
 
       ::
 	     
-             docker build -f docker/Dockerfile.18.04 --build-arg with_neuware_installed=no -t ubuntu_cnstream:v1
+             docker build -f Dockerfile.18.04 -t ubuntu_cnstream:v1
 			
 4. 运行下面命令，开启容器：
 
@@ -148,7 +150,7 @@ CNStream提供以下Dockerfile，其中``${CNSTREAM_DIR}`` 代表CNStream源码�
    
      docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
 
-5. 如果之前制作的镜像没有安装寒武纪Neuware安装包，安装Neuware安装包。详情查看 :ref:`寒武纪依赖库` 。
+5. 如果之前制作的镜像没有安装寒武纪CNToolkit安装包，安装CNToolkit安装包。详情查看 :ref:`寒武纪依赖库` 。
      
 .. _编译指令:
 
@@ -157,20 +159,26 @@ CNStream提供以下Dockerfile，其中``${CNSTREAM_DIR}`` 代表CNStream源码�
 
 完成环境依赖的部署以及依赖库的安装后，执行下面步骤编译CNStream指令：
 
-1. 运行下面命令创建 ``build`` 目录用来保存输出结果。
+1. 运行下面指令从github检出子仓easydk源码
+
+   ::
+
+      git submodule update --init
+
+2. 运行下面命令创建 ``build`` 目录用来保存输出结果。
 
    ::
    
       mkdir build
 
-2. 运行下面命令生成编译指令的脚本。``CNSTREAM_DIR`` 为CNStream源码目录。
+3. 运行下面命令生成编译指令的脚本。``CNSTREAM_DIR`` 为CNStream源码目录。
 
    ::
   
      cd build
      cmake ${CNSTREAM_DIR}
 
-3. 如果想要运行寒武纪提供的CNStream示例：
+4. 如果想要运行寒武纪提供的CNStream示例：
 
    1. 运行下面命令： 
      
@@ -187,7 +195,7 @@ CNStream提供以下Dockerfile，其中``${CNSTREAM_DIR}`` 代表CNStream源码�
        .. attention::
           |  用户需要手动在 ``cross-compile.cmake`` 文件中配置toolchain。
 
-4. 运行下面命令编译CNStream指令：
+5. 运行下面命令编译CNStream指令：
 
    ::
 
@@ -225,18 +233,18 @@ SSD目标检测。
 - Osd
 - Displayer
 
-YOLO V3网络目标检测样例
+YOLOv3网络目标检测样例
 **************************
 
-使用YOLO v3网络对目标物体进行检。
+使用YOLOv3网络对目标物体进行检。
 
 **样例文件**
 
-- MLU270配置文件：``${CNSTREAM_DIR}/samples/demo/detection/mlu270/yolov3_mlu270_config.json``   
-- MLU270运行脚本：``${CNSTREAM_DIR}/samples/demo/detection/mlu270/run_yolov3_mlu270.sh``                                                   
-- MLU220配置文件：``${CNSTREAM_DIR}/samples/demo/detection/mlu220/yolov3_mlu220_config.json``                                              
-- MLU220运行脚本：``${CNSTREAM_DIR}/samples/demo/detection/mlu220/run_yolov3_mlu220.sh``                                                 
-- 后处理源码：``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_yolov3.cpp``                                               
+- MLU270配置文件：``${CNSTREAM_DIR}/samples/demo/detection/mlu270/yolov3_mlu270_config.json``
+- MLU270运行脚本：``${CNSTREAM_DIR}/samples/demo/detection/mlu270/run_yolov3_mlu270.sh``
+- MLU220配置文件：``${CNSTREAM_DIR}/samples/demo/detection/mlu220/yolov3_mlu220_config.json``
+- MLU220运行脚本：``${CNSTREAM_DIR}/samples/demo/detection/mlu220/run_yolov3_mlu220.sh``
+- 后处理源码：``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_yolov3.cpp``
 
 **使用模块**
 
@@ -291,12 +299,12 @@ YOLO V3网络目标检测样例
  
 **样例文件**
 
-- MLU270配置文件：``${CNSTREAM_DIR}/samples/demossd_resnet34_and_resnet50_mlu270_config.json``                                                           
-- MLU270运行脚本：``${CNSTREAM_DIR}/samples/demo/secondary/run_ssd_and_resnet50_mlu270.sh``                                                           
-- 车辆筛选车的策略源码：``${CNSTREAM_DIR}/samples/demo/obj_filter/car_filter.cpp``                                                                         
-- 后处理源码：                                                        
+- MLU270配置文件：``${CNSTREAM_DIR}/samples/demo/ssd_resnet34_and_resnet50_mlu270_config.json``
+- MLU270运行脚本：``${CNSTREAM_DIR}/samples/demo/secondary/run_ssd_and_resnet50_mlu270.sh``
+- 车辆筛选车的策略源码：``${CNSTREAM_DIR}/samples/demo/obj_filter/car_filter.cpp``
+- 后处理源码：
 
-   - ``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_ssd.cpp``           
+   - ``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_ssd.cpp``
    - ``${CNSTREAM_DIR}/samples/demo/postprocess/postprocess_classification.cpp`` 
 
 **使用模块**

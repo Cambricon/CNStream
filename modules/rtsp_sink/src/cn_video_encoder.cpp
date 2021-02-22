@@ -114,8 +114,7 @@ CNVideoEncoder::CNVideoEncoder(const RtspParam &rtsp_param) : VideoEncoder(OUTPU
   attr.b_frame_num = 0;
   attr.input_buffer_num = 6;
   attr.output_buffer_num = 6;
-  attr.max_mb_per_slice = 0;
-  attr.insertSpsPpsWhenIDR = 1;
+  attr.insert_spspps_when_idr = 1;
   attr.dev_id = rtsp_param.device_id;
   attr.codec_type = codec_type_;
   attr.pixel_format = picture_format_;
@@ -136,10 +135,8 @@ CNVideoEncoder::CNVideoEncoder(const RtspParam &rtsp_param) : VideoEncoder(OUTPU
   attr.rate_control.max_bit_rate = rtsp_param.kbps * 1000;
   attr.rate_control.frame_rate_num = frame_rate_num_;
   attr.rate_control.frame_rate_den = frame_rate_den_;
-  memset(&attr.crop_config, 0, sizeof(edk::CropConfig));
   attr.silent = false;
   attr.jpeg_qfactor = 50;
-  attr.crop_config.enable = false;
   attr.packet_callback = std::bind(&CNVideoEncoder::PacketCallback, this, std::placeholders::_1);
   attr.eos_callback = std::bind(&CNVideoEncoder::EosCallback, this);
 

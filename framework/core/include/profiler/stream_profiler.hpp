@@ -1,23 +1,3 @@
-/*************************************************************************
- * Copyright (C) [2020] by Cambricon, Inc. All rights reserved
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *************************************************************************/
-
 #ifndef CNSTREAM_FRAMEWORK_CORE_INCLUDE_PROFILER_STREAM_PROFILER_HPP_
 #define CNSTREAM_FRAMEWORK_CORE_INCLUDE_PROFILER_STREAM_PROFILER_HPP_
 
@@ -38,18 +18,59 @@ class StreamProfiler {
   using Duration = std::chrono::duration<double, std::milli>;
 
  public:
+  /**
+   * StreamProfiler constructor.
+   *
+   * @param stream_name Stream name.
+   */
   explicit StreamProfiler(const std::string& stream_name);
 
+  /**
+   * Accumulate latency data.
+   *
+   * @param latency Latency.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   StreamProfiler& AddLatency(const Duration& latency);
 
+  /**
+   * Update pyhsical time this stream used.
+   *
+   * @param time The pyhsical time this stream used.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   StreamProfiler& UpdatePhysicalTime(const Duration& time);
 
+  /**
+   * Accumulate drop frame count.
+   *
+   * @param dropped drop frame count.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   StreamProfiler& AddDropped(uint64_t dropped);
 
+  /**
+   * Accumulate completed frame count with 1.
+   *
+   * @return Returns a lvalue reference to the current instance.
+   */
   StreamProfiler& AddCompleted();
 
+  /**
+   * Gets stream name.
+   *
+   * @return Returns stream name.
+   */
   std::string GetName() const;
 
+  /**
+   * Gets statistical performance data for this stream.
+   *
+   * @return Returns statistical performance data for this stream.
+   */
   StreamProfile GetProfile();
 
  private:

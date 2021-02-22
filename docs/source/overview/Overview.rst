@@ -10,7 +10,7 @@ CNStream是面向寒武纪开发平台的数据流处理SDK。用户可以根据
 
 CNStream基于模块化和流水线的思想，提供了一套基于C++语言的接口来支持流处理多路并发的Pipeline框架。为用户提供可自定义的模块机制以及通过高度抽象的CNFrameInfo类型进行模块间的数据传输，满足用户对性能和可伸缩性的需求。
 
-CNStream支持在MLU270和MLU220 M.2平台上使用。
+CNStream支持在MLU270, MLU220 M.2和EDGE平台上使用。
 
 CNStream特点
 --------------

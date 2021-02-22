@@ -151,6 +151,10 @@ int SourceModule::RemoveSource(const std::string &stream_id, bool force) {
   {
     std::unique_lock<std::mutex> lock(mutex_);
     auto iter = source_map_.find(stream_id);
+    if (iter == source_map_.end()) {
+      LOGW(CORE) << "source does not exist\n";
+      return 0;
+    }
     source_map_.erase(iter);
   }
   return 0;

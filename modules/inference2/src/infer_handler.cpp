@@ -42,15 +42,15 @@ class InferDataObserver : public InferEngineDataObserver {
                              std::shared_ptr<infer_server::ModelInfo> model_info, bool with_objs)
       : infer_handler_(infer_handler), postprocessor_(postprocessor), model_info_(model_info), with_objs_(with_objs) {}
 
-  void Notify(InferStatus status, InferPackagePtr result, InferUserData user_data) noexcept override {
+  void Response(InferStatus status, InferPackagePtr result, InferUserData user_data) noexcept override {
     CNFrameInfoPtr data = infer_server::any_cast<CNFrameInfoPtr>(user_data);
-    cnstream::CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(data);
+    CNInferObjsPtr objs_holder = GetCNInferObjsPtr(data);
     if (with_objs_) {
       for (auto i = 0u; i < objs_holder->objs_.size(); ++i) {
-        postprocessor_->ExecuteInObserverNotify(result->data[i], model_info_, data, objs_holder->objs_[i]);
+        postprocessor_->UserProcess(result->data[i], *model_info_.get(), data, objs_holder->objs_[i]);
       }
     } else {
-      postprocessor_->ExecuteInObserverNotify(result->data[0], model_info_, data);
+      postprocessor_->UserProcess(result->data[0], *model_info_.get(), data);
     }
     infer_handler_->TransmitData(data);
   }
@@ -107,33 +107,33 @@ void InferHandlerImpl::Close() {
 bool InferHandlerImpl::LinkInferServer() {
   // create inference2 engine, load model
   infer_server_.reset(new InferEngine(params_.device_id));
+  std::shared_ptr<infer_server::ModelInfo> model_info;
   try {
-    model_info_ = infer_server_->LoadModel(params_.model_path, params_.func_name);
+    model_info = infer_server_->LoadModel(params_.model_path, params_.func_name);
   } catch (...) {
-    LOGE(INFERENCER2) << "[" << module_->GetName() << "] init offline model failed. model_path: [" << params_.model_path
-                     << "].";
+    LOGE(INFERENCER2) << "[" << module_->GetName() << "] init offline model failed. model_path: ["
+                      << params_.model_path << "].";
     return false;
   }
 
-  // create session between infer_engine
   InferSessionDesc desc;
   desc.name = module_->GetName();
   desc.strategy = params_.batch_strategy;
-  desc.batch_timeout = params_.batch_timeout;
+  desc.batch_timeout = params_.batching_timeout;
   desc.priority = params_.priority;
-  desc.model = model_info_;
+  desc.model = model_info;
   desc.show_perf = params_.show_stats;
   desc.engine_num = params_.engine_num;
   desc.host_input_layout = {InferDataType::UINT8, InferDimOrder::NHWC};
   desc.host_output_layout = {InferDataType::FLOAT32, params_.data_order};
-  InferVideoPixelFmt dst_format = VPixelFmtCast(params_.model_input_pixel_format);
-  // describe preprocessor
+  InferVideoPixelFmt dst_format = params_.model_input_pixel_format;
+  // preprocess
   if (params_.preproc_name == "RCOP") {
     scale_platform_ = InferPreprocessType::RESIZE_CONVERT;
     desc.preproc = std::make_shared<InferMluPreprocess>();
     desc.preproc->SetParams("src_format", InferVideoPixelFmt::NV12, "dst_format", dst_format, "preprocess_type",
                             InferPreprocessType::RESIZE_CONVERT, "keep_aspect_ratio", params_.keep_aspect_ratio);
-  } else if (params_.preproc_name == "Scaler") {
+  } else if (params_.preproc_name == "SCALER") {
     scale_platform_ = InferPreprocessType::SCALER;
     desc.preproc = std::make_shared<InferMluPreprocess>();
     desc.preproc->SetParams("src_format", InferVideoPixelFmt::NV12, "dst_format", dst_format, "preprocess_type",
@@ -141,18 +141,18 @@ bool InferHandlerImpl::LinkInferServer() {
   } else {
     scale_platform_ = InferPreprocessType::UNKNOWN;
     desc.preproc = std::make_shared<InferCpuPreprocess>();
-    preprocessor_->SetModelInfo(model_info_);
-    auto preproc_func = std::bind(&Preproc::ExecuteInferServer, preprocessor_, std::placeholders::_1,
+    auto preproc_func = std::bind(&VideoPreproc::Execute, preprocessor_, std::placeholders::_1,
                                   std::placeholders::_2, std::placeholders::_3);
     desc.preproc->SetParams<InferCpuPreprocess::ProcessFunction>("process_function", preproc_func);
   }
-
-  // describe postprocessor
+  // postprocess
   desc.postproc = std::make_shared<InferPostprocess>();
-  auto postproc_func = std::bind(&VideoPostproc::ExecuteByInferServer, postprocessor_, std::placeholders::_1,
+  auto postproc_func = std::bind(&VideoPostproc::Execute, postprocessor_, std::placeholders::_1,
                                  std::placeholders::_2, std::placeholders::_3);
   desc.postproc->SetParams<InferPostprocess::ProcessFunction>("process_function", postproc_func);
-  data_observer_ = std::make_shared<InferDataObserver>(this, postprocessor_, model_info_, params_.object_infer);
+  // observer
+  data_observer_ = std::make_shared<InferDataObserver>(this, postprocessor_, model_info, params_.object_infer);
+  // create session
   session_ = infer_server_->CreateSession(desc, data_observer_);
 
   return session_ != nullptr;
@@ -161,7 +161,7 @@ bool InferHandlerImpl::LinkInferServer() {
 int InferHandlerImpl::Process(CNFrameInfoPtr data, bool with_objs) {
   if (nullptr == data || data->IsEos()) return -1;
 
-  CNDataFramePtr frame = cnstream::any_cast<CNDataFramePtr>(data->datas[CNDataFramePtrKey]);
+  CNDataFramePtr frame = GetCNDataFramePtr(data);
   InferVideoFrame vframe;
   vframe.plane_num = frame->GetPlanes();
   vframe.format = VPixelFmtCast(frame->fmt);
@@ -186,10 +186,13 @@ int InferHandlerImpl::Process(CNFrameInfoPtr data, bool with_objs) {
     return -1;
   }
 
-  if (!with_objs) {  // for first infer
-    infer_server_->Request(session_, std::move(vframe), data->stream_id, data);
-    return 0;
-  } else {  // for secondary
+  if (!with_objs) {
+    if (!infer_server_->Request(session_, std::move(vframe), data->stream_id, data)) {
+      LOGE(INFERENCER2) << "[" << module_->GetName() << "]"<< " Request sending data to infer server failed."
+                        << " stream id: " << data->stream_id << " frame id: " << frame->frame_id;
+      return -1;
+    }
+  } else {  /* secondary inference */
     auto objs = GetCNInferObjsPtr(data);
     std::vector<infer_server::video::BoundingBox> BoundingBoxVec;
     for (decltype(objs->objs_.size()) i = 0; i < objs->objs_.size(); ++i) {
@@ -200,11 +203,13 @@ int InferHandlerImpl::Process(CNFrameInfoPtr data, bool with_objs) {
       box.h = objs->objs_[i]->bbox.h;
       BoundingBoxVec.push_back(box);
     }
-    infer_server_->Request(session_, std::move(vframe), BoundingBoxVec, data->stream_id, data);
-    return 0;
+    if (!infer_server_->Request(session_, std::move(vframe), BoundingBoxVec, data->stream_id, data)) {
+      LOGE(INFERENCER2) << "[" << module_->GetName() << "]"<< " Request sending data to infer server failed."
+                        << " stream id: " << data->stream_id << " frame id: " << frame->frame_id;
+      return -1;
+    }
   }
-
-  return -1;
+  return 0;
 }
 
 void InferHandlerImpl::WaitTaskDone(const std::string& stream_id) {
