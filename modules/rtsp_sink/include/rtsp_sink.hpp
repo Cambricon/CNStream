@@ -83,6 +83,7 @@ struct RtspParam {
   int device_id;             // Device id
   int view_rows;             // Row of the display grid. Only used in mosaic mode.
   int view_cols;             // Column of the display grid. Only used in mosaic mode.
+  bool resample = true;      // Resample before encode. False only used in single mode.
   std::string view_mode;     // Display mode
   std::string color_mode;    // Color mode
   std::string preproc_type;  // Preproc type
@@ -146,6 +147,7 @@ class RtspSink : public ModuleEx, public ModuleCreator<RtspSink> {
   void OnStreamEos(CNFrameInfoPtr data);
   void SetParam(const ModuleParamSet& paramSet, std::string name, int* variable, int default_value);
   void SetParam(const ModuleParamSet& paramSet, std::string name, std::string* variable, std::string default_value);
+  void SetParam(const ModuleParamSet& paramSet, std::string name, bool* variable, bool default_value);
 
   RtspParam params_;
 

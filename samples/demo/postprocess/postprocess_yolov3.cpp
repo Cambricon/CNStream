@@ -27,6 +27,10 @@
 #include "postproc.hpp"
 #include "cnstream_logging.hpp"
 
+/**
+ * @brief Postprocessing for YOLOv3 neural network
+ * The input frame of the model should keep aspect ratio.
+ */
 class PostprocYolov3 : public cnstream::Postproc {
  public:
   int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
@@ -44,12 +48,16 @@ class PostprocYolov3 : public cnstream::Postproc {
     // scaling factors
     const float scaling_factors = std::min(1.0 * model_input_w / img_w, 1.0 * model_input_h / img_h);
 
+    // The input frame of the model should keep aspect ratio.
+    // If mlu resize and convert operator is used as preproc, parameter keep_aspect_ratio of Inferencer module
+    // should be set to true in config json file.
+    // If cpu preproc is used as preproc, please make sure keep aspect ratio in custom preproc.
+    // Scaler does not support keep aspect ratio.
+    // If the input frame does not keep aspect ratio, set scaled_w = model_input_w and scaled_h = model_input_h
+
     // scaled size
     const int scaled_w = scaling_factors * img_w;
     const int scaled_h = scaling_factors * img_h;
-
-    // const int scaled_w = model_input_w;
-    // const int scaled_h = model_input_h;
 
     // bboxes
     const int box_num = static_cast<int>(net_output[0]);

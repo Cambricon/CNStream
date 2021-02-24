@@ -42,6 +42,7 @@ bool RtspSinkJoinStream::Open(const RtspParam& rtsp_params) {
     return false;
   }
   if ("mosaic" == rtsp_params.view_mode) {
+    if (!rtsp_params.resample) return false;
     is_mosaic_style_ = true;
     if (3 == rtsp_params.view_cols && 2 == rtsp_params.view_rows) {
       mosaic_win_width_ = rtsp_params.dst_width / rtsp_params.view_cols;
@@ -70,7 +71,8 @@ bool RtspSinkJoinStream::Open(const RtspParam& rtsp_params) {
   canvas_data_ = new uint8_t[rtsp_params.dst_height * rtsp_params.dst_width * 3 / 2];  // for nv21
 
   if (("cpu" == rtsp_params.preproc_type && MULTI_THREAD) || "bgr" == rtsp_params.color_mode) {
-    refresh_thread_ = new std::thread(&RtspSinkJoinStream::RefreshLoop, this);
+    if (rtsp_params.resample)
+      refresh_thread_ = new std::thread(&RtspSinkJoinStream::RefreshLoop, this);
   }
   return true;
 }
@@ -201,17 +203,20 @@ bool RtspSinkJoinStream::UpdateBGR(cv::Mat image, int64_t timestamp, int channel
       switch (channel_id) {
         case 0:
           cv::resize(image, image, cv::Size(mosaic_win_width_ * 2, mosaic_win_height_ * 2), cv::INTER_CUBIC);
-          image.copyTo(canvas_(cv::Rect(x, y, mosaic_win_width_ * 2, mosaic_win_height_ * 2)));
+          if (rtsp_param_->resample)
+            image.copyTo(canvas_(cv::Rect(x, y, mosaic_win_width_ * 2, mosaic_win_height_ * 2)));
           break;
         case 1:
           x += mosaic_win_width_;
           cv::resize(image, image, cv::Size(mosaic_win_width_, mosaic_win_height_), cv::INTER_CUBIC);
-          image.copyTo(canvas_(cv::Rect(x, y, mosaic_win_width_, mosaic_win_height_)));
+          if (rtsp_param_->resample)
+            image.copyTo(canvas_(cv::Rect(x, y, mosaic_win_width_, mosaic_win_height_)));
           break;
         default:
           y += mosaic_win_height_;
           cv::resize(image, image, cv::Size(mosaic_win_width_, mosaic_win_height_), cv::INTER_CUBIC);
-          image.copyTo(canvas_(cv::Rect(x, y, mosaic_win_width_, mosaic_win_height_)));
+          if (rtsp_param_->resample)
+            image.copyTo(canvas_(cv::Rect(x, y, mosaic_win_width_, mosaic_win_height_)));
           break;
       }
     } else {
@@ -221,8 +226,14 @@ bool RtspSinkJoinStream::UpdateBGR(cv::Mat image, int64_t timestamp, int channel
       image.copyTo(canvas_(cv::Rect(x, y, mosaic_win_width_, mosaic_win_height_)));
     }
   } else {
-    image.copyTo(canvas_);
+    if (rtsp_param_->resample)
+      image.copyTo(canvas_);
   }
+
+  if (!rtsp_param_->resample) {
+    EncodeFrameBGR(image.clone(), timestamp);
+  }
+
   canvas_lock_.unlock();
   return true;
 }

@@ -52,7 +52,7 @@ uint32_t GetMaxModuleNumber() {
 }
 
 uint32_t IdxManager::GetStreamIndex(const std::string& stream_id) {
-  SpinLockGuard guard(id_lock);
+  std::lock_guard<std::mutex>  guard(id_lock);
   auto search = stream_idx_map.find(stream_id);
   if (search != stream_idx_map.end()) {
     return search->second;
@@ -69,7 +69,7 @@ uint32_t IdxManager::GetStreamIndex(const std::string& stream_id) {
 }
 
 void IdxManager::ReturnStreamIndex(const std::string& stream_id) {
-  SpinLockGuard guard(id_lock);
+  std::lock_guard<std::mutex>  guard(id_lock);
   auto search = stream_idx_map.find(stream_id);
   if (search == stream_idx_map.end()) {
     return;
@@ -83,7 +83,7 @@ void IdxManager::ReturnStreamIndex(const std::string& stream_id) {
 }
 
 size_t IdxManager::GetModuleIdx() {
-  SpinLockGuard guard(id_lock);
+  std::lock_guard<std::mutex>  guard(id_lock);
   for (size_t i = 0; i < GetMaxModuleNumber(); i++) {
     if (!(module_id_mask_ & ((uint64_t)1 << i))) {
       module_id_mask_ |= (uint64_t)1 << i;
@@ -94,7 +94,7 @@ size_t IdxManager::GetModuleIdx() {
 }
 
 void IdxManager::ReturnModuleIdx(size_t id_) {
-  SpinLockGuard guard(id_lock);
+  std::lock_guard<std::mutex>  guard(id_lock);
   if (id_ >= GetMaxModuleNumber()) {
     return;
   }

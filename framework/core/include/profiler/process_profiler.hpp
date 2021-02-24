@@ -28,7 +28,6 @@
 
 #include "cnstream_common.hpp"
 #include "cnstream_config.hpp"
-#include "util/cnstream_spinlock.hpp"
 #include "profiler/pipeline_tracer.hpp"
 #include "profiler/profile.hpp"
 #include "profiler/stream_profiler.hpp"
@@ -163,7 +162,7 @@ class ProcessProfiler : private NonCopyable {
 
  private:
   ProfilerConfig config_;
-  SpinLock lk_;
+  std::mutex lk_;
   // Processing data counter.
   // The data that only records the start time but not the end time is called an ongoing-data.
   uint64_t ongoing_ = 0;

@@ -163,6 +163,26 @@ void RtspSink::SetParam(const ModuleParamSet &paramSet, std::string name, std::s
   }
 }
 
+static inline
+bool StrToBool(const std::string& str, bool* out) {
+  if ("False" == str || "false" == str || "FALSE" == str || "0" == str) {
+    *out = false;
+  } else if ("True" == str || "true" == str || "TRUE" == str || "1" == str) {
+    *out = true;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+void RtspSink::SetParam(const ModuleParamSet &paramSet, std::string name, bool *variable,
+                        bool default_value) {
+  *variable = default_value;
+  if (paramSet.find(name) != paramSet.end()) {
+    StrToBool(paramSet.at(name), variable);
+  }
+}
+
 bool RtspSink::Open(ModuleParamSet paramSet) {
   if (!CheckParamSet(paramSet)) {
     return false;
@@ -185,6 +205,8 @@ bool RtspSink::Open(ModuleParamSet paramSet) {
 
   SetParam(paramSet, "color_mode", &params_.color_mode, "nv");
   SetParam(paramSet, "view_mode", &params_.view_mode, "single");
+
+  SetParam(paramSet, "resample", &params_.resample, true);
 
   if ("mosaic" == params_.view_mode) {
     params_.preproc_type = "cpu";
@@ -215,7 +237,11 @@ int RtspSink::Process(CNFrameInfoPtr data) {
   if ("cpu" == params_.preproc_type) {
     if ("bgr" == params_.color_mode || params_.color_format == BGR24) {
       cv::Mat image = *frame->ImageBGR();
-      ctx->rtsp_stream_->UpdateBGR(image, data->timestamp, data->GetStreamIndex());
+      int64_t timestamp = data->timestamp;
+      if (!params_.resample) {
+        timestamp = frame->frame_id * 1e3 / params_.frame_rate;
+      }
+      ctx->rtsp_stream_->UpdateBGR(image, timestamp, data->GetStreamIndex());
     } else if ("nv" == params_.color_mode) {
       uint8_t *image_data = nullptr;
       image_data = new uint8_t[frame->GetBytes()];
@@ -281,6 +307,13 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
     }
   }
 
+  bool resample = true;
+  if (paramSet.find("resample") != paramSet.end()) {
+    if (!StrToBool(paramSet.at("resample"), &resample)) {
+      ret = false;
+    }
+  }
+
   if (paramSet.find("view_mode") != paramSet.end()) {
     if (paramSet.at("view_mode") != "single" && paramSet.at("view_mode") != "mosaic") {
       LOGE(RTSP) << "[RtspSink] (ERROR) Not support view mode: \"" << paramSet.at("view_mode")
@@ -296,6 +329,10 @@ bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
       }
       if (paramSet.find("view_rows") == paramSet.end()) {
         LOGW(RTSP) << "[RtspSink] (WARNING) View *row* number is not given. Default 4.";
+      }
+      if (!resample) {
+        LOGE(RTSP) << "Resample is \"false\". Not support mosaic view mode with non-resample.";
+        ret = false;
       }
     }
   }
@@ -319,6 +356,7 @@ RtspSink::RtspSink(const std::string &name) : ModuleEx(name) {
   param_register_.Register("dst_width", "The image width of the output.");
   param_register_.Register("dst_height", "The image height of the output.");
   param_register_.Register("color_mode", "Input picture color mode, include nv and bgr.");
+  param_register_.Register("resample", "Resample before encode.False can be used only in single mode.");
   param_register_.Register("view_mode", "Use set rtsp view mode, inlcude single and mosaic mode.");
   param_register_.Register("view_cols", "Divide the screen horizontally, set only for mosaic mode.");
   param_register_.Register("view_rows", "Divide the screen vertically, set only for mosaic mode.");

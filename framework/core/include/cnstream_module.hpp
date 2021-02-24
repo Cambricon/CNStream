@@ -278,7 +278,7 @@ class Module : private NonCopyable {
  private:
   size_t id_ = INVALID_MODULE_ID;
   /* supports no more than 64 modules */
-  static SpinLock module_id_spinlock_;
+  static std::mutex module_id_lock_;
   static uint64_t module_id_mask_;
 
   std::vector<size_t> parent_ids_;
