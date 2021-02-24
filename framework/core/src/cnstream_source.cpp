@@ -35,12 +35,12 @@ namespace cnstream {
 #ifdef UNIT_TEST
 
 /*default */
-static SpinLock stream_idx_lock;
+static std::mutex stream_idx_lock;
 static std::unordered_map<std::string, uint32_t> stream_idx_map;
 static std::bitset<MAX_STREAM_NUM> stream_bitset(0);
 
 static uint32_t _GetStreamIndex(const std::string &stream_id) {
-  SpinLockGuard guard(stream_idx_lock);
+  std::lock_guard<std::mutex>  guard(stream_idx_lock);
   auto search = stream_idx_map.find(stream_id);
   if (search != stream_idx_map.end()) {
     return search->second;
@@ -57,7 +57,7 @@ static uint32_t _GetStreamIndex(const std::string &stream_id) {
 }
 
 static int _ReturnStreamIndex(const std::string &stream_id) {
-  SpinLockGuard guard(stream_idx_lock);
+  std::lock_guard<std::mutex>  guard(stream_idx_lock);
   auto search = stream_idx_map.find(stream_id);
   if (search == stream_idx_map.end()) {
     return -1;

@@ -48,29 +48,6 @@ namespace cnstream {
 // since from version 3.1(libavformat/version:57.40.100)
 #define FFMPEG_VERSION_3_1 AV_VERSION_INT(57, 40, 100)
 
-namespace detail {
-class SpinLock {
- public:
-  void lock() {
-    while (lock_.test_and_set(std::memory_order_acquire)) {
-    }  // spin
-  }
-  void unlock() { lock_.clear(std::memory_order_release); }
-
- private:
-  std::atomic_flag lock_ = ATOMIC_FLAG_INIT;
-};
-
-class SpinLockGuard {
- public:
-  explicit SpinLockGuard(SpinLock& lock) : lock_(lock) { lock_.lock(); }
-  ~SpinLockGuard() { lock_.unlock(); }
-
- private:
-  SpinLock& lock_;
-};
-}  // namespace detail
-
 class MluDecoderImpl {
  public:
   explicit MluDecoderImpl(const std::string& stream_id, IDecodeResult *cb) : stream_id_(stream_id), result_(cb) {}
@@ -139,16 +116,16 @@ class MluDecoderImpl {
   // For m200 vpu-decoder, m200 vpu-codec does not 64bits timestamp, we have to implement it.
   uint32_t pts_key_ = 0;
   std::unordered_map<uint32_t, uint64_t> vpu_pts_map_;
-  detail::SpinLock map_lock_;
+  std::mutex map_lock_;
   uint32_t SetVpuTimestamp(uint64_t pts) {
-    detail::SpinLockGuard guard(map_lock_);
+    std::lock_guard<std::mutex>  guard(map_lock_);
     uint32_t key = pts_key_++;
     vpu_pts_map_[key] = pts;
     return key;
   }
   bool GetVpuTimestamp(uint32_t key, uint64_t *pts) {
     if (!pts) return false;
-    detail::SpinLockGuard guard(map_lock_);
+    std::lock_guard<std::mutex>  guard(map_lock_);
     auto iter = vpu_pts_map_.find(key);
     if (iter != vpu_pts_map_.end()) {
       *pts = iter->second;

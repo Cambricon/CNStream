@@ -30,6 +30,7 @@
 
 /**
  * @brief Video postprocessing for YOLOv3 neural network
+ * The input frame of the model should keep aspect ratio.
  */
 class VideoPostprocYolov3 : public cnstream::VideoPostproc {
  public:
@@ -74,6 +75,13 @@ bool VideoPostprocYolov3::UserProcess(infer_server::InferDataPtr output_data,
   // scaling factors
   const float scaling_factors = std::min(1.0 * model_input_w / img_w, 1.0 * model_input_h / img_h);
 
+  // The input frame of the model should keep aspect ratio.
+  // If mlu resize and convert operator is used as preproc, parameter keep_aspect_ratio of Inferencer2 module
+  // should be set to true in config json file.
+  // If cpu preproc is used as preproc, please make sure keep aspect ratio in custom preproc.
+  // Scaler does not support keep aspect ratio.
+  // If the input frame does not keep aspect ratio, set scaled_w = model_input_w and scaled_h = model_input_h
+
   // scaled size
   const int scaled_w = scaling_factors * img_w;
   const int scaled_h = scaling_factors * img_h;
@@ -113,83 +121,5 @@ bool VideoPostprocYolov3::UserProcess(infer_server::InferDataPtr output_data,
     objs.push_back(obj);
   }
 
-  return true;
-}
-
-/**
- * @brief Video postprocessing for YOLOv3 neural network when inputs of the network are not keeping aspect ratio
- */
-class VideoPostprocFakeYolov3 : public cnstream::VideoPostproc {
- public:
-  /**
-   * @brief Execute YOLOv3 neural network postprocessing
-   *
-   * @param output_data: postproc result. The result of postprocessing should be set to it.
-   *                     You could set any type of data to this parameter and get it in UserProcess function.
-   * @param model_output: the raw output data from neural network
-   * @param model_info: model information, e.g., input/output number, shape and etc.
-   *
-   * @return return true if succeed
-   * @see VideoPostprocFakeYolov3::UserProcess
-   */
-  bool Execute(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
-               const infer_server::ModelInfo& model_info) override;
-  /**
-   * @brief User process. Fill postprocessing result to frame.
-   *
-   * @param output_data: The postproc result. In Execute function, you could set any type of data to it.
-   * @param model_info: model information, e.g., input/output number, shape and etc.
-   * @param frame: the CNframeInfo, that will be passed to the next module
-   *
-   * @return return true if succeed
-   * @see VideoPostprocFakeYolov3::Execute
-   */
-  bool UserProcess(infer_server::InferDataPtr output_data, const infer_server::ModelInfo& model_info,
-                   cnstream::CNFrameInfoPtr frame) override;
-
- private:
-  DECLARE_REFLEX_OBJECT_EX(VideoPostprocFakeYolov3, cnstream::VideoPostproc);
-};  // class VideoPostprocFakeYolov3
-
-IMPLEMENT_REFLEX_OBJECT_EX(VideoPostprocFakeYolov3, cnstream::VideoPostproc);
-
-bool VideoPostprocFakeYolov3::Execute(infer_server::InferData* output_data,
-                                      const infer_server::ModelIO& model_output,
-                                      const infer_server::ModelInfo& model_info) {
-  LOGF_IF(DEMO, model_info.InputNum() != 1);
-  LOGF_IF(DEMO, model_info.OutputNum() != 1);
-  LOGF_IF(DEMO, model_output.buffers.size() != 1);
-
-  cnstream::CNObjsVec objs;
-
-  const float* data = reinterpret_cast<const float*>(model_output.buffers[0].Data());
-  unsigned box_num = static_cast<unsigned>(data[0]);
-  data += 64;
-  for (auto bi = 0u; bi < box_num; ++bi) {
-    if (threshold_ > 0 && data[2] < threshold_) continue;
-    std::shared_ptr<cnstream::CNInferObject> object = std::make_shared<cnstream::CNInferObject>();
-    object->id = std::to_string(data[1]);
-    object->score = data[2];
-    object->bbox.x = data[3];
-    object->bbox.y = data[4];
-    object->bbox.w = data[5] - object->bbox.x;
-    object->bbox.h = data[6] - object->bbox.y;
-
-    objs.push_back(object);
-    data += 7;
-  }
-  output_data->Set(objs);
-  return true;
-}
-
-bool VideoPostprocFakeYolov3::UserProcess(infer_server::InferDataPtr output_data,
-                                          const infer_server::ModelInfo& model_info,
-                                          cnstream::CNFrameInfoPtr frame) {
-  cnstream::CNObjsVec result_objs = output_data->GetLref<cnstream::CNObjsVec>();
-
-  // fill result in frame
-  cnstream::CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(frame);
-  std::lock_guard<std::mutex> objs_mutex(objs_holder->mutex_);
-  objs_holder->objs_.insert(objs_holder->objs_.end(), result_objs.begin(), result_objs.end());
   return true;
 }

@@ -86,7 +86,7 @@ class RecordPolicy {
   std::unordered_map<std::string, std::list<uint64_t>> skip_refs_;
   // MaxDpbSize of stream, key is stream name, value is MaxDpbSize.
   std::unordered_map<std::string, uint64_t> stream_max_dpb_sizes_;
-  SpinLock max_dpb_size_lk_;
+  std::mutex max_dpb_size_lk_;
 };  // class RecordPolicy
 
 
@@ -169,19 +169,19 @@ void RecordPolicy::OnStreamEos(const std::string& stream_name, uint64_t* number_
 }
 
 void RecordPolicy::SetStreamMaxDpbSize(const std::string& stream_name, uint64_t max_dpb_size) {
-  SpinLockGuard lk_guard(max_dpb_size_lk_);
+  std::lock_guard<std::mutex>  lk_guard(max_dpb_size_lk_);
   stream_max_dpb_sizes_[stream_name] = max_dpb_size;
 }
 
 uint64_t RecordPolicy::GetStreamMaxDpbSize(const std::string& stream_name) {
-  SpinLockGuard lk_guard(max_dpb_size_lk_);
+  std::lock_guard<std::mutex>  lk_guard(max_dpb_size_lk_);
   if (stream_max_dpb_sizes_.find(stream_name) != stream_max_dpb_sizes_.end())
     return stream_max_dpb_sizes_[stream_name];
   return stream_max_dpb_sizes_[stream_name] = kDEFAULT_MAX_DPB_SIZE;
 }
 
 void RecordPolicy::RemoveStreamMaxDpbSize(const std::string& stream_name) {
-  SpinLockGuard lk_guard(max_dpb_size_lk_);
+  std::lock_guard<std::mutex>  lk_guard(max_dpb_size_lk_);
   stream_max_dpb_sizes_.erase(stream_name);
 }
 
@@ -199,7 +199,7 @@ ProcessProfiler::~ProcessProfiler() {
 
 void ProcessProfiler::RecordStart(const RecordKey& key) {
   if (!config_.enable_tracing && !config_.enable_profiling) return;
-  SpinLockGuard lk(lk_);
+  std::lock_guard<std::mutex>  lk(lk_);
   Time now = Clock::now();
   if (config_.enable_tracing) Tracing(key, now, TraceEvent::START);
   if (config_.enable_profiling) RecordStart(key, now);
@@ -220,7 +220,7 @@ void ProcessProfiler::RecordStart(const RecordKey& key, const Time& time) {
 
 void ProcessProfiler::RecordEnd(const RecordKey& key) {
   if (!config_.enable_tracing && !config_.enable_profiling) return;
-  SpinLockGuard lk(lk_);
+  std::lock_guard<std::mutex>  lk(lk_);
   Time now = Clock::now();
   if (config_.enable_tracing) Tracing(key, now, TraceEvent::END);
   if (config_.enable_profiling) RecordEnd(key, now);
@@ -253,7 +253,7 @@ void ProcessProfiler::RecordEnd(const RecordKey& key, const Time& time) {
 ProcessProfile ProcessProfiler::GetProfile() {
   ProcessProfile profile;
   profile.process_name = GetName();
-  SpinLockGuard lk(lk_);
+  std::lock_guard<std::mutex>  lk(lk_);
   profile.completed = completed_;
   profile.dropped = dropped_;
   profile.counter = profile.completed + profile.dropped;
@@ -287,7 +287,7 @@ ProcessProfile ProcessProfiler::GetProfile(const ProcessTrace& trace) const {
 
 void ProcessProfiler::OnStreamEos(const std::string& stream_name) {
   if (!config_.enable_tracing && !config_.enable_profiling) return;
-  SpinLockGuard lk(lk_);
+  std::lock_guard<std::mutex>  lk(lk_);
   if (stream_profilers_.find(stream_name) == stream_profilers_.end()) return;
   uint64_t number_remaining = 0;
   record_policy_->OnStreamEos(stream_name, &number_remaining);

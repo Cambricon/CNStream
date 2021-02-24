@@ -133,7 +133,7 @@ class IdxManager {
   void ReturnModuleIdx(size_t id_);
 
  private:
-  SpinLock id_lock;
+  std::mutex id_lock;
   std::unordered_map<std::string, uint32_t> stream_idx_map;
   std::bitset<MAX_STREAM_NUM> stream_bitset;
   uint64_t module_id_mask_ = 0;

@@ -27,13 +27,13 @@
 
 namespace cnstream {
 
-SpinLock CNFrameInfo::spinlock_;
+std::mutex CNFrameInfo::stream_count_lock_;
 std::unordered_map<std::string, int> CNFrameInfo::stream_count_map_;
 
-static SpinLock s_eos_spinlock_;
+static std::mutex s_eos_lock_;
 static std::unordered_map<std::string, std::atomic<bool>> s_stream_eos_map_;
 
-static SpinLock s_remove_spinlock_;
+static std::mutex s_remove_lock_;
 static std::unordered_map<std::string, bool> s_stream_removed_map_;
 
 int CNFrameInfo::flow_depth_ = 0;
@@ -45,7 +45,7 @@ bool CheckStreamEosReached(const std::string &stream_id, bool sync) {
   if (sync) {
     while (1) {
       std::this_thread::sleep_for(std::chrono::milliseconds(20));
-      SpinLockGuard guard(s_eos_spinlock_);
+      std::lock_guard<std::mutex> guard(s_eos_lock_);
       auto iter = s_stream_eos_map_.find(stream_id);
       if (iter != s_stream_eos_map_.end()) {
         if (iter->second == true) {
@@ -59,7 +59,7 @@ bool CheckStreamEosReached(const std::string &stream_id, bool sync) {
     }
     return false;
   } else {
-    SpinLockGuard guard(s_eos_spinlock_);
+    std::lock_guard<std::mutex> guard(s_eos_lock_);
     auto iter = s_stream_eos_map_.find(stream_id);
     if (iter != s_stream_eos_map_.end()) {
       if (iter->second == true) {
@@ -72,7 +72,7 @@ bool CheckStreamEosReached(const std::string &stream_id, bool sync) {
 }
 
 void SetStreamRemoved(const std::string &stream_id, bool value) {
-  SpinLockGuard guard(s_remove_spinlock_);
+  std::lock_guard<std::mutex> guard(s_remove_lock_);
   auto iter = s_stream_removed_map_.find(stream_id);
   if (iter != s_stream_removed_map_.end()) {
     if (value != true) {
@@ -87,7 +87,7 @@ void SetStreamRemoved(const std::string &stream_id, bool value) {
 }
 
 bool IsStreamRemoved(const std::string &stream_id) {
-  SpinLockGuard guard(s_remove_spinlock_);
+  std::lock_guard<std::mutex> guard(s_remove_lock_);
   auto iter = s_stream_removed_map_.find(stream_id);
   if (iter != s_stream_removed_map_.end()) {
     // LOGI(CORE) << "_____IsStreamRemoved " << stream_id << ":" << s_stream_removed_map_[stream_id];
@@ -112,14 +112,14 @@ std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, b
   if (eos) {
     ptr->flags |= cnstream::CN_FRAME_FLAG_EOS;
     if (!ptr->payload) {
-      SpinLockGuard guard(s_eos_spinlock_);
+      std::lock_guard<std::mutex> guard(s_eos_lock_);
       s_stream_eos_map_[stream_id] = false;
     }
     return ptr;
   }
 
   if (flow_depth_ > 0) {
-    SpinLockGuard guard(spinlock_);
+    std::lock_guard<std::mutex> guard(stream_count_lock_);
     auto iter = stream_count_map_.find(stream_id);
     if (iter == stream_count_map_.end()) {
       stream_count_map_[stream_id] = 1;
@@ -139,7 +139,7 @@ std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, b
 CNFrameInfo::~CNFrameInfo() {
   if (this->IsEos()) {
     if (!this->payload) {
-      SpinLockGuard guard(s_eos_spinlock_);
+      std::lock_guard<std::mutex> guard(s_eos_lock_);
       s_stream_eos_map_[stream_id] = true;
     }
     return;
@@ -148,7 +148,7 @@ CNFrameInfo::~CNFrameInfo() {
     return;
   }*/
   if (flow_depth_ > 0) {
-    SpinLockGuard guard(spinlock_);
+    std::lock_guard<std::mutex> guard(stream_count_lock_);
     auto iter = stream_count_map_.find(stream_id);
     if (iter != stream_count_map_.end()) {
       int count = iter->second;
@@ -167,18 +167,18 @@ CNFrameInfo::~CNFrameInfo() {
 }
 
 void CNFrameInfo::SetModulesMask(uint64_t mask) {
-  SpinLockGuard guard(mask_lock_);
+  std::lock_guard<std::mutex> lk(mask_lock_);
   modules_mask_ = mask;
 }
 
 uint64_t CNFrameInfo::MarkPassed(Module* module) {
-  SpinLockGuard guard(mask_lock_);
+  std::lock_guard<std::mutex> lk(mask_lock_);
   modules_mask_ |= (uint64_t)1 << module->GetId();
   return modules_mask_;
 }
 
 uint64_t CNFrameInfo::GetModulesMask() {
-  SpinLockGuard guard(mask_lock_);
+  std::lock_guard<std::mutex> lk(mask_lock_);
   return modules_mask_;
 }
 

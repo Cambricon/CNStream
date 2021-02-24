@@ -28,7 +28,6 @@
 
 #include "cnstream_common.hpp"
 #include "util/cnstream_any.hpp"
-#include "util/cnstream_spinlock.hpp"
 
 /**
  *  @file cnstream_frame.hpp
@@ -102,7 +101,7 @@ class CNFrameInfo : private NonCopyable {
 
   // user-defined DataFrame，InferResult etc...
   std::unordered_map<int, any> datas;
-  cnstream::SpinLock datas_lock_;
+  std::mutex datas_lock_;
 
   // CNFrameInfo instance of parent pipeine
   std::shared_ptr<cnstream::CNFrameInfo> payload = nullptr;
@@ -118,13 +117,13 @@ class CNFrameInfo : private NonCopyable {
   uint64_t GetModulesMask();
 
  private:
-  SpinLock mask_lock_;
+  std::mutex mask_lock_;
   /* Identifies which modules have processed this data */
   uint64_t modules_mask_ = 0;
 
  private:
   CNFrameInfo() {}
-  static cnstream::SpinLock spinlock_;
+  static std::mutex stream_count_lock_;
   static std::unordered_map<std::string, int> stream_count_map_;
 
  public:

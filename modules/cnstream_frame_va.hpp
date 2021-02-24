@@ -519,19 +519,19 @@ using CNInferDataPtr = std::shared_ptr<CNInferData>;
 // helpers
 static inline
 CNDataFramePtr GetCNDataFramePtr(std::shared_ptr<CNFrameInfo> frameInfo) {
-  SpinLockGuard guard(frameInfo->datas_lock_);
+  std::lock_guard<std::mutex> guard(frameInfo->datas_lock_);
   return cnstream::any_cast<CNDataFramePtr>(frameInfo->datas[CNDataFramePtrKey]);
 }
 
 static inline
 CNInferObjsPtr GetCNInferObjsPtr(std::shared_ptr<CNFrameInfo> frameInfo) {
-  SpinLockGuard guard(frameInfo->datas_lock_);
+  std::lock_guard<std::mutex> guard(frameInfo->datas_lock_);
   return cnstream::any_cast<CNInferObjsPtr>(frameInfo->datas[CNInferObjsPtrKey]);
 }
 
 static inline
 CNInferDataPtr GetCNInferDataPtr(std::shared_ptr<CNFrameInfo> frameInfo) {
-  SpinLockGuard guard(frameInfo->datas_lock_);
+  std::lock_guard<std::mutex> guard(frameInfo->datas_lock_);
   return cnstream::any_cast<CNInferDataPtr>(frameInfo->datas[CNInferDataPtrKey]);
 }
 

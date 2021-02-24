@@ -30,10 +30,10 @@
 namespace cnstream {
 
 #ifdef UNIT_TEST
-static SpinLock module_id_spinlock_;
+static std::mutex module_id_lock_;
 static uint64_t module_id_mask_ = 0;
 static size_t _GetId() {
-  SpinLockGuard guard(module_id_spinlock_);
+  std::lock_guard<std::mutex> guard(module_id_lock_);
   for (size_t i = 0; i < sizeof(module_id_mask_) * 8; i++) {
     if (!(module_id_mask_ & ((uint64_t)1 << i))) {
       module_id_mask_ |= (uint64_t)1 << i;
@@ -43,7 +43,7 @@ static size_t _GetId() {
   return INVALID_MODULE_ID;
 }
 static void _ReturnId(size_t id_) {
-  SpinLockGuard guard(module_id_spinlock_);
+  std::lock_guard<std::mutex>  guard(module_id_lock_);
   if (id_ >= sizeof(module_id_mask_) * 8) {
     return;
   }
