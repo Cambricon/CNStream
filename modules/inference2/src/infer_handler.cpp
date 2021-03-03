@@ -86,6 +86,7 @@ InferHandlerImpl::~InferHandlerImpl() {
   edk::MluContext mlu_ctx;
   mlu_ctx.SetDeviceId(params_.device_id);
   mlu_ctx.BindDevice();
+  Close();
   if (data_observer_) data_observer_.reset();
 }
 
@@ -101,6 +102,7 @@ bool InferHandlerImpl::Open() {
 void InferHandlerImpl::Close() {
   if (session_) {
     infer_server_->DestroySession(session_);
+    session_ = nullptr;
   }
 }
 

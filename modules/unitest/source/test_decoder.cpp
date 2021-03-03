@@ -40,9 +40,6 @@ static constexpr const char *gmp4_path = "../../modules/unitest/source/data/img.
 static constexpr const char *gh264_path = "../../modules/unitest/source/data/raw.h264";
 static constexpr const char *gimage_path = "../../data/images/%d.jpg";
 
-static const int g_dev_id = 0;
-static const int g_ddr_channel = 0;
-
 class PrepareEnvFile {
  public:
   // device = 0 mlu, device = 1 cpu

@@ -47,19 +47,19 @@ bool ImagePreproc::Init() {
 
   if (preproc_param_.preproc_type == "mlu") {
     if (preproc_param_.src_pix_fmt == NV12 || preproc_param_.src_pix_fmt == NV21) {
-      if (preproc_param_.device_id >= 0) {
-        edk::MluContext context;
-        try {
-          context.SetDeviceId(preproc_param_.device_id);
-          context.BindDevice();
-        } catch (edk::Exception &err) {
-          LOGE(ENCODE) << "[ImagePreproc] set mlu env failed.";
-          return false;
-        }
-      } else {
-        LOGE(ENCODE) << "[ImagePreproc] device id is invalid.";
-        return false;
-      }
+      // if (preproc_param_.device_id >= 0) {
+      //   edk::MluContext context;
+      //   try {
+      //     context.SetDeviceId(preproc_param_.device_id);
+      //     context.BindDevice();
+      //   } catch (edk::Exception &err) {
+      //     LOGE(ENCODE) << "[ImagePreproc] set mlu env failed.";
+      //     return false;
+      //   }
+      // } else {
+      //   LOGE(ENCODE) << "[ImagePreproc] device id is invalid.";
+      //   return false;
+      // }
       // do something to init a mlu resize yuv op
       LOGE(ENCODE) << "[ImagePreproc] mlu preproc is not supported yet.";
       return false;

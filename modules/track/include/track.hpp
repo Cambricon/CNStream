@@ -38,8 +38,6 @@
 
 namespace cnstream {
 
-CNSTREAM_REGISTER_EXCEPTION(Tracker);
-
 struct TrackerContext;
 
 /// Pointer for frame info

@@ -19,26 +19,24 @@
  *************************************************************************/
 #include "cnstream_allocator.hpp"
 
-#include "cnrt.h"
 #include <exception>
 #include <memory>
+
+#include "cnrt.h"
 
 namespace cnstream {
 
 class CnrtInit {
  public:
-  CnrtInit() {
-    cnrtInit(0);
-  }
-  ~CnrtInit() {
-    cnrtDestroy();
-  }
+  CnrtInit() { cnrtInit(0); }
+  ~CnrtInit() { cnrtDestroy(); }
 };
 static CnrtInit cnrt_init_;
 
-MluDeviceGuard::MluDeviceGuard(int device_id) : device_id_(device_id)  {
+MluDeviceGuard::MluDeviceGuard(int device_id) : device_id_(device_id) {
   // FIXME, check errors
   if (device_id < 0) {
+    LOGE(Allocator) << "device id:  " << device_id << " is invalid";
     return;
   }
   cnrtDev_t dev;
@@ -48,25 +46,21 @@ MluDeviceGuard::MluDeviceGuard(int device_id) : device_id_(device_id)  {
 
 MluDeviceGuard::~MluDeviceGuard() {}
 
-
 // helper funcs
-class CnAllocDeleter final{
+class CnAllocDeleter final {
  public:
-  explicit CnAllocDeleter(std::shared_ptr<MemoryAllocator> allocator)
-   : allocator_(allocator) {}
+  explicit CnAllocDeleter(std::shared_ptr<MemoryAllocator> allocator) : allocator_(allocator) {}
 
-  void operator()(void *ptr) {
-    allocator_->free(ptr);
-  }
+  void operator()(void *ptr) { allocator_->free(ptr); }
 
  private:
   std::shared_ptr<MemoryAllocator> allocator_;
 };
 
-std::shared_ptr<void> cnMemAlloc(size_t size, std::shared_ptr<MemoryAllocator> allocator) {  
+std::shared_ptr<void> cnMemAlloc(size_t size, std::shared_ptr<MemoryAllocator> allocator) {
   if (allocator) {
     std::shared_ptr<void> ds(allocator->alloc(size), CnAllocDeleter(allocator));
-    return ds; 
+    return ds;
   }
   return nullptr;
 }
@@ -82,40 +76,38 @@ std::shared_ptr<void> cnMluMemAlloc(size_t size, int device_id) {
 }
 
 // cpu Var-size allocator
-void *CpuAllocator::alloc(size_t size, int timeout_ms)  {
-  size_t alloc_size = (size + 4095)/4096 * 4096;
-  timeout_ms = timeout_ms;  // disable warning
-  // LOGI("Allocator") << "CpuAllocator::alloc  " << size << "\n"; 
-  return static_cast<void*> (new (std::nothrow) unsigned char[alloc_size]);
+void *CpuAllocator::alloc(size_t size, int timeout_ms) {
+  size_t alloc_size = (size + 4095) & (~0xFFF);  // Align 4096
+  // LOGI("Allocator") << "CpuAllocator::alloc  " << size << "\n";
+  return static_cast<void *>(new (std::nothrow) unsigned char[alloc_size]);
 }
 
-void CpuAllocator::free(void* p) {
-  unsigned char *ptr = static_cast<unsigned char*>(p);
-  // LOGI("Allocator") << "CpuAllocator::free\n"; 
-  delete []ptr;
-};
+void CpuAllocator::free(void *p) {
+  unsigned char *ptr = static_cast<unsigned char *>(p);
+  // LOGI("Allocator") << "CpuAllocator::free\n";
+  delete[] ptr;
+}
 
 // mlu var-size allocator
 void *MluAllocator::alloc(size_t size, int timeout_ms) {
-  size_t alloc_size = (size + 4095)/4096 * 4096;
-  timeout_ms = timeout_ms;  // disable warning
+  size_t alloc_size = (size + 4095) & (~0xFFF);  // Align 4096
 
-  std::unique_lock<std::mutex> lk(mutex_);
+  std::lock_guard<std::mutex> lk(mutex_);
   MluDeviceGuard guard(device_id_);
   void *mlu_ptr;
   if (cnrtMalloc(&mlu_ptr, alloc_size) != CNRT_RET_SUCCESS) {
     return nullptr;
   }
 
-  // LOGI("Allocator") << "MluAllocator::alloc  " << size << "\n"; 
+  // LOGI("Allocator") << "MluAllocator::alloc  " << size << "\n";
   return mlu_ptr;
 }
 
-void MluAllocator::free(void* p) {
-  std::unique_lock<std::mutex> lk(mutex_);
+void MluAllocator::free(void *p) {
+  std::lock_guard<std::mutex> lk(mutex_);
   MluDeviceGuard guard(device_id_);
   cnrtFree(p);
-  // LOGI("Allocator") << "MluAllocator::free\n"; 
+  // LOGI("Allocator") << "MluAllocator::free\n";
 }
 
 }  // namespace cnstream

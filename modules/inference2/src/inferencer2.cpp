@@ -58,6 +58,14 @@ bool Inferencer2::Open(ModuleParamSet raw_params) {
   mlu_ctx.SetDeviceId(params.device_id);
   mlu_ctx.BindDevice();
 
+  std::string model_path = GetPathRelativeToTheJSONFile(params.model_path, raw_params);
+  if (FILE* file = fopen(model_path.c_str(), "r")) {
+    fclose(file);
+  } else {
+    LOGE(INFERENCER2) << "Model path is wrong. Wrong path is [ " << model_path << " ], please check it.";
+    return false;
+  }
+
   if (params.preproc_name.empty()) {
     LOGE(INFERENCER2) << "Preproc name can't be empty string. Please set preproc_name.";
     return false;
@@ -88,7 +96,10 @@ bool Inferencer2::Open(ModuleParamSet raw_params) {
 }
 
 void Inferencer2::Close() {
-  if (infer_handler_) infer_handler_->Close();
+  if (infer_handler_) {
+    infer_handler_.reset();
+    infer_handler_ = nullptr;
+  }
 }
 
 int Inferencer2::Process(std::shared_ptr<CNFrameInfo> data) {
@@ -118,8 +129,8 @@ Inferencer2::~Inferencer2() {
   edk::MluContext mlu_ctx;
   mlu_ctx.SetDeviceId(infer_params_.device_id);
   mlu_ctx.BindDevice();
+  Close();
   param_manager_.reset();
-  infer_handler_.reset();
 }
 
 bool Inferencer2::CheckParamSet(const ModuleParamSet& param_set) const {

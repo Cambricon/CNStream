@@ -68,7 +68,7 @@ Ubuntu环境下安装和配置
     ::
 
         sudo apt-get install libopencv-dev libgflags-dev libgoogle-glog-dev cmake
-        sudo apt-get install libfreetype6 ttf-wqy-zenhei libsdl2-dev curl
+        sudo apt-get install libfreetype6 ttf-wqy-zenhei libsdl2-dev curl libcurl4-openssl-dev
 
 CentOS环境下安装和配置
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -100,7 +100,7 @@ CentOS环境下安装和配置
 
       sudo yum install opencv-devel.x86_64 gflags.x86_64 glog.x86_64 cmake3.x86_64
       sudo yum install freetype-devel SDL2_gfx-devel.x86_64 wqy-zenhei-fonts
-      sudo yum install ffmpeg ffmpeg-devel curl
+      sudo yum install ffmpeg ffmpeg-devel curl libcurl-devel
 
 
 Docker环境下安装和配置

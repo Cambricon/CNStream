@@ -43,6 +43,7 @@ installAptLibs() {
     ttf-wqy-zenhei\
     cmake\
     libsdl2-dev\
+    curl libcurl4-openssl-dev\
     lcov
 }
 
@@ -54,6 +55,7 @@ installYumLibs() {
     freetype-devel\
     SDL2_gfx-devel.x86_64\
     wqy-zenhei-fonts\
+    curl libcurl-devel \
     lcov
   ${SUDO_CMD} yum install -y epel-release rpm
   #remove below line for long time to update

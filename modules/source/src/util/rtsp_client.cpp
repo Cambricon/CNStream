@@ -143,11 +143,12 @@ class DummySink : public MediaSink, public cnstream::IParserResult {
 
   void OnParserInfo(cnstream::VideoInfo *info) override;
   void OnParserFrame(cnstream::VideoEsFrame *frame) override;
+
  private:
   // redefined virtual functions:
-  virtual Boolean continuePlaying();
-
+  Boolean continuePlaying() override;
   bool FindKeyFrame(unsigned char *buf, unsigned size, bool isH264);
+
  private:
   std::unique_ptr<u_int8_t[]> fReceiveBuffer = nullptr;
   MediaSubsession& fSubsession;

@@ -43,7 +43,6 @@
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["rtsp_sink"],
-    "show_perf_info" : true,
     "custom_params" : {
       "label_path" : "../../../../data/models/MLU270/yolov3/label_map_coco.txt" 
     }

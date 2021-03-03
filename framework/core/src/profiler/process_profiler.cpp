@@ -271,7 +271,7 @@ ProcessProfile ProcessProfiler::GetProfile() {
   }
   auto stream_profilers = GetStreamProfilers();
   for (auto& it : stream_profilers) profile.stream_profiles.emplace_back(it.GetProfile());
-  return std::move(profile);
+  return profile;
 }
 
 ProcessProfile ProcessProfiler::GetProfile(const ProcessTrace& trace) const {
@@ -312,7 +312,7 @@ void ProcessProfiler::OnStreamStart(const std::string& stream_name) {
 std::vector<StreamProfiler> ProcessProfiler::GetStreamProfilers() {
   std::vector<StreamProfiler> profilers;
   for (const auto& it : stream_profilers_) profilers.emplace_back(it.second);
-  return std::move(profilers);
+  return profilers;
 }
 
 }  // namespace cnstream

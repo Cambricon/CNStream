@@ -223,7 +223,6 @@ CNStream中提供自定义后处理示例，保存在 ``samples/demo/postprocess
 
 -  **VideoPostprocClassification** 类：分类网络作为一级网络的后处理。定义在 ``video_postprocess_classification.cpp`` 文件中。
 -  **VideoPostprocYolov3** 类：提供yolov3网络的后处理（输入保持宽高比）。定义在 ``video_postprocess_yolov3.cpp`` 文件中。
--  **VideoPostprocFakeYolov3** 类：提供yolov3网络的后处理。该类对输入没有保持宽高比的情况进行了处理。示例定义在 ``video_postprocess_yolov3.cpp`` 文件中。
 -  **VideoPostprocSsd** 类：提供ssd网络的后处理。定义在 ``video_postprocess_ssd.cpp`` 文件中。
 
 次级推理后处理示例：

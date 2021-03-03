@@ -59,7 +59,6 @@ class ESJpegMemHandlerImpl : public IDecodeResult, public SourceRender {
   ESJpegMemHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;
-  size_t interval_ = 1;
 
  private:
 #ifdef UNIT_TEST

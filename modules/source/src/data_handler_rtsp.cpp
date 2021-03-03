@@ -279,8 +279,6 @@ bool RtspHandlerImpl::Open() {
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
 
-  SetThreadName(module_->GetName(), handler_->GetStreamUniqueIdx());
-
   size_t maxSize = 60;  // FIXME
   queue_ = new FrameQueue(maxSize);
   if (!queue_) {
@@ -402,7 +400,7 @@ void RtspHandlerImpl::DecodeLoop() {
     extra.output_buf_num = param_.output_buf_number_;
     extra.apply_stride_align_for_scaler = param_.apply_stride_align_for_scaler_;
     extra.extra_info = stream_info_.extra_data;
-    std::unique_lock<std::mutex> lk(mutex_);
+    std::lock_guard<std::mutex> lk(mutex_);
     bool ret = decoder_->Create(&stream_info_, &extra);
     if (!ret) {
       LOGE(SOURCE) << "[" << stream_id_ << "]: "

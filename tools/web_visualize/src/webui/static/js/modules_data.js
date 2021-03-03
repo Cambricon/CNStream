@@ -2,7 +2,6 @@ window.MODULES = [{
 class_name: "cnstream::DataSource",
 name: "source",
 parallelism: 0,
-show_perf_info: true,
 custom_params: {
     output_type: "mlu",
     decoder_type: "mlu",
@@ -20,7 +19,6 @@ custom_params: {
   name: "detector",
   parallelism: 1,
   max_input_queue_size: 20,
-  show_perf_info: true,
   custom_params: {
     model_path: "../../models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon",
     func_name: "subnet0",
@@ -49,7 +47,6 @@ custom_params: {
   name: "osd",
   parallelism: 4,
   max_input_queue_size: 20,
-  show_perf_info: true,
   custom_params: {
     label_path: "../../models/MLU270/Primary_Detector/ssd/label_voc.txt",
     font_path: "",
@@ -69,7 +66,6 @@ custom_params: {
   name:"tracker",
   parallelism: 16,
   max_input_queue_size: 20,
-  show_perf_info: true,
   custom_params: {
     model_path: "../../models/MLU270/feature_extract/feature_extract_4c4b_argb_270_v1.5.0.cambricon",
     func_name: "subnet0",
@@ -85,7 +81,6 @@ custom_params: {
   name: "rtsp_sink",
   parallelism: 2,
   max_input_queue_size: 20,
-  show_perf_info: true,
   custom_params: {
     http_port: 8080,
     udp_port: 9554,
@@ -110,7 +105,6 @@ custom_params: {
   name:"encoder",
   parallelism: 2,
   max_input_queue_size: 20,
-  show_perf_info: true,
   custom_params: {
     preproc_type: "cpu",
     encoder_type: "mlu",
@@ -132,7 +126,6 @@ custom_params: {
   name:"displayer",
   parallelism: 2,
   max_input_queue_size: 20,
-  show_perf_info: true,
   custom_params: {
     "window-width": 500,
     "window-height": 500,
@@ -149,7 +142,6 @@ custom_params: {
   name:"ipc",
   parallelism: 2,
   max_input_queue_size: 20,
-  show_perf_info: true,
   custom_params: {
     ipc_type: "client",
     memmap_type: "mlu",

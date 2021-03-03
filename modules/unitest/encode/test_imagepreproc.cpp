@@ -41,8 +41,6 @@ TEST(EncodePreprocTest, InitFailedCase) {
     params.preproc_type = "mlu";
     ImagePreproc preproc(params);
     EXPECT_FALSE(preproc.Init());
-    params.device_id = 0;
-    EXPECT_FALSE(preproc.Init());
     params.src_pix_fmt = BGR24;
     EXPECT_FALSE(preproc.Init());
   }
@@ -59,6 +57,7 @@ TEST(EncodePreprocTest, InitFailedCase) {
     params.src_width = 1280;
     params.dst_height = 720;
     params.dst_width = 1280;
+    params.dst_pix_fmt = RGB24;
     ImagePreproc preproc(params);
     EXPECT_TRUE(preproc.Init());
     EXPECT_FALSE(preproc.Init());

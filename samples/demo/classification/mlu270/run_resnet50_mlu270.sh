@@ -26,7 +26,6 @@ source ${SAMPLES_DIR}/demo/env.sh
 mkdir -p $CURRENT_FILE/output
 ${SAMPLES_DIR}/bin/demo  \
     --data_path ${SAMPLES_DIR}/demo/files.list_image \
-    --src_frame_rate 60   \
     --wait_time 0 \
     --loop=false \
     --config_fname "$CURRENT_FILE/classification_resnet50_mlu270_config.json" \

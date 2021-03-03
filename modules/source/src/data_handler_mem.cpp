@@ -109,8 +109,6 @@ bool ESMemHandlerImpl::Open() {
   }
   */
 
-  SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
-
   size_t MaxSize = 60;  // FIXME
   queue_ = new (std::nothrow) cnstream::BoundedQueue<std::shared_ptr<EsPacket>>(MaxSize);
   if (!queue_) {

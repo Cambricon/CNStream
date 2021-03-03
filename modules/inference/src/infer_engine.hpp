@@ -52,7 +52,7 @@ class ObjPreproc;
 class Postproc;
 class ObjPostproc;
 class InferThreadPool;
-struct CNFrameInfo;
+class CNFrameInfo;
 class ModuleProfiler;
 
 class InferEngine {

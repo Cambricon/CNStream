@@ -99,7 +99,6 @@ bool ESJpegMemHandlerImpl::Open() {
     return false;
   }
 
-  SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
   return InitDecoder();
 }
 

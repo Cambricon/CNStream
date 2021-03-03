@@ -87,7 +87,6 @@ class RawImgMemHandlerImpl : public SourceRender {
   RawImgMemHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;
-  size_t interval_ = 1;
 
  private:
 #ifdef UNIT_TEST
