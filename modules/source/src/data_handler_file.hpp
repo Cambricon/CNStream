@@ -55,7 +55,6 @@ class FileHandlerImpl : public IParserResult, public IDecodeResult, public Sourc
   FileHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;
-  size_t interval_ = 1;
 
  private:
 #ifdef UNIT_TEST

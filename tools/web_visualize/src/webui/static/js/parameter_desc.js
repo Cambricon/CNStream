@@ -1,6 +1,5 @@
 window.PARAM_DESC = {}
 PARAM_DESC["cnstream::DataSource"] = {
-    show_perf_info: "Optional.<br> Default value: [false] <br> Optional values: [false] [true] <br> Desc: Whether show perf information of this module.",
     custom_params: {
         output_type: "Optional. <br> Default value: [cpu] <br> Optional values: [cpu] [mlu] <br> Desc: The output type.",
         decoder_type: "Optional. <br> Default value: [cpu] <br> Optional values: [cpu] [mlu] <br> Desc: The decoder type.",
@@ -13,7 +12,6 @@ PARAM_DESC["cnstream::DataSource"] = {
     },
 };
 PARAM_DESC["cnstream::Inferencer"] = {
-    show_perf_info: "Optional. <br> Default value: [false] <br> Optional values: [false] [true] <br> Desc: Whether show perf information of this module.",
     custom_params: {
         model_path: "Required. <br> Optional values: model path <br> Desc: The path of the offline model.",
         func_name: "Required. <br> Default value: [subnet0] <br> Desc: The function name that is defined in the offline model. <br> note: It could be found in Cambricon twins file. For most cases, it is 'subnet0' ",
@@ -37,7 +35,6 @@ PARAM_DESC["cnstream::Inferencer"] = {
 };
 
 PARAM_DESC["cnstream::Osd"] = {
-    show_perf_info: "Optional.<br> Default value: [false].<br> Optional values: [false] [true] <br> Desc: Whether show perf information of this module.",
     custom_params: {
         label_path: "Optional. <br> Desc: The path of the label file.",
         font_path: "Optional. <br> Desc: The path of font.",
@@ -52,7 +49,6 @@ PARAM_DESC["cnstream::Osd"] = {
 };
 
 PARAM_DESC["cnstream::Tracker"] = {
-    show_perf_info: "Optional.<br> Default value: [false] <br> Optional values: [false] [true] <br> Desc: Whether show perf information of this module.",
     custom_params: {
         model_path: "Optional. <br> Desc: path of offline model",
         func_name: "Optional. <br> Default value: [subnet0] <br> Desc: function name defined in the offline model. It can be found in the Cambricon twins description file",
@@ -63,7 +59,6 @@ PARAM_DESC["cnstream::Tracker"] = {
 };
 
 PARAM_DESC["cnstream::RtspSink"] = {
-    show_perf_info: "Optional.<br> Default value: [false].<br> Optional values: [false] [true] <br> Desc: Whether show perf information of this module.",
     custom_params: {
         http_port: "Optional. <br> Default value: [8080] <br> Desc: Http port.",
         udp_port: "Optional. <br> Default value: [9554] <br> Desc: UDP port.",
@@ -83,7 +78,6 @@ PARAM_DESC["cnstream::RtspSink"] = {
 };
 
 PARAM_DESC["cnstream::Encode"] = {
-    show_perf_info: "Optional.<br> Default value: [false] <br> Optional values: [false] [true] <br> Desc: Whether show perf information of this module.",
     custom_params: {
         encoder_type: "Optional. <br> Default value: [cpu] <br> Optional values: [cpu] [mlu] <br> Desc: Use cpu encoding or mlu encoding.",
         preproc_type: "Optional. <br> Default value: [cpu] <br> Optional values: [cpu] [mlu] <br> Desc: Preprocessing data on cpu or mlu(mlu is not supported yet).",
@@ -100,7 +94,6 @@ PARAM_DESC["cnstream::Encode"] = {
 };
 
 PARAM_DESC["cnstream::Displayer"] = {
-    show_perf_info: "Optional. <br> Default value: [false] <br> Optional values: [false] [true] <br> Desc: Whether show perf information of this module.",
     custom_params: {
         "window-width": "Required. <br> Optional values: integer <br> Desc: display window width",
         "window-height": "Required. <br> Optional values: integer <br> Desc:  display window height",
@@ -112,7 +105,6 @@ PARAM_DESC["cnstream::Displayer"] = {
 };
 
 PARAM_DESC["cnstream::ModuleIPC"] = {
-    show_perf_info: "Optional. <br> Default value: [false] <br> Optional values: [false] [true] <br> Desc: Whether show perf information of this module.",
     custom_params: {
         ipc_type: "Required. <br> Optional values: [clinet] [server] <br> Desc: Identify ModuleIPC actor as client or server.",
         memmap_type: "Required. <br> Optional values: [cpu] [mlu] <br> Desc: Identify memory map type inter process communication.",

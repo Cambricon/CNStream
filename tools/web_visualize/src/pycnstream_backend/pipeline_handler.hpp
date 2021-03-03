@@ -21,11 +21,13 @@
 #ifndef __CNSTREAM_PIPELINE_HANDLER__HPP__
 #define __CNSTREAM_PIPELINE_HANDLER__HPP__
 
+#include <atomic>
 #include <mutex>
 #include <string>
 
 #include "cnstream_core.hpp"
 #include "cnstype.h"
+#include "util.hpp"
 
 class PipelineHandler {
  public:
@@ -48,6 +50,8 @@ class PipelineHandler {
   std::string stream_id_;
   std::string perf_dir_ = "perf_cache";
   cnstream::Pipeline* ppipeline_ = nullptr;
+  std::future<void> perf_print_th_ret;
+  std::atomic<bool> gstop_perf_print {false};
 };
 
 #endif

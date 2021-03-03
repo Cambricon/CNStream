@@ -124,10 +124,10 @@ class Encode : public Module, public ModuleCreator<Encode> {
   bool CheckParamSet(const ModuleParamSet& paramSet) const override;
 
  private:
-  EncodeContext* GetEncodeContext(CNFrameInfoPtr data);
+  std::shared_ptr<EncodeContext> GetEncodeContext(CNFrameInfoPtr data);
   EncodeParam* param_ = nullptr;
   uint32_t dst_stride_;
-  std::unordered_map<std::string, EncodeContext*> ctxs_;
+  std::unordered_map<std::string, std::shared_ptr<EncodeContext>> ctxs_;
   RwLock ctx_lock_;
 };  // class Encode
 

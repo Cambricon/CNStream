@@ -197,8 +197,7 @@ int SourceRender::Process(std::shared_ptr<CNFrameInfo> frame_info,
     dataframe->dst_device_id = param_.device_id_;  // assume the param_.device_id is dst_device_id
     for (int i = 0; i < dataframe->GetPlanes(); i++) {
       dataframe->data[i]->SetMluDevContext(dataframe->dst_device_id);
-      const void * plane_data = dataframe->data[i]->GetMluData();
-      plane_data = plane_data;  // disable warnings
+      dataframe->data[i]->GetMluData();
     }
   }
 

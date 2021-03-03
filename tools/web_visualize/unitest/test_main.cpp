@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2021] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+
 #include <gflags/gflags.h>
 #include <array>
 #include <iostream>
@@ -41,7 +42,6 @@ const std::vector<std::array<std::string, 3>> model_info = {
     {"yuv2gray.cambricon", "/KCF/", "http://video.cambricon.com/models/MLU270/KCF/yuv2gray.cambricon"},
     {"feature_extract_4c4b_argb_270_v1.5.0.cambricon", "/feature_extract/",
      "http://video.cambricon.com/models/MLU270/feature_extract/feature_extract_4c4b_argb_270_v1.5.0.cambricon"},
-     {"yolov3_4c4b_argb_270_v1.5.0.cambricon", "/yolov3/", "http://video.cambricon.com/models/MLU270/yolov3/yolov3_4c4b_argb_270_v1.5.0.cambricon"}
 };
 
 class TestEnvironment : public testing::Environment {
@@ -49,7 +49,7 @@ class TestEnvironment : public testing::Environment {
   virtual void SetUp() {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(0);
-    mlu_ctx.SetChannelId(0);
+    // mlu_ctx.SetChannelId(0);
     mlu_ctx.BindDevice();
     LOGI(MODULESUNITEST) << "Set Up global environment.";
   }

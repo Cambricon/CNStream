@@ -40,7 +40,7 @@ DataSource::DataSource(const std::string &name) : SourceModule(name) {
   param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
   param_register_.Register("interval",
                            "How many frames will be discarded between two frames"
-                           " which will be sent to codec.");
+                           " which will be sent to next modules.");
   param_register_.Register("decoder_type", "Which the input data will be decoded by. It could be cpu or mlu.");
   param_register_.Register("reuse_cndec_buf",
                            "This parameter decides whether the codec buffer that stores output data"

@@ -59,7 +59,6 @@ bool PipelineHandler::CreatePipeline(const std::string &config_fname, const std:
     return false;
   }
 
-  perf_dir_ = perf_dir;
   return true;
 }
 
@@ -80,16 +79,24 @@ void PipelineHandler::SetDataObserver(cnstream::IModuleObserver *data_observer) 
 
 bool PipelineHandler::Start() {
   if (!ppipeline_) return false;
-  if (!ppipeline_->CreatePerfManager({}, perf_dir_)) {
-    LOGE(WEBVISUAL) << "create perf Manager failed.";
-    return false;
-  }
-
   if (!ppipeline_->Start()) {
     LOGE(WEBVISUAL) << "pipeline start failed.";
     return false;
   }
 
+  if (ppipeline_->IsProfilingEnabled()) {
+    perf_print_th_ret = std::async(std::launch::async, [&] {
+      while (gstop_perf_print) {
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        PrintPipelinePerformance("Whole", ppipeline_->GetProfiler()->GetProfile());
+        if (ppipeline_->IsTracingEnabled()) {
+          cnstream::Duration duration(2000);
+          PrintPipelinePerformance("Last two seconds",
+                                   ppipeline_->GetProfiler()->GetProfileBefore(cnstream::Clock::now(), duration));
+        }
+      }
+    });
+  }
   return true;
 }
 
@@ -104,6 +111,12 @@ void PipelineHandler::Stop() {
     ppipeline_ = nullptr;
   }
 
+  if (ppipeline_->IsProfilingEnabled()) {
+    gstop_perf_print = true;
+    perf_print_th_ret.get();
+    PrintPipelinePerformance("Whole", ppipeline_->GetProfiler()->GetProfile());
+  }
+
   LOGI(WEBVISUAL) << "stop pipeline succeed.";
 }
 
@@ -115,12 +128,10 @@ bool PipelineHandler::AddStream(const std::string &stream_url, const std::string
   auto source = dynamic_cast<cnstream::DataSource *>(ppipeline_->GetModule("source"));
   if (nullptr == source) return false;
 
-  ppipeline_->AddPerfManager(stream_id, perf_dir_);
   auto handler = cnstream::FileHandler::Create(source, stream_id, stream_url, fps, loop);
   int ret = source->AddSource(handler);
   if (ret < 0) {
     LOGE(WEBVISUAL) << "add source to pipeline failed.";
-    ppipeline_->RemovePerfManager(stream_id);
     return false;
   }
 
@@ -136,6 +147,5 @@ bool PipelineHandler::RemoveStream(const std::string &stream_id) {
   if (nullptr == source) return false;
 
   source->RemoveSource(stream_id);
-  ppipeline_->RemovePerfManager(stream_id);
   return true;
 }

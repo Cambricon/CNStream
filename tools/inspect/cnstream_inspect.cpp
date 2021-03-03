@@ -170,10 +170,6 @@ static void PrintModuleCommonParameters() {
   std::cout << "\033[01;1m" << "  " << std::left << std::setw(width) << "next_modules" << "\033[0m";
   PrintDesc("Next modules.", width + 2, sub_str_len);
   std::cout << std::endl;
-
-  std::cout << "\033[01;1m" << "  " << std::left << std::setw(width) << "show_perf_info" << "\033[0m";
-  PrintDesc("Show module performance info.", width + 2, sub_str_len);
-  std::cout << std::endl;
 }
 
 static void PrintModuleParameters(const std::string& module_name) {

@@ -130,7 +130,6 @@ class FFmpegCpuDecoder : public Decoder {
   bool Process(AVPacket *pkt, bool eos);
 
  private:
-  AVStream *stream_ = nullptr;
   AVCodecContext *instance_ = nullptr;
   AVFrame *av_frame_ = nullptr;
   std::atomic<int> eos_got_{0};

@@ -78,7 +78,6 @@ class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public Sour
   ESMemHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;
-  size_t interval_ = 1;
   ESMemHandler::DataType data_type_ = ESMemHandler::INVALID;
   bool first_frame_ = true;
 

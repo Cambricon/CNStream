@@ -70,7 +70,6 @@ class RtspHandlerImpl : public IDecodeResult, public SourceRender {
   DataSourceParam param_;
   bool use_ffmpeg_ = false;
   int reconnect_ = 0;
-  int64_t pts_ = 0;
 
  private:
   /**/
@@ -78,7 +77,6 @@ class RtspHandlerImpl : public IDecodeResult, public SourceRender {
   std::thread demux_thread_;
   std::atomic<int> decode_exit_flag_{0};
   std::thread decode_thread_;
-  bool eos_sent_ = false;
   std::atomic<bool> stream_info_set_{false};
   std::mutex mutex_;
   VideoInfo stream_info_;

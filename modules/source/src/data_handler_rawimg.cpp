@@ -202,8 +202,6 @@ bool RawImgMemHandlerImpl::Open() {
   // updated with paramSet
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
-  this->interval_ = param_.interval_;
-  SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
   return true;
 }
 
@@ -229,8 +227,7 @@ int RawImgMemHandlerImpl::Write(const cv::Mat *mat_data, const uint64_t pts) {
   }
 
   if (nullptr == mat_data) {
-    LOGI(SOURCE) << "[" << stream_id_ << "]: "
-                 << "Got eos image data";
+    LOGI(SOURCE) << "[" << stream_id_ << "]: " << "Got eos image data";
     SendFlowEos();
     eos_got_.store(true);
     return 0;
@@ -255,14 +252,12 @@ int RawImgMemHandlerImpl::Write(const cv::Mat *mat_data, const uint64_t pts) {
 int RawImgMemHandlerImpl::Write(const uint8_t *img_data, const int size, const uint64_t pts,
     const int w, const int h, const CNDataFormat pixel_fmt) {
   if (eos_got_.load()) {
-    LOGW(SOURCE) << "[" << stream_id_ << "]: "
-                 << "eos got, can not feed data any more.";
+    LOGW(SOURCE) << "[" << stream_id_ << "]: " << "eos got, can not feed data any more.";
     return -1;
   }
 
   if (nullptr == img_data && 0 == size) {
-    LOGI(SOURCE) << "[" << stream_id_ << "]: "
-                 << "EOS reached in RawImgMemHandler";
+    LOGI(SOURCE) << "[" << stream_id_ << "]: " << "EOS reached in RawImgMemHandler";
     SendFlowEos();
     eos_got_.store(true);
     return 0;
@@ -302,6 +297,9 @@ bool RawImgMemHandlerImpl::CheckRawImageParams(const uint8_t *data, const int si
 bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size, const int width,
       const int height, const CNDataFormat pixel_fmt, const uint64_t pts) {
   if (!img_data ) return false;
+  if (frame_count_++ % param_.interval_ != 0) {
+    return true;  // discard frames
+  }
   int dst_stride = width;
   dst_stride = std::ceil(1.0 * dst_stride / STRIDE_ALIGN) * STRIDE_ALIGN;  // align stride to 64 by default
   if (param_.apply_stride_align_for_scaler_) {
@@ -389,8 +387,7 @@ bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size,
       t += plane_size;
     }
   } else {
-    LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                 << "DevContex::INVALID";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: " << "DevContex::INVALID";
     return false;
   }
 

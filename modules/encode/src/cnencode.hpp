@@ -91,7 +91,6 @@ class CNEncode {
   uint32_t frame_count_ = 0;
 
   std::string output_file_name_ = "";
-  size_t written_ = 0;
   std::ofstream file_;
 
   edk::PixelFmt picture_format_;

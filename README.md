@@ -1,14 +1,14 @@
 # Cambricon CNStream #
-
 CNStream is a streaming framework with plug-ins. It is used to connect other modules, includes basic functionalities, libraries,
 and essential elements.
 
-CNStream provides the following plug-in modules:
+CNStream provides the following built-in modules:
 
-- source: Supports RTSP, video file, and images（H.264, H.265, and JPEG decoding.） 
+- source: Support RTSP, video file,  images and elementary stream in memory （H.264, H.265, and JPEG decoding.） 
 - inference: MLU-based inference accelerator for detection and classification.
+- inference2: Based on infer server to run inference, preprocess and postprocess.
 - osd (On-screen display): Module for highlighting objects and text overlay.
-- encode: Encodes on CPU.
+- encode: Encode videos or images.
 - display: Display the video on screen.
 - tracker: Multi-object tracking.
 - rtsp_sink：Push RTSP stream to internet
@@ -16,25 +16,25 @@ CNStream provides the following plug-in modules:
 
 ## **Cambricon Dependencies** ##
 
-CNStream depends on the CNCodec library and the CNRT library which are packed in Cambricon neuware package.
-Therefore, the lastest Cambricon neuware package is required. If you do not have one, please feel free to contact with us.
+CNStream depends on the CNCodec library and the CNRT library which are packed in Cambricon CNToolkit package.
+Therefore, the lastest Cambricon CNToolkit package is required. If you do not have one, please feel free to contact with us.
 Our mailbox: service@cambricon.com
 
-### Install Cambricon neuware package ###
+### Install Cambricon CNToolkit package ###
 
-#### Ubuntu or Debian ####
+#### Ubuntu  ####
 
 ```bash
-  dpkg -i neuware-mluxxx-x.x.x_Ubuntuxx.xx_amd64.deb
-  cd /var/neuware-mluxxx-x.x.x
+  dpkg -i cntoolkit-x.x.x_Ubuntuxx.xx_amd64.deb
+  cd /var/cntoolkit-x.x.x
   dpkg -i cncodec-xxx.deb cnrt_xxx.deb
 ```
 
 #### Centos ####
 
 ```bash
-  yum -y install neuware-mluxxx-x.x.x.el7.x86_64.rpm
-  cd /var/neuware-mluxxx-x.x.x
+  yum -y install cntoolkit-x.x.x.el7.x86_64.rpm
+  cd /var/cntoolkit-xxx-x.x.x
   yum -y install cncodec-xxx.rpm cnrt-xxx.rpm
 ```
 After that, Cambricon dependencies that CNStream needed are installed at path '/usr/loacl/neuware'.
@@ -49,23 +49,23 @@ This section introduces how to quickly build instructions on CNStream and how to
 
 Before building instructions, you need to install the following software:
 
-- OpenCV2.4.9+
-- GFlags2.1.2
-- GLog0.3.4
-- Cmake2.8.7+
-- SDL22.0.4+ &emsp;&emsp;  // If build_display=ON
-- FFmpeg2.8 3.4 4.2
+- OpenCV&emsp;2.4.9+
+- GFlags&emsp;2.1.2
+- GLog&emsp;0.3.4
+- CMake&emsp;2.8.7+
+- SDL2&emsp;2.0.4+ &emsp;&emsp;  // If build_display=ON
+- FFmpeg&emsp;2.8 3.4 4.2
 
-#### Ubuntu or Debian ####
+#### Ubuntu ####
 
-If you are using Ubuntu or Debian, run the following commands:
+If you are using Ubuntu, run the following commands:
 
 ```bash
-  OpenCV2.4.9+  >>>>>>>>>   sudo apt-get install libopencv-dev
-  GFlags2.1.2   >>>>>>>>>   sudo apt-get install libgflags-dev
-  GLog0.3.4     >>>>>>>>>   sudo apt-get install libgoogle-glog-dev
-  Cmake2.8.7+   >>>>>>>>>   sudo apt-get install cmake
-  SDL22.0.4+    >>>>>>>>>   sudo apt-get install libsdl2-dev
+  OpenCV 2.4.9+  >>>>>>>>>   sudo apt-get install libopencv-dev
+  GFlags 2.1.2   >>>>>>>>>   sudo apt-get install libgflags-dev
+  GLog 0.3.4     >>>>>>>>>   sudo apt-get install libgoogle-glog-dev
+  CMake 2.8.7+   >>>>>>>>>   sudo apt-get install cmake
+  SDL2 2.0.4+    >>>>>>>>>   sudo apt-get install libsdl2-dev
 ```
 
 #### Centos ####
@@ -73,16 +73,16 @@ If you are using Ubuntu or Debian, run the following commands:
 If you are using Centos, run the following commands:
 
 ```bash
-  OpenCV2.4.9+  >>>>>>>>>   sudo yum install opencv-devel.x86_64
-  GFlags2.1.2   >>>>>>>>>   sudo yum install gflags.x86_64
-  GLog0.3.4     >>>>>>>>>   sudo yum install glog.x86_64
-  Cmake2.8.7+   >>>>>>>>>   sudo yum install cmake3.x86_64
-  SDL22.0.4+    >>>>>>>>>   sudo yum install SDL2_gfx-devel.x86_64
+  OpenCV 2.4.9+  >>>>>>>>>   sudo yum install opencv-devel.x86_64
+  GFlags 2.1.2   >>>>>>>>>   sudo yum install gflags.x86_64
+  GLog 0.3.4     >>>>>>>>>   sudo yum install glog.x86_64
+  CMake 2.8.7+   >>>>>>>>>   sudo yum install cmake3.x86_64
+  SDL2 2.0.4+    >>>>>>>>>   sudo yum install SDL2_gfx-devel.x86_64
 ```
 
 ## Build Instructions Using CMake ##
 
-After finished prerequisites, you can build instructions with the following steps:
+After finished prerequisites, you can build project with the following steps:
 
 1. clone submodule easydk with command as below
 
@@ -90,7 +90,7 @@ After finished prerequisites, you can build instructions with the following step
    git submodule  update  --init
    ```
 
-2. Run the following command to save a directory for saving the output.
+2. Run the following command to create a directory for saving the output.
 
    ```bash
    mkdir build       # Create a directory to save the output.
@@ -129,6 +129,7 @@ After finished prerequisites, you can build instructions with the following step
    | WITH_RTSP            | ON / OFF                                 | ON      | build with RTSP             |
 
 4. If you want to build CNStream samples:
+
    a. Run the following command:
 
       ```bash

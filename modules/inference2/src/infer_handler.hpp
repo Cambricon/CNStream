@@ -19,7 +19,7 @@
  *************************************************************************/
 
 #ifndef MODULES_INFER_HANDLER_HPP_
-#define MODULES__INFER_HANDLER_HPP_
+#define MODULES_INFER_HANDLER_HPP_
 
 #include <memory>
 #include <string>

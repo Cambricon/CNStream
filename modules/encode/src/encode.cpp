@@ -79,29 +79,28 @@ Encode::Encode(const std::string &name) : Module(name) {
   hasTransmit_.store(1);  // for receive eos
 }
 
-EncodeContext *Encode::GetEncodeContext(CNFrameInfoPtr data) {
-  EncodeContext *ctx = nullptr;
+std::shared_ptr<EncodeContext> Encode::GetEncodeContext(CNFrameInfoPtr data) {
   if (!data) {
     LOGE(ENCODE) << "[Encode] data is nullptr.";
-    return ctx;
+    return nullptr;
   }
+
   {
     RwLockReadGuard lg(ctx_lock_);
     if (ctxs_.find(data->stream_id) != ctxs_.end()) {
-      ctx = ctxs_[data->stream_id];
-      return ctx;
+      return ctxs_[data->stream_id];
     }
   }
+
   if (data->IsEos()) {
     LOGW(ENCODE) << "[Encode] data is eos, get EncodeContext failed.";
-    return ctx;
+    return nullptr;
   }
 
   // Create encode context
-  RwLockWriteGuard lg(ctx_lock_);
+  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
+  std::shared_ptr<EncodeContext> ctx = std::make_shared<EncodeContext>();
 
-  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);;
-  ctx = new EncodeContext();
   CNPixelFormat src_pix_fmt;
   CNPixelFormat dst_pix_fmt;
   CNPixelFormat frame_pix_fmt;
@@ -121,9 +120,6 @@ EncodeContext *Encode::GetEncodeContext(CNFrameInfoPtr data) {
       break;
     default:
       LOGE(ENCODE) << "[Encode] unsupported pixel format.";
-      if (ctx) {
-        delete ctx;
-      }
       return nullptr;
   }
 
@@ -142,8 +138,8 @@ EncodeContext *Encode::GetEncodeContext(CNFrameInfoPtr data) {
     dst_pix_fmt = BGR24;
   }
   ctx->src_pix_fmt = src_pix_fmt;
-  if (param_->dst_height <= 0) param_->dst_height = frame->height / 2 * 2;
-  if (param_->dst_width <= 0) param_->dst_width = frame->width / 2 * 2;
+  if (param_->dst_height <= 0) param_->dst_height = frame->height & (~0x01);
+  if (param_->dst_width <= 0) param_->dst_width = frame->width & (~0x01);
   if (param_->codec_type == JPEG && param_->encoder_type == "mlu") {
     dst_stride_ = ALIGN(param_->dst_width, JPEG_ENC_ALIGNMENT);
   } else {
@@ -167,13 +163,14 @@ EncodeContext *Encode::GetEncodeContext(CNFrameInfoPtr data) {
   if (param_->preproc_type == "mlu") {
     preproc_param.device_id = param_->device_id;
   }
-  ctx->preproc.reset(new ImagePreproc(preproc_param));
-  if (!ctx->preproc->Init()) {
-    LOGE(ENCODE) << "[Encode] encoder preproc init failed.";
-    if (ctx) {
-      delete ctx;
+
+  {
+    RwLockWriteGuard lg(ctx_lock_);
+    ctx->preproc.reset(new ImagePreproc(preproc_param));
+    if (!ctx->preproc->Init()) {
+      LOGE(ENCODE) << "[Encode] encoder preproc init failed.";
+      return nullptr;
     }
-    return nullptr;
   }
 
   // build cnencode
@@ -193,12 +190,10 @@ EncodeContext *Encode::GetEncodeContext(CNFrameInfoPtr data) {
     cnencode_param.device_id = param_->device_id;
   }
 
+  RwLockWriteGuard lg(ctx_lock_);  // cnencode->Init isn't thread safe, so lock guard here.
   ctx->cnencode.reset(new CNEncode(cnencode_param));
   if (!ctx->cnencode->Init()) {
     LOGE(ENCODE) << "[Encode] CNEncode type object initialized failed.";
-    if (ctx) {
-      delete ctx;
-    }
     return nullptr;
   }
   if (param_->encoder_type == "mlu" && (param_->preproc_type == "cpu" || ctx->src_pix_fmt == BGR24)) {
@@ -332,10 +327,6 @@ void Encode::Close() {
       delete[] pair.second->data_yuv;
       pair.second->data_yuv = nullptr;
     }
-    if (pair.second) {
-      delete pair.second;
-      pair.second = nullptr;
-    }
   }
   ctxs_.clear();
 }
@@ -345,7 +336,7 @@ int Encode::Process(CNFrameInfoPtr data) {
     return -1;
   }
   bool eos = data->IsEos();
-  EncodeContext *ctx = GetEncodeContext(data);
+  std::shared_ptr<EncodeContext> ctx = GetEncodeContext(data);
   if (!ctx) {
     LOGE(ENCODE) << "[Encode] Get encode context failed.";
     return -1;

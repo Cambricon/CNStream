@@ -197,14 +197,9 @@ class SourceRender {
     return handler_->SendData(data);
   }
 
-  void SetThreadName(std::string module_name, uint64_t stream_idx) {
-    thread_name_ = "cn-" + module_name + "-" + NumToFormatStr(stream_idx, 2);
-  }
-
  protected:
   SourceHandler *handler_;
   bool eos_sent_ = false;
-  std::string thread_name_;
 
  protected:
   std::atomic<bool> interrupt_{false};

@@ -190,7 +190,7 @@ Chart.ready(() => {
         UpdateParamInfo();
 
         let list_html_params = `<br>`;
-        let needed_params = data["name"] == "source" ? ['show_perf_info'] : ['name', 'parallelism', 'max_input_queue_size', 'show_perf_info'];
+        let needed_params = data["name"] == "source" ? [] : ['name', 'parallelism', 'max_input_queue_size',];
         needed_params.forEach(v => {
             if (data.hasOwnProperty(v)) {
                 list_html_params += `<div class='param-item'>${v}:<input id='${v}' value='${data[v]}'/></div>`;
@@ -237,9 +237,7 @@ Chart.ready(() => {
             // update node parameters
             needed_params.forEach(v => {
                 let str = $('#' + v).val();
-                if (v == "show_perf_info" && (str == "true" || str == "false")) {
-                    data[v] = Boolean(str == "true");
-                } else if (str == "") {
+                if (str == "") {
                     data[v] = "";
                 } else {
                     var n = Number(str); // return NaN if isnot a Number

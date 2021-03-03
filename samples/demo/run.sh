@@ -32,5 +32,5 @@ $CURRENT_DIR/../bin/demo  \
     --wait_time 0 \
     --loop=false \
     --raw_img_input=false \
-    --perf_level 0 \
-    --config_fname "$CURRENT_DIR/detection_config.json"
+    --config_fname "$CURRENT_DIR/detection_config.json" \
+    --perf_level 0  # Please increase the level to get more information

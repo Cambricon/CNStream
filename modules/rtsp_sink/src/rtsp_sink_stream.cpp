@@ -195,7 +195,7 @@ void RtspSinkJoinStream::Close() {
 }
 
 bool RtspSinkJoinStream::UpdateBGR(cv::Mat image, int64_t timestamp, int channel_id) {
-  canvas_lock_.lock();
+  std::lock_guard<std::mutex> lk(canvas_lock_);
   if (is_mosaic_style_ && channel_id >= 0) {
     if (3 == rtsp_param_->view_cols && 2 == rtsp_param_->view_rows) {
       int x = channel_id % rtsp_param_->view_cols * mosaic_win_width_;
@@ -234,27 +234,24 @@ bool RtspSinkJoinStream::UpdateBGR(cv::Mat image, int64_t timestamp, int channel
     EncodeFrameBGR(image.clone(), timestamp);
   }
 
-  canvas_lock_.unlock();
   return true;
 }
 
 bool RtspSinkJoinStream::UpdateYUV(uint8_t* image, int64_t timestamp) {
-  canvas_lock_.lock();
+  std::lock_guard<std::mutex> lk(canvas_lock_);
   ResizeYuvNearest(image, canvas_data_);
   if (!MULTI_THREAD) {
     EncodeFrameYUV(canvas_data_, timestamp);
   }
-  canvas_lock_.unlock();
   return true;
 }
 
 /*
 bool RtspSinkJoinStream::UpdateYUVs(void *y, void *uv, int64_t timestamp) {
-  canvas_lock_.lock();
+  std::lock_guard<std::mutex> lk(canvas_lock_);
   y_ptr_ = y;
   uv_ptr_ = uv;
   EncodeFrameYUVs(y_ptr_, uv_ptr_, timestamp);
-  canvas_lock_.unlock();
   return true;
 }
 */
@@ -282,7 +279,7 @@ void RtspSinkJoinStream::RefreshLoop() {
     pts_us = index++ * 1e6 / rtsp_param_->frame_rate;
 
     if (ctx_) {
-      canvas_lock_.lock();
+      std::unique_lock<std::mutex> lock(canvas_lock_);
       if ("cpu" == rtsp_param_->preproc_type) {
         if ("nv" == rtsp_param_->color_mode) {
           EncodeFrameYUV(canvas_data_, pts_us / 1000);
@@ -290,7 +287,7 @@ void RtspSinkJoinStream::RefreshLoop() {
           EncodeFrameBGR(canvas_, pts_us / 1000);
         }
       }
-      canvas_lock_.unlock();
+      lock.unlock();
       delay_us = index * 1e6 / rtsp_param_->frame_rate - pts_us;
     }
   }

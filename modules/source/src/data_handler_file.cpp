@@ -83,8 +83,6 @@ bool FileHandlerImpl::Open() {
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
 
-  SetThreadName(module_->GetName(), handler_.GetStreamUniqueIdx());
-
   // start separate thread
   running_.store(1);
   thread_ = std::thread(&FileHandlerImpl::Loop, this);

@@ -106,7 +106,7 @@ def process(filename, config_json):
   global run_demo_subprocess
   cwd = os.getcwd() + "/"
   run_demo_subprocess = subprocess.Popen(["../../../samples/bin/demo", "--data_name=" + cwd + filename,
-      "--data_path=../files.list_video", "--perf_db_dir=./perf_cache",
+      "--data_path=../files.list_video", 
       "--src_frame_rate=30", "--wait_time=0", "--config_fname", config_json,
       "--log_to_stderr=true"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   
