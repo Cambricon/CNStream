@@ -60,7 +60,7 @@ endif()
 set(SOURCE_LINKER_LIBS rt dl cnstream_core ${CN_LIBS} ${3RDPARTY_LIBS} ${OPENCV_LIBS} ${FFMPEG_LIBRARIES} pthread)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 #FIXME
-if(MLU_PLATFORM STREQUAL MLU220_SOC)
+if(MLU_PLATFORM STREQUAL MLU220EDGE)
   list(APPEND SOURCE_LINKER_LIBS ion)
 else()
   list(APPEND SOURCE_LINKER_LIBS ${SDL2_LIBRARIES})
@@ -85,7 +85,7 @@ target_link_libraries(cnstream_va ${SOURCE_LINKER_LIBS} ${Live555_LIBS} ${LIBYUV
 set_target_properties(cnstream_va PROPERTIES VERSION ${CNSTREAM_TARGET_VERSION})
 
 if(NOT Live555_LIBS STREQUAL "")
-  set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES ${PROJECT_SOURCE_DIR}/3rdparty/live555)
+  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES_LIST "${PROJECT_SOURCE_DIR}/3rdparty/live555")
   if(CMAKE_TOOLCHAIN_FILE)
     message(STATUS ${CROSS_PREFIX})
     add_custom_target(live555 sh ${PROJECT_SOURCE_DIR}/tools/build_live555.sh ${CROSS_PREFIX})
@@ -96,7 +96,7 @@ if(NOT Live555_LIBS STREQUAL "")
 endif()
 
 if(NOT LIBYUV_LIBS STREQUAL "")
-  set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES ${PROJECT_SOURCE_DIR}/3rdparty/libyuv)
+  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES_LIST "${PROJECT_SOURCE_DIR}/3rdparty/libyuv")
   if(CMAKE_TOOLCHAIN_FILE)
     message(STATUS ${CMAKE_C_COMPILER})
     add_custom_target(cnstream_libyuv sh ${PROJECT_SOURCE_DIR}/tools/build_libyuv.sh ${CMAKE_C_COMPILER} ${CMAKE_CXX_COMPILER})
@@ -105,6 +105,9 @@ if(NOT LIBYUV_LIBS STREQUAL "")
   endif()
   add_dependencies(cnstream_va cnstream_libyuv)
 endif()
+
+# remove related files while make clean
+set_property(DIRECTORY PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${ADDITIONAL_MAKE_CLEAN_FILES_LIST})
 
 if(build_tests)
   add_subdirectory(unitest)

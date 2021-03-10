@@ -97,7 +97,6 @@ class ourRTSPClient : public RTSPClient {
   virtual ~ourRTSPClient();
 
  public:
-  Authenticator* authenticator_ = nullptr;
   bool streammingPreferTcp = true;
   bool streammingOverTcp = true;
   bool setupOk = false;
@@ -239,8 +238,7 @@ void setupNextSubsession(RTSPClient* rtspClient) {
 
         // Continue setting up this subsession, by sending a RTSP "SETUP" command:
         Boolean streamUsingTCP = (client->streammingPreferTcp && client->streammingOverTcp);
-        rtspClient->sendSetupCommand(*scs.subsession, continueAfterSETUP, False, streamUsingTCP, false,
-                                     ((ourRTSPClient*)rtspClient)->authenticator_);
+        rtspClient->sendSetupCommand(*scs.subsession, continueAfterSETUP, False, streamUsingTCP, false);
       }
       return;
     }
@@ -250,11 +248,10 @@ void setupNextSubsession(RTSPClient* rtspClient) {
   if (scs.session->absStartTime() != NULL) {
     // Special case: The stream is indexed by 'absolute' time, so send an appropriate "PLAY" command:
     rtspClient->sendPlayCommand(*scs.session, continueAfterPLAY, scs.session->absStartTime(), scs.session->absEndTime(),
-                                1.0f, ((ourRTSPClient*)rtspClient)->authenticator_);
+                                1.0f);
   } else {
     scs.duration = scs.session->playEndTime() - scs.session->playStartTime();
-    rtspClient->sendPlayCommand(*scs.session, continueAfterPLAY, 0.0f, -1.0f, 1.0f,
-                                ((ourRTSPClient*)rtspClient)->authenticator_);
+    rtspClient->sendPlayCommand(*scs.session, continueAfterPLAY, 0.0f, -1.0f, 1.0f);
   }
 }
 
@@ -433,7 +430,7 @@ void shutdownStream(RTSPClient* rtspClient, int exitCode) {
     if (someSubsessionsWereActive) {
       // Send a RTSP "TEARDOWN" command, to tell the server to shutdown the stream.
       // Don't bother handling the response to the "TEARDOWN".
-      rtspClient->sendTeardownCommand(*scs.session, NULL, ((ourRTSPClient*)rtspClient)->authenticator_);
+      rtspClient->sendTeardownCommand(*scs.session, NULL);
     }
   }
 
@@ -455,29 +452,11 @@ ourRTSPClient* ourRTSPClient::createNew(UsageEnvironment& env, char const* rtspU
 ourRTSPClient::ourRTSPClient(UsageEnvironment& env, char const* rtspURL, int verbosityLevel,
                              char const* applicationName, portNumBits tunnelOverHTTPPortNum)
     : RTSPClient(env, rtspURL, verbosityLevel, applicationName, tunnelOverHTTPPortNum, -1) {
-  std::string rtsp_url = rtspURL;
-  auto pos = rtsp_url.find("rtsp://");
-  if (pos == std::string::npos) {
-    std::cout << "invalid url : " << rtsp_url << std::endl;
-    return;
-  }
-  auto pos2 = rtsp_url.find("@", pos + 7);
-  if (pos2 != std::string::npos) {
-    auto pos3 = rtsp_url.find(":", pos + 7);
-    if (pos3 == std::string::npos) {
-      std::cout << "invalid url,username or pwd error : " << rtsp_url << std::endl;
-      return;
-    }
-    std::string username = rtsp_url.substr(pos + 7, pos3 - (pos + 7));
-    std::string password = rtsp_url.substr(pos3 + 1, pos2 - (pos3 + 1));
-    authenticator_ = new (std::nothrow) Authenticator(username.c_str(), password.c_str());
-  }
 }
 
 ourRTSPClient::~ourRTSPClient() {
   envir() << "ourRTSPClient::~ourRTSPClient() called\n";
   s_rtspTimer.remove(timer_id_);
-  delete authenticator_, authenticator_ = nullptr;
 }
 
 // Implementation of "StreamClientState":
@@ -708,7 +687,7 @@ class RtspSessionImpl {
     // Note that this command - like all RTSP commands - is sent asynchronously; we do not block, waiting for a
     // response. Instead, the following function call returns immediately, and we handle the RTSP response later, from
     // within the event loop:
-    rtspClient->sendDescribeCommand(continueAfterDESCRIBE, ((ourRTSPClient*)rtspClient)->authenticator_);
+    rtspClient->sendDescribeCommand(continueAfterDESCRIBE);
 
     env->taskScheduler().doEventLoop(&this->eventLoopWatchVariable);
 

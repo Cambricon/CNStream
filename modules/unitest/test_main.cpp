@@ -41,8 +41,8 @@ const std::vector<std::array<std::string, 3>> model_info = {
     {"yuv2gray.cambricon", "/KCF/", "http://video.cambricon.com/models/MLU270/KCF/yuv2gray.cambricon"},
     {"feature_extract_4c4b_argb_270_v1.5.0.cambricon", "/feature_extract/",
      "http://video.cambricon.com/models/MLU270/feature_extract/feature_extract_4c4b_argb_270_v1.5.0.cambricon"},
-     {"yolov3_4c4b_argb_270_v1.5.0.cambricon", "/yolov3/", "http://video.cambricon.com/models/MLU270/yolov3/yolov3_4c4b_argb_270_v1.5.0.cambricon"}
-};
+    {"yolov3_4c4b_argb_270_v1.5.0.cambricon", "/yolov3/",
+     "http://video.cambricon.com/models/MLU270/yolov3/yolov3_4c4b_argb_270_v1.5.0.cambricon"}};
 
 class TestEnvironment : public testing::Environment {
  public:

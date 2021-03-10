@@ -114,7 +114,7 @@ struct LinkStatus {
   std::vector<uint32_t> cache_size;  ///< The size of each queue that is used to cache data between modules.
 };
 
-static constexpr size_t MAX_STREAM_NUM = 64;
+static constexpr uint32_t MAX_STREAM_NUM = 64;
 
 /**
  * @brief ModuleId&StreamIdx manager for pipeline.
