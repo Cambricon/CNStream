@@ -14,7 +14,7 @@ message("target :  ${name}")
 add_executable(${name} ${SRC})
 
 set(LINK_LIBS cnrt cndrv easydk)
-if(MLU STREQUAL MLU220_SOC)
+if(MLU STREQUAL MLU220EDGE)
     list(APPEND LINK_LIBS ion)
 endif()
 

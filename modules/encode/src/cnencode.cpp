@@ -173,7 +173,7 @@ bool CNEncode::CreateCpuEncoder() {
   size_ = cv::Size(cnencode_param_.dst_width, cnencode_param_.dst_height);
   std::string filename = cnencode_param_.output_dir + "/encode_stream_" + cnencode_param_.stream_id;
   int fourcc = -1;
-#if ((CV_MAJOR_VERSION < 3) || CNS_MLU220_SOC)
+#if ((CV_MAJOR_VERSION < 3) || CNS_MLU220EDGE)
   LOGW(ENCODE) << "[CNEncode] H264 or HEVC encoder is not supported. MJPG encoder will be used instead.";
   if (cnencode_param_.codec_type == H264 || cnencode_param_.codec_type == HEVC) {
     fourcc = CV_FOURCC('M', 'J', 'P', 'G');

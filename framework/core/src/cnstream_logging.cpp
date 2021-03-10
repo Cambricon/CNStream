@@ -42,8 +42,8 @@
 #include <thread>
 #include <queue>
 
-#include "cnstream_logging.hpp"
 #include "cnstream_common.hpp"
+#include "cnstream_logging.hpp"
 #include "util/cnstream_queue.hpp"
 #include "util/cnstream_rwlock.hpp"
 
@@ -73,7 +73,7 @@ CNSTREAM_DEFINE_ENV_int32(flush_log_file_secs, 30, "flush log file for at most t
 
 CNSTREAM_DEFINE_ENV_bool(log_to_stderr, true, "log messages go to stderr");
 
-CNSTREAM_DEFINE_ENV_bool(log_to_file, true, "log messages go to log file");
+CNSTREAM_DEFINE_ENV_bool(log_to_file, false, "log messages go to log file");
 
 static bool g_init_cnstream_logging = false;
 

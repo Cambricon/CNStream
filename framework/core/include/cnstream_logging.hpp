@@ -49,7 +49,7 @@ DECLARE_int32(flush_log_file_secs);
 DECLARE_bool(log_to_stderr);
 
 /**
- * @brief Log messages go to log file, default true
+ * @brief Log messages go to log file, default false
  */
 DECLARE_bool(log_to_file);
 

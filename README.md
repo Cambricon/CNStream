@@ -143,10 +143,10 @@ After finished prerequisites, you can build project with the following steps:
       ```
       Note: you need to configure toolchain by yourself in cross-compile.cmake and cross-compile gflags, glog, opencv, ffmpeg and install them into ${CNSTREAM_DIR}
 
-      take MLU220_SOC as example:
+      take MLU220EDGE as example:
 
       ```bash
-      cmake ${CNSTREAM_DIR} -DCMAKE_TOOLCHAIN_FILE=${CNSTREAM_DIR}/cmake/cross-compile.cmake -Dbuild_tests=OFF -Dbuild_track=OFF -DWITH_TRACKER=OFF -DENABLE_KCF=OFF -DMLU=MLU220_SOC
+      cmake ${CNSTREAM_DIR} -DCMAKE_TOOLCHAIN_FILE=${CNSTREAM_DIR}/cmake/cross-compile.cmake  -DCNIS_WITH_CURL=OFF -Dbuild_display=OFF -DMLU=MLU220EDGE
       ```
 
 5. Run the following command to build instructions:

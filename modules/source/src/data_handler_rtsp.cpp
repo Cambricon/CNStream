@@ -305,8 +305,11 @@ void RtspHandlerImpl::Close() {
       decode_thread_.join();
     }
   }
+
+  std::lock_guard<std::mutex> lk(mutex_);  // Close called by multi threads
   if (queue_) {
     delete queue_;
+    queue_ = nullptr;
   }
 }
 
