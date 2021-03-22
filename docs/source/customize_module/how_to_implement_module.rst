@@ -42,8 +42,8 @@ CNStream支持用户创建自定义模块。使用CNStream框架创建自定义�
 
 ::
   
-  class ExampleModuleSource : public cnstream::Module, public cnstream::ModuleCreator<ExampleModuleSource> {
-    using super = cnstream::Module;
+  class ExampleModuleSource : public cnstream::SourceModule, public cnstream::ModuleCreator<ExampleModuleSource> {
+    using super = cnstream::SourceModule;
   
    public:
     explicit ExampleModuleSource(const std::string &name) : super(name) {}
