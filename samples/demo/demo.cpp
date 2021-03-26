@@ -137,7 +137,6 @@ class MsgObserver : cnstream::StreamMsgObserver {
 
   void WaitForStop() {
     std::unique_lock<std::mutex> lk(mutex_);
-    stop_ = false;
     wakener_.wait(lk, [this]() {return stop_; });
     lk.unlock();
     pipeline_->Stop();

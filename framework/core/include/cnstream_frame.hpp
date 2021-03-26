@@ -103,7 +103,7 @@ class CNFrameInfo : private NonCopyable {
   std::unordered_map<int, any> datas;
   std::mutex datas_lock_;
 
-  // CNFrameInfo instance of parent pipeine
+  // CNFrameInfo instance of parent pipeline
   std::shared_ptr<cnstream::CNFrameInfo> payload = nullptr;
 
  private:

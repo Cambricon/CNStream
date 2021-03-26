@@ -47,7 +47,7 @@ cnstream::Pipeline类
 **cnstream::Pipeline** 类实现了pipeline的搭建、module管理、以及module的调度执行。在module自身不传递数据时，负责module之间的数据传递。此外，该类集成事件总线，提供注册事件监听器的机制，使用户能够接收事件。例如stream EOS（End of Stream）等。Pipeline通过隐含的深度可控的队列来连接module，使用module的输入队列连接上游的module。CNStream也提供了根据JSON配置文件来搭建pipeline的接口。在不重新编译源码的情况下，通过修改配置文件搭建不同的pipeline。
 
 .. attention::
-  |  Pipeline的source module是没有输入队列，pipeline中不会为source module启动线程，也就是说pipeline不会调度source module。source module通过pipeline的 ``ProvideData`` 接口向下游模块发送数据和启动内部线程。
+  |  Pipeline的source module是没有输入队列，pipeline中不会为source module启动线程，也就是说pipeline不会调度source module。source module通过pipeline的 ``ProvideData`` 接口向下游模块发送数据。
 
 **cnstream::Pipeline** 类在 ``cnstream_pipeline.hpp`` 文件内定义，主要接口如下。 ``cnstream_pipeline.hpp`` 文件存放于 ``framework/core/include`` 目录下。源代码中有详细的注释，这里仅给出必要的说明。接口详情，查看《CNStream Developer Guide》。
 
@@ -89,7 +89,6 @@ ModuleConfigs（JSON）的示例如下。JSON配置文件支持C和C++风格的�
        "parallelism" : 0, //框架创建的module线程数目。source module不使用这个字段。
        "next_modules" : ["inference"],        //下一个连接模块的名字，可以有多个。
        "custom_params" : {                    //当前module的参数。
-         "source_type" : "ffmpeg",            //使用ffmpeg作为demuxer。
          "output_type" : "mlu",               //解码图像输出到MLU内存。
          "decoder_type" : "mlu",              //使用MLU解码。
          "device_id" : 0                      //MLU设备id。
@@ -162,21 +161,20 @@ CNStream SDK要求所有的Module类使用统一接口和数据结构 **cnstream
 cnstream::CNFrameInfo类
 ------------------------
 
-**cnstream::CNFrameInfo** 类是module之间传递的数据结构，即pipeline的Context。该类在 ``cnstream_frame.hpp`` 文件中定义。``cnstream_frame.hpp`` 文件存放在 ``framework/core/include`` 文件夹下。这个类主要包括 ``ThreadSafeUnorderedMap<int, cnstream::any> datas`` ，用于存放任意数据类型的数据帧和推理结果。
+**cnstream::CNFrameInfo** 类是module之间传递的数据结构，即pipeline的Context。该类在 ``cnstream_frame.hpp`` 文件中定义。``cnstream_frame.hpp`` 文件存放在 ``framework/core/include`` 文件夹下。这个类主要包括 ``std::unordered_map<int, any> datas`` ，用于存放任意数据类型的数据帧和推理结果。
 
 ``cnstream::any`` 等同于C++17标准的 ``std::any`` 类型, 即C++弱类型特性。使用该类型定义 ``datas`` 能够支持用户自定义任意数据类型，且依然具备类型安全功能。比如CNStream内置插件库中针对智能视频分析场景专门定义了 ``CNDataFrame`` 和 ``CNInferObject``, 分别用于存放视频帧数据和神经网络推理结果，详述如下。用户使用该类型数据前需要转换成自定义类型，例如：
 
 ::
 
-  auto frame = cnstream::any_cast<CNDataFrame>(datas[CNDataFrameKey])
+  auto frame = cnstream::any_cast<CNDataFramePtr>(datas[CNDataFramePtrKey])
 
 CNDataFrame中集成了SyncedMemory。基于MLU平台的异构性，在应用程序中，当某个具体的module处理的数据可能需要在CPU上或者MLU上时，SyncedMem实现了CPU和MLU（Host和Device）之间的数据同步。通过SyncedMem，module可以自身决定访问保存在MLU或者CPU上的数据，从而简化module的编写，接口如下：
 
 ::
 
-  std::shared_ptr<CNSyncedMemory> data[CN_MAX_PLANES];
+  std::unique_ptr<CNSyncedMemory> data[CN_MAX_PLANES];
 
-CNDataFrame中的SyncedMem支持deep copy或者复用已有的内存。当管理Codec和Inference之间的image buffer时，可以进行deep copy和复用decoder的buffer内存。decoder和后续的inference处理完全解耦，但是会带来dev2dev copy的代价。
 
 另外，CNInferObject不仅提供对常规推理结果的数据存储机制，还提供用户自定义数据格式的接口 ``AddExtraAttribute`` ，方便用户使用其他格式传递数据，如JSON格式。
 
@@ -210,7 +208,7 @@ cnstream::EventBus类
 cnstream::Event类
 ---------------------
 
-**cnstream::Event** 类是模块和pipepline之间通信的基本单元，即事件。事件由四个部分组成：事件类型、消息、发布事件的模块、发布事件的线程号。消息类型包括：无效、错误、警告、EOS(End of Stream)、停止，以及一个预留类型。
+**cnstream::Event** 类是模块和pipepline之间通信的基本单元，即事件。事件由四个部分组成：事件类型、消息、发布事件的模块、发布事件的线程号。消息类型包括：无效、错误、警告、EOS(End of Stream)、停止，数据流错误，以及一个预留类型。
 
 **cnstream::Event** 类在 ``cnstream_eventbus.hpp`` 文件定义，``cnstream_eventbus.hpp`` 文件存放在 ``framework/core/include`` 文件夹下。接口详情，查看《CNStream Developer Guide》。
 

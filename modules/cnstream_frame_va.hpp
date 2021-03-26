@@ -128,40 +128,6 @@ class IDataDeallocator {
 };
 
 /**
- * ICNMediaImageMapper is an abstract class, for M220_SOC only.
- */
-class ICNMediaImageMapper {
- public:
-  /**
-   * Gets an image.
-   * @return Returns the image address.
-   */
-  virtual void* GetMediaImage() = 0;
-  /**
-   * Gets pitch.
-   * @param index
-   * @return Returns pitch.
-   */
-  virtual int GetPitch(int index) = 0;
-  /**
-   * Gets CPU address.
-   * @param index
-   * @return Returns the CPU address.
-   */
-  virtual void* GetCpuAddress(int index) = 0;
-  /**
-   * Gets the device address.
-   * @param index
-   * @return Returns the device address.
-   */
-  virtual void* GetDevAddress(int index) = 0;
-  /**
-   *  Destructor of class ICNMediaImageMapper.
-   */
-  virtual ~ICNMediaImageMapper() {}
-};
-
-/**
  * The structure holding a data frame and the frame description.
  */
 class CNDataFrame : public NonCopyable {
@@ -182,7 +148,6 @@ class CNDataFrame : public NonCopyable {
   void* ptr_mlu[CN_MAX_PLANES];                              ///< The MLU data addresses for planes.
   void* ptr_cpu[CN_MAX_PLANES];                              ///< The CPU data addresses for planes.
   std::unique_ptr<IDataDeallocator> deAllocator_ = nullptr;  ///< The dedicated deallocator for CNDecoder buffer.
-  std::unique_ptr<ICNMediaImageMapper> mapper_ = nullptr;    ///< The dedicated Mapper for M220 CNDecoder.
 
   /* The 'dst_device_id' is for SyncedMemory.
   */

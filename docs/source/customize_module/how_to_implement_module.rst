@@ -86,7 +86,8 @@ CNStream支持用户创建自定义模块。使用CNStream框架创建自定义�
     }
     int Process(FrameInfoPtr data) override {
       // Your codes.
-      /*notify that data handle by the module*/
+      // Note that data transmitted by the module self
+      TransmitData(data);
       return 1;
     }
   

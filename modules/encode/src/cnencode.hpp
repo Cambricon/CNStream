@@ -95,6 +95,7 @@ class CNEncode {
 
   edk::PixelFmt picture_format_;
   std::unique_ptr<edk::EasyEncode> mlu_encoder_ = nullptr;
+  std::unique_ptr<edk::CnFrame> cnframe_ = nullptr;
 
   cv::VideoWriter writer_;
   cv::Size size_;
