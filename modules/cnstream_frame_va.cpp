@@ -47,10 +47,6 @@ CNDataFrame::~CNDataFrame() {
   mlu_data.reset();
   cpu_data.reset();
 
-  if (nullptr != mapper_) {
-    mapper_.reset();
-  }
-
   if (nullptr != deAllocator_) {
     deAllocator_.reset();
   }

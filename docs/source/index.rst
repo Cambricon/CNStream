@@ -21,6 +21,7 @@
    ./application/how_to_build_apps
    ./web_ui/web_visualize
    ./tool/Inspect_tool
+   ./tool/log
    ./profiling/index
    ./tracing/index
    ./FAQ/FAQ

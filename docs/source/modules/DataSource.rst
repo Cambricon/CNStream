@@ -9,11 +9,10 @@
 
 数据源模块主要有以下特点：
 
-- 作为pipeline的起始模块，没有输入队列。因此pipeline不会为DataSource启动线程，也不会调度source。source module需要内部启动线程，通过pipeline的 ``ProvideData()`` 接口向下游发送数据。
-- 每一路source由使用者指定唯一标识 ``stream_id`` 。
+- 作为pipeline的起始模块，没有输入队列。因此pipeline不会为DataSource启动和调度线程。数据源模块需要内部启动线程，通过pipeline的 ``ProvideData()`` 接口向下游发送数据。
+- 每一路数据流由使用者指定唯一标识 ``stream_id`` 。
 - 支持动态增加和减少数据流。
-- 支持通过配置文件修改和选择source module的具体功能，而不是在编译时选择。
-- pipeline执行过程中，pipeline缓存数据会在使用完后立刻被删除，并直接退出这一路流的处理。
+- 支持通过配置文件修改和选择数据源模块的具体功能，而不是在编译时选择。
 
 **cnstream::DataSource** 类在 ``data_source.hpp`` 文件中定义。 ``data_source.hpp`` 文件存放在 ``modules/source/include`` 文件夹下。 ``DataSource`` 主要功能继承自 ``SourceModule`` 类，存放在 ``framework/core/include`` 目录下。主要接口如下，源代码中有详细的注释，这里仅给出必要的说明。
 
@@ -113,7 +112,7 @@ output_buf_number
 - 当复用解码器内存功能打开时，基于性能考虑，推荐把该值尽可能的设置大。
 - 当复用解码器内存关闭时，该值设置为大于码流参考帧数量一般就不会影响性能。
 
-若设置的值过大，会导致创建解码器失败，pipeline将会通过
+若设置的值过大，会导致创建解码器失败。
 
 interval
 '''''''''''''''''

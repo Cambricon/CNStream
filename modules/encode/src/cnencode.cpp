@@ -144,7 +144,7 @@ bool CNEncode::CreateMluEncoder() {
     attr.level = edk::VideoLevel::H265_MAIN_41;
     attr.profile = edk::VideoProfile::H265_MAIN;
   }
-  memset(&attr.rate_control, 0, sizeof(edk::RateControl));
+
   attr.rate_control.vbr = false;
   attr.rate_control.gop = cnencode_param_.gop;
   attr.rate_control.frame_rate_num = cnencode_param_.frame_rate;
@@ -156,12 +156,13 @@ bool CNEncode::CreateMluEncoder() {
   attr.eos_callback = std::bind(&CNEncode::EosCallback, this);
   attr.packet_callback = std::bind(&CNEncode::PacketCallback, this, std::placeholders::_1);
 
+  cnframe_.reset(new edk::CnFrame);
   mlu_encoder_ = edk::EasyEncode::New(attr);
-
   if (!mlu_encoder_) {
     LOGE(ENCODE) << "[CNEncode] create mlu encoder failed.";
     return false;
   }
+
   return true;
 }
 
@@ -251,37 +252,32 @@ bool CNEncode::Update(uint8_t* src_y, uint8_t* src_uv, int64_t timestamp, bool e
     LOGE(ENCODE) << "[CNEncode] mlu encoder is not existed.";
     return false;
   }
-  edk::CnFrame *cnframe = new edk::CnFrame;
-  memset(cnframe, 0, sizeof(edk::CnFrame));
-  cnframe->pts = timestamp;
+
+  cnframe_->pts = timestamp;
   if (!eos) {
     if (!src_y || !src_uv) {
       LOGE(ENCODE) << "[CNEncode] src y or src uv pointer is nullptr.";
-      delete cnframe;
       return false;
     }
-    cnframe->width = cnencode_param_.dst_width;
-    cnframe->height = cnencode_param_.dst_height;
-    cnframe->pformat = picture_format_;
-    cnframe->frame_size = output_frame_size_;
-    cnframe->n_planes = 2;
-    cnframe->strides[0] = cnencode_param_.dst_stride;
-    cnframe->strides[1] = cnencode_param_.dst_stride;
-    cnframe->ptrs[0] = reinterpret_cast<void *>(src_y);
-    cnframe->ptrs[1] = reinterpret_cast<void *>(src_uv);
+    cnframe_->width = cnencode_param_.dst_width;
+    cnframe_->height = cnencode_param_.dst_height;
+    cnframe_->pformat = picture_format_;
+    cnframe_->frame_size = output_frame_size_;
+    cnframe_->n_planes = 2;
+    cnframe_->strides[0] = cnencode_param_.dst_stride;
+    cnframe_->strides[1] = cnencode_param_.dst_stride;
+    cnframe_->ptrs[0] = reinterpret_cast<void *>(src_y);
+    cnframe_->ptrs[1] = reinterpret_cast<void *>(src_uv);
   }
   try {
-    if (!mlu_encoder_->SendDataCPU(*cnframe, eos)) {
+    if (!mlu_encoder_->SendDataCPU(*cnframe_, eos)) {
       LOGE(ENCODE) << "[CNEncode] send data to mlu encoder failed.";
-      delete cnframe;
       return false;
     }
   } catch (edk::Exception &err) {
     LOGE(ENCODE) << "EncoderError: send data to mlu encoder" << err.what();
-    delete cnframe;
     return false;
   }
-  delete cnframe;
   return true;
 }
 

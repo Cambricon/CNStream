@@ -96,13 +96,7 @@ bool Module::PostEvent(EventType type, const std::string& msg) {
   event.message = msg;
   event.module_name = name_;
 
-  RwLockReadGuard guard(container_lock_);
-  if (container_) {
-    return container_->GetEventBus()->PostEvent(event);
-  } else {
-    LOGW(CORE) << "[" << GetName() << "] module's container is not set";
-    return false;
-  }
+  return PostEvent(event);
 }
 
 bool Module::PostEvent(Event e) {
