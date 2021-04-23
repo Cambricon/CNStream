@@ -49,18 +49,17 @@ class CnOsd {
   inline void SetSecondaryLabels(std::vector<std::string> labels) { secondary_labels_ = labels; }
   inline void SetCnFont(std::shared_ptr<CnFont> cn_font) { cn_font_ = cn_font; }
 
-  void DrawLabel(cv::Mat *image, const CNInferObjsPtr& objects, std::vector<std::string> attr_keys = {}) const;
-  void DrawLogo(cv::Mat *image, std::string logo) const;
+  void DrawLabel(cv::Mat image, const CNInferObjsPtr &objects, std::vector<std::string> attr_keys = {}) const;
+  void DrawLogo(cv::Mat image, std::string logo) const;
 
  private:
   std::pair<cv::Point, cv::Point> GetBboxCorner(const cnstream::CNInferObject &object,
                                                 int img_width, int img_height) const;
   bool LabelIsFound(const int &label_id) const;
   int GetLabelId(const std::string &label_id_str) const;
-  void DrawBox(cv::Mat* image, const cv::Point &top_left, const cv::Point &bottom_right,
-               const cv::Scalar &color) const;
-  void DrawText(cv::Mat* image, const cv::Point &bottom_left, const std::string &text, const cv::Scalar &color,
-                float scale = 1, int* text_height = nullptr) const;
+  void DrawBox(cv::Mat image, const cv::Point &top_left, const cv::Point &bottom_right, const cv::Scalar &color) const;
+  void DrawText(cv::Mat image, const cv::Point &bottom_left, const std::string &text, const cv::Scalar &color,
+                float scale = 1, int *text_height = nullptr) const;
   int CalcThickness(int image_width, float thickness) const;
   double CalcScale(int image_width, float scale) const;
 

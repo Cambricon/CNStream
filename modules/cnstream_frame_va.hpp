@@ -133,7 +133,7 @@ class IDataDeallocator {
 class CNDataFrame : public NonCopyable {
  public:
   CNDataFrame() = default;
-  ~CNDataFrame();
+  ~CNDataFrame() = default;
 
   uint64_t frame_id = -1;  ///< The frame index that incremented from 0.
 
@@ -194,14 +194,15 @@ class CNDataFrame : public NonCopyable {
    *
    * @return Returns data with opencv mat type.
    */
-  cv::Mat* ImageBGR();
+  cv::Mat ImageBGR();
   bool HasBGRImage() {
-    if (bgr_mat) return true;
-    return false;
+    std::lock_guard<std::mutex> lk(mtx);
+    if (bgr_mat.empty()) return false;
+    return true;
   }
 
  private:
-  cv::Mat* bgr_mat = nullptr;
+  cv::Mat bgr_mat;
 #else
   bool HasBGRImage() {
     return false;
@@ -456,7 +457,12 @@ struct InferData {
 
   // infer output
   std::vector<std::shared_ptr<void>> output_cpu_addr_;  //< many outputs for one input
+  std::vector<size_t> output_sizes_;
+
+  /// @deprecated output_size_.
+  /// @note output_size_ is replaced by output_sizes_
   size_t output_size_;
+
   size_t output_num_;
 };
 

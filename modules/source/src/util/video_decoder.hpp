@@ -51,9 +51,7 @@ struct DecodeFrame {
   std::unique_ptr<IDecBufRef> buf_ref = nullptr;
 
  public:
-  ~DecodeFrame() {
-    if (buf_ref) buf_ref.reset();
-  }
+  ~DecodeFrame() {}
 };
 
 struct ExtraDecoderInfo {

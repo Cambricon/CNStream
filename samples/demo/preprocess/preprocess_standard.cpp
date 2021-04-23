@@ -161,7 +161,7 @@ int ObjPreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::sha
                            const std::shared_ptr<cnstream::CNInferObject>& pobj) {
   cnstream::CNDataFramePtr frame = cnstream::GetCNDataFramePtr(finfo);
   // origin frame
-  cv::Mat frame_bgr = *frame->ImageBGR();
+  cv::Mat frame_bgr = frame->ImageBGR();
 
   // crop objct from frame
   int w = frame->width;

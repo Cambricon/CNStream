@@ -150,6 +150,7 @@ void Tracker::Close() {
   if (g_tl_mlu_env) {
     g_tl_mlu_env.reset();
   }
+
   for (auto &pair : contexts_) {
     delete pair.second;
   }

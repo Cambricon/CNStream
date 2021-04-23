@@ -131,8 +131,8 @@ struct RCOpValue {
 
 class RCOpResource : public InferResource<std::shared_ptr<RCOpValue>> {
  public:
-  RCOpResource(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize,
-               bool keep_aspect_ratio, CNDataFormat dst_fmt);
+  RCOpResource(std::shared_ptr<edk::ModelLoader> model, uint32_t batchsize, bool keep_aspect_ratio,
+               CNDataFormat dst_fmt, int pad_method);
   ~RCOpResource();
   bool Initialized() const { return value_->initialized; }
   void SetMluQueue(std::shared_ptr<edk::MluTaskQueue> mlu_queue) { value_->op.SetMluQueue(mlu_queue); }
@@ -142,6 +142,7 @@ class RCOpResource : public InferResource<std::shared_ptr<RCOpValue>> {
   CNDataFormat SrcFmt() const { return src_fmt_; }
 
  private:
+  int pad_method_ = 0;
   int core_number_ = 0;
   bool keep_aspect_ratio_ = false;
   CNDataFormat src_fmt_ = CN_PIXEL_FORMAT_YUV420_NV21;

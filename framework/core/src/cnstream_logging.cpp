@@ -729,6 +729,7 @@ void LogMessage::Flush() {
   if (append_newline) {
     data_->message_buf_[data_->num_chars_to_log_++] = '\n';
   }
+  data_->message_buf_[data_->num_chars_to_log_] = '\0';
   SendToLog();
 }
 

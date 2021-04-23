@@ -177,9 +177,9 @@ uint64_t CNFrameInfo::MarkPassed(Module* module) {
   return modules_mask_;
 }
 
-uint64_t CNFrameInfo::GetModulesMask() {
-  std::lock_guard<std::mutex> lk(mask_lock_);
-  return modules_mask_;
-}
+// uint64_t CNFrameInfo::GetModulesMask() {
+//   std::lock_guard<std::mutex> lk(mask_lock_);
+//   return modules_mask_;
+// }
 
 }  // namespace cnstream

@@ -828,6 +828,13 @@ TEST(CorePipeline, EventLoop) {
   std::this_thread::sleep_for(std::chrono::milliseconds(20));
   EXPECT_TRUE(pipeline.Stop());
 
+  // 4 Stream error event
+  EXPECT_TRUE(pipeline.Start());
+  type = EVENT_STREAM_ERROR;
+  EXPECT_TRUE(module->PostEvent(type, "post stream error event for test"));
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  EXPECT_TRUE(pipeline.Stop());
+
   // 5 Invalid event
   EXPECT_TRUE(pipeline.Start());
   type = EVENT_INVALID;
@@ -883,6 +890,24 @@ TEST(CorePipeline, TransmitDataEosFrame) {
   EXPECT_NO_THROW(pipeline.TransmitData("up_node", data));
 }
 
+TEST(CorePipeline, TransmitDataInvalidFrame) {
+  Pipeline pipeline("test pipeline");
+
+  auto up_node = std::make_shared<TestModule>("up_node");
+  auto down_node = std::make_shared<TestModule>("down_node");
+  EXPECT_TRUE(pipeline.AddModule(up_node));
+  EXPECT_TRUE(pipeline.AddModule(down_node));
+  pipeline.SetModuleAttribute(up_node, 0);
+  /* up_node ---- down_node */
+  std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
+  EXPECT_EQ(pipeline.LinkModules(up_node, down_node), link_id);
+  EXPECT_TRUE(nullptr == CNFrameInfo::Create(""));
+  auto data = CNFrameInfo::Create("0");
+  data->SetStreamIndex(0);
+  data->flags = CN_FRAME_FLAG_INVALID;
+  EXPECT_NO_THROW(pipeline.TransmitData("up_node", data));
+}
+
 TEST(CorePipelineDeathTest, TransmitDataFailed) {
   Pipeline pipeline("test pipeline");
   auto module = std::make_shared<TestModule>("test_module");
@@ -902,6 +927,7 @@ void RunTaskLoop(std::shared_ptr<TestModule> up_node, std::shared_ptr<TestModule
   pipeline.SetModuleAttribute(up_node, 0);
   /* up_node ---- down_node */
   std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
+  EXPECT_STREQ("", pipeline.LinkModules(nullptr, nullptr).c_str());
   EXPECT_EQ(pipeline.LinkModules(up_node, down_node), link_id);
   {
     auto data = CNFrameInfo::Create("0");
@@ -1065,6 +1091,25 @@ TEST(CorePipeline, GetModule) {
   EXPECT_NE(pipeline.GetModule("test_infer"), nullptr);
 
   EXPECT_EQ(pipeline.GetModule(""), nullptr);
+  std::vector<std::string> names = pipeline.GetModuleNames();
+  EXPECT_EQ(names.size(), 2);
+  auto result1 = std::find(std::begin(names), std::end(names), "test_source");
+  auto result2 = std::find(std::begin(names), std::end(names), "test_infer");
+  EXPECT_TRUE(result1 != names.end());
+  EXPECT_TRUE(result2 != names.end());
+
+  EXPECT_NE(nullptr, pipeline.GetEndModule());
+}
+
+TEST(CorePipeline, QueryLinkStatus) {
+  Pipeline pipeline("test pipeline");
+  std::vector<CNModuleConfig> m_cfgs = GetCfg();
+  EXPECT_EQ(pipeline.BuildPipeline(m_cfgs), 0);
+
+  EXPECT_FALSE(pipeline.QueryLinkStatus(nullptr, "test_source-->test_infer"));
+  LinkStatus status;
+  EXPECT_FALSE(pipeline.QueryLinkStatus(&status, "test_source"));  // wrong link id
+  EXPECT_TRUE(pipeline.QueryLinkStatus(&status, "test_source-->test_infer"));
 }
 
 TEST(CorePipeline, StreamMsgObserver) {

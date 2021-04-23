@@ -64,7 +64,7 @@ void InitFrame(CNDataFrame* frame, int image_type) {
 void RunConvertImageTest(CNDataFrame* frame, int image_type) {
   frame->dst_device_id = g_dev_id;
   frame->CopyToSyncMem(true);
-  EXPECT_NE(frame->ImageBGR(), nullptr);
+  EXPECT_FALSE(frame->ImageBGR().empty());
   free(frame->ptr_cpu[0]);
   if (image_type == 1 || image_type == 2) {  // YUV
     free(frame->ptr_cpu[1]);
@@ -79,7 +79,7 @@ TEST(CoreFrame, ConvertBGRImageToBGR) {
 
   RunConvertImageTest(&frame, 0);
 
-  EXPECT_NE(frame.ImageBGR(), nullptr);
+  EXPECT_FALSE(frame.ImageBGR().empty());
 }
 
 TEST(CoreFrame, ConvertRGBImageToBGR) {

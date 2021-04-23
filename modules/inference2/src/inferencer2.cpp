@@ -95,12 +95,7 @@ bool Inferencer2::Open(ModuleParamSet raw_params) {
   return infer_handler_->Open();
 }
 
-void Inferencer2::Close() {
-  if (infer_handler_) {
-    infer_handler_.reset();
-    infer_handler_ = nullptr;
-  }
-}
+void Inferencer2::Close() { infer_handler_.reset(); }
 
 int Inferencer2::Process(std::shared_ptr<CNFrameInfo> data) {
   if (!data) return -1;
@@ -130,7 +125,6 @@ Inferencer2::~Inferencer2() {
   mlu_ctx.SetDeviceId(infer_params_.device_id);
   mlu_ctx.BindDevice();
   Close();
-  param_manager_.reset();
 }
 
 bool Inferencer2::CheckParamSet(const ModuleParamSet& param_set) const {

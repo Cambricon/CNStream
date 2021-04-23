@@ -170,26 +170,11 @@ class InferencerPrivate {
       thread_id_str.erase(0, thread_id_str.length() - 9);
       std::string tid_str = "th_" + thread_id_str;
       ctx->engine = std::make_shared<InferEngine>(
-          params_.device_id,
-          model_loader_,
-          preproc_,
-          postproc_,
-          bsize_,
-          params_.batching_timeout,
-          params_.use_scaler,
-          tid_str,
-          std::bind(&InferencerPrivate::InferEngineErrorHnadleFunc, this, std::placeholders::_1),
-          params_.keep_aspect_ratio,
-          params_.object_infer,
-          obj_preproc_,
-          obj_postproc_,
-          obj_filter_,
-          dump_resized_image_dir_,
-          params_.model_input_pixel_format,
-          params_.mem_on_mlu_for_postproc,
-          params_.saving_infer_input,
-          module_name_,
-          q_ptr_->GetProfiler());
+          params_.device_id, model_loader_, preproc_, postproc_, bsize_, params_.batching_timeout, params_.use_scaler,
+          tid_str, std::bind(&InferencerPrivate::InferEngineErrorHnadleFunc, this, std::placeholders::_1),
+          params_.keep_aspect_ratio, params_.object_infer, obj_preproc_, obj_postproc_, obj_filter_,
+          dump_resized_image_dir_, params_.model_input_pixel_format, params_.mem_on_mlu_for_postproc,
+          params_.saving_infer_input, module_name_, q_ptr_->GetProfiler(), params_.pad_method);
       ctx->trans_data_helper = std::make_shared<InferTransDataHelper>(q_ptr_, params_.infer_interval * bsize_ * 2);
       ctxs_[tid] = ctx;
     }

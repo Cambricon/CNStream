@@ -204,32 +204,34 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
       mem_op.SetModel(this->easyinfer_->Model());
       mem_op.MemcpyOutputD2H(cpu_output_value.ptrs, mlu_output_value.ptrs);
 
-      for (size_t i = 0; i < mlu_input_value.datas.size(); ++i) {
+      if (mlu_input_value.datas.size() == 1) {
         for (int j = 0; j < frame_num; ++j) {
           std::shared_ptr<InferData> iodata(new (std::nothrow) InferData);
-          iodata->input_height_ = mlu_input_value.datas[i].shape.h;
-          iodata->input_width_ = mlu_input_value.datas[i].shape.w;
+          iodata->input_height_ = mlu_input_value.datas[0].shape.h;
+          iodata->input_width_ = mlu_input_value.datas[0].shape.w;
 
           // infer model input_fmt only support RBGA32, ARGB32, BGRA32, ABGR32
           iodata->input_size_ = iodata->input_height_ * iodata->input_width_ * 4;
           iodata->input_fmt_ = model_input_fmt_;
           iodata->output_num_ = cpu_output_value.datas.size();
-          iodata->output_size_ = cpu_output_value.datas[0].shape.hwc();
 
           // save model input
           iodata->input_cpu_addr_ = cnCpuMemAlloc(iodata->input_size_);
-          cnrtMemcpy(iodata->input_cpu_addr_.get(), mlu_input_value.datas[i].Offset(j), iodata->input_size_,
+          cnrtMemcpy(iodata->input_cpu_addr_.get(), mlu_input_value.datas[0].Offset(j), iodata->input_size_,
                      CNRT_MEM_TRANS_DIR_DEV2HOST);
 
           // save model output
           for (size_t k = 0; k < iodata->output_num_; ++k) {
-            std::shared_ptr<void> output_cpu_addr = cnCpuMemAlloc(iodata->output_size_ * sizeof(float*));
-            memcpy(output_cpu_addr.get(), cpu_output_value.datas[k].Offset(j), sizeof(float*) * iodata->output_size_);
+            iodata->output_sizes_.push_back(cpu_output_value.datas[k].shape.hwc());
+            std::shared_ptr<void> output_cpu_addr = cnCpuMemAlloc(iodata->output_sizes_[k] * sizeof(float*));
+            memcpy(output_cpu_addr.get(),
+                   cpu_output_value.datas[k].Offset(j), sizeof(float*) * iodata->output_sizes_[k]);
             iodata->output_cpu_addr_.push_back(output_cpu_addr);
           }
 
           // save iodata
           auto data_map = GetCNInferDataPtr(finfos[j].first);
+          std::lock_guard<std::mutex> lk(data_map->mutex_);
           if (data_map->datas_map_.find(module_name_) != data_map->datas_map_.end()) {
             data_map->datas_map_[module_name_].push_back(iodata);
           } else {
@@ -237,6 +239,9 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
             data_map->datas_map_[module_name_] = vec;
           }
         }
+      } else {
+        LOGE(INFERENCER) << "Module input num is " << mlu_input_value.datas.size()
+                         << " , input num not supports greater than 1!";
       }
       alloc_cpu_output_mem.Destroy();
     }

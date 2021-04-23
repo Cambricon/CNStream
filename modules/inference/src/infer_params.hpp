@@ -49,6 +49,7 @@ struct InferParams {
   std::string obj_filter_name;
   std::string dump_resized_image_dir = "";  // debug option, dump images(offline-model's input) before infer.
   bool saving_infer_input = false;
+  int pad_method;
 };  // struct InferParams
 
 struct InferParamDesc {

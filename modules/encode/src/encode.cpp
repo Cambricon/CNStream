@@ -20,6 +20,7 @@
 
 #include "encode.hpp"
 
+#include <algorithm>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -263,9 +264,12 @@ bool Encode::Open(ModuleParamSet paramSet) {
     param_->use_ffmpeg = true;
   }
   if (paramSet.find("encoder_type") != paramSet.end()) {
-    if (paramSet["encoder_type"] == "mlu") {
+    std::string encoder_type = paramSet["encoder_type"];
+    std::transform(encoder_type.begin(), encoder_type.end(), encoder_type.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    if (encoder_type == "mlu") {
       param_->encoder_type = "mlu";
-    } else if (paramSet["encoder_type"] == "cpu") {
+    } else if (encoder_type == "cpu") {
       param_->encoder_type = "cpu";
     } else {
       LOGW(ENCODE) << "[Encode] encoder type should be chosen from mlu and cpu. "
@@ -273,10 +277,13 @@ bool Encode::Open(ModuleParamSet paramSet) {
     }
   }
   if (paramSet.find("preproc_type") != paramSet.end()) {
-    if (paramSet["preproc_type"] == "mlu") {
+    std::string preproc_type = paramSet["preproc_type"];
+    std::transform(preproc_type.begin(), preproc_type.end(), preproc_type.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    if (preproc_type == "mlu") {
       LOGE(ENCODE) << "[Encode] Preproc on MLU is not supported now.";
       return false;
-    } else if (paramSet["preproc_type"] == "cpu") {
+    } else if (preproc_type == "cpu") {
       param_->preproc_type = "cpu";
     } else {
       LOGW(ENCODE) << "[Encode] preprocess type should be chosen from mlu and cpu. "
@@ -285,6 +292,8 @@ bool Encode::Open(ModuleParamSet paramSet) {
   }
   if (paramSet.find("codec_type") != paramSet.end()) {
     std::string codec_type = paramSet["codec_type"];
+    std::transform(codec_type.begin(), codec_type.end(), codec_type.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
     if ("h264" == codec_type) {
       param_->codec_type = H264;
     } else if ("hevc" == codec_type) {
@@ -344,7 +353,7 @@ int Encode::Process(CNFrameInfoPtr data) {
   if (ctx->data_yuv) {
     memset(ctx->data_yuv, 0, sizeof(uint8_t) * dst_stride_ * param_->dst_height * 3 / 2);
   }
-  cv::Mat *image = nullptr;
+  cv::Mat image;
   uint8_t *dst_y = nullptr, *dst_uv = nullptr;
 
   if (eos) {
@@ -394,7 +403,7 @@ int Encode::Process(CNFrameInfoPtr data) {
       return -1;
     } else {
       // Cpu Preproc
-      if (!image) {
+      if (image.empty()) {
         const uint8_t *src_y = reinterpret_cast<const uint8_t *>(frame->data[0]->GetCpuData());
         const uint8_t *src_uv = reinterpret_cast<const uint8_t *>(frame->data[1]->GetCpuData());
         if (!ctx->preproc->Yuv2Yuv(src_y, src_uv, ctx->data_yuv)) {
@@ -402,7 +411,7 @@ int Encode::Process(CNFrameInfoPtr data) {
           return -1;
         }
       } else {
-        if (!ctx->preproc->Bgr2Yuv(*image, ctx->data_yuv)) {
+        if (!ctx->preproc->Bgr2Yuv(image, ctx->data_yuv)) {
           LOGE(ENCODE) << "[Encode] cpu bgr2yuv and resize failed.";
           return -1;
         }
@@ -422,7 +431,7 @@ int Encode::Process(CNFrameInfoPtr data) {
     ctx->preproc->SetSrcWidthHeight(frame->width, frame->height);
     image = frame->ImageBGR();
     // Cpu Preproc
-    if (!ctx->preproc->Bgr2Bgr(*image, ctx->dst_image)) {
+    if (!ctx->preproc->Bgr2Bgr(image, ctx->dst_image)) {
       LOGE(ENCODE) << "[Encode] cpu bgr resize failed.";
       return -1;
     }

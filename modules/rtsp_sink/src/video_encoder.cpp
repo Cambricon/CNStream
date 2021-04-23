@@ -107,7 +107,6 @@ VideoEncoder::~VideoEncoder() {
   if (sync_input_frame_) delete sync_input_frame_;
   if (output_circular_buffer_) delete output_circular_buffer_;
   if (output_frame_header_) delete output_frame_header_;
-  if (sync_output_frame_buffer_) delete[] sync_output_frame_buffer_;
 }
 
 void VideoEncoder::Start() { running_ = true; }
@@ -126,31 +125,14 @@ bool VideoEncoder::SendFrame(uint8_t *data, int64_t timestamp) {
     timestamp -= init_timestamp_;
   }
 
-  input_mutex_.lock();
+  std::lock_guard<std::mutex> guard(input_mutex_);
   if (sync_input_frame_ == nullptr) {
     sync_input_frame_ = NewFrame();
   }
   sync_input_frame_->Fill(data, timestamp);
   EncodeFrame(sync_input_frame_);
-  input_mutex_.unlock();
   return true;
 }
-
-/*
-bool VideoEncoder::SendFrame(void *y, void *uv, int64_t timestamp) {
-  if (!running_) return false;
-  if (init_timestamp_ == -1) {
-    init_timestamp_ = timestamp;
-    timestamp = 0;
-  } else {
-    timestamp -= init_timestamp_;
-  }
-  input_mutex_.lock();
-  EncodeFrame(y, uv, timestamp);
-  input_mutex_.unlock();
-  return true;
-}
-*/
 
 bool VideoEncoder::PushOutputBuffer(uint8_t *data, size_t size, uint32_t frame_id, int64_t timestamp) {
   if (!running_) return false;
@@ -162,7 +144,7 @@ bool VideoEncoder::PushOutputBuffer(uint8_t *data, size_t size, uint32_t frame_i
   if (!is_client_running_) return false;
 
   std::lock_guard<std::mutex> lk(output_mutex_);
-  if (output_circular_buffer_) {
+
     EncodedFrameHeader efh;
     efh.frame_id = frame_id;
     efh.length = size;
@@ -173,28 +155,12 @@ bool VideoEncoder::PushOutputBuffer(uint8_t *data, size_t size, uint32_t frame_i
     size_t write_size = sizeof(EncodedFrameHeader) + size;
 
     if (free_size < write_size) {
+      LOGW(RTSP) << "Drop one frame because there's no enough free size.";
       output_frames_dropped++;
       return false;
     }
     output_circular_buffer_->write(reinterpret_cast<uint8_t *>(&efh), sizeof(EncodedFrameHeader));
     output_circular_buffer_->write(data, size);
-  } else {
-    if (sync_output_frame_new_ == true) {
-      output_frames_dropped++;
-      return false;
-    }
-    if (size > sync_output_frame_buffer_length_) {
-      if (sync_output_frame_buffer_) delete[] sync_output_frame_buffer_;
-      sync_output_frame_buffer_ = new uint8_t[size];
-      sync_output_frame_buffer_length_ = size;
-    }
-    memcpy(sync_output_frame_buffer_, data, size);
-    output_frame_header_->length = size;
-    output_frame_header_->offset = 0;
-    output_frame_header_->frame_id = frame_id;
-    output_frame_header_->timestamp = timestamp;
-    sync_output_frame_new_ = true;
-  }
 
   return true;
 }
@@ -208,7 +174,6 @@ bool VideoEncoder::GetFrame(uint8_t *data, uint32_t max_size, uint32_t *size, in
   is_client_running_ = true;
   std::lock_guard<std::mutex> lk(output_mutex_);
 
-  if (output_circular_buffer_) {
     size_t data_size = output_circular_buffer_->size();
     uint8_t *header = reinterpret_cast<uint8_t *>(output_frame_header_);
     if (data_size > sizeof(EncodedFrameHeader)) {
@@ -235,19 +200,6 @@ bool VideoEncoder::GetFrame(uint8_t *data, uint32_t max_size, uint32_t *size, in
       *timestamp = -1;
       return false;
     }
-  } else {
-    if (sync_output_frame_new_ == false) return false;
-    if (data == nullptr) {
-      *size = output_frame_header_->length;
-      *timestamp = output_frame_header_->timestamp;
-    } else {
-      uint32_t copy_size = std::min(output_frame_header_->length, max_size);
-      memcpy(data, sync_output_frame_buffer_, copy_size);
-      *size = copy_size;
-      *timestamp = output_frame_header_->timestamp;
-      sync_output_frame_new_ = false;
-    }
-  }
 
   return true;
 }

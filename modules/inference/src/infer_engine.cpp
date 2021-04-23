@@ -45,14 +45,10 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
                          const std::function<void(const std::string& err_msg)>& error_func, bool keep_aspect_ratio,
                          bool batching_by_obj, const std::shared_ptr<ObjPreproc>& obj_preprocessor,
                          const std::shared_ptr<ObjPostproc>& obj_postprocessor,
-                         const std::shared_ptr<ObjFilter>& obj_filter,
-                         std::string dump_resized_image_dir,
-                         CNDataFormat model_input_pixel_format,
-                         bool mem_on_mlu_for_postproc,
-                         bool saving_infer_input,
-                         std::string module_name,
-                         ModuleProfiler* profiler)
-     :model_(model),
+                         const std::shared_ptr<ObjFilter>& obj_filter, std::string dump_resized_image_dir,
+                         CNDataFormat model_input_pixel_format, bool mem_on_mlu_for_postproc, bool saving_infer_input,
+                         std::string module_name, ModuleProfiler* profiler, int pad_method)
+    : model_(model),
       preprocessor_(preprocessor),
       postprocessor_(postprocessor),
       batchsize_(batchsize),
@@ -89,7 +85,8 @@ InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, st
       use_scaler_ = false;
     }
     if (!use_scaler_)
-      rcop_res_ = std::make_shared<RCOpResource>(model, batchsize, keep_aspect_ratio, model_input_pixel_format);
+      rcop_res_ =
+          std::make_shared<RCOpResource>(model, batchsize, keep_aspect_ratio, model_input_pixel_format, pad_method);
     cpu_input_res_->Init();
     mlu_input_res_->Init();
     mlu_output_res_->Init();
