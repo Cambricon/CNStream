@@ -52,7 +52,7 @@ class PreprocYolov3 : public cnstream::Preproc {
     int height = frame->height;
     int dst_w = input_shape.W();
     int dst_h = input_shape.H();
-    cv::Mat img = *(frame->ImageBGR());
+    cv::Mat img = frame->ImageBGR();
     // resize
     if (height != dst_h || width != dst_w) {
       cv::Mat dst(dst_h, dst_w, CV_8UC3, cv::Scalar(128, 128, 128));

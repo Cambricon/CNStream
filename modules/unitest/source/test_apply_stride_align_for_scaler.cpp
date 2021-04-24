@@ -81,8 +81,8 @@ bool CompareFrames(const std::vector<cnstream::CNDataFramePtr> &src_frames,
     EXPECT_FALSE(aligned_frame->stride[0] % 128);
     EXPECT_FALSE(aligned_frame->stride[1] % 128);
 
-    auto src_mat = *(src_frame->ImageBGR());
-    auto dst_mat = *(aligned_frame->ImageBGR());
+    auto src_mat = src_frame->ImageBGR();
+    auto dst_mat = aligned_frame->ImageBGR();
     EXPECT_EQ(0, memcmp(src_mat.data, dst_mat.data, src_mat.total() * src_mat.elemSize()));
   }
   return true;

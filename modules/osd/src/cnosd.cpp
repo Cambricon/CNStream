@@ -48,13 +48,41 @@ static cv::Scalar HSV2RGB(const float h, const float s, const float v) {
   const float t = v * (1 - (1 - f) * s);
   float r, g, b;
   switch (h_i) {
-    case 0: r = v; g = t; b = p; break;
-    case 1: r = q; g = v; b = p; break;
-    case 2: r = p; g = v; b = t; break;
-    case 3: r = p; g = q; b = v; break;
-    case 4: r = t; g = p; b = v; break;
-    case 5: r = v; g = p; b = q; break;
-    default: r = 1; g = 1; b = 1; break;
+    case 0:
+      r = v;
+      g = t;
+      b = p;
+      break;
+    case 1:
+      r = q;
+      g = v;
+      b = p;
+      break;
+    case 2:
+      r = p;
+      g = v;
+      b = t;
+      break;
+    case 3:
+      r = p;
+      g = q;
+      b = v;
+      break;
+    case 4:
+      r = t;
+      g = p;
+      b = v;
+      break;
+    case 5:
+      r = v;
+      g = p;
+      b = q;
+      break;
+    default:
+      r = 1;
+      g = 1;
+      b = 1;
+      break;
   }
   return cv::Scalar(r * 255, g * 255, b * 255);
 }
@@ -76,18 +104,17 @@ CnOsd::CnOsd(const std::vector<std::string>& labels) : labels_(labels) {
   colors_ = GenerateColorsForCategories(labels_.size());
 }
 
-void CnOsd::DrawLogo(cv::Mat* image, std::string logo) const {
-  cv::Point logo_pos(5, image->rows - 5);
+void CnOsd::DrawLogo(cv::Mat image, std::string logo) const {
+  cv::Point logo_pos(5, image.rows - 5);
   uint32_t scale = 1;
   uint32_t thickness = 2;
   cv::Scalar color(200, 200, 200);
-  cv::putText(*image, logo, logo_pos, font_, scale, color, thickness);
+  cv::putText(image, logo, logo_pos, font_, scale, color, thickness);
 }
 
-void CnOsd::DrawLabel(cv::Mat* image, const CNInferObjsPtr& objs_holder,
-                      std::vector<std::string> attr_keys) const {
+void CnOsd::DrawLabel(cv::Mat image, const CNInferObjsPtr& objs_holder, std::vector<std::string> attr_keys) const {
   // check input data
-  if (image->cols * image->rows == 0) {
+  if (image.cols * image.rows == 0) {
     LOGE(OSD) << "Osd: the image is empty.";
     return;
   }
@@ -95,7 +122,7 @@ void CnOsd::DrawLabel(cv::Mat* image, const CNInferObjsPtr& objs_holder,
   for (uint32_t i = 0; i < objs_holder->objs_.size(); ++i) {
     std::shared_ptr<cnstream::CNInferObject> object = objs_holder->objs_[i];
     if (!object) continue;
-    std::pair<cv::Point, cv::Point> corner = GetBboxCorner(*object.get(), image->cols, image->rows);
+    std::pair<cv::Point, cv::Point> corner = GetBboxCorner(*object.get(), image.cols, image.rows);
     cv::Point top_left = corner.first;
     cv::Point bottom_right = corner.second;
     cv::Point bottom_left(top_left.x, bottom_right.y);
@@ -109,6 +136,9 @@ void CnOsd::DrawLabel(cv::Mat* image, const CNInferObjsPtr& objs_holder,
     }
 
     // Draw Detection window
+    LOGD(OSD) << "Draw Bounding Box: "
+              << "top_left: (" << top_left.x << "," << top_left.y << ") bottom_right:(" << bottom_right.x << ","
+              << bottom_right.y << ")";
     DrawBox(image, top_left, bottom_right, color);
 
     // Draw Text label + score + track id
@@ -121,6 +151,9 @@ void CnOsd::DrawLabel(cv::Mat* image, const CNInferObjsPtr& objs_holder,
     text += " " + FloatToString(object->score);
     if (!object->track_id.empty() && object->track_id != "-1") {
       text += " track_id: " + object->track_id;
+      LOGD(OSD) << "Draw Label, Score and TrackID: " << text;
+    } else {
+      LOGD(OSD) << "Draw Label and Score: " << text;
     }
     DrawText(image, bottom_left, text, color);
 
@@ -139,8 +172,7 @@ void CnOsd::DrawLabel(cv::Mat* image, const CNInferObjsPtr& objs_holder,
   }
 }
 
-std::pair<cv::Point, cv::Point> CnOsd::GetBboxCorner(const CNInferObject &object,
-                                                     int img_width, int img_height) const {
+std::pair<cv::Point, cv::Point> CnOsd::GetBboxCorner(const CNInferObject& object, int img_width, int img_height) const {
   float x = CLIP(object.bbox.x);
   float y = CLIP(object.bbox.y);
   float w = CLIP(object.bbox.w);
@@ -152,27 +184,27 @@ std::pair<cv::Point, cv::Point> CnOsd::GetBboxCorner(const CNInferObject &object
   return std::make_pair(top_left, bottom_right);
 }
 
-bool CnOsd::LabelIsFound(const int &label_id) const {
+bool CnOsd::LabelIsFound(const int& label_id) const {
   if (labels_.size() <= static_cast<size_t>(label_id)) {
     return false;
   }
   return true;
 }
 
-int CnOsd::GetLabelId(const std::string &label_id_str) const {
+int CnOsd::GetLabelId(const std::string& label_id_str) const {
   return label_id_str.empty() ? -1 : std::stoi(label_id_str);
 }
 
-void CnOsd::DrawBox(cv::Mat* image, const cv::Point &top_left, const cv::Point &bottom_right,
-                    const cv::Scalar &color) const {
-  cv::rectangle(*image, top_left, bottom_right, color, CalcThickness(image->cols, box_thickness_));
+void CnOsd::DrawBox(cv::Mat image, const cv::Point& top_left, const cv::Point& bottom_right,
+                    const cv::Scalar& color) const {
+  cv::rectangle(image, top_left, bottom_right, color, CalcThickness(image.cols, box_thickness_));
 }
 
-void CnOsd::DrawText(cv::Mat* image, const cv::Point &bottom_left, const std::string &text,
-                     const cv::Scalar &color, float scale, int* text_height) const {
-  double txt_scale = CalcScale(image->cols, text_scale_) * scale;
-  int txt_thickness = CalcThickness(image->cols, text_thickness_) * scale;
-  int box_thickness = CalcThickness(image->cols, box_thickness_) * scale;
+void CnOsd::DrawText(cv::Mat image, const cv::Point& bottom_left, const std::string& text, const cv::Scalar& color,
+                     float scale, int* text_height) const {
+  double txt_scale = CalcScale(image.cols, text_scale_) * scale;
+  int txt_thickness = CalcThickness(image.cols, text_thickness_) * scale;
+  int box_thickness = CalcThickness(image.cols, box_thickness_) * scale;
 
   int baseline = 0;
   int space_before = 0;
@@ -196,26 +228,26 @@ void CnOsd::DrawText(cv::Mat* image, const cv::Point &bottom_left, const std::st
   cv::Point label_top_left = bottom_left + cv::Point(offset, offset);
   cv::Point label_bottom_right = label_top_left + cv::Point(text_size.width + offset, label_height);
   // move up if the label is beyond the bottom of the image
-  if (label_bottom_right.y > image->rows) {
+  if (label_bottom_right.y > image.rows) {
     label_bottom_right.y -= label_height;
     label_top_left.y -= label_height;
   }
   // move left if the label is beyond the right side of the image
-  if (label_bottom_right.x > image->cols) {
-    label_bottom_right.x = image->cols;
-    label_top_left.x = image->cols - text_size.width;
+  if (label_bottom_right.x > image.cols) {
+    label_bottom_right.x = image.cols;
+    label_top_left.x = image.cols - text_size.width;
   }
   // draw text background
-  cv::rectangle(*image, label_top_left, label_bottom_right, color, CV_FILLED);
+  cv::rectangle(image, label_top_left, label_bottom_right, color, CV_FILLED);
   // draw text
   cv::Point text_left_bottom =
       label_top_left + cv::Point(space_before, label_height - baseline / 2 - txt_thickness / 2);
   cv::Scalar text_color = cv::Scalar(255, 255, 255) - color;
   if (cn_font_ == nullptr) {
-    cv::putText(*image, text, text_left_bottom, font_, txt_scale, text_color, txt_thickness);
+    cv::putText(image, text, text_left_bottom, font_, txt_scale, text_color, txt_thickness);
   } else {
     char* str = const_cast<char*>(text.data());
-    cn_font_->putText(*image, str, text_left_bottom, text_color);
+    cn_font_->putText(image, str, text_left_bottom, text_color);
   }
   if (text_height) *text_height = text_size.height + baseline;
 }
@@ -226,8 +258,6 @@ int CnOsd::CalcThickness(int image_width, float thickness) const {
   return result;
 }
 
-double CnOsd::CalcScale(int image_width, float scale) const {
-  return scale * image_width / 1000;
-}
+double CnOsd::CalcScale(int image_width, float scale) const { return scale * image_width / 1000; }
 
 }  // namespace cnstream

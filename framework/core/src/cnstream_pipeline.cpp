@@ -550,7 +550,7 @@ void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
       continue;
     }
 
-    assert(ShouldTransmit(data, instance.get()));
+    // assert(ShouldTransmit(data, instance.get()));
 
     if (profiler_ && !data->IsEos()) {
       auto profiling_record_key = std::make_pair(data->stream_id, data->timestamp);

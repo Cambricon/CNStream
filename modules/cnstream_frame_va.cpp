@@ -43,20 +43,6 @@
 
 namespace cnstream {
 
-CNDataFrame::~CNDataFrame() {
-  mlu_data.reset();
-  cpu_data.reset();
-
-  if (nullptr != deAllocator_) {
-    deAllocator_.reset();
-  }
-#ifdef HAVE_OPENCV
-  if (nullptr != bgr_mat) {
-    delete bgr_mat, bgr_mat = nullptr;
-  }
-#endif
-}
-
 #ifdef HAVE_OPENCV
 namespace color_cvt {
 static
@@ -119,20 +105,17 @@ cv::Mat FrameToImageBGR(const CNDataFrame& frame) {
       LOGF(FRAME) << "Unsupport pixel format. fmt[" << static_cast<int>(frame.fmt) << "]";
   }
   // never be here
-  abort();
   return cv::Mat();
 }
 
 }  // namespace color_cvt
 
-cv::Mat* CNDataFrame::ImageBGR() {
+cv::Mat CNDataFrame::ImageBGR() {
   std::lock_guard<std::mutex> lk(mtx);
-  if (bgr_mat != nullptr) {
+  if (!bgr_mat.empty()) {
     return bgr_mat;
   }
-  bgr_mat = new (std::nothrow) cv::Mat();
-  LOGF_IF(FRAME, nullptr == bgr_mat) << "CNDataFrame::ImageBGR() failed to alloc cv::Mat";
-  *bgr_mat = color_cvt::FrameToImageBGR(*this);
+  bgr_mat = color_cvt::FrameToImageBGR(*this);
   return bgr_mat;
 }
 #endif

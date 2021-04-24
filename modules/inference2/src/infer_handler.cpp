@@ -87,7 +87,6 @@ InferHandlerImpl::~InferHandlerImpl() {
   mlu_ctx.SetDeviceId(params_.device_id);
   mlu_ctx.BindDevice();
   Close();
-  if (data_observer_) data_observer_.reset();
 }
 
 bool InferHandlerImpl::Open() {

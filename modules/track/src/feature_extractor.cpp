@@ -164,7 +164,7 @@ void FeatureExtractor::ExtractFeatureOnMlu(const CNDataFramePtr& frame,
 void FeatureExtractor::ExtractFeatureOnCpu(const CNDataFramePtr& frame,
                                            const CNInferObjsPtr& objs_holder,
                                            std::vector<std::vector<float>>* features) {
-  const cv::Mat image = *frame->ImageBGR();
+  const cv::Mat image = frame->ImageBGR();
   for (uint32_t num = 0; num < objs_holder->objs_.size(); ++num) {
     auto obj = objs_holder->objs_[num];
     cv::Rect rect = cv::Rect(obj->bbox.x * image.cols, obj->bbox.y * image.rows, obj->bbox.w * image.cols,

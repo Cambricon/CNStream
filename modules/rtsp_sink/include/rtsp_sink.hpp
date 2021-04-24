@@ -141,9 +141,9 @@ class RtspSink : public ModuleEx, public ModuleCreator<RtspSink> {
   bool CheckParamSet(const ModuleParamSet& paramSet) const override;
 
  private:
-  RtspSinkContext* GetRtspSinkContext(CNFrameInfoPtr data);
+  std::shared_ptr<RtspSinkContext> GetRtspSinkContext(CNFrameInfoPtr data);
   RtspParam GetRtspParam(CNFrameInfoPtr data);
-  RtspSinkContext* CreateRtspSinkContext(CNFrameInfoPtr data);
+  std::shared_ptr<RtspSinkContext> CreateRtspSinkContext(CNFrameInfoPtr data);
   void OnStreamEos(CNFrameInfoPtr data);
   void SetParam(const ModuleParamSet& paramSet, std::string name, int* variable, int default_value);
   void SetParam(const ModuleParamSet& paramSet, std::string name, std::string* variable, std::string default_value);
@@ -154,7 +154,7 @@ class RtspSink : public ModuleEx, public ModuleCreator<RtspSink> {
   bool is_mosaic_style_ = false;
 
   RwLock rtsp_lock_;
-  std::unordered_map<int, RtspSinkContext*> contexts_;
+  std::unordered_map<int, std::shared_ptr<RtspSinkContext>> contexts_;
 };  // class RtspSink
 
 }  // namespace cnstream

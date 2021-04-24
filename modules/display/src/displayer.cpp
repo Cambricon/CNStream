@@ -87,7 +87,7 @@ int Displayer::Process(CNFrameInfoPtr data) {
   if (show_) {
     UpdateData ud;
     CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
-    ud.img = *frame->ImageBGR();
+    ud.img = frame->ImageBGR();
     ud.chn_idx = data->GetStreamIndex();
     ud.stream_id = data->stream_id;
     ud.pts = data->timestamp;

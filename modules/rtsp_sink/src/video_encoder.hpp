@@ -107,9 +107,6 @@ class VideoEncoder {
   std::mutex output_mutex_;
   CircularBuffer *output_circular_buffer_ = nullptr;
   EncodedFrameHeader *output_frame_header_ = nullptr;
-  uint8_t *sync_output_frame_buffer_ = nullptr;
-  uint32_t sync_output_frame_buffer_length_ = 0;
-  bool sync_output_frame_new_ = false;
 
   uint32_t input_frames_dropped = 0;
   uint32_t output_frames_dropped = 0;

@@ -335,7 +335,7 @@ class Pipeline : private NonCopyable {
    * link-index is returned by Pipeline::LinkModules.
    *
    * @param status The link status to query.
-   * @param link_id The Link-index returned by Pipeline::LinkModules.
+   * @param link_id The Link-index returned by Pipeline::LinkModules,  in shape "up node name --> down node name".
    *
    * @return Returns true if this function has run successfully. Otherwise, returns false.
    *
@@ -414,12 +414,19 @@ class Pipeline : private NonCopyable {
    **/
   bool IsLeafNode(const std::string& node_name) const;
 
- private:
-  /** called by BuildPipeline **/
-  void GenerateRouteMask();
+  /**
+   * Return modules' names.
+   *
+   * @param none
+   *
+   * @return modules' names.
+   **/
   std::vector<std::string> GetModuleNames();
 
  private:
+  /** called by BuildPipeline **/
+  void GenerateRouteMask();
+
   /* ------Internal methods------ */
   void UpdateByStreamMsg(const StreamMsg& msg);
   void StreamMsgHandleFunc();

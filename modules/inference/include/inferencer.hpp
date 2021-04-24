@@ -122,7 +122,9 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
    *   mem_on_mlu_for_postproc: Optional. Pass a batch mlu pointer directly to post-processing function without
                                 making d2h copies. see `Postproc` for details.
    *   saving_infer_input: Optional. Save the data close to inferencing.
-   * 
+   *   pad_method: Optional. When use mlu preprocessing, set the pad method. set pad_method = "center", image in center;
+                              set the pad_method = "origin". image in top left corner.
+   *                          if not set this param, the default value is "center"
    * @endverbatim
    *
    * @return Returns ture if the inferencer has been opened successfully.
