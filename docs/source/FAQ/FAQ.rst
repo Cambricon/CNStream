@@ -38,3 +38,28 @@ file_list文件是做什么用的？
     /path/of/%d.jpg
     ...
 
+怎么输入任意命名的图片？
+-----------------------------
+
+目前CNStream支持Jpeg图片解码，可以通过file_list中添加字段进行通配符匹配，这种使用方式对图片源输入来说并不灵活。CNStream同时还支持输入任意名字的图片，通过fopen或者cv::imread事先将图片读入内存，然后再把该内存数据喂入Pipeline中进行后续处理。具体细节可以参考
+``cnstream/samples/demo/demo.cpp`` 文件中的函数  ``AddSourceForDecompressedImage`` 和 ``AddSourceForImageInMem`` 内容。
+
+
+有没有交叉编译CNStream的指导？
+-----------------------------
+
+可以参考第三方开发人员提供步骤 https://github.com/CambriconKnight/mlu220-cross-compile-docker-image
+
+
+parallelism 参数该怎么配置？
+-----------------------------
+
+parallelism是模块内并行度，表明有多少个线程在同时运行 ``Module::Process`` 函数。 总体上该值越大，并行度越高，流水线处理能力越强，占用资源也越多。
+
+* parallelism值应不大于数据流路数，否则会有线程空挂，造成资源浪费。同时增大该值时需要时刻关注系统资源是否够用。
+
+* 对于数据源插件，parallelism设置为0即可, 因为数据源插件的并行度是由输入数据路数决定的。
+
+* 对于Inference插件，parallelism建议小于硬件核数与离线模型核数之比。
+
+* 其余插件可以根据具体性能进行调整，比如某个插件性能较低，那么可以增大其parallelism值提高处理速率。如果当前性能已经远远超出pipeline上其他插件，那么可以减小该值以减少资源占用。

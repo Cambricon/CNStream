@@ -44,7 +44,7 @@ RUN  yum install -y wget && \
 	 yum clean all && yum makecache && \
 	 yum install -y epel-release curl libcurl-devel && \
 	 yum install -y zlib-devel git make vim gcc gcc-c++ kernel-devel net-tools cmake && \
-	 yum install -y opencv-devel.x86_64 gflags-devel glog-devel SDL2_gfx-devel lcov &&\
+	 yum install -y opencv-devel.x86_64 gflags-devel glog-devel SDL2_gfx-devel librdkafka-devel lcov &&\
 	 rpm --import http://li.nux.ro/download/nux/RPM-GPG-KEY-nux.ro && \
 	 rpm -Uvh http://li.nux.ro/download/nux/dextop/el7/x86_64/nux-dextop-release-0-5.el7.nux.noarch.rpm && \
 	 yum install -y ffmpeg ffmpeg-devel gstreamer*

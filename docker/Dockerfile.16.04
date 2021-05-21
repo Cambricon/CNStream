@@ -38,24 +38,12 @@ ARG with_cnstream_code=no
 
 RUN echo -e 'nameserver 114.114.114.114' > /etc/resolv.conf
 
-RUN echo deb http://mirrors.aliyun.com/ubuntu/ xenial main restricted  > /etc/apt/sources.list && \
-    echo deb-src http://mirrors.aliyun.com/ubuntu/ xenial main restricted multiverse universe >> /etc/apt/sources.list && \
-    echo deb http://mirrors.aliyun.com/ubuntu/ xenial-updates main restricted >> /etc/apt/sources.list && \
-    echo deb http://mirrors.aliyun.com/ubuntu/ xenial universe >> /etc/apt/sources.list && \
-    echo deb http://mirrors.aliyun.com/ubuntu/ xenial-updates universe >> /etc/apt/sources.list && \
-    echo deb http://mirrors.aliyun.com/ubuntu/ xenial multiverse >> /etc/apt/sources.list && \
-    echo deb http://mirrors.aliyun.com/ubuntu/ xenial-updates multiverse >> /etc/apt/sources.list && \
-    echo deb http://mirrors.aliyun.com/ubuntu/ xenial-backports main restricted universe multiverse >> /etc/apt/sources.list && \
-    echo deb-src http://mirrors.aliyun.com/ubuntu/ xenial-backports main restricted universe multiverse >> /etc/apt/sources.list && \
-    echo deb http://mirrors.aliyun.com/ubuntu/ xenial-security main restricted >> /etc/apt/sources.list && \
-    echo deb-src http://mirrors.aliyun.com/ubuntu/ xenial-security main restricted multiverse universe >> /etc/apt/sources.list && \
-    echo deb http://mirrors.aliyun.com/ubuntu/ xenial-security universe  >> /etc/apt/sources.list && \
-    echo deb http://mirrors.aliyun.com/ubuntu/ xenial-security multiverse >> /etc/apt/sources.list && \
-    apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+RUN sed -i "1i deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted\n deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted\n deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial universe\n deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates universe\n deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial multiverse\n deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates multiverse\n deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\n deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted\n deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security universe\n deb http://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security multiverse\n"  /etc/apt/sources.list && \
+   apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends --fix-missing \
             curl git wget vim build-essential cmake make \
             libopencv-dev libcurl4-openssl-dev \
             libgoogle-glog-dev \
-            openssh-server \
+            openssh-server librdkafka-dev\
             libsdl2-dev  \ 
             lcov  \
             ca-certificates \
