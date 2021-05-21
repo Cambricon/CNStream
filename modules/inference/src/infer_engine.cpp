@@ -156,7 +156,9 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
       return card;
     }
     CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(finfo);
-    CNObjsVec &objs = objs_holder->objs_;
+    objs_holder->mutex_.lock();
+    CNObjsVec objs = objs_holder->objs_;
+    objs_holder->mutex_.unlock();
     for (size_t idx = 0; idx < objs.size(); ++idx) {
       auto& obj = objs[idx];
       if (obj_filter_) {

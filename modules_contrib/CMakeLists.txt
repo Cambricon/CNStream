@@ -1,9 +1,12 @@
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib/)
 
-set(contrib_modules_list fakesink)
+set(contrib_modules_list fakesink kafka)
+#find_package(LibRDKafka REQUIRED)
 
 include_directories(${PROJECT_SOURCE_DIR}/modules)
-
+include_directories(${PROJECT_SOURCE_DIR}/modules/util/include)
+include_directories(${PROJECT_SOURCE_DIR}/3rdparty/cppcodec)
+include_directories(/usr/include)
 foreach(contrib_module ${contrib_modules_list})
   include_directories(${PROJECT_SOURCE_DIR}/modules_contrib/${contrib_module}/include)
   install(DIRECTORY ${PROJECT_SOURCE_DIR}/modules_contrib/${contrib_module}/include/ DESTINATION include)
@@ -15,7 +18,7 @@ if(DEFINED contrib_modules_list)
   add_library(cnstream_contrib SHARED ${contrib_module_srcs})
   set_target_properties(cnstream_contrib PROPERTIES LINK_FLAGS_RELEASE -s)
   include_directories(${OpenCV_INCLUDE_DIRS})
-  target_link_libraries(cnstream_contrib cnrt easydk cnstream_core ${OpenCV_LIBS}
-    ${SOURCE_LINKER_LIBS})
+  target_link_libraries(cnstream_contrib cnrt easydk cnstream_core cnstream_va ${OpenCV_LIBS}
+    ${SOURCE_LINKER_LIBS} rdkafka)
   install(TARGETS cnstream_contrib LIBRARY DESTINATION lib)
 endif()

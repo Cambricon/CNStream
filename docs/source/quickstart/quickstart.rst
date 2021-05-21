@@ -136,19 +136,19 @@ CNStream提供以下Dockerfile，其中``${CNSTREAM_DIR}`` 代表CNStream源码�
 
          ::
 	     
-             docker build -f Dockerfile.18.04 --build-arg toolkit_package=${cntoolkit_package_name} -t ubuntu_cnstream:v1 
+             docker build -f Dockerfile.18.04 --build-arg toolkit_package=${cntoolkit_package_name} -t ubuntu1804_cnstream:v1 .
 
    -  如果选择不将寒武纪CNToolkit包安装进镜像中，运行下面命令编译镜像：
 
       ::
 	     
-             docker build -f Dockerfile.18.04 -t ubuntu_cnstream:v1
+             docker build -f Dockerfile.18.04 -t ubuntu1804_cnstream:v1 .
 			
 4. 运行下面命令，开启容器：
 
    ::
    
-     docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
+     docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace ubuntu1804_cnstream:v1
 
 5. 如果之前制作的镜像没有安装寒武纪CNToolkit安装包，安装CNToolkit安装包。详情查看 :ref:`寒武纪依赖库` 。
      

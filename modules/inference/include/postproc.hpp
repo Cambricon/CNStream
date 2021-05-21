@@ -37,9 +37,6 @@
 
 #include "cnstream_frame.hpp"
 #include "cnstream_frame_va.hpp"
-#include "infer_server.h"
-#include "buffer.h"
-#include "processor.h"
 
 namespace cnstream {
 /**

@@ -86,7 +86,7 @@ bool PipelineHandler::Start() {
 
   if (ppipeline_->IsProfilingEnabled()) {
     perf_print_th_ret = std::async(std::launch::async, [&] {
-      while (gstop_perf_print) {
+      while (!gstop_perf_print) {
         std::this_thread::sleep_for(std::chrono::seconds(2));
         PrintPipelinePerformance("Whole", ppipeline_->GetProfiler()->GetProfile());
         if (ppipeline_->IsTracingEnabled()) {
@@ -107,15 +107,15 @@ void PipelineHandler::Stop() {
     RemoveStream(stream_id_);
     stream_id_ = "";
     ppipeline_->Stop();
+    if (ppipeline_->IsProfilingEnabled()) {
+      gstop_perf_print = true;
+      perf_print_th_ret.get();
+      PrintPipelinePerformance("Whole", ppipeline_->GetProfiler()->GetProfile());
+    }
     delete ppipeline_;
     ppipeline_ = nullptr;
   }
 
-  if (ppipeline_->IsProfilingEnabled()) {
-    gstop_perf_print = true;
-    perf_print_th_ret.get();
-    PrintPipelinePerformance("Whole", ppipeline_->GetProfiler()->GetProfile());
-  }
 
   LOGI(WEBVISUAL) << "stop pipeline succeed.";
 }

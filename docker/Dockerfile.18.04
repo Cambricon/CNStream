@@ -45,7 +45,7 @@ RUN sed -i "1i deb http://mirrors.aliyun.com/ubuntu/ bionic main restricted univ
             libsdl2-dev wget \ 
             git build-essential cmake make vim curl libcurl4-openssl-dev \
             libgoogle-glog-dev \
-            openssh-server \
+            openssh-server librdkafka-dev \
             lcov  \ 
             ca-certificates \
             net-tools && \

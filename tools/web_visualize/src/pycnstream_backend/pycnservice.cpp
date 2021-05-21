@@ -211,7 +211,7 @@ void PyCNService::FrameDataCallBack(std::shared_ptr<cnstream::CNFrameInfo> in_da
     cnsframe.frame_info.width = cnsinfo_.dst_width;
     cnsframe.frame_info.height = cnsinfo_.dst_height;
     cnsframe.bgr_mat = new (std::nothrow) cv::Mat(cnsinfo_.dst_width, cnsinfo_.dst_height, CV_8UC3);
-    cv::resize(*data->ImageBGR(), *cnsframe.bgr_mat, cv::Size(cnsinfo_.dst_width, cnsinfo_.dst_height), 0, 0,
+    cv::resize(data->ImageBGR(), *cnsframe.bgr_mat, cv::Size(cnsinfo_.dst_width, cnsinfo_.dst_height), 0, 0,
                cv::INTER_LINEAR);
   }
 
