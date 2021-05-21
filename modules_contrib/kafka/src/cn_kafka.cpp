@@ -22,18 +22,15 @@
 
 #include <errno.h>
 #include <signal.h>
-#include <syslog.h>
+#include <time.h>
 
 #include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 
+#include "cnstream_logging.hpp"
 namespace cnstream {
-#define LOGE(...) log(rk_, LOG_LEVEL_ERROR, "ERROR", "CNKAFKA: " __VA_ARGS__)
-#define LOGW(...) log(rk_, LOG_LEVEL_WARNING, "WARNING", "CNKAFKA: " __VA_ARGS__)
-#define LOGI(...) log(rk_, LOG_LEVEL_INFO, "INFO", "CNKAFKA: " __VA_ARGS__)
-#define LOGD(...) log(rk_, LOG_LEVEL_DEBUG, "DEBUG", "CNKAFKA: " __VA_ARGS__)
 
 CnKafka::Logger CnKafka::logger_ = nullptr;
 
@@ -56,17 +53,14 @@ CnKafka::~CnKafka() {
 bool CnKafka::Start(TYPE type, const std::string &brokers, const std::string &topic, int32_t partition) {
   char tmp[16];
   char errstr[512];
-  /*
-  LOGD("%% Start(%s, %s, %s, %d)", type == PRODUCER ? "PRODUCER" : "CONSUMER", brokers.c_str(), topic.c_str(),
-       partition);
-  */
+
   mode_ = (type == CONSUMER) ? PRE_CONSUME : PRE_PRODUCE;
 
   type_ = type;
   partition_ = partition;
   conf_ = rd_kafka_conf_new();
   if (!conf_) {
-    LOGE("%% rd_kafka_conf_new.error");
+    LOGE(Kafka) << "rd_kafka_conf_new.error";
     Stop();
     return false;
   }
@@ -78,7 +72,7 @@ bool CnKafka::Start(TYPE type, const std::string &brokers, const std::string &to
   /* Topic configuration */
   topic_conf_ = rd_kafka_topic_conf_new();
   if (!topic_conf_) {
-    LOGE("%% rd_kafka_topic_conf_new.error");
+    LOGE(Kafka) << "rd_kafka_topic_conf_new.error";
     Stop();
     return false;
   }
@@ -89,7 +83,7 @@ bool CnKafka::Start(TYPE type, const std::string &brokers, const std::string &to
 
     /* Create Kafka consumer */
     if (!(rk_ = rd_kafka_new(RD_KAFKA_CONSUMER, conf_, errstr, sizeof(errstr)))) {
-      LOGE("%% Failed to create new consumer: %s", errstr);
+      LOGE(Kafka) << "Failed to create new consumer:" << errstr;
       Stop();
       return false;
     }
@@ -101,7 +95,7 @@ bool CnKafka::Start(TYPE type, const std::string &brokers, const std::string &to
 
     /* Create Kafka producer */
     if (!(rk_ = rd_kafka_new(RD_KAFKA_PRODUCER, conf_, errstr, sizeof(errstr)))) {
-      LOGE("%% Failed to create new producer: %s", errstr);
+      LOGE(Kafka) << "Failed to create new producer" << errstr;
       Stop();
       return false;
     }
@@ -113,7 +107,7 @@ bool CnKafka::Start(TYPE type, const std::string &brokers, const std::string &to
 
   /* Add brokers */
   if (rd_kafka_brokers_add(rk_, brokers.c_str()) == 0) {
-    LOGE("%% No valid brokers specified");
+    LOGE(Kafka) << "No valid brokers specified";
     Stop();
     return false;
   }
@@ -121,7 +115,7 @@ bool CnKafka::Start(TYPE type, const std::string &brokers, const std::string &to
   /* Create topic */
   topic_ = rd_kafka_topic_new(rk_, topic.c_str(), topic_conf_);
   if (!topic_) {
-    LOGE("%% rd_kafka_topic_new.error");
+    LOGE(Kafka) << "rd_kafka_topic_new.error";
     Stop();
     return false;
   }
@@ -133,7 +127,7 @@ bool CnKafka::Start(TYPE type, const std::string &brokers, const std::string &to
     /* Start consuming */
     int64_t start_offset = RD_KAFKA_OFFSET_STORED;
     if (rd_kafka_consume_start(topic_, partition, start_offset) == -1) {
-      // LOGE("%% Failed to start consuming: %s", rd_kafka_err2str(rd_kafka_last_error()));
+      LOGE(Kafka) << "Failed to start consuming";
       Stop();
       return false;
     }
@@ -147,7 +141,7 @@ bool CnKafka::Start(TYPE type, const std::string &brokers, const std::string &to
 
 bool CnKafka::Stop(bool instant) {
   if (mode_ == IDEL) {
-    LOGW("%% Already stopped");
+    LOGW(Kafka) << "Already stopped";
     return true;
   }
 
@@ -229,8 +223,7 @@ bool CnKafka::Produce(const uint8_t *payload, size_t length) {
   /* Send/Produce message. */
   if (rd_kafka_produce(topic_, partition_, RD_KAFKA_MSG_F_COPY, const_cast<uint8_t *>(payload), length, nullptr, 0,
                        nullptr) == -1) {
-    // LOGE("%% Failed to produce to topic %s partition %i: %s", rd_kafka_topic_name(topic_), partition_,
-    //     rd_kafka_err2str(rd_kafka_last_error()));
+    LOGE(Kafka) << "Failed to produce to topic %s partition" << rd_kafka_topic_name(topic_) << partition_;
     return false;
   }
 
@@ -243,7 +236,7 @@ bool CnKafka::Produce(const uint8_t *payload, size_t length) {
 void CnKafka::logger(const rd_kafka_t *rk, int level, const char *fac, const char *buf) {
   if (logger_ != nullptr) {
     int log_level = LOG_LEVEL_DEBUG;
-    if (level <= LOG_ERR) {
+    if (level <= LOG_LEVEL_ERROR) {
       log_level = LOG_LEVEL_ERROR;
     } else if (level == LOG_WARNING) {
       log_level = LOG_LEVEL_WARNING;
@@ -253,6 +246,18 @@ void CnKafka::logger(const rd_kafka_t *rk, int level, const char *fac, const cha
       log_level = LOG_LEVEL_DEBUG;
     }
     logger_(log_level, buf);
+  } else {
+    auto n = std::chrono::high_resolution_clock::now();
+    auto usec = std::chrono::duration_cast<std::chrono::microseconds>(n.time_since_epoch());
+    auto us = (usec.count()) % 1000000;
+    auto t = std::chrono::system_clock::to_time_t(n);
+    auto time = std::localtime(&t);
+    char foo[80];
+    strftime(foo, 80, "%Y-%m-%d %H:%M:%S", time);
+    LOGE(Kafka) << "[" << foo << "." << std::setw(6) << std::setfill('0') << us
+                << "] "
+                /* << "RDKAFKA-" << level << "-" */
+                << fac << (rk ? (": " + std::string(rd_kafka_name(rk))) : "") << ": " << buf << std::endl;
   }
 }
 
@@ -272,16 +277,16 @@ bool CnKafka::msg_consume(rd_kafka_message_t *msg, uint8_t **p_payload, size_t *
     *p_payload = nullptr;
     *p_len = 0;
     if (msg->err == RD_KAFKA_RESP_ERR__PARTITION_EOF) {
-      LOGE("%% Consumer reached end of %s [%" PRId32 "] message queue at offset %" PRId64 "",
-           rd_kafka_topic_name(msg->rkt), msg->partition, msg->offset);
+      LOGE(Kafka) << " Consumer reached end of " << rd_kafka_topic_name(msg->rkt) << " message queue at offset "
+                  << msg->offset;
       return false;
     }
 
-    LOGE("%% Consume error for topic \"%s\" [%" PRId32 "] offset %" PRId64 ": %s", rd_kafka_topic_name(msg->rkt),
-         msg->partition, msg->offset, rd_kafka_message_errstr(msg));
+    LOGE(Kafka) << "Consume error for topic:" << rd_kafka_topic_name(msg->rkt) << " offset:" << msg->offset << " "
+                << rd_kafka_message_errstr(msg);
 
     if (msg->err == RD_KAFKA_RESP_ERR__UNKNOWN_PARTITION || msg->err == RD_KAFKA_RESP_ERR__UNKNOWN_TOPIC) {
-      LOGE("%% Exit read process");
+      LOGE(Kafka) << "%% Exit read process";
     }
 
     return false;

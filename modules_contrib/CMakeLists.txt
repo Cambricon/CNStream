@@ -1,12 +1,19 @@
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib/)
 
 set(contrib_modules_list fakesink kafka)
-#find_package(LibRDKafka REQUIRED)
+include("${PROJECT_SOURCE_DIR}/cmake/FindLibRDKafka.cmake")
+if(LIBRDKAFKA_FOUND)
+  message(STATUS "rdkafka include dir : ${LibRDKafka_INCLUDE_DIR}")
+  message(STATUS "rdkafka libraries : ${LibRDKafka_C_LIBRARIES}")
+else()
+  message(FATAL_ERROR "rdkafka not found")
+endif()
+include_directories(${LibRDKafka_INCLUDE_DIR})
 
 include_directories(${PROJECT_SOURCE_DIR}/modules)
 include_directories(${PROJECT_SOURCE_DIR}/modules/util/include)
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/cppcodec)
-include_directories(/usr/include)
+
 foreach(contrib_module ${contrib_modules_list})
   include_directories(${PROJECT_SOURCE_DIR}/modules_contrib/${contrib_module}/include)
   install(DIRECTORY ${PROJECT_SOURCE_DIR}/modules_contrib/${contrib_module}/include/ DESTINATION include)

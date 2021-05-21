@@ -39,10 +39,7 @@ class KafkaHandler : virtual public ReflexObjectEx<cnstream::KafkaHandler> {
   using ConsumeFunc = std::function<bool(std::string *, int)>;
   using ConfigFunc = std::function<bool(const std::string &)>;
 
-  virtual int ProduceInfo(const ProduceFunc produce, const std::string &param,
-                          const std::shared_ptr<cnstream::CNFrameInfo> &data) {
-    return 0;
-  }
+  virtual int ProduceInfo(const ProduceFunc produce, const std::shared_ptr<cnstream::CNFrameInfo> &data) { return 0; }
 };  // class KafkaHandler
 }  // namespace cnstream
 

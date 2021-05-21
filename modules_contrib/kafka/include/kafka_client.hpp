@@ -50,20 +50,16 @@ class KafkaClient : public cnstream::Module, public cnstream::ModuleCreator<Kafk
  private:
   KafkaClientContext *GetContext(CNFrameInfoPtr data);
 
-  bool Produce(KafkaProducer *producer, std::ofstream &log_file, const std::string &str);
-  bool Consume(KafkaConsumer *consumer, std::ofstream &log_file, std::string *str, int timeout);
-  bool Config(const std::string &param, bool store = false);
+  bool Produce(KafkaProducer *producer, const std::string &str);
+  bool Consume(KafkaConsumer *consumer, std::string *str, int timeout);
   void Log(int level, const std::string &str);
 
   std::unordered_map<int, KafkaClientContext *> contexts_;
-  std::vector<std::string> stream_ids_;
   std::string broker_;
   std::string handler_name_;
+  // the topic_ is prefix of a real topic. eg:if you set topic in json is "cndata",
+  // the stream_id 0`s real topic is "cndata_0"
   std::string topic_;
-
-  KafkaProducer *producer_ = nullptr;
-  KafkaConsumer *consumer_ = nullptr;
-  KafkaHandler *handler_ = nullptr;
 };  // class KafkaClient
 
 }  // namespace cnstream
