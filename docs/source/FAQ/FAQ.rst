@@ -63,3 +63,15 @@ parallelism是模块内并行度，表明有多少个线程在同时运行 ``Mod
 * 对于Inference插件，parallelism建议小于硬件核数与离线模型核数之比。
 
 * 其余插件可以根据具体性能进行调整，比如某个插件性能较低，那么可以增大其parallelism值提高处理速率。如果当前性能已经远远超出pipeline上其他插件，那么可以减小该值以减少资源占用。
+
+
+使用module_contrib模块出现未定义错误该怎么解决？
+-----------------------------
+
+module_contrib目录会编译成libcnstream_contrib.so库。而CNStream使用的反射技术在运行时才会依据类名字符串实例化一个类，所以即使在链接列表中有指定这个库，仍有可能不会链接，等到程序运行时就会出现某个类未定义这样的错误。
+我们可以通过ldd命令查看是否真正完成链接。那么为了保证找到类定义，我们可以给链接选项加上--no-as-needed参数，如CMake就可以这样书写：set(CMAKE_EXE_LINKER_FLAGS "-Wl,--no-as-needed")。
+
+怎么提高Log打印等级？
+-----------------------------
+
+CNStream默认的log输出等级是INFO，可以通过环境变量 CNSTREAM_min_log_level 或者命令行参数 min_log_level 调整日志输出等级，数字越大输出的log内容越多。更多细节可以参阅CNStream用户手册中关于Log工具的描述。

@@ -190,7 +190,7 @@ Inferencer::Inferencer(const std::string& name) : Module(name) {
   hasTransmit_.store(1);  // transmit data by module itself
   param_register_.SetModuleDesc(
       "Inferencer is a module for running offline model inference,"
-      " as well as preprocedding and postprocessing.");
+      " as well as preprocessing and postprocessing.");
   param_manager_ = new (std::nothrow) InferParamManager();
   LOGF_IF(INFERENCER, !param_manager_) << "Inferencer::Inferencer(const std::string& name) new InferParams failed.";
   param_manager_->RegisterAll(&param_register_);
