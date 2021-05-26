@@ -228,6 +228,22 @@ static void CheckConfigFile(const std::string& config_file) {
   }
 
   for (rapidjson::Document::ConstMemberIterator iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter) {
+    rapidjson::StringBuffer sbuf;
+    rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
+    iter->value.Accept(jwriter);
+
+    cnstream::ProfilerConfig profiler_config;
+    std::string item_name = iter->name.GetString();
+    if (cnstream::kPROFILER_CONFIG_NAME == item_name) {
+      LOGI(INSPECT) << "Check profiler [" << item_name << "] ...";
+      if (!profiler_config.ParseByJSONStr(std::string(sbuf.GetString()))) {
+        LOGE(INSPECT) << "Parse profiler config failed.";
+        return;
+      }
+      LOGI(INSPECT) << "Succeed!";
+      continue;
+    }
+
     cnstream::CNModuleConfig mconf;
     mconf.name = iter->name.GetString();
     LOGI(INSPECT) << "Check module [" << mconf.name << "] ...";
@@ -240,9 +256,6 @@ static void CheckConfigFile(const std::string& config_file) {
     }
     namelist.push_back(mconf.name);
 
-    rapidjson::StringBuffer sbuf;
-    rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
-    iter->value.Accept(jwriter);
     if (!mconf.ParseByJSONStr(std::string(sbuf.GetString()))) {
       std::string err_str = "Check module configuration failed, Module name : [" + mconf.name + "].";
       std::cout << err_str << std::endl;

@@ -96,7 +96,6 @@ struct CNModuleConfig {
   int maxInputQueueSize;          ///< The maximum size of the input data queues.
   std::string className;          ///< The class name of the module.
   std::vector<std::string> next;  ///< The name of the downstream modules.
-  bool showPerfInfo;              ///< Whether to show performance information or not.
 
   /**
    * Parses members from JSON string except CNModuleConfig::name.
