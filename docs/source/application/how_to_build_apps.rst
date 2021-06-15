@@ -6,7 +6,7 @@
 概述
 -----
 
-基于CNStream创建应用程序，实际上是基于CNStream自有模块和用户自定义模块搭建业务流水线。用户可以选择使用配置文件方式或非配置文件方式创建应用程序。
+基于CNStream创建应用程序，实际上是基于CNStream内置模块和用户自定义模块搭建业务流水线。用户可以选择使用配置文件方式或非配置文件方式创建应用程序。
 
 配置文件方式与非配置文件方式的主要区别在于，配置文件使用JSON文件格式声明pipeline结构、模块上下游关系和模块参数等，而非配置文件则需要开发者创建模块对象，设置模块参数和模块上下游关系等。  相对而言，配置文件方式更加灵活，推荐使用。开发者编写pipeline基本骨架后，仍可以灵活地调整配置文件中的模块参数甚至结构，而无需重新编译。
 
@@ -23,7 +23,7 @@ JSON配置文件的编写
 
 JSON配置文件主要用于声明pipeline中各个模块的上下游关系及其每个模块内部的参数配置。   
 
-下面示例展示了如何使用CNStream提供的自有模块DataSource、Inferencer、Tracker、Osd、Encoder，以及ssd和track离线模型，实现一个典型的pipeline操作。
+下面示例展示了如何使用CNStream提供的内置模块DataSource、Inferencer、Tracker、Osd、Encoder，以及ssd和track离线模型，实现一个典型的pipeline操作。
 
 典型的pipeline操作为：
 
@@ -39,11 +39,10 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
 
   {
   "source" : {     
-    // 数据源模块。设置使用ffmpeg进行demux，使用MUL解码，不单独启动线程。 
+    // 数据源模块。设置使用ffmpeg进行demux，使用MLU解码，pipeline不负责该模块的线程启动。 
     "class_name" : "cnstream::DataSource",
     "parallelism" : 0,
     "next_modules" : ["detector"],
-    "show_perf_info" : true,
     "custom_params" : {
       "source_type" : "ffmpeg",
       "output_type" : "mlu",
@@ -58,7 +57,6 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["tracker"],
-    "show_perf_info" : true,
     "custom_params" : {
       "model_path" : "../data/models/resnet34ssd/resnet34_ssd.cambricon",
       "func_name" : "subnet0",
@@ -73,7 +71,6 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["osd"],
-    "show_perf_info" : true,
     "custom_params" : {
       "model_path" : "../data/models/Track/track.cambricon",
       "func_name" : "subnet0"
@@ -86,7 +83,6 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["encoder"],
-    "show_perf_info" : true,
     "custom_params" : {
       "chinese_label_flag" : "false", 
       "label_path" : "../data/models/resnet34ssd/label_voc.txt"
@@ -98,7 +94,6 @@ JSON配置文件主要用于声明pipeline中各个模块的上下游关系及�
     "class_name" : "cnstream::Encoder",
     "parallelism" : 4,
     "max_input_queue_size" : 20,
-    "show_perf_info" : true,
     "custom_params" : {
       "dump_dir" : "output"
     }
