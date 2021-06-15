@@ -24,7 +24,6 @@ Encode为编码模块，主要用于编码视频和图像。
     "class_name" : "cnstream::Encode",
     "parallelism" : 2,
     "max_input_queue_size" : 20,
-    "show_perf_info" : true,
     "custom_params" : {
       "encoder_type" : "mlu",
       "codec_type" : "h264",
@@ -47,8 +46,6 @@ Encode为编码模块，主要用于编码视频和图像。
 - parallelism：（必设参数）模块并行度。
 
 - max_input_queue_size：（必设参数）数据输入队列长度。
-
-- show_perf_info：（可选参数）是否显示模块信息。
 
 - encoder_type：（可选参数）编码类型。可设置的值包括：
 

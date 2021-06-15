@@ -26,7 +26,6 @@ OSD模块后面可以连接下面模块，实现不同功能：
     "parallelism" : 4,
     "max_input_queue_size" : 20,
     "next_modules" : ["rtsp_sink"],
-    "show_perf_info" : true,
     "custom_params" : {
       "label_path" : "../../../data/models/MLU270/Primary_Detector/ssd/label_voc.txt",
       "font_path" : "../../data/wqy_zenhei.ttf", 
@@ -50,11 +49,9 @@ OSD模块后面可以连接下面模块，实现不同功能：
 
 - next_modules：（必设参数）下一个连接模块名称。
 
-- show_perf_info：（可选参数）是否显示模块信息。
-
 - label_path：（可选参数）标签路径。对应一级网络的标签路径。
 
-- font_path：（可选参数）字体路径。使用的 ``wqy_zenhei.ttf`` 文件需要自行下载，作为正确输出中文标签。
+- font_path：（可选参数）自定义字体路径。支持显示中文字体。使用自定义字体依赖于FreeType开源库，可以参考 ``https://www.freetype.org/`` 安装。同时，需要打开编译选项 ``WITH_FREETYPE``。示例中使用的 ``wqy_zenhei.ttf`` 字体文件需要自行下载。
 
 - label_size：（可选参数）标签大小，默认值为 ``normal``。可设置的值包括：
   
