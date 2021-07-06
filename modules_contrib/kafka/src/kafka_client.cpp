@@ -41,7 +41,7 @@ struct KafkaClientContext {
 KafkaClient::KafkaClient(const std::string &name) : Module(name) {
   param_register_.SetModuleDesc(
       "kafka is a module which using rdkafka to produce CNFrameInfo data,"
-      " or comsume data.");
+      " or consume data.");
   param_register_.Register("handler", "The name of handler which use to deal CNFrameInfo data.");
   param_register_.Register("broker", "The message broker of kafka.");
   param_register_.Register("topic", "Topic is the basic unit of Kafka data writing operation.");

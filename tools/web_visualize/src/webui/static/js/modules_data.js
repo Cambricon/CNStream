@@ -33,8 +33,6 @@ custom_params: {
     object_infer: "",
     obj_filter_name: "",
     keep_aspect_ratio: "",
-    show_stats: "",
-    stats_db_name: "",
     dump_resized_image_dir: "",
     model_input_pixel_format: "",
     mem_on_mlu_for_postproc: "",
