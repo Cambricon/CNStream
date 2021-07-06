@@ -25,8 +25,6 @@ PARAM_DESC["cnstream::Inferencer"] = {
         object_infer: "Optional. <br> Default value: [false] <br> Optional value: [true] [1] [TRUE] [True] [false] [0] [FALSE] [False] <br> Desc: If object_infer is set to true, the detection target is used as the input to inferencing. If it is set to false, the video frame is used as the input to inferencing.",
         obj_filter_name: "Optional. <br> Desc: The class name for object filter. See cnstream::ObjFilter.",
         keep_aspect_ratio: "Optional. <br> Default value: [false] <br> Optional value: [true] [1] [TRUE] [True] [false] [0] [FALSE] [False] <br> Desc: Keep aspect ratio, when the mlu is used for image processing.",
-        show_stats: "Optional. <br> Default value: [false] <br> Optional value: [true] [1] [TRUE] [True] [false] [0] [FALSE] [False] <br> Desc: Whether show inferencer performance statistics.",
-        stats_db_name: "Optional. <br> Desc: The directory to store the db file. e.g., ``dir1/dir2/detect.db``.",
         dump_resized_image_dir: "Optional. <br> Desc: Where to dump the resized image.",
         model_input_pixel_format: "Optional. <br> Default value: [RGBA32] <br> Optional value: [ARGB32][ABGR32][RGBA32][BGRA32] <br> Desc: The pixel format of the model input image.",
         mem_on_mlu_for_postproc: "Optional. <br> Default value: [false] <br> Optional value: [true][false] <br> Desc: Pass a batch mlu pointer directly to post-processing function without making d2h copies.",

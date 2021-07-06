@@ -108,9 +108,6 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
    *   data_order: Optional. Data format. The default format is NHWC.
    *   threshold: Optional. The threshold of the confidence. By default it is 0.
    *   infer_interval: Optional. Process one frame for every ``infer_interval`` frames.
-   *   show_stats: Optional. Whether show inferencer performance statistics. It will not be shown by default.
-   *   stats_db_name: Required when show_stats is set to ``true``. The directory to store the db file.
-                      e.g., ``dir1/dir2/detect.db``.
    *   object_infer: Optional. if object_infer is set to true, the detection target is used as the input to
                      inferencing. if it is set to false, the video frame is used as the input to inferencing.
                      False by default.

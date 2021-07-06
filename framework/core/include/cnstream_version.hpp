@@ -28,7 +28,7 @@
  */
 
 #define CNSTREAM_MAJOR_VERSION 5
-#define CNSTREAM_MINOR_VERSION 4
+#define CNSTREAM_MINOR_VERSION 3
 #define CNSTREAM_PATCH_VERSION 0
 
 namespace cnstream {
