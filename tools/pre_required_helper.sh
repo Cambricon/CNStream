@@ -44,6 +44,7 @@ installAptLibs() {
     cmake\
     libsdl2-dev\
     curl libcurl4-openssl-dev\
+    librdkafka-dev\
     lcov
 }
 
@@ -56,6 +57,7 @@ installYumLibs() {
     SDL2_gfx-devel.x86_64\
     wqy-zenhei-fonts\
     curl libcurl-devel \
+    librdkafka-devel \
     lcov
   ${SUDO_CMD} yum install -y epel-release rpm
   #remove below line for long time to update
