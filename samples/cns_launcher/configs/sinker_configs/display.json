@@ -1,0 +1,15 @@
+{
+  "displayer" : {
+    "class_name" : "cnstream::Displayer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "window-width": 1280,
+      "window-height": 720,
+      "refresh-rate" : 25,
+      "max-channels" : 32,
+      "show" : true,
+      "full-screen" : false
+    }
+  }
+}

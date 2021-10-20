@@ -37,8 +37,9 @@ namespace cnstream {
 
 class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public SourceRender {
  public:
-  explicit ESMemHandlerImpl(DataSource *module, ESMemHandler *handler)  // NOLINT
-    : SourceRender(handler), module_(module), handler_(*handler) {
+  explicit ESMemHandlerImpl(DataSource *module, const MaximumVideoResolution& maximum_resolution,
+    ESMemHandler *handler)  // NOLINT
+    : SourceRender(handler), module_(module), maximum_resolution_(maximum_resolution), handler_(*handler) {
       stream_id_ = handler_.GetStreamId();
   }
 
@@ -50,12 +51,12 @@ class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public Sour
   int SetDataType(ESMemHandler::DataType data_type) {
     data_type_ = data_type;
     int ret = -1;
-    if (data_type_ == ESMemHandler::H264) {
+    if (data_type_ == ESMemHandler::DataType::H264) {
       ret = parser_.Open(AV_CODEC_ID_H264, this);
-    } else if (data_type_ == ESMemHandler::H265) {
+    } else if (data_type_ == ESMemHandler::DataType::H265) {
       ret = parser_.Open(AV_CODEC_ID_HEVC, this);
     } else {
-      LOGF(SOURCE) << "Unsupported data type " << data_type;
+      LOGF(SOURCE) << "Unsupported data type " << static_cast<int>(data_type);
       ret = -1;
     }
     return ret;
@@ -63,6 +64,7 @@ class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public Sour
 
   int Write(ESPacket *pkt);
   int Write(unsigned char *data, int len);
+  int WriteEos();
 
   // IParserResult methods
   void OnParserInfo(VideoInfo *info) override;
@@ -75,19 +77,21 @@ class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public Sour
 
  private:
   DataSource *module_ = nullptr;
+  MaximumVideoResolution maximum_resolution_;
   ESMemHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;
-  ESMemHandler::DataType data_type_ = ESMemHandler::INVALID;
+  ESMemHandler::DataType data_type_ = ESMemHandler::DataType::INVALID;
   bool first_frame_ = true;
 
   std::mutex info_mutex_;
   VideoInfo info_;
   std::atomic<bool> info_set_{false};
 
- private:
 #ifdef UNIT_TEST
  public:  // NOLINT
+#else
+ private:  // NOLINT
 #endif
   bool PrepareResources();
   void ClearResources();

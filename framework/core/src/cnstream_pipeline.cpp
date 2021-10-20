@@ -22,7 +22,6 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <list>
 #include <memory>
@@ -33,6 +32,7 @@
 #include <utility>
 #include <vector>
 
+#include "cnstream_graph.hpp"
 #include "cnstream_module.hpp"
 #include "cnstream_pipeline.hpp"
 #include "connector.hpp"
@@ -40,9 +40,488 @@
 #include "profiler/module_profiler.hpp"
 #include "profiler/pipeline_profiler.hpp"
 #include "util/cnstream_queue.hpp"
-#include "util/cnstream_time_utility.hpp"
 
 namespace cnstream {
+
+/**
+ * @brief The node context used by pipeline.
+ */
+struct NodeContext {
+  std::shared_ptr<Module> module;
+  std::shared_ptr<Connector> connector;
+  uint64_t parent_nodes_mask = 0;
+  uint64_t route_mask = 0;  // for head nodes
+  // for gets node instance by a module, see Module::context_;
+  std::weak_ptr<CNGraph<NodeContext>::CNNode> node;
+};
+
+Pipeline::Pipeline(const std::string& name) : name_(name) {
+  // stream message handle thread
+  exit_msg_loop_ = false;
+  smsg_thread_ = std::thread(&Pipeline::StreamMsgHandleFunc, this);
+
+  event_bus_.reset(new (std::nothrow) EventBus());
+  LOGF_IF(CORE, nullptr == event_bus_) << "Pipeline::Pipeline() failed to alloc EventBus";
+  GetEventBus()->AddBusWatch(std::bind(&Pipeline::DefaultBusWatch, this, std::placeholders::_1));
+
+  idxManager_.reset(new (std::nothrow) IdxManager());
+  LOGF_IF(CORE, nullptr == idxManager_) << "Pipeline::Pipeline() failed to alloc IdxManager";
+
+  graph_.reset(new (std::nothrow) CNGraph<NodeContext>());
+  LOGF_IF(CORE, nullptr == graph_) << "Pipeline::Pipeline() failed to alloc CNGraph";
+}
+
+Pipeline::~Pipeline() {
+  running_ = false;
+  exit_msg_loop_ = true;
+  if (smsg_thread_.joinable()) {
+    smsg_thread_.join();
+  }
+  event_bus_.reset();
+  graph_.reset();  // must release before idxManager_;
+  idxManager_.reset();
+}
+
+bool Pipeline::BuildPipeline(const CNGraphConfig& graph_config) {
+  auto t = graph_config;
+  t.name = GetName();
+  if (!graph_->Init(t)) {
+    LOGE(CORE) << "Init graph failed.";
+    return false;
+  }
+  // create modules by config
+  if (!CreateModules()) {
+    LOGE(CORE) << "Create modules failed.";
+    return false;
+  }
+  // generate parant mask for all nodes and route mask for head nodes.
+  GenerateModulesMask();
+  // create connectors for all nodes beside head nodes.
+  // This call must after GenerateModulesMask called,
+  // then we can determine witch are the head nodes.
+  return CreateConnectors();
+}
+
+bool Pipeline::Start() {
+  if (IsRunning()) {
+    LOGW(CORE) << "Pipeline is running, the Pipeline::Start function is called multiple times.";
+    return false;
+  }
+
+  // open modules
+  bool open_module_failed = false;
+  std::vector<std::shared_ptr<Module>> opened_modules;
+  for (auto node = graph_->DFSBegin(); node != graph_->DFSEnd(); ++node) {
+    if (!node->data.module->Open(node->GetConfig().parameters)) {
+      LOGE(CORE) << node->data.module->GetName() << " open failed!";
+      open_module_failed = true;
+      break;
+    }
+    opened_modules.push_back(node->data.module);
+  }
+  if (open_module_failed) {
+    for (auto it : opened_modules) it->Close();
+    return false;
+  }
+
+  running_.store(true);
+  event_bus_->Start();
+
+  // start data transmit
+  for (auto node = graph_->DFSBegin(); node != graph_->DFSEnd(); ++node) {
+    if (!node->data.parent_nodes_mask) continue;  // head node
+    node->data.connector->Start();
+  }
+
+  // create process threads
+  for (auto node = graph_->DFSBegin(); node != graph_->DFSEnd(); ++node) {
+    if (!node->data.parent_nodes_mask) continue;  // head node
+    const auto& config = node->GetConfig();
+    for (int conveyor_idx = 0; conveyor_idx < config.parallelism; ++conveyor_idx) {
+      threads_.push_back(std::thread(&Pipeline::TaskLoop, this, &node->data, conveyor_idx));
+    }
+  }
+  LOGI(CORE) << "Pipeline[" << GetName() << "] " << "Start";
+  return true;
+}
+
+bool Pipeline::Stop() {
+  if (!IsRunning()) return true;
+
+  // stop data transmit
+  for (auto node = graph_->DFSBegin(); node != graph_->DFSEnd(); ++node) {
+    if (!node->data.parent_nodes_mask) continue;  // head node
+    auto connector = node->data.connector;
+    if (connector) {
+      // push data will be rejected after Stop()
+      // stop first to ensure connector will be empty
+      connector->Stop();
+      connector->EmptyDataQueue();
+    }
+  }
+  running_.store(false);
+  for (std::thread& it : threads_) {
+    if (it.joinable()) it.join();
+  }
+  threads_.clear();
+  event_bus_->Stop();
+
+  // close modules
+  for (auto node = graph_->DFSBegin(); node != graph_->DFSEnd(); ++node) {
+    node->data.module->Close();
+  }
+
+  LOGI(CORE) << "Pipeline[" << GetName() << "] " << "Stop";
+  return true;
+}
+
+Module* Pipeline::GetModule(const std::string& module_name) const {
+  auto node = graph_->GetNodeByName(module_name);
+  if (node.get()) return node->data.module.get();
+  return nullptr;
+}
+
+CNModuleConfig Pipeline::GetModuleConfig(const std::string& module_name) const {
+  auto node = graph_->GetNodeByName(module_name);
+  if (node.get()) return node->GetConfig();
+  return {};
+}
+
+bool Pipeline::ProvideData(const Module* module, std::shared_ptr<CNFrameInfo> data) {
+  // check running.
+  if (!IsRunning()) {
+    LOGE(CORE) << "[" << module->GetName() << "]" << " Provide data to pipeline [" << GetName() << "] failed, "
+        << "pipeline is not running, start pipeline first. " << data->stream_id;
+    return false;
+  }
+  // check module is created by current pipeline.
+  if (!module || module->GetContainer() != this) {
+    LOGE(CORE) << "Provide data to pipeline [" << GetName() << "] failed, "
+        << (module ? ("module named [" + module->GetName() + "] is not created by current pipeline.") :
+        "module can not be nullptr.");
+    return false;
+  }
+  // data can only created by root nodes.
+  if (!data->GetModulesMask() && module->context_->parent_nodes_mask) {
+    LOGE(CORE) << "Provide data to pipeline [" << GetName() << "] failed, "
+        << "Data created by module named [" << module->GetName() << "]. "
+        << "Data can be provided to pipeline only when the data is created by root nodes.";
+    return false;
+  }
+  TransmitData(module->context_, data);
+  return true;
+}
+
+bool Pipeline::IsRootNode(const std::string& module_name) const {
+  auto module = GetModule(module_name);
+  if (!module) return false;
+  return !module->context_->parent_nodes_mask;
+}
+
+bool Pipeline::IsLeafNode(const std::string& module_name) const {
+  auto module = GetModule(module_name);
+  if (!module) return false;
+  return module->context_->node.lock()->GetNext().empty();
+}
+
+bool Pipeline::CreateModules() {
+  std::vector<std::shared_ptr<Module>> modules;  // used to init profiler
+
+  all_modules_mask_ = 0;
+  for (auto node_iter = graph_->DFSBegin(); node_iter != graph_->DFSEnd(); ++node_iter) {
+    const CNModuleConfig& config = node_iter->GetConfig();
+    // use GetFullName with a graph name prefix to create modules to prevent nodes with the same name in subgraphs.
+    Module* module = ModuleFactory::Instance()->Create(config.className, node_iter->GetFullName());
+    if (!module) {
+      LOGE(CORE) << "Create module failed, module name : [" << config.name
+          << "], class name : [" << config.className << "].";
+      return false;
+    }
+    module->context_ = &node_iter->data;
+    node_iter->data.node = *node_iter;
+    node_iter->data.parent_nodes_mask = 0;
+    node_iter->data.route_mask = 0;
+    node_iter->data.module = std::shared_ptr<Module>(module);
+    node_iter->data.module->SetContainer(this);
+    modules.push_back(node_iter->data.module);
+    all_modules_mask_ |= 1UL << node_iter->data.module->GetId();
+  }
+
+  profiler_.reset(new PipelineProfiler(graph_->GetConfig().profiler_config, GetName(), modules));
+  return true;
+}
+
+void Pipeline::GenerateModulesMask() {
+  // parent mask helps to determine whether the data has passed all the parent nodes.
+  for (auto cur_node = graph_->DFSBegin(); cur_node != graph_->DFSEnd(); ++cur_node) {
+    const auto& next_nodes = cur_node->GetNext();
+    for (const auto& next : next_nodes) {
+      next->data.parent_nodes_mask |= 1UL << cur_node->data.module->GetId();
+    }
+  }
+
+  // route mask helps to mark that the data has passed through all unreachable nodes.
+  // consider the case of multiple head nodes. (multiple source modules)
+  for (auto head : graph_->GetHeads()) {
+    for (auto iter = head->DFSBegin(); iter != head->DFSEnd(); ++iter) {
+      head->data.route_mask |= 1UL << iter->data.module->GetId();
+    }
+  }
+}
+
+bool Pipeline::CreateConnectors() {
+  for (auto node_iter = graph_->DFSBegin(); node_iter != graph_->DFSEnd(); ++node_iter) {
+    if (node_iter->data.parent_nodes_mask)  {  // not a head node
+      const auto &config = node_iter->GetConfig();
+      // check if parallelism and max_input_queue_size is valid.
+      if (config.parallelism <= 0 || config.maxInputQueueSize <= 0) {
+        LOGE(CORE) << "Module [" << config.name << "]: parallelism or max_input_queue_size is not valid, "
+                   "parallelism[" << config.parallelism << "], "
+                   "max_input_queue_size[" << config.maxInputQueueSize << "].";
+        return false;
+      }
+      node_iter->data.connector = std::make_shared<Connector>(config.parallelism, config.maxInputQueueSize);
+    }
+  }
+  return true;
+}
+
+static inline
+bool PassedByAllParentNodes(NodeContext* context, uint64_t data_mask) {
+  uint64_t parent_masks = context->parent_nodes_mask;
+  return (data_mask & parent_masks) == parent_masks;
+}
+
+void Pipeline::OnProcessStart(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data) {
+  if (data->IsEos()) return;
+  if (IsProfilingEnabled()) {
+    auto record_key = std::make_pair(data->stream_id, data->timestamp);
+    auto profiler = context->module->GetProfiler();
+    profiler->RecordProcessEnd(kINPUT_PROFILER_NAME, record_key);
+    profiler->RecordProcessStart(kPROCESS_PROFILER_NAME, record_key);
+  }
+}
+
+void Pipeline::OnProcessEnd(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data) {
+  if (IsProfilingEnabled())
+    context->module->GetProfiler()->RecordProcessEnd(kPROCESS_PROFILER_NAME,
+        std::make_pair(data->stream_id, data->timestamp));
+  context->module->NotifyObserver(data);
+}
+
+void Pipeline::OnProcessFailed(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data, int ret) {
+  auto module_name = context->module->GetName();
+  Event e;
+  e.type = EventType::EVENT_ERROR;
+  e.module_name = module_name;
+  e.message = module_name + " process failed, return number: " + std::to_string(ret);
+  e.stream_id = data->stream_id;
+  e.thread_id = std::this_thread::get_id();
+  event_bus_->PostEvent(e);
+}
+
+void Pipeline::OnDataInvalid(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data) {
+  auto module = context->module;
+  LOGW(CORE) << "[" << GetName() << "]" << " got frame error from " << module->GetName() <<
+    " stream_id: " << data->stream_id << ", pts: " << data->timestamp;
+  StreamMsg msg;
+  msg.type = StreamMsgType::FRAME_ERR_MSG;
+  msg.stream_id = data->stream_id;
+  msg.module_name = module->GetName();
+  msg.pts = data->timestamp;
+  UpdateByStreamMsg(msg);
+}
+
+void Pipeline::OnEos(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data) {
+  auto module = context->module;
+  module->NotifyObserver(data);
+  if (IsProfilingEnabled())
+    module->GetProfiler()->OnStreamEos(data->stream_id);
+  LOGI(CORE) << "[" << module->GetName() << "]"
+      << " [" << data->stream_id << "] got eos.";
+  // eos message
+  Event e;
+  e.type = EventType::EVENT_EOS;
+  e.module_name = module->GetName();
+  e.stream_id = data->stream_id;
+  e.thread_id = std::this_thread::get_id();
+  event_bus_->PostEvent(e);
+}
+
+void Pipeline::OnPassThrough(const std::shared_ptr<CNFrameInfo>& data) {
+  if (frame_done_cb_) frame_done_cb_(data);  // To notify the frame is processed by all modules
+  if (data->IsEos()) {
+    StreamMsg msg;
+    msg.type = StreamMsgType::EOS_MSG;
+    msg.stream_id = data->stream_id;
+    UpdateByStreamMsg(msg);
+    if (IsProfilingEnabled()) profiler_->OnStreamEos(data->stream_id);
+  } else {
+    if (IsProfilingEnabled()) profiler_->RecordOutput(
+        std::make_pair(data->stream_id, data->timestamp));
+  }
+}
+
+void Pipeline::TransmitData(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data) {
+  if (data->IsInvalid()) {
+    OnDataInvalid(context, data);
+    return;
+  }
+  if (!context->parent_nodes_mask) {
+    // root node
+    // set mask to 1 for never touched modules, for case which has multiple source modules.
+    data->SetModulesMask(all_modules_mask_ ^ context->route_mask);
+  }
+  if (data->IsEos()) {
+    OnEos(context, data);
+  } else {
+    OnProcessEnd(context, data);
+    if (IsStreamRemoved(data->stream_id))
+      return;
+  }
+
+  auto node = context->node.lock();
+  auto module = context->module;
+  const uint64_t cur_mask = data->MarkPassed(module.get());
+  const bool passed_by_all_modules = PassedByAllModules(cur_mask);
+
+  if (passed_by_all_modules) {
+    OnPassThrough(data);
+    return;
+  }
+
+  // transmit to next nodes
+  for (auto next_node : node->GetNext()) {
+    if (!PassedByAllParentNodes(&next_node->data, cur_mask)) continue;
+    auto next_module = next_node->data.module;
+    auto connector = next_node->data.connector;
+    // push data to conveyor only after data passed by all parent nodes.
+    if (IsProfilingEnabled() && !data->IsEos())
+      next_module->GetProfiler()->RecordProcessStart(kINPUT_PROFILER_NAME,
+          std::make_pair(data->stream_id, data->timestamp));
+    const int conveyor_idx = data->GetStreamIndex() % connector->GetConveyorCount();
+    while (!connector->IsStopped() && connector->PushDataBufferToConveyor(conveyor_idx, data) == false) {
+      if (connector->GetFailTime(conveyor_idx) % 50 == 0) {
+        // Show infomation when conveyor is full in every second
+        LOGD(CORE) << "[" << next_module->GetName() << " " << conveyor_idx << "] " << "Input buffer is full";
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }  // while try push
+  }  // loop next nodes
+}
+
+void Pipeline::TaskLoop(NodeContext* context, uint32_t conveyor_idx) {
+  auto module = context->module;
+  auto connector = context->connector;
+  auto node_name = module->GetName();
+
+  // process loop
+  while (1) {
+    std::shared_ptr<CNFrameInfo> data = nullptr;
+    // pull data from conveyor
+    while (!connector->IsStopped() && data == nullptr)
+      data = connector->PopDataBufferFromConveyor(conveyor_idx);
+    if (connector->IsStopped())
+      break;
+    if (data == nullptr)
+      continue;
+    OnProcessStart(context, data);
+    int ret = module->DoProcess(data);
+    if (ret < 0)
+      OnProcessFailed(context, data, ret);
+  }  // while process loop
+}
+
+EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
+  StreamMsg smsg;
+  EventHandleFlag ret;
+  switch (event.type) {
+    case EventType::EVENT_ERROR:
+      smsg.type = StreamMsgType::ERROR_MSG;
+      smsg.module_name = event.module_name;
+      smsg.stream_id = event.stream_id;
+      UpdateByStreamMsg(smsg);
+      LOGE(CORE) << "[" << event.module_name << "]: "
+                 << event.message;
+      ret = EventHandleFlag::EVENT_HANDLE_STOP;
+      break;
+    case EventType::EVENT_WARNING:
+      LOGW(CORE) << "[" << event.module_name << "]: "
+                 << event.message;
+      ret = EventHandleFlag::EVENT_HANDLE_SYNCED;
+      break;
+    case EventType::EVENT_STOP:
+      LOGI(CORE) << "[" << event.module_name << "]: "
+                 << event.message;
+      ret = EventHandleFlag::EVENT_HANDLE_STOP;
+      break;
+    case EventType::EVENT_EOS: {
+      LOGD(CORE) << "Pipeline received eos from module " + event.module_name << " of stream " << event.stream_id;
+      ret = EventHandleFlag::EVENT_HANDLE_SYNCED;
+      break;
+    }
+    case EventType::EVENT_STREAM_ERROR: {
+      smsg.type = StreamMsgType::STREAM_ERR_MSG;
+      smsg.module_name = event.module_name;
+      smsg.stream_id = event.stream_id;
+      UpdateByStreamMsg(smsg);
+      LOGD(CORE) << "Pipeline received stream error from module " + event.module_name
+                 << " of stream " << event.stream_id;
+      ret = EventHandleFlag::EVENT_HANDLE_SYNCED;
+      break;
+    }
+    case EventType::EVENT_INVALID:
+      LOGE(CORE) << "[" << event.module_name << "]: "
+                 << event.message;
+    default:
+      ret = EventHandleFlag::EVENT_HANDLE_NULL;
+      break;
+  }
+  return ret;
+}
+
+void Pipeline::UpdateByStreamMsg(const StreamMsg& msg) {
+  LOGD(CORE) << "[" << GetName() << "] "
+             << "stream: " << msg.stream_id << " got message: " << static_cast<std::size_t>(msg.type);
+  msgq_.Push(msg);
+}
+
+void Pipeline::StreamMsgHandleFunc() {
+  while (!exit_msg_loop_) {
+    StreamMsg msg;
+    while (!exit_msg_loop_ && !msgq_.WaitAndTryPop(msg, std::chrono::milliseconds(200))) {
+    }
+
+    if (exit_msg_loop_) {
+        LOGI(CORE) << "[" << GetName() << "] stop updating stream message";
+        return;
+    }
+    switch (msg.type) {
+      case StreamMsgType::EOS_MSG:
+      case StreamMsgType::ERROR_MSG:
+      case StreamMsgType::STREAM_ERR_MSG:
+      case StreamMsgType::FRAME_ERR_MSG:
+      case StreamMsgType::USER_MSG0:
+      case StreamMsgType::USER_MSG1:
+      case StreamMsgType::USER_MSG2:
+      case StreamMsgType::USER_MSG3:
+      case StreamMsgType::USER_MSG4:
+      case StreamMsgType::USER_MSG5:
+      case StreamMsgType::USER_MSG6:
+      case StreamMsgType::USER_MSG7:
+      case StreamMsgType::USER_MSG8:
+      case StreamMsgType::USER_MSG9:
+        LOGD(CORE) << "[" << GetName() << "] "
+                   << "stream: " << msg.stream_id << " notify message: " << static_cast<std::size_t>(msg.type);
+        if (smsg_observer_) {
+          smsg_observer_->Update(msg);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+}
 
 uint32_t GetMaxStreamNumber() { return MAX_STREAM_NUM; }
 
@@ -52,7 +531,7 @@ uint32_t GetMaxModuleNumber() {
 }
 
 uint32_t IdxManager::GetStreamIndex(const std::string& stream_id) {
-  std::lock_guard<std::mutex>  guard(id_lock);
+  std::lock_guard<std::mutex> guard(id_lock);
   auto search = stream_idx_map.find(stream_id);
   if (search != stream_idx_map.end()) {
     return search->second;
@@ -69,7 +548,7 @@ uint32_t IdxManager::GetStreamIndex(const std::string& stream_id) {
 }
 
 void IdxManager::ReturnStreamIndex(const std::string& stream_id) {
-  std::lock_guard<std::mutex>  guard(id_lock);
+  std::lock_guard<std::mutex> guard(id_lock);
   auto search = stream_idx_map.find(stream_id);
   if (search == stream_idx_map.end()) {
     return;
@@ -99,623 +578,6 @@ void IdxManager::ReturnModuleIdx(size_t id_) {
     return;
   }
   module_id_mask_ &= ~(1 << id_);
-}
-
-void Pipeline::UpdateByStreamMsg(const StreamMsg& msg) {
-  LOGD(CORE) << "[" << GetName() << "] "
-            << "stream: " << msg.stream_id << " got message: " << msg.type;
-  msgq_.Push(msg);
-}
-
-void Pipeline::StreamMsgHandleFunc() {
-  while (!exit_msg_loop_) {
-    StreamMsg msg;
-    while (!exit_msg_loop_ && !msgq_.WaitAndTryPop(msg, std::chrono::microseconds(200))) {
-    }
-
-    if (exit_msg_loop_) {
-        LOGI(CORE) << "[" << GetName() << "] stop updating stream message";
-        return;
-    }
-    switch (msg.type) {
-      case StreamMsgType::EOS_MSG:
-      case StreamMsgType::ERROR_MSG:
-      case StreamMsgType::STREAM_ERR_MSG:
-      case StreamMsgType::FRAME_ERR_MSG:
-      case StreamMsgType::USER_MSG0:
-      case StreamMsgType::USER_MSG1:
-      case StreamMsgType::USER_MSG2:
-      case StreamMsgType::USER_MSG3:
-      case StreamMsgType::USER_MSG4:
-      case StreamMsgType::USER_MSG5:
-      case StreamMsgType::USER_MSG6:
-      case StreamMsgType::USER_MSG7:
-      case StreamMsgType::USER_MSG8:
-      case StreamMsgType::USER_MSG9:
-        LOGD(CORE) << "[" << GetName() << "] "
-                  << "stream: " << msg.stream_id << " notify message: " << msg.type;
-        if (smsg_observer_) {
-          smsg_observer_->Update(msg);
-        }
-        break;
-      default:
-        break;
-    }
-  }
-}
-
-Pipeline::Pipeline(const std::string& name) : name_(name) {
-  // stream message handle thread
-  exit_msg_loop_ = false;
-  smsg_thread_ = std::thread(&Pipeline::StreamMsgHandleFunc, this);
-
-  event_bus_ = new (std::nothrow) EventBus();
-  LOGF_IF(CORE, nullptr == event_bus_) << "Pipeline::Pipeline() failed to alloc EventBus";
-  GetEventBus()->AddBusWatch(std::bind(&Pipeline::DefaultBusWatch, this, std::placeholders::_1));
-
-  idxManager_ = new (std::nothrow) IdxManager();
-  LOGF_IF(CORE, nullptr == idxManager_) << "Pipeline::Pipeline() failed to alloc IdxManager";
-}
-
-Pipeline::~Pipeline() {
-  running_ = false;
-  for (auto& it : modules_map_) {
-    it.second->SetContainer(nullptr);
-  }
-  exit_msg_loop_ = true;
-  if (smsg_thread_.joinable()) {
-    smsg_thread_.join();
-  }
-  delete event_bus_;
-  delete idxManager_;
-}
-
-void Pipeline::SetStreamMsgObserver(StreamMsgObserver* observer) {
-  smsg_observer_ = observer;
-}
-
-StreamMsgObserver* Pipeline::GetStreamMsgObserver() const {
-  return smsg_observer_;
-}
-
-EventHandleFlag Pipeline::DefaultBusWatch(const Event& event) {
-  StreamMsg smsg;
-  EventHandleFlag ret;
-  switch (event.type) {
-    case EventType::EVENT_ERROR:
-      smsg.type = ERROR_MSG;
-      smsg.module_name = event.module_name;
-      UpdateByStreamMsg(smsg);
-      LOGE(CORE) << "[" << event.module_name << "]: "
-                 << event.message;
-      ret = EVENT_HANDLE_STOP;
-      break;
-    case EventType::EVENT_WARNING:
-      LOGW(CORE) << "[" << event.module_name << "]: "
-                 << event.message;
-      ret = EVENT_HANDLE_SYNCED;
-      break;
-    case EventType::EVENT_STOP:
-      LOGI(CORE) << "[" << event.module_name << "]: "
-                 << event.message;
-      ret = EVENT_HANDLE_STOP;
-      break;
-    case EventType::EVENT_EOS: {
-      LOGD(CORE) << "Pipeline received eos from module " + event.module_name << " of stream " << event.stream_id;
-      ret = EVENT_HANDLE_SYNCED;
-      break;
-    }
-    case EventType::EVENT_STREAM_ERROR: {
-      smsg.type = STREAM_ERR_MSG;
-      smsg.module_name = event.module_name;
-      smsg.stream_id = event.stream_id;
-      UpdateByStreamMsg(smsg);
-      LOGD(CORE) << "Pipeline received stream error from module " + event.module_name
-                 << " of stream " << event.stream_id;
-      ret = EVENT_HANDLE_SYNCED;
-      break;
-    }
-    case EventType::EVENT_INVALID:
-      LOGE(CORE) << "[" << event.module_name << "]: "
-                 << event.message;
-    default:
-      ret = EVENT_HANDLE_NULL;
-      break;
-  }
-  return ret;
-}
-
-bool Pipeline::ProvideData(const Module* module, std::shared_ptr<CNFrameInfo> data) {
-  std::string moduleName = module->GetName();
-
-  if (modules_map_.find(moduleName) == modules_map_.end()) return false;
-
-  TransmitData(moduleName, data);
-
-  return true;
-}
-
-bool Pipeline::AddModule(std::shared_ptr<Module> module) {
-  std::string moduleName = module->GetName();
-
-  if (modules_map_.find(moduleName) != modules_map_.end()) {
-    LOGW(CORE) << "Module [" << moduleName << "] has already been added to this pipeline";
-    return false;
-  }
-
-  LOGI(CORE) << "Add Module " << moduleName << " to pipeline";
-  module->SetContainer(this);
-  if (module->GetId() == INVALID_MODULE_ID) {
-    LOGE(CORE) << "Failed to get module Id";
-    return false;
-  }
-
-  ModuleAssociatedInfo associated_info;
-  associated_info.parallelism = 1;
-  associated_info.connector = std::make_shared<Connector>(associated_info.parallelism);
-  modules_.insert(std::make_pair(moduleName, associated_info));
-  modules_map_[moduleName] = module;
-
-  // update modules mask
-  all_modules_mask_ |= (uint64_t)1 << module->GetId();
-  return true;
-}
-
-bool Pipeline::SetModuleAttribute(std::shared_ptr<Module> module, uint32_t parallelism, size_t queue_capacity) {
-  std::string moduleName = module->GetName();
-  if (modules_.find(moduleName) == modules_.end()) return false;
-  modules_[moduleName].parallelism = parallelism;
-  if (parallelism && queue_capacity) {
-    modules_[moduleName].connector = std::make_shared<Connector>(parallelism, queue_capacity);
-    return static_cast<bool>(modules_[moduleName].connector);
-  }
-  if (!parallelism && modules_[moduleName].connector) {
-    modules_[moduleName].connector.reset();
-  }
-  return true;
-}
-
-std::string Pipeline::LinkModules(std::shared_ptr<Module> up_node, std::shared_ptr<Module> down_node) {
-  if (up_node == nullptr || down_node == nullptr) {
-    return "";
-  }
-
-  std::string up_node_name = up_node->GetName();
-  std::string down_node_name = down_node->GetName();
-
-  if (modules_.find(up_node_name) == modules_.end() ||
-      modules_.find(down_node_name) == modules_.end()) {
-    LOGE(CORE) << "module has not been added to this pipeline";
-    return "";
-  }
-
-  ModuleAssociatedInfo& up_node_info = modules_.find(up_node_name)->second;
-  ModuleAssociatedInfo& down_node_info = modules_.find(down_node_name)->second;
-
-  std::string link_id = up_node->GetName() + "-->" + down_node->GetName();
-  if (!down_node_info.connector) {
-    LOGE(CORE) << "connector is invalid when linking " << link_id;
-    return "";
-  }
-  auto ret = up_node_info.down_nodes.insert(down_node_name);
-  if (!ret.second) {
-    LOGE(CORE) << "modules have been linked already";
-    return link_id;
-  }
-
-  LOGI(CORE) << "Link Module " << link_id;
-
-  // create connector
-  up_node_info.output_connectors.push_back(link_id);
-  down_node_info.input_connectors.push_back(link_id);
-  links_[link_id] = down_node_info.connector;
-
-  down_node->SetParentId(up_node->GetId());
-  return link_id;
-}
-
-bool Pipeline::QueryLinkStatus(LinkStatus* status, const std::string& link_id) {
-  std::shared_ptr<Connector> con = links_[link_id];
-  if (!con) {
-    LOGE(CORE) << "can not find link according to link id";
-    return false;
-  }
-  if (!status) {
-    LOGE(CORE) << "status cannot be nullptr";
-    return false;
-  }
-  status->stopped = con->IsStopped();
-  for (uint32_t i = 0; i < con->GetConveyorCount(); ++i) {
-    status->cache_size.emplace_back(con->GetConveyorSize(i));
-  }
-  return true;
-}
-
-bool Pipeline::Start() {
-  if (IsRunning()) return true;
-
-  // open modules
-  std::vector<std::shared_ptr<Module>> opened_modules;
-  bool open_module_failed = false;
-  for (auto& it : modules_map_) {
-    if (!it.second->Open(GetModuleParamSet(it.second->GetName()))) {
-      open_module_failed = true;
-      LOGE(CORE) << it.second->GetName() << " start failed!";
-      break;
-    } else {
-      opened_modules.push_back(it.second);
-    }
-  }
-
-  if (open_module_failed) {
-    for (auto it : opened_modules) it->Close();
-    return false;
-  }
-
-  // start data transmit
-  running_.store(true);
-  event_bus_->Start();
-
-  for (const std::pair<std::string, ModuleAssociatedInfo>& it : modules_) {
-    if (it.second.connector) {
-      it.second.connector->Start();
-    }
-  }
-
-  // create process threads
-  for (auto& it : modules_) {
-    const std::string node_name = it.first;
-    ModuleAssociatedInfo& module_info = it.second;
-    uint32_t parallelism = module_info.parallelism;
-    if ((!parallelism && module_info.input_connectors.size()) ||
-        (parallelism && !module_info.input_connectors.size())) {
-      LOGE(CORE) << "The parallelism of the first module should be 0, and the parallelism of other modules should be "
-                    "larger than 0. "
-                 << "Please check the config of " << node_name << " module.";
-      Stop();
-      return false;
-    }
-    if ((!parallelism && module_info.connector) || (parallelism && !module_info.connector) ||
-        (parallelism && module_info.connector && parallelism != module_info.connector->GetConveyorCount())) {
-      LOGE(CORE) << "Module parallelism do not equal input Connector's Conveyor number, in module " << node_name;
-      Stop();
-      return false;
-    }
-    for (uint32_t conveyor_idx = 0; conveyor_idx < parallelism; ++conveyor_idx) {
-      threads_.push_back(std::thread(&Pipeline::TaskLoop, this, node_name, conveyor_idx));
-    }
-  }
-  LOGI(CORE) << "Pipeline Start";
-  LOGI(CORE) << "All modules, except the first module, total  threads  is: " << threads_.size();
-  return true;
-}
-
-bool Pipeline::Stop() {
-  if (!IsRunning()) return true;
-
-  // stop data transmit
-  for (const std::pair<std::string, ModuleAssociatedInfo>& it : modules_) {
-    if (it.second.connector) {
-      // push data will be rejected after Stop()
-      // stop first to ensure connector will be empty
-      it.second.connector->Stop();
-      it.second.connector->EmptyDataQueue();
-    }
-  }
-  running_.store(false);
-  for (std::thread& it : threads_) {
-    if (it.joinable()) it.join();
-  }
-  threads_.clear();
-  event_bus_->Stop();
-
-  // close modules
-  for (auto& it : modules_map_) {
-    it.second->Close();
-  }
-
-  LOGI(CORE) << "[" << GetName() << "] " << "Stop";
-  return true;
-}
-
-void Pipeline::TransmitData(std::string moduleName, std::shared_ptr<CNFrameInfo> data) {
-  LOGF_IF(CORE, modules_.find(moduleName) == modules_.end());
-
-  const ModuleAssociatedInfo& module_info = modules_[moduleName];
-  Module* module = modules_map_[moduleName].get();
-
-  if (IsRootNode(moduleName)) {
-    /** set mask to 1 for never touched modules, for case which has multiple source modules. **/
-    data->SetModulesMask(route_masks_[moduleName]);
-  }
-  uint64_t changed_mask = data->MarkPassed(module);
-
-  const auto profiling_record_key = std::make_pair(data->stream_id, data->timestamp);
-
-  if (data->IsEos()) {
-    if (profiler_)
-      module->GetProfiler()->OnStreamEos(data->stream_id);
-
-    LOGI(CORE) << "[" << moduleName << "]"
-               << " [" << data->stream_id << "] got eos.";
-    Event e;
-    e.type = EventType::EVENT_EOS;
-    e.module_name = moduleName;
-    e.stream_id = data->stream_id;
-    e.thread_id = std::this_thread::get_id();
-    event_bus_->PostEvent(e);
-    if (changed_mask == all_modules_mask_) {
-      // passed by all modules
-      StreamMsg msg;
-      msg.type = StreamMsgType::EOS_MSG;
-      msg.stream_id = data->stream_id;
-      msg.module_name = moduleName;
-      UpdateByStreamMsg(msg);
-    }
-    if (profiler_ && IsLeafNode(moduleName) && PassedByAllModules(changed_mask)) {
-      profiler_->OnStreamEos(data->stream_id);
-    }
-  } else {
-    /* For the stream is removed, do not pass the packet on */
-    if (IsStreamRemoved(data->stream_id)) {
-      return;
-    }
-    if (profiler_) {
-      if (IsLeafNode(moduleName) && PassedByAllModules(changed_mask)) {
-        profiler_->RecordOutput(profiling_record_key);
-      }
-      if (!IsRootNode(moduleName)) {
-        profiler_->GetModuleProfiler(moduleName)
-                 ->RecordProcessEnd(kPROCESS_PROFILER_NAME, profiling_record_key);
-      }
-    }
-  }
-
-  // If data is invalid
-  if (data->IsInvalid()) {
-    StreamMsg msg;
-    msg.type = StreamMsgType::FRAME_ERR_MSG;
-    msg.stream_id = data->stream_id;
-    msg.module_name = moduleName;
-    msg.pts = data->timestamp;
-    UpdateByStreamMsg(msg);
-    LOGW(CORE) << "[" << GetName() << "]" << " got frame error from " << module->name_ <<
-      " stream_id: " << data->stream_id << ", pts: " << data->timestamp;
-    return;
-  }
-  module->NotifyObserver(data);
-  for (auto& down_node_name : module_info.down_nodes) {
-    ModuleAssociatedInfo& down_node_info = modules_.find(down_node_name)->second;
-    assert(down_node_info.connector);
-    assert(0 < down_node_info.input_connectors.size());
-    Module* down_node = modules_map_[down_node_name].get();
-
-    // case 1: down_node has only 1 input node: current node
-    // case 2: down_node has >1 input nodes, current node has brother nodes
-    // the processing data frame will not be pushed into down_node Connector
-    // until processed by all brother nodes, the last node responds to transmit
-    bool processed_by_all_modules = ShouldTransmit(changed_mask, down_node);
-
-    if (processed_by_all_modules) {
-      std::shared_ptr<Connector> connector = down_node_info.connector;
-      int conveyor_idx = data->GetStreamIndex() % connector->GetConveyorCount();
-      if (profiler_ && !data->IsEos()) {
-        profiler_->GetModuleProfiler(down_node_name)
-                 ->RecordProcessStart(kINPUT_PROFILER_NAME, profiling_record_key);
-      }
-      while (!connector->IsStopped() && connector->PushDataBufferToConveyor(conveyor_idx, data) == false) {
-        if (connector->GetFailTime(conveyor_idx) % 50 == 0) {
-          // Show infomation when conveyor is full in every second
-          // LOGI(CORE) << "[" << down_node->name_  << " " << conveyor_idx << "] " << "Input buffer is full";
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-      }
-    }
-  }
-
-  // frame done
-  if (frame_done_callback_ && (0 == module_info.down_nodes.size())) {
-    frame_done_callback_(data);
-  }
-}
-
-void Pipeline::TaskLoop(std::string node_name, uint32_t conveyor_idx) {
-  LOGF_IF(CORE, modules_.find(node_name) == modules_.end());
-
-  ModuleAssociatedInfo& module_info = modules_[node_name];
-  std::shared_ptr<Connector> connector = module_info.connector;
-
-  if (!connector.get() || module_info.input_connectors.size() <= 0) {
-    return;
-  }
-
-  size_t len = node_name.size() > 10 ? 10 : node_name.size();
-  std::string thread_name = "cn-" + node_name.substr(0, len) + "-" + NumToFormatStr(conveyor_idx, 2);
-  SetThreadName(thread_name, pthread_self());
-
-  std::shared_ptr<Module> instance = modules_map_[node_name];
-  while (1) {
-    std::shared_ptr<CNFrameInfo> data = nullptr;
-    // sync data
-    while (!connector->IsStopped() && data == nullptr) {
-      // LOGI(CORE) << "[" << instance->name_ << "]" << " There is no avaiable input data"; 
-      data = connector->PopDataBufferFromConveyor(conveyor_idx);
-    }
-    if (connector->IsStopped()) {
-      // when connector stops, break taskloop
-      break;
-    }
-
-    if (data == nullptr) {
-      continue;
-    }
-
-    // assert(ShouldTransmit(data, instance.get()));
-
-    if (profiler_ && !data->IsEos()) {
-      auto profiling_record_key = std::make_pair(data->stream_id, data->timestamp);
-      profiler_->GetModuleProfiler(node_name)
-               ->RecordProcessEnd(kINPUT_PROFILER_NAME, profiling_record_key);
-      profiler_->GetModuleProfiler(node_name)
-               ->RecordProcessStart(kPROCESS_PROFILER_NAME, profiling_record_key);
-    }
-
-    int ret = instance->DoProcess(data);
-
-    if (ret < 0) {
-      /*process failed*/
-      Event e;
-      e.type = EventType::EVENT_ERROR;
-      e.module_name = node_name;
-      e.message = node_name + " process failed, return number: " + std::to_string(ret);
-      e.stream_id = data->stream_id;
-      e.thread_id = std::this_thread::get_id();
-      event_bus_->PostEvent(e);
-      StreamMsg msg;
-      msg.type = StreamMsgType::ERROR_MSG;
-      msg.stream_id = data->stream_id;
-      msg.module_name = node_name;
-      UpdateByStreamMsg(msg);
-      return;
-    }
-  }  // while
-}
-
-/* ------config/auto-graph methods------ */
-int Pipeline::AddModuleConfig(const CNModuleConfig& config) {
-  modules_config_[config.name] = config;
-  connections_config_[config.name] = config.next;
-  return 0;
-}
-
-ModuleParamSet Pipeline::GetModuleParamSet(const std::string& moduleName) {
-  ModuleParamSet paramSet;
-  auto iter = modules_config_.find(moduleName);
-  if (iter != modules_config_.end()) {
-    for (auto& v : iter->second.parameters) {
-      // filter some keys ...
-      paramSet[v.first] = v.second;
-    }
-  }
-  return paramSet;
-}
-
-CNModuleConfig Pipeline::GetModuleConfig(const std::string& module_name) {
-  CNModuleConfig config = {};
-  auto iter = modules_config_.find(module_name);
-  if (iter != modules_config_.end()) {
-    config = iter->second;
-  }
-  return config;
-}
-
-void Pipeline::GenerateRouteMask() {
-  std::unordered_map<std::string, bool> visit_init_map;
-  for (const auto& module_info : modules_) {
-    visit_init_map[module_info.first] = false;
-  }
-  for (const auto& module_info : modules_) {
-    if (IsRootNode(module_info.first)) {
-      auto visit = visit_init_map;
-      uint64_t route_mask = all_modules_mask_;
-      // bfs
-      std::queue<std::string> nodes;
-      nodes.push(module_info.first);
-      while (!nodes.empty()) {
-        auto node = nodes.front();
-        nodes.pop();
-        if (visit[node]) continue;
-        route_mask ^= 1UL << modules_map_[node]->GetId();
-        visit[node] = true;
-        for (const auto& down_node : modules_[node].down_nodes)
-          nodes.push(down_node);
-      }
-      route_masks_[module_info.first] = route_mask;
-    }
-  }
-}
-
-int Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& module_configs, const ProfilerConfig& profiler_config) {
-  /*TODO,check configs*/
-  uint64_t linked_id_mask = 0;
-  ModuleCreatorWorker creator;
-  std::vector<std::shared_ptr<Module>> modules;
-  for (auto& v : module_configs) {
-    this->AddModuleConfig(v);
-    std::shared_ptr<Module> instance(creator.Create(v.className, v.name));
-    if (!instance) {
-      LOGE(CORE) << "Failed to create module by className(" << v.className << ") and name(" << v.name << ")";
-      return -1;
-    }
-    this->AddModule(instance);
-    this->SetModuleAttribute(instance, v.parallelism, v.maxInputQueueSize);
-    modules.push_back(instance);
-  }
-  for (auto& v : connections_config_) {
-    for (auto& name : v.second) {
-      if (modules_map_.find(v.first) == modules_map_.end() ||
-          modules_map_.find(name) == modules_map_.end() ||
-          this->LinkModules(modules_map_[v.first], modules_map_[name]).empty()) {
-        LOGE(CORE) << "Link [" << v.first << "] with [" << name << "] failed.";
-        return -1;
-      }
-      linked_id_mask |= (uint64_t)1 << modules_map_[name]->GetId();
-    }
-  }
-  for (auto& v : module_configs) {
-    if (v.className != "cnstream::DataSource" && v.className != "cnstream::TestDataSource" &&
-        v.className != "cnstream::ModuleIPC" &&
-        !(((uint64_t)1 << modules_map_[v.name]->GetId()) & linked_id_mask)) {
-      LOGE(CORE) << v.name << " not linked to any module.";
-      return -1;
-    }
-  }
-
-  GenerateRouteMask();
-  profiler_config_ = profiler_config;
-  profiler_ = std::unique_ptr<PipelineProfiler>(new PipelineProfiler(profiler_config, GetName(), modules));
-  return 0;
-}
-
-int Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
-  std::vector<CNModuleConfig> mconfs;
-  ProfilerConfig profiler_config;
-  bool ret = ConfigsFromJsonFile(config_file, &mconfs, &profiler_config);
-  if (ret != true) {
-    return -1;
-  }
-  return BuildPipeline(mconfs, profiler_config);
-}
-
-Module* Pipeline::GetModule(const std::string& moduleName) {
-  auto iter = modules_map_.find(moduleName);
-  if (iter != modules_map_.end()) {
-    return modules_map_[moduleName].get();
-  }
-  return nullptr;
-}
-
-Module* Pipeline::GetEndModule() {
-  std::string end_node_name;
-  for (auto& it : modules_) {
-    const std::string node_name = it.first;
-    ModuleAssociatedInfo& module_info = it.second;
-    if (0 == module_info.down_nodes.size()) {
-      end_node_name = end_node_name.empty() ? node_name : "";
-    }
-  }
-
-  if (!end_node_name.empty()) return modules_map_[end_node_name].get();
-  return nullptr;
-}
-
-std::vector<std::string> Pipeline::GetModuleNames() {
-  std::vector<std::string> module_names;
-  for (auto& module_it : modules_) {
-    const std::string node_name = module_it.first;
-    module_names.push_back(node_name);
-  }
-  return module_names;
 }
 
 }  // namespace cnstream

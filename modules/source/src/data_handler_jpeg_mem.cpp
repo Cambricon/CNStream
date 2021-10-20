@@ -98,27 +98,35 @@ bool ESJpegMemHandlerImpl::Open() {
                  << "source module is null";
     return false;
   }
-
-  return InitDecoder();
+  int ret = InitDecoder();
+  if (ret) {
+    running_ = true;
+    eos_reached_ = false;
+  }
+  return ret;
 }
 
 void ESJpegMemHandlerImpl::Close() {
-  if (decoder_.get()) {
+  running_ = false;
+  if (decoder_) {
     decoder_->Destroy();
+    decoder_ = nullptr;
   }
 }
 
 int ESJpegMemHandlerImpl::Write(ESPacket *pkt) {
   if (pkt && decoder_) {
-    ProcessImage(pkt);
-    return 0;
+    if (ProcessImage(pkt)) return 0;
   }
 
   return -1;
 }
 
 bool ESJpegMemHandlerImpl::ProcessImage(ESPacket *in_pkt) {
-  if (in_pkt->flags & ESPacket::FLAG_EOS) {
+  if (eos_reached_ || !running_) {
+    return false;
+  }
+  if (in_pkt->flags & static_cast<size_t>(ESPacket::FLAG::FLAG_EOS)) {
     LOGI(SOURCE) << "[" << stream_id_ << "]: "
                  << "EOS reached in ESJpegMemHandler";
     decoder_->Process(nullptr);
@@ -181,6 +189,15 @@ bool ESJpegMemHandlerImpl::InitDecoder() {
 // IDecodeResult methods
 void ESJpegMemHandlerImpl::OnDecodeError(DecodeErrorCode error_code) {
   // FIXME,  handle decode error ...
+  if (nullptr != module_) {
+    Event e;
+    e.type = EventType::EVENT_STREAM_ERROR;
+    e.module_name = module_->GetName();
+    e.message = "Decode failed.";
+    e.stream_id = stream_id_;
+    e.thread_id = std::this_thread::get_id();
+    module_->PostEvent(e);
+  }
   interrupt_.store(true);
 }
 
@@ -196,7 +213,7 @@ void ESJpegMemHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
 
   data->timestamp = frame->pts;  // FIXME
   if (!frame->valid) {
-    data->flags = CN_FRAME_FLAG_INVALID;
+    data->flags = static_cast<size_t>(CNFrameFlag::CN_FRAME_FLAG_INVALID);
     this->SendFrameInfo(data);
     return;
   }

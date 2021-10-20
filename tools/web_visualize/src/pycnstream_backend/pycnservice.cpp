@@ -18,6 +18,7 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include <atomic>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -31,7 +32,7 @@
 
 class CNSEventObserver {
  public:
-  enum EVENT {
+  enum class EVENT {
     EOS,    ///< End of data stream event
     ERROR,  ///< Data stream error
   };
@@ -50,7 +51,7 @@ class CNSEventObserver {
         if (service_) service_->WaitStop();
         break;
       default:
-        LOGI(WEBVISUAL) << "CNService receive unkonw msg.";
+        LOGI(WEBVISUAL) << "CNService receives unknown message.";
         break;
     }
   }
@@ -65,9 +66,9 @@ class CNSMsgObserver : cnstream::StreamMsgObserver {
 
   void Update(const cnstream::StreamMsg &smsg) override {
     if (smsg.type == cnstream::StreamMsgType::EOS_MSG) {
-      if (observer_) observer_->EventNotify(smsg.stream_id, CNSEventObserver::EOS);
+      if (observer_) observer_->EventNotify(smsg.stream_id, CNSEventObserver::EVENT::EOS);
     } else if (smsg.type == cnstream::StreamMsgType::ERROR_MSG) {
-      if (observer_) observer_->EventNotify(smsg.stream_id, CNSEventObserver::ERROR);
+      if (observer_) observer_->EventNotify(smsg.stream_id, CNSEventObserver::EVENT::ERROR);
     }
   }
 
@@ -81,10 +82,13 @@ class CNSDataObserver : public cnstream::IModuleObserver {
   ~CNSDataObserver() {}
 
   void notify(std::shared_ptr<cnstream::CNFrameInfo> in_data) override {
+    if (in_data->IsEos()) ready_to_stop_.store(true);
     if (service_) service_->FrameDataCallBack(in_data);
   }
+  bool IsReadyToStop() { return ready_to_stop_; }
 
  private:
+  std::atomic<bool> ready_to_stop_{false};
   PyCNService *service_ = nullptr;
 };
 
@@ -105,7 +109,7 @@ bool PyCNService::Start(const std::string &stream_url, const std::string &config
   }
 
   bool ret = false;
-  ret = ppipe_handler_->CreatePipeline(config_fname, "perf_cache");
+  ret = ppipe_handler_->CreatePipeline(config_fname);
   if (!ret) {
     LOGI(WEBVISUAL) << "CNService create pipeline failed, stream_url: " << stream_url;
     return false;
@@ -134,6 +138,7 @@ bool PyCNService::Start(const std::string &stream_url, const std::string &config
     LOGI(WEBVISUAL) << "CNService add stream failed, stream_url: " << stream_url;
     return false;
   }
+  stream_id_ = stream_id;
 
   is_running_.store(true);
   LOGI(WEBVISUAL) << "CNService start pipeline succeed, stream_url: " << stream_url;
@@ -166,6 +171,15 @@ void PyCNService::DestoryResource() {
   if (is_running_.load()) return;
   std::lock_guard<std::mutex> lock(stop_mtx_);
   if (ppipe_handler_) {
+    ppipe_handler_->RemoveStream(stream_id_);
+    stream_id_ = "";
+    if (data_observer_) {
+      while (!data_observer_->IsReadyToStop()) {
+        usleep(10000);
+      }
+    } else {
+      usleep(10000);
+    }
     ppipe_handler_->Stop();
   }
 
@@ -199,13 +213,12 @@ void PyCNService::DestoryResource() {
 
 void PyCNService::FrameDataCallBack(std::shared_ptr<cnstream::CNFrameInfo> in_data) {
   if (nullptr == data_observer_ || !is_running_.load()) return;
-
   std::unique_lock<std::mutex> lock(mutex_);
   CNSFrame cnsframe;
   if (in_data->IsEos()) {
     cnsframe.frame_info.eos_flag = 1;
   } else {
-    auto data = cnstream::any_cast<std::shared_ptr<cnstream::CNDataFrame>>(in_data->datas[cnstream::CNDataFramePtrKey]);
+    auto data = in_data->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag);
     cnsframe.frame_info.eos_flag = 0;
     cnsframe.frame_info.frame_id = data->frame_id;
     cnsframe.frame_info.width = cnsinfo_.dst_width;

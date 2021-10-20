@@ -65,6 +65,7 @@ void EventBus::ClearAllWatchers() {
 }
 
 const std::list<BusWatcher> &EventBus::GetBusWatchers() const {
+  std::lock_guard<std::mutex> lk(watcher_mtx_);
   return bus_watchers_;
 }
 
@@ -73,7 +74,7 @@ bool EventBus::PostEvent(Event event) {
     LOGW(CORE) << "Post event failed, pipeline not running";
     return false;
   }
-  // LOGI(CORE) << "Recieve Event from [" << event.module->GetName() << "] :" << event.message;
+  // LOGI(CORE) << "Receieve event from [" << event.module->GetName() << "] :" << event.message;
   queue_.Push(event);
 #ifdef UNIT_TEST
   if (unit_test) {
@@ -86,39 +87,38 @@ bool EventBus::PostEvent(Event event) {
 
 Event EventBus::PollEvent() {
   Event event;
-  event.type = EVENT_INVALID;
+  event.type = EventType::EVENT_INVALID;
   while (running_.load()) {
     if (queue_.WaitAndTryPop(event, std::chrono::milliseconds(100))) {
       break;
     }
   }
-  if (!running_.load()) event.type = EVENT_STOP;
+  if (!running_.load()) event.type = EventType::EVENT_STOP;
   return event;
 }
 
 void EventBus::EventLoop() {
   const std::list<BusWatcher> &kWatchers = GetBusWatchers();
-  EventHandleFlag flag = EVENT_HANDLE_NULL;
+  EventHandleFlag flag = EventHandleFlag::EVENT_HANDLE_NULL;
 
-  SetThreadName("cn-EventLoop", pthread_self());
   // start loop
   while (IsRunning()) {
     Event event = PollEvent();
-    if (event.type == EVENT_INVALID) {
+    if (event.type == EventType::EVENT_INVALID) {
       LOGI(CORE) << "[EventLoop] event type is invalid";
       break;
-    } else if (event.type == EVENT_STOP) {
+    } else if (event.type == EventType::EVENT_STOP) {
       LOGI(CORE) << "[EventLoop] Get stop event";
       break;
     }
     std::unique_lock<std::mutex> lk(watcher_mtx_);
     for (auto &watcher : kWatchers) {
       flag = watcher(event);
-      if (flag == EVENT_HANDLE_INTERCEPTION || flag == EVENT_HANDLE_STOP) {
+      if (flag == EventHandleFlag::EVENT_HANDLE_INTERCEPTION || flag == EventHandleFlag::EVENT_HANDLE_STOP) {
         break;
       }
     }
-    if (flag == EVENT_HANDLE_STOP) {
+    if (flag == EventHandleFlag::EVENT_HANDLE_STOP) {
       break;
     }
   }
@@ -128,13 +128,13 @@ void EventBus::EventLoop() {
 #ifdef UNIT_TEST
 Event EventBus::PollEventToTest() {
   Event event;
-  event.type = EVENT_INVALID;
+  event.type = EventType::EVENT_INVALID;
   while (running_.load()) {
     if (test_eventq_.WaitAndTryPop(event, std::chrono::milliseconds(100))) {
       break;
     }
   }
-  if (!running_.load()) event.type = EVENT_STOP;
+  if (!running_.load()) event.type = EventType::EVENT_STOP;
   return event;
 }
 #endif

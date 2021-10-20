@@ -29,8 +29,6 @@
 
 namespace cnstream {
 
-using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
-
 class Conveyor;
 
 /**

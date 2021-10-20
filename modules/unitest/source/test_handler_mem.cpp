@@ -46,31 +46,125 @@ static void ResetParam(ModuleParamSet &param) {  // NOLINT
   param["output_buf_number"] = "32";  // Max is 32 due to Codec's limitation
 }
 
+class EsMemObserver : public IModuleObserver {
+ public:
+  int GetCnt() {
+    return count;
+  }
+  void Wait() {
+    while (!get_eos) {
+      std::chrono::seconds sec(1);
+      std::this_thread::sleep_for(sec);
+    }
+  }
+  void Reset() {
+    get_eos.store(false);
+    count.store(0);
+  }
+
+ private:
+  void notify(std::shared_ptr<CNFrameInfo> data) override {
+    if (!data->IsEos()) {
+      count++;
+    } else {
+      get_eos = true;
+    }
+  }
+  std::atomic<int> count{0};
+  std::atomic<bool> get_eos{false};
+};
+
 TEST(DataHandlerMem, Write) {
   DataSource src(gname);
+  EsMemObserver observer;
+  src.SetObserver(&observer);
   ModuleParamSet param;
   ResetParam(param);
   ASSERT_TRUE(src.CheckParamSet(param));
   ASSERT_TRUE(src.Open(param));
-  auto handler = ESMemHandler::Create(&src, std::to_string(0));
-  ASSERT_TRUE(handler != nullptr);
-  EXPECT_TRUE(handler->GetStreamId() == std::to_string(0));
-  auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
-  EXPECT_EQ(memHandler->SetDataType(ESMemHandler::H264), 0);
-  EXPECT_EQ(memHandler->Open(), true);
   std::string video_path = GetExePath() + gh264_path;
   FILE *fp = fopen(video_path.c_str(), "rb");
   ASSERT_TRUE(fp != nullptr);
   unsigned char buf[4096];
-  while (!feof(fp)) {
-    int size = fread(buf, 1, 4096, fp);
-    EXPECT_EQ(memHandler->Write(buf, size), 0);
+  {
+    auto handler = ESMemHandler::Create(&src, std::to_string(0));
+    ASSERT_TRUE(handler != nullptr);
+    EXPECT_TRUE(handler->GetStreamId() == std::to_string(0));
+    auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+    EXPECT_EQ(memHandler->SetDataType(ESMemHandler::DataType::H264), 0);
+    EXPECT_EQ(memHandler->Open(), true);
+
+    while (!feof(fp)) {
+      int size = fread(buf, 1, 4096, fp);
+      EXPECT_EQ(memHandler->Write(buf, size), 0);
+    }
+    EXPECT_EQ(memHandler->Write(nullptr, 0), 0);
+
+    observer.Wait();
+    memHandler->Close();
+    int frame_cnt = 5;
+    EXPECT_EQ(observer.GetCnt(), frame_cnt);
+  }
+  observer.Reset();
+  fseek(fp, 0, SEEK_SET);
+  {
+    auto handler = ESMemHandler::Create(&src, std::to_string(0));
+    ASSERT_TRUE(handler != nullptr);
+    EXPECT_TRUE(handler->GetStreamId() == std::to_string(0));
+    auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+    EXPECT_EQ(memHandler->SetDataType(ESMemHandler::DataType::H264), 0);
+    EXPECT_EQ(memHandler->Open(), true);
+    for (uint32_t i = 0; i < 4; i++) {
+      int size = fread(buf, 1, 4096, fp);
+      EXPECT_EQ(memHandler->Write(buf, size), 0);
+    }
+    EXPECT_EQ(memHandler->WriteEos(), 0);
+
+    observer.Wait();
+    memHandler->Close();
+    int frame_cnt = 2;
+    EXPECT_EQ(observer.GetCnt(), frame_cnt);
   }
 
-  std::chrono::seconds sec(2);
-  std::this_thread::sleep_for(sec);
-  memHandler->Close();
   fclose(fp);
+  src.Close();
+}
+
+TEST(DataHandlerMem, WriteEosOnly) {
+  DataSource src(gname);
+  EsMemObserver observer;
+  src.SetObserver(&observer);
+  ModuleParamSet param;
+  ResetParam(param);
+  ASSERT_TRUE(src.CheckParamSet(param));
+  ASSERT_TRUE(src.Open(param));
+  {
+    auto handler = ESMemHandler::Create(&src, std::to_string(0));
+    ASSERT_TRUE(handler != nullptr);
+    EXPECT_TRUE(handler->GetStreamId() == std::to_string(0));
+    auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+    EXPECT_EQ(memHandler->SetDataType(ESMemHandler::DataType::H264), 0);
+    EXPECT_EQ(memHandler->Open(), true);
+    EXPECT_EQ(memHandler->WriteEos(), 0);
+
+    observer.Wait();
+    memHandler->Close();
+    EXPECT_EQ(observer.GetCnt(), 0);
+  }
+  observer.Reset();
+  {
+    auto handler = ESMemHandler::Create(&src, std::to_string(0));
+    ASSERT_TRUE(handler != nullptr);
+    EXPECT_TRUE(handler->GetStreamId() == std::to_string(0));
+    auto memHandler = std::dynamic_pointer_cast<cnstream::ESMemHandler>(handler);
+    EXPECT_EQ(memHandler->SetDataType(ESMemHandler::DataType::H264), 0);
+    EXPECT_EQ(memHandler->Open(), true);
+    EXPECT_EQ(memHandler->Write(nullptr, 0), 0);
+    observer.Wait();
+    memHandler->Close();
+    EXPECT_EQ(observer.GetCnt(), 0);
+  }
+  src.Close();
 }
 
 }  // namespace cnstream

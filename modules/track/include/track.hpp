@@ -30,60 +30,52 @@
 #include <string>
 #include <unordered_map>
 
-#include "cnstream_core.hpp"
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
-#include "easyinfer/model_loader.h"
 #include "easytrack/easy_track.h"
+
+namespace infer_server { class ModelInfo; }
 
 namespace cnstream {
 
 struct TrackerContext;
 
-/// Pointer for frame info
-using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
-/// Pointer for infer object
-using CNInferObjectPtr = std::shared_ptr<CNInferObject>;
-
 /**
- *  @brief Tracker is a module for realtime tracking
- *   It would be MLU feature extracting if the model_path provided,
- *   otherwise it would be done on CPU.
+ * @class Tracker
+ *
+ * @brief Tracker is a module for realtime tracking.
+ *   It would be MLU feature extracting if the model_path is provided, otherwise it would be done on CPU.
  */
 class Tracker : public Module, public ModuleCreator<Tracker> {
  public:
   /**
-   *  @brief  Generate tracker
+   *  @brief  Generates a tracker.
    *
-   *  @param  Name : Module name
+   *  @param[in]  Name Module name.
    *
-   *  @return None
+   *  @return None.
    */
   explicit Tracker(const std::string &name);
   /**
-   *  @brief  Release tracker
+   *  @brief Releases a tracker.
    *
-   *  @param  None
+   *  @param None.
    *
-   *  @return None
+   *  @return None.
    */
   ~Tracker();
   /**
-   *  @brief Called by pipeline when pipeline start
+   *  @brief Configures a module.
    *
-   *  @param paramSet :
-   * @verbatim
-   * track_name: Class name for track, "FeatureMatch" provided
-   * model_path: Offline model path
-   * func_name:  Function name defined in the offline model, could be found in the cambricon_twins description file
-               It is "subnet0" for the most case
-   * @endverbatim
-   *  @return if module open succeed
+   *  @param[in] paramSet  This module's parameters to configure Tracker. Please use `cnstream_inspect` tool to get each
+   parameter's detail information.
+
+   *  @return Returns true if opened successfully, otherwise returns false.
    */
   bool Open(ModuleParamSet paramSet) override;
 
   /**
-   * @brief  Called by pipeline when pipeline stop
+   * @brief  Closes a module.
    *
    * @param  None
    *
@@ -92,35 +84,38 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
   void Close() override;
 
   /**
-   * @brief Do for each frame
+   * @brief Processes each frame data.
    *
-   * @param data : Pointer to the frame info
+   * @param[in] data  Pointer to the frame infomation.
    *
-   * @return whether process succeed
-   * @retval 0: succeed and do no intercept data
-   * @retval <0: faile
+   * @retval 0 successful with no data intercepted.
+   * @retval <0 failure
    */
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
   /**
-   * @brief Check ParamSet for a module.
+   * @brief Checks the parameters for a module.
    *
-   * @param paramSet Parameters for this module.
+   * @param[in] paramSet Parameters for this module.
    *
    * @return Returns true if this API run successfully. Otherwise, returns false.
    */
   bool CheckParamSet(const ModuleParamSet &paramSet) const override;
 
  private:
-  TrackerContext *GetContext(CNFrameInfoPtr data);
+  bool InitFeatureExtractor(const CNFrameInfoPtr &data);
+  TrackerContext *GetContext(const CNFrameInfoPtr &data);
   std::unordered_map<int, TrackerContext *> contexts_;
-  std::shared_ptr<edk::ModelLoader> model_loader_ = nullptr;
+  std::shared_ptr<infer_server::ModelInfo> model_ = nullptr;
   std::mutex mutex_;
+  std::function<void(const CNFrameInfoPtr, bool)> match_func_;
   int device_id_ = 0;
-  std::string model_path_ = "";
-  std::string func_name_ = "";
+  std::string model_pattern1_ = "";
+  std::string model_pattern2_ = "";
   std::string track_name_ = "";
   float max_cosine_distance_ = 0.2;
+  int engine_num_ = 1;
+  bool need_feature_ = true;
 };  // class Tracker
 
 }  // namespace cnstream

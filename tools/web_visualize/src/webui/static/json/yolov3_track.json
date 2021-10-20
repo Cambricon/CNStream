@@ -22,7 +22,7 @@
     "max_input_queue_size" : 20,
     "next_modules" : ["tracker"],
     "custom_params" : {
-      "model_path" : "../models/MLU270/yolov3/yolov3_4c4b_argb_270_v1.5.0.cambricon",
+      "model_path" : "../models/yolov3_b4c4_argb_mlu270.cambricon",
       "func_name" : "subnet0",
       "postproc_name" : "PostprocYolov3",
       "batching_timeout" : 300,
@@ -39,7 +39,7 @@
     "max_input_queue_size" : 20,
     "next_modules" : ["osd"],
     "custom_params" : {
-      "model_path" : "../models/MLU270/feature_extract/feature_extract_4c4b_argb_270_v1.5.0.cambricon",
+      "model_path" : "../models/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon",
       "max_cosine_distance": "0.06",
       "device_id" : 0
     }
@@ -50,7 +50,7 @@
     "parallelism" : 1,
     "max_input_queue_size" : 20,
     "custom_params" : {
-      "label_path" : "../models/MLU270/yolov3/label_map_coco.txt"
+      "label_path" : "../models/label_map_coco.txt"
     }
   }
 }

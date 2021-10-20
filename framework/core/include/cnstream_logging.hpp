@@ -55,43 +55,41 @@ DECLARE_bool(log_to_file);
 
 #define STR(src) #src
 
-#define LOGF(category)                                                                   \
-  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_FATAL).stream()
+#define LOGF(category) \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LogSeverity::LOG_FATAL).stream()
 
 #define LOGF_IF(category, condition)                                                     \
   !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGF(category)
 
-#define LOGE(category)                                                                   \
-  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_ERROR).stream()
+#define LOGE(category) \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LogSeverity::LOG_ERROR).stream()
 #define LOGE_IF(category, condition)                                                     \
   !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGE(category)
 
-#define LOGW(category)                                                                   \
-  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_WARNING).stream()
+#define LOGW(category) \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LogSeverity::LOG_WARNING).stream()
 
 #define LOGW_IF(category, condition)                                                     \
   !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGW(category)
 
-#define LOGI(category)                                                                   \
-  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_INFO).stream()
+#define LOGI(category) cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LogSeverity::LOG_INFO).stream()
 
 #define LOGI_IF(category, condition)                                                     \
   !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGI(category)
 
-#define LOGD(category)                                                                   \
-  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_DEBUG).stream()
+#define LOGD(category) \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LogSeverity::LOG_DEBUG).stream()
 
 #define LOGD_IF(category, condition)                                                     \
   !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGD(category)
 
-#define LOGT(category)                                                                   \
-  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_TRACE).stream()
+#define LOGT(category) \
+  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LogSeverity::LOG_TRACE).stream()
 
 #define LOGT_IF(category, condition)                                                     \
   !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGT(category)
 
-#define LOGA(category)                                                                   \
-  cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LOG_ALL).stream()
+#define LOGA(category) cnstream::LogMessage(STR(category), __FILE__, __LINE__, cnstream::LogSeverity::LOG_ALL).stream()
 
 #define LOGA_IF(category, condition)                                                     \
   !(condition) ? (void) 0 : cnstream::LogMessageVoidify() & LOGA(category)
@@ -108,15 +106,7 @@ namespace cnstream {
  * 5, TRACE
  * 6, ALL
  */
-enum LogSeverity {
-  LOG_FATAL = 0,
-  LOG_ERROR,
-  LOG_WARNING,
-  LOG_INFO,
-  LOG_DEBUG,
-  LOG_TRACE,
-  LOG_ALL
-};
+enum class LogSeverity { LOG_FATAL = 0, LOG_ERROR, LOG_WARNING, LOG_INFO, LOG_DEBUG, LOG_TRACE, LOG_ALL };
 
 class LogSink {
  public:

@@ -20,14 +20,10 @@
 
 #include "cnfont.hpp"
 
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
-#else
-#error OpenCV required
 #endif
 
 #include <string>
@@ -134,7 +130,10 @@ bool CnFont::GetTextSize(char* text, uint32_t* width, uint32_t* height) {
     return false;
   }
   wchar_t* w_str;
-  ToWchar(text, w_str);
+  if (ToWchar(text, w_str) == -1) {
+    LOGE(OSD) << "[CnFont] [GetTextSize] [ToWchar] failed.";
+    return -1;
+  }
 
   uint32_t w_char_width = 0, w_char_height = 0;
   double space = m_fontSize.val[0] * m_fontSize.val[1];
@@ -173,15 +172,25 @@ void CnFont::GetWCharSize(wchar_t wc, uint32_t* width, uint32_t* height) {
 }
 
 int CnFont::putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) {
-  if (img.data == nullptr) return -1;
-  if (text == nullptr) return -1;
+  if (img.data == nullptr) {
+    LOGE(OSD) << "[CnFont] [putText] img.data is nullptr.";
+    return -1;
+  }
+
+  if (text == nullptr) {
+    LOGE(OSD) << "[CnFont] [putText] text is nullptr.";
+  }
+
   if (!is_initialized_) {
     LOGE(OSD) << " [Osd] Please init CnFont first.";
     return -1;
   }
 
   wchar_t* w_str;
-  ToWchar(text, w_str);
+  if (ToWchar(text, w_str) == -1) {
+    LOGE(OSD) << "[CnFont] [putText] [ToWchar] failed.";
+    return -1;
+  }
 
   for (int i = 0; w_str[i] != '\0'; ++i) {
     putWChar(img, w_str[i], pos, color);

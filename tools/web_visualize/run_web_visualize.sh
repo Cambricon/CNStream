@@ -3,6 +3,7 @@ CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/neuware/lib64/
 
 src_dir="$CURRENT_DIR/../../data"
+models_dir="$CURRENT_DIR/../../data/models"
 dst_dir="$CURRENT_DIR/src/webui/static"
 pushd $dst_dir
   if [ ! -d $dst_dir/data ]; then
@@ -21,55 +22,41 @@ pushd $dst_dir
     fi
   fi
 
-  resnet50_model_path="models/MLU270/Classification/resnet50"
-  resnet50_model_name="resnet50_offline_v1.3.0.cambricon"
-  resnet50_label_name="synset_words.txt"
-  mkdir -p $src_dir/$resnet50_model_path
-  pushd $src_dir/$resnet50_model_path
+  pushd $models_dir
+    resnet50_model_name="resnet50_b16c16_bgra_mlu270.cambricon"
+    resnet50_label_name="synset_words.txt"
     if [ ! -f $resnet50_model_name ]; then
       echo "download renset50"
-      wget -O $resnet50_model_name  http://video.cambricon.com/$resnet50_model_path/$resnet50_model_name
+      wget -O $resnet50_model_name http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon
     fi
     if [ ! -f $resnet50_label_name ]; then
       echo "download renset50 label"
-      wget -O $resnet50_label_name http://video.cambricon.com/$resnet50_model_path/$resnet50_label_name
+      wget -O $resnet50_label_name http://video.cambricon.com/models/MLU270/Classification/resnet50/synset_words.txt
     fi
-  popd
-  ssd_model_path="models/MLU270/Primary_Detector/ssd"
-  ssd_model_name="resnet34_ssd.cambricon"
-  ssd_label_name="label_voc.txt"
-  echo $src_dir/$ssd_model_path
-  pushd $src_dir/$ssd_model_path
+    ssd_model_name="resnet34_ssd_b16c16_mlu270.cambricon"
+    ssd_label_name="label_voc.txt"
     if [ ! -f $ssd_model_name ]; then
       echo "download ssd"
-      wget -O $ssd_model_name  http://video.cambricon.com/$ssd_model_path/$ssd_model_name
+      wget -O $ssd_model_name http://video.cambricon.com/models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon
     fi
     if [ ! -f $ssd_label_name ]; then
       echo "download ssd label"
-      wget -O $ssd_label_name http://video.cambricon.com/$ssd_model_path/$ssd_label_name
+      wget -O $ssd_label_name http://video.cambricon.com/models/MLU270/Primary_Detector/ssd/label_voc.txt
     fi
-  popd
-  yolov3_model_path="models/MLU270/yolov3"
-  yolov3_model_name="yolov3_offline_u4_v1.3.0.cambricon"
-  yolov3_label_name="label_map_coco.txt"
-  mkdir -p $src_dir/$yolov3_model_path
-  pushd $src_dir/$yolov3_model_path
+    yolov3_model_name="yolov3_b4c4_argb_mlu270.cambricon"
+    yolov3_label_name="label_map_coco.txt"
     if [ ! -f $yolov3_model_name ]; then
       echo "download yolov3"
-      wget -O $yolov3_model_name  http://video.cambricon.com/$yolov3_model_path/$yolov3_model_name
+      wget -O $yolov3_model_name http://video.cambricon.com/models/MLU270/yolov3/yolov3_4c4b_argb_270_v1.5.0.cambricon
     fi
     if [ ! -f $yolov3_label_name ]; then
       echo "download yolov3 label"
-      wget -O $yolov3_label_name http://video.cambricon.com/$yolov3_model_path/$yolov3_label_name
+      wget -O $yolov3_label_name http://video.cambricon.com/models/MLU270/yolov3/label_map_coco.txt
     fi
-  popd
-  feature_extract_model_path="models/MLU270/feature_extract"
-  feature_extract_model_name="feature_extract_4c4b_argb_270_v1.5.0.cambricon"
-  mkdir -p $src_dir/$feature_extract_model_path
-  pushd $src_dir/$feature_extract_model_path
+    feature_extract_model_name="feature_extract_for_tracker_b4c4_argb_mlu270.cambricon"
     if [ ! -f $feature_extract_model_name ]; then
       echo "download feature extract model"
-      wget -O $feature_extract_model_name  http://video.cambricon.com//$feature_extract_model_path/$feature_extract_model_name
+      wget -O $feature_extract_model_name http://video.cambricon.com/models/MLU270/feature_extract/feature_extract_4c4b_argb_270_v1.5.0.cambricon
     fi
   popd
 

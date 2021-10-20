@@ -18,6 +18,7 @@
  * THE SOFTWARE.
  *************************************************************************/
 #include "data_source.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <functional>
@@ -77,14 +78,14 @@ bool DataSource::Open(ModuleParamSet paramSet) {
   if (paramSet.find("output_type") != paramSet.end()) {
     std::string out_type = paramSet["output_type"];
     if (out_type == "cpu") {
-      param_.output_type_ = OUTPUT_CPU;
+      param_.output_type_ = OutputType::OUTPUT_CPU;
     } else if (out_type == "mlu") {
-      param_.output_type_ = OUTPUT_MLU;
+      param_.output_type_ = OutputType::OUTPUT_MLU;
     } else {
       LOGE(SOURCE) << "output_type " << paramSet["output_type"] << " not supported";
       return false;
     }
-    if (param_.output_type_ == OUTPUT_MLU) {
+    if (param_.output_type_ == OutputType::OUTPUT_MLU) {
       param_.device_id_ = GetDeviceId(paramSet);
       if (param_.device_id_ < 0) {
         LOGE(SOURCE) << "output_type MLU : device_id must be set";
@@ -108,9 +109,9 @@ bool DataSource::Open(ModuleParamSet paramSet) {
   if (paramSet.find("decoder_type") != paramSet.end()) {
     std::string dec_type = paramSet["decoder_type"];
     if (dec_type == "cpu") {
-      param_.decoder_type_ = DECODER_CPU;
+      param_.decoder_type_ = DecoderType::DECODER_CPU;
     } else if (dec_type == "mlu") {
-      param_.decoder_type_ = DECODER_MLU;
+      param_.decoder_type_ = DecoderType::DECODER_MLU;
     } else {
       LOGE(SOURCE) << "decoder_type " << paramSet["decoder_type"] << " not supported";
       return false;
@@ -124,7 +125,7 @@ bool DataSource::Open(ModuleParamSet paramSet) {
     }
   }
 
-  if (param_.decoder_type_ == DECODER_MLU) {
+  if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
     param_.reuse_cndec_buf = false;
     if (paramSet.find("reuse_cndec_buf") != paramSet.end()) {
       if (paramSet["reuse_cndec_buf"] == "true") {

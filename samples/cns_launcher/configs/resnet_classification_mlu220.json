@@ -1,0 +1,14 @@
+{
+  "classifier" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path" : "../../../data/models/resnet18_b4c4_bgra_mlu220.cambricon",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocClassification",
+      "model_input_pixel_format" : "BGRA32",
+      "device_id" : 0
+    }
+  }
+}

@@ -24,6 +24,8 @@
 #include <string.h>
 
 #include <cerrno>
+#include <string>
+#include <utility>
 
 #include "cnstream_logging.hpp"
 
@@ -50,4 +52,18 @@ void CheckExePath(const std::string& path) {
     LOGF_IF(COREUNITEST, 0 != errno) << std::string(strerror(errno));
     LOGF(COREUNITEST) << "length of exe path is larger than " << PATH_MAX_LENGTH;
   }
+}
+
+std::pair<int, std::string> CreateTempFile(const std::string& filename_prefix) {
+  char filename[1024];
+  if (filename_prefix.size() > 1024 - 7) {
+    LOGF(COREUNITEST) << "filename_prefix is too long, must be less than " << 1024 - 7 << std::endl;
+  }
+  strncpy(filename, filename_prefix.c_str(), filename_prefix.size());
+  strncpy(filename + filename_prefix.size(), "XXXXXX", 6);
+  filename[filename_prefix.size() + 6] = '\0';
+  int fd = mkstemp(filename);
+  LOGF_IF(COREUNITEST, -1 == fd) << "Create temporary file for BuildPipelineByJSONFile test case failed! "
+      << strerror(errno);
+  return std::make_pair(fd, std::string(filename));
 }

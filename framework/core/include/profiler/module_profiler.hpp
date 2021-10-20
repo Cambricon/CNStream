@@ -31,6 +31,11 @@
 #include "profiler/profile.hpp"
 #include "profiler/trace.hpp"
 
+/*!
+ *  @file module_profiler.hpp
+ *
+ *  This file contains a declaration of the ModuleProfiler class.
+ */
 namespace cnstream {
 
 static constexpr char kPROCESS_PROFILER_NAME[] = "PROCESS";
@@ -38,97 +43,103 @@ static constexpr char kINPUT_PROFILER_NAME[]   = "INPUT_QUEUE";
 
 class PipelineTracer;
 
-/**
- * ModuleProfiler is responsible for the performance statistics of a module.
- * ModuleProfiler contains multiple ProcessProfilers for multiple process proiling.
- * The trace event of the processes will be recorded when `ProfilerConfig::enable_tracing` is true.
- * Profiling and tracing of custom process is supported, see `RegisterProcessName` for detail.
- * This class is thread-safe.
- **/
+/*!
+ * @class ModuleProfiler
+ *
+ * @brief ModuleProfiler is a class of the performance statistics of a module. It contains multiple
+ * cnstream::ProcessProfiler instances to support multiple process profilings.
+ *
+ * The trace events of each process will be recorded when ProfilerConfig::enable_tracing is true. Profiling and tracing of customized process is supported. See ModuleProfiler::RegisterProcessName for details.
+ *
+ * @note This class is thread safe.
+ */
 class ModuleProfiler : private NonCopyable {
  public:
-  /**
-   * @brief Constructor of ModuleProfiler.
+  /*!
+   * @brief Constructs a ModuleProfiler object.
+   *
+   * @param[in] config The configuration of the profiler.
+   * @param[in] module_name The name of the module.
+   * @param[in] tracer The tracer for tracing events.
    * 
-   * @param config Profiler config.
-   * @param module_name Module name.
-   * @param tracer Tool for tracing.
-   **/
+   * @return No return value.
+   */
   explicit ModuleProfiler(const ProfilerConfig& config,
                           const std::string& module_name,
                           PipelineTracer* tracer);
 
-  /**
-   * @brief Registers process named by `process_name` for this profiler.
+  /*!
+   * @brief Registers process named by ``process_name`` for this profiler.
    *
-   * @param process_name The process name is the unique identification of a
-   * function or a piece of code that needs to do profiling.
+   * @param[in] process_name The process name is the unique identification of a function or a piece of code that needs
+   *                         to do profiling.
    *
-   * @return True for Register succeessed.
-   * False will be returned when the process named by `process_name` has already been registered.
-   **/
+   * @return Returns true if the registration is successful. Returns false if the process name has been registered.
+   */
   bool RegisterProcessName(const std::string& process_name);
 
-  /**
-   * @brief Records the start of a process named `process_name`.
-   * 
-   * @param process_name The name of a process. process_name is registed by `RegisterProcessName`.
-   * @param key Unique identifier of a CNFrameInfo instance.
-   * 
-   * @return Ture for record successed.
-   * False will be returned when the process named by `process_name` has not been registered by `RegisterProcessName`.
-   * 
-   * @see RegisterProcessName
-   * @see RecordKey
-   **/
+  /*!
+   * @brief Records the start of a process named ``process_name``.
+   *
+   * @param[in] process_name The name of the process. It should be registed by ``RegisterProcessName``.
+   * @param[in] key The unique identifier of a CNFrameInfo instance.
+   *
+   * @return Returns true if recording is successful. Returns false if the process named by ``process_name`` is not
+   *         registered by ``RegisterProcessName``.
+   *
+   * @see cnstream::ModuleProfiler::RegisterProcessName
+   * @see cnstream::ModuleProfiler::RecordKey
+   */
   bool RecordProcessStart(const std::string& process_name, const RecordKey& key);
 
-  /**
-   * @brief Records the end of a process named `process_name`.
+  /*!
+   * @brief Records the end of a process named ``process_name``.
    * 
-   * @param process_name The name of a process. process_name is registed by `RegisterProcessName`.
-   * @param key Unique identifier of a CNFrameInfo instance.
-   * 
-   * @return Ture for record successed.
-   * False will be returned when the process named by `process_name` has not been registered by `RegisterProcessName`.
-   * 
-   * @see RegisterProcessName
-   * @see RecordKey
-   **/
+   * @param[in] process_name The name of the process. It should be registed by ``RegisterProcessName``.
+   * @param[in] key The unique identifier of a CNFrameInfo instance.
+   *
+   * @return Returns true if record successfully. Returns false if the process named by ``process_name`` has not been
+   *         registered by ``RegisterProcessName``.
+   *
+   * @see cnstream::ModuleProfiler::RegisterProcessName
+   * @see cnstream::ModuleProfiler::RecordKey
+   */
   bool RecordProcessEnd(const std::string& process_name, const RecordKey& key);
 
-  /**
-   * @brief Tells the profiler to clear datas of stream named by `stream_name`.
-   * 
-   * @param stream_name Stream name. Usually it is comes from `CNFrameInfo::stream_id`.
-   * 
-   * @return void.
-   **/
+  /*!
+   * @brief Clears profiling data of the stream named by ``stream_name``, as the end of the stream is reached.
+   *
+   * @param[in] stream_name The name of the stream, usually the ``CNFrameInfo::stream_id``.
+   *
+   * @return No return value.
+   */
   void OnStreamEos(const std::string& stream_name);
 
-  /**
-   * @brief Gets name of module.
-   **/
+  /*!
+   * @brief Gets the name of the module.
+   *
+   * @return Returns the name of the module.
+   */
   std::string GetName() const;
 
-  /**
-   * @brief Gets profiling results of the whole run time.
-   * 
+  /*!
+   * @brief Gets profiling results of the module during the execution of the program.
+   *
    * @return Returns the profiling results.
-   **/
+   */
   ModuleProfile GetProfile();
 
-  /**
-   * @brief Gets profiling results according to the trace datas.
-   * 
-   * @param trace Trace datas.
-   * 
+  /*!
+   * @brief Gets profiling results according to the trace data.
+   *
+   * @param[in] trace Gets profiling results according to the trace data.
+   *
    * @return Returns the profiling results.
-   **/
+   */
   ModuleProfile GetProfile(const ModuleTrace& trace);
 
  private:
-  // Gets process profiler by `process_name`.
+  // Gets process profiler by ``process_name``.
   ProcessProfiler* GetProcessProfiler(const std::string& process_name);
 
  private:

@@ -34,22 +34,18 @@
 #define PATH_MAX_SIZE 1024
 
 const std::vector<std::array<std::string, 3>> model_info = {
-    {"resnet50_offline.cambricon", "/Classification/resnet50/",
-     "http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline.cambricon"},
-    {"resnet50_offline_v1.3.0.cambricon", "/Classification/resnet50/",
-     "http://video.cambricon.com/models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon"},
-    {"yuv2gray.cambricon", "/KCF/", "http://video.cambricon.com/models/MLU270/KCF/yuv2gray.cambricon"},
-    {"feature_extract_4c4b_argb_270_v1.5.0.cambricon", "/feature_extract/",
-     "http://video.cambricon.com/models/MLU270/feature_extract/feature_extract_4c4b_argb_270_v1.5.0.cambricon"},
-    {"yolov3_4c4b_argb_270_v1.5.0.cambricon", "/yolov3/",
-     "http://video.cambricon.com/models/MLU270/yolov3/yolov3_4c4b_argb_270_v1.5.0.cambricon"}};
+    {"resnet50_b16c16_bgra_mlu270.cambricon", "/",
+     "http://video.cambricon.com/models/MLU270/resnet50_b16c16_bgra_mlu270.cambricon"},
+    {"feature_extract_for_tracker_b4c4_argb_mlu270.cambricon", "/",
+     "http://video.cambricon.com/models/MLU270/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon"},
+    {"yolov3_b4c4_argb_mlu270.cambricon", "/",
+     "http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon"}};
 
 class TestEnvironment : public testing::Environment {
  public:
   virtual void SetUp() {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(0);
-    mlu_ctx.SetChannelId(0);
     mlu_ctx.BindDevice();
     LOGI(MODULESUNITEST) << "Set Up global environment.";
   }
@@ -101,7 +97,7 @@ void GetModuleExists(const std::vector<std::array<std::string, 3>> model_info) {
 
   for (unsigned i = 0; i < model_info.size(); i++) {
     std::string model_name = model_info[i][0];
-    std::string tmp_path = get_execute_path + "../../data/models/MLU270";
+    std::string tmp_path = get_execute_path + "../../data/models";
     model_path = tmp_path + model_info[i][1];
     model_file_path = model_path + model_name;
     // model file does not exists

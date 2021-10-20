@@ -33,16 +33,19 @@
 #include "profiler/pipeline_profiler.hpp"
 namespace cnstream {
 
-std::shared_ptr<SourceHandler> ESMemHandler::Create(DataSource *module, const std::string &stream_id) {
+std::shared_ptr<SourceHandler> ESMemHandler::Create(DataSource *module, const std::string &stream_id,
+    const MaximumVideoResolution& maximum_resolution) {
   if (!module || stream_id.empty()) {
+    LOGW(SOURCE) << "[ESMemHandler] create function gets invalid paramters.";
     return nullptr;
   }
-  std::shared_ptr<ESMemHandler> handler(new (std::nothrow) ESMemHandler(module, stream_id));
+  std::shared_ptr<ESMemHandler> handler(new (std::nothrow) ESMemHandler(module, stream_id, maximum_resolution));
   return handler;
 }
 
-ESMemHandler::ESMemHandler(DataSource *module, const std::string &stream_id) : SourceHandler(module, stream_id) {
-  impl_ = new (std::nothrow) ESMemHandlerImpl(module, this);
+ESMemHandler::ESMemHandler(DataSource *module, const std::string &stream_id,
+    const MaximumVideoResolution& maximum_resolution) : SourceHandler(module, stream_id) {
+  impl_ = new (std::nothrow) ESMemHandlerImpl(module, maximum_resolution, this);
 }
 
 ESMemHandler::~ESMemHandler() {
@@ -53,19 +56,16 @@ ESMemHandler::~ESMemHandler() {
 
 bool ESMemHandler::Open() {
   if (!this->module_) {
-    LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                 << "module_ null";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: " << "module_ null";
     return false;
   }
   if (!impl_) {
-    LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                 << "ESJpegMemHandler open failed, no memory left";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: " << "ESJpegMemHandler open failed, no memory left";
     return false;
   }
 
   if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                 << "invalid stream_idx";
+    LOGE(SOURCE) << "[" << stream_id_ << "]: " << "invalid stream_idx";
     return false;
   }
 
@@ -99,6 +99,14 @@ int ESMemHandler::Write(unsigned char *data, int len) {
   return -1;
 }
 
+int ESMemHandler::WriteEos() {
+  if (impl_) {
+    impl_->WriteEos();
+    return 0;
+  }
+  return -1;
+}
+
 bool ESMemHandlerImpl::Open() {
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
@@ -112,6 +120,7 @@ bool ESMemHandlerImpl::Open() {
   size_t MaxSize = 60;  // FIXME
   queue_ = new (std::nothrow) cnstream::BoundedQueue<std::shared_ptr<EsPacket>>(MaxSize);
   if (!queue_) {
+    LOGE(SOURCE) << "[ESMemHandlerImpl] open function, failed to create BoundedQueue.";
     return false;
   }
 
@@ -164,6 +173,17 @@ int ESMemHandlerImpl::Write(unsigned char *data, int len) {
   return Write(&pkt);
 }
 
+int ESMemHandlerImpl::WriteEos() {
+  if (eos_reached_) {
+    return -1;
+  }
+  if (parser_.ParseEos()) {
+    eos_reached_ = true;
+    return 0;
+  }
+  return -1;
+}
+
 void ESMemHandlerImpl::OnParserInfo(VideoInfo *video_info) {
   // FIXME
   if (!video_info) {
@@ -173,6 +193,7 @@ void ESMemHandlerImpl::OnParserInfo(VideoInfo *video_info) {
   }
   std::unique_lock<std::mutex> lk(info_mutex_);
   info_ = *video_info;
+  info_.maximum_resolution = maximum_resolution_;
   info_set_.store(true);
   LOGI(SOURCE) << "[" << stream_id_ << "]: "
                << "Got video info.";
@@ -185,26 +206,25 @@ void ESMemHandlerImpl::OnParserFrame(VideoEsFrame *frame) {
     pkt.size = frame->len;
     pkt.pts = generate_pts_ ? (fake_pts_ ++) : frame->pts;
     if (frame->IsEos()) {
-      pkt.flags = ESPacket::FLAG_EOS;
+      pkt.flags = static_cast<size_t>(ESPacket::FLAG::FLAG_EOS);
       eos_reached_ = true;
-      LOGI(SOURCE) << "[" << stream_id_ << "]: "
-                   << "EOS reached in ESMemHandler";
+      LOGI(SOURCE) << "[" << stream_id_ << "]: " << "EOS reached in ESMemHandler";
     } else {
-      pkt.flags = frame->flags ? ESPacket::FLAG_KEY_FRAME : 0;
+      pkt.flags = frame->flags ? static_cast<size_t>(ESPacket::FLAG::FLAG_KEY_FRAME) : 0;
     }
   } else {
-    pkt.flags = ESPacket::FLAG_EOS;
+    pkt.flags = static_cast<size_t>(ESPacket::FLAG::FLAG_EOS);
     eos_reached_ = true;
-    LOGI(SOURCE) << "[" << stream_id_ << "]: "
-                 << "EOS reached in ESMemHandler";
+    LOGI(SOURCE) << "[" << stream_id_ << "]: " << "EOS reached in ESMemHandler";
   }
-  while (running_) {
+  while (running_.load()) {
     int timeoutMs = 1000;
     std::lock_guard<std::mutex> lk(queue_mutex_);
     if (queue_ && queue_->Push(timeoutMs, std::make_shared<EsPacket>(&pkt))) {
       break;
     }
     if (!queue_) {
+      LOGW(SOURCE) << "Frame queue doesn't exist";
       return;
     }
   }
@@ -218,16 +238,20 @@ void ESMemHandlerImpl::DecodeLoop() {
 
   if (!PrepareResources()) {
     ClearResources();
-    if (nullptr != module_) {
-      Event e;
-      e.type = EventType::EVENT_STREAM_ERROR;
-      e.module_name = module_->GetName();
-      e.message = "Prepare codec resources failed.";
-      e.stream_id = stream_id_;
-      e.thread_id = std::this_thread::get_id();
-      module_->PostEvent(e);
+    if (eos_reached_ && !info_set_.load()) {
+      LOGW(SOURCE) << "PrepareResources failed, can not get video info.";
+    } else {
+      if (nullptr != module_) {
+        Event e;
+        e.type = EventType::EVENT_STREAM_ERROR;
+        e.module_name = module_->GetName();
+        e.message = "Prepare codec resources failed.";
+        e.stream_id = stream_id_;
+        e.thread_id = std::this_thread::get_id();
+        module_->PostEvent(e);
+      }
+      LOGE(SOURCE) << "PrepareResources failed.";
     }
-    LOGE(SOURCE) << "PrepareResources failed.";
     return;
   }
 
@@ -246,9 +270,12 @@ void ESMemHandlerImpl::DecodeLoop() {
 
 bool ESMemHandlerImpl::PrepareResources() {
   LOGD(SOURCE) << "[" << stream_id_ << "]: "
-               << "Begin preprare resources";
+               << "Begin to preprare resources";
   VideoInfo info;
-  while (running_.load() && !eos_reached_) {
+  while (running_.load()) {
+    if (eos_reached_ && !info_set_.load()) {
+      break;
+    }
     if (info_set_.load()) {
       std::unique_lock<std::mutex> lk(info_mutex_);
       info = info_;
@@ -261,7 +288,7 @@ bool ESMemHandlerImpl::PrepareResources() {
     return false;
   }
 
-  if (eos_reached_) {
+  if (eos_reached_ && !info_set_.load()) {
     OnDecodeEos();
     return false;
   }
@@ -287,28 +314,19 @@ bool ESMemHandlerImpl::PrepareResources() {
   if (!ret) {
     return false;
   }
-  if (info.extra_data.size()) {
-    VideoEsPacket pkt;
-    pkt.data = info.extra_data.data();
-    pkt.len = info.extra_data.size();
-    pkt.pts = 0;
-    if (!decoder_->Process(&pkt)) {
-      return false;
-    }
-  }
   LOGD(SOURCE) << "[" << stream_id_ << "]: "
-               << "Finish preprare resources";
+               << "Finish prepraring resources";
   return true;
 }
 
 void ESMemHandlerImpl::ClearResources() {
   LOGD(SOURCE) << "[" << stream_id_ << "]: "
-               << "Begin clear resources";
+               << "Begin to clear resources";
   if (decoder_.get()) {
     decoder_->Destroy();
   }
   LOGD(SOURCE) << "[" << stream_id_ << "]: "
-               << "Finish clear resources";
+               << "Finish clearing resources";
 }
 
 bool ESMemHandlerImpl::Process() {
@@ -323,9 +341,8 @@ bool ESMemHandlerImpl::Process() {
     return true;
   }
 
-  if (in->pkt_.flags & ESPacket::FLAG_EOS) {
-    LOGI(SOURCE) << "[" << stream_id_ << "]: "
-                 << " EOS reached in ESMemHandler";
+  if (in->pkt_.flags & static_cast<size_t>(ESPacket::FLAG::FLAG_EOS)) {
+    LOGI(SOURCE) << "[" << stream_id_ << "]: " << " Process EOS frame in ESMemHandler";
     decoder_->Process(nullptr);
     return false;
   }  // if (!ret)
@@ -334,7 +351,6 @@ bool ESMemHandlerImpl::Process() {
   pkt.data = in->pkt_.data;
   pkt.len = in->pkt_.size;
   pkt.pts = in->pkt_.pts;
-
   if (module_ && module_->GetProfiler()) {
     auto record_key = std::make_pair(stream_id_, pkt.pts);
     module_->GetProfiler()->RecordProcessStart(kPROCESS_PROFILER_NAME, record_key);
@@ -351,6 +367,15 @@ bool ESMemHandlerImpl::Process() {
 // IDecodeResult methods
 void ESMemHandlerImpl::OnDecodeError(DecodeErrorCode error_code) {
   // FIXME,  handle decode error ...
+  if (nullptr != module_) {
+    Event e;
+    e.type = EventType::EVENT_STREAM_ERROR;
+    e.module_name = module_->GetName();
+    e.message = "Decode failed.";
+    e.stream_id = stream_id_;
+    e.thread_id = std::this_thread::get_id();
+    module_->PostEvent(e);
+  }
   interrupt_.store(true);
 }
 
@@ -358,16 +383,20 @@ void ESMemHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
   if (frame_count_++ % param_.interval_ != 0) {
     return;  // discard frames
   }
-  if (!frame) return;
+  if (!frame) {
+    LOGW(SOURCE) << "[ESMemHandlerImpl] OnDecodeFrame function frame is nullptr.";
+    return;
+  }
 
   std::shared_ptr<CNFrameInfo> data = this->CreateFrameInfo();
   if (!data) {
+    LOGW(SOURCE) << "[ESMemHandlerImpl] OnDecodeFrame function, failed to create FrameInfo.";
     return;
   }
 
   data->timestamp = frame->pts;  // FIXME
   if (!frame->valid) {
-    data->flags = CN_FRAME_FLAG_INVALID;
+    data->flags = static_cast<size_t>(CNFrameFlag::CN_FRAME_FLAG_INVALID);
     this->SendFrameInfo(data);
     return;
   }

@@ -40,67 +40,71 @@
 namespace cnstream {
 
 /**
- * @brief construct a pointer to CNFrameInfo
- */
-using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
-/**
- * @brief Base class of pre process
+ * @class Preproc
+ *
+ * @brief Preproc is the base class of neural network preprocessing for inference module.
  */
 class Preproc : virtual public ReflexObjectEx<Preproc> {
  public:
   /**
-   * @brief do nothing
+   * @brief Destructs an object.
+   *
+   * @return No return value.
    */
   virtual ~Preproc() {}
   /**
-   * @brief create relative preprocess
+   * @brief Creates a preprocess object with the given preprocess's class name.
    *
-   * @param proc_name preprocess class name
+   * @param[in] proc_name The preprocess class name.
    *
-   * @return relative preprocess object pointer
+   * @return Returns the pointer to preprocess object.
    */
   static Preproc* Create(const std::string& proc_name);
 
   /**
-   * @brief Execute preproc on neural network inputs
+   * @brief Executes preprocess on neural network inputs.
    *
-   * @param net_inputs: neural network inputs
-   * @param model: model information(you can get input shape and output shape from model)
-   * @param package: smart pointer of struct to store origin data
+   * @param[out] net_inputs  Neural network inputs.
+   * @param[in] model  Model information including input shape and output shape.
+   * @param[in] package Smart pointer of ``CNFrameInfo`` which stores origin data.
    *
-   * @return return 0 if succeed
+   * @return Returns 0 if successful, otherwise returns -1.
    */
   virtual int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
                       const CNFrameInfoPtr& package) = 0;
 };  // class Preproc
 
 /**
- * @brief Base class of pre process for object
+ * @class ObjPreproc
+ *
+ * @brief ObjPreproc is the base class of preprocess for object.
  */
 class ObjPreproc : virtual public ReflexObjectEx<ObjPreproc> {
  public:
   /**
-   * @brief do nothing
+   * @brief Destructs an object.
+   *
+   * @return No return value.
    */
   virtual ~ObjPreproc() {}
   /**
-   * @brief create relative object preprocess
+   * @brief Creates a preprocess object with the given preprocess's class name.
    *
-   * @param proc_name preprocess class name
+   * @param[in] proc_name The preprocess class name.
    *
-   * @return None
+   * @return Returns the pointer to preprocess object.
    */
   static ObjPreproc* Create(const std::string& proc_name);
 
   /**
-   * @brief Execute preproc on neural network inputs
+   * @brief Executes preprocess on neural network inputs.
    *
-   * @param net_inputs: neural network inputs
-   * @param model: model information(you can get input shape and output shape from model)
-   * @param finfo: smart pointer of struct to store origin frame data
-   * @param obj: object infomations
+   * @param[out] net_inputs  Neural network inputs.
+   * @param[in] model  Model information including input shape and output shape.
+   * @param[in] finfo Smart pointer of ``CNFrameInfo`` which stores origin data.
+   * @param[in] obj The deduced object information.
    *
-   * @return return 0 if succeed
+   * @return Returns 0 if successful, otherwise returns -1.
    */
   virtual int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
                       const CNFrameInfoPtr& finfo, const std::shared_ptr<CNInferObject>& pobj) = 0;

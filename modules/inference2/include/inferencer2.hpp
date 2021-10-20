@@ -28,7 +28,6 @@
 #include <string>
 #include <vector>
 
-#include "cnstream_core.hpp"
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
 #include "device/mlu_context.h"

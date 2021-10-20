@@ -23,12 +23,10 @@
 #include <memory>
 #include <string>
 
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
 #endif
 
 #include "easyinfer/mlu_memory_op.h"
@@ -43,8 +41,8 @@ namespace cnstream {
 
 class FakeVideoPostproc : public cnstream::VideoPostproc {
  public:
-  bool ExecuteInObserverNotify(infer_server::InferDataPtr result, const std::shared_ptr<infer_server::ModelInfo>& model,
-                               cnstream::CNFrameInfoPtr frame) {
+  bool Execute(infer_server::InferData* result, const infer_server::ModelIO& output,
+               const infer_server::ModelInfo& model) override {
     return true;
   }
 
@@ -73,15 +71,17 @@ static std::string GetModelPath() {
   std::string model_path = "";
   switch (core_ver) {
     case edk::CoreVersion::MLU220:
-      model_path = "../../data/models/MLU220/Primary_Detector/YOLOv3/yolov3/yolov3_4c4b_argb_220_v1.5.0.cambricon";
+      model_path = "../../data/models/yolov3_b4c4_argb_mlu220.cambricon";
       break;
     case edk::CoreVersion::MLU270:
     default:
-      model_path = "../../data/models/MLU270/yolov3/yolov3_4c4b_argb_270_v1.5.0.cambricon";
+      model_path = "../../data/models/yolov3_b4c4_argb_mlu270.cambricon";
       break;
   }
   return model_path;
 }
+
+static std::string GetModelPathMM() { return "../../data/models/yolov3_nhwc.model"; }
 
 // the data is related to model
 static cnstream::CNFrameInfoPtr CreatData(std::string device_id, bool is_eos = false, bool mlu_data = true) {
@@ -100,53 +100,58 @@ static cnstream::CNFrameInfoPtr CreatData(std::string device_id, bool is_eos = f
     frame_data = mem_op.AllocMlu(nbytes);
     planes[0] = frame_data;                                                                       // y plane
     planes[1] = reinterpret_cast<void*>(reinterpret_cast<int64_t>(frame_data) + width * height);  // uv plane
-    frame->ptr_mlu[0] = planes[0];
-    frame->ptr_mlu[1] = planes[1];
+    void* ptr_mlu[2] = {planes[0], planes[1]};
     frame->ctx.dev_type = DevContext::DevType::MLU;
     frame->ctx.ddr_channel = std::stoi(device_id);
     frame->ctx.dev_id = std::stoi(device_id);
-    frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+    frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
     frame->dst_device_id = std::stoi(device_id);
     frame->frame_id = 1;
     data->timestamp = 1000;
     frame->width = width;
     frame->height = height;
     frame->stride[0] = frame->stride[1] = width;
-    frame->CopyToSyncMem();
-    data->datas[CNDataFramePtrKey] = frame;
+    frame->CopyToSyncMem(ptr_mlu, true);
     std::shared_ptr<CNInferObjs> objs(new (std::nothrow) CNInferObjs());
-    data->datas[CNInferObjsPtrKey] = objs;
+    data->collection.Add(kCNDataFrameTag, frame);
+    data->collection.Add(kCNInferObjsTag, objs);
     return data;
   } else {
     frame->frame_id = 1;
     data->timestamp = 1000;
     frame->width = width;
     frame->height = height;
-    frame->ptr_cpu[0] = image.data;
-    frame->ptr_cpu[1] = image.data + nbytes * 2 / 3;
+    void* ptr_cpu[2] = {image.data, image.data + nbytes * 2 / 3};
     frame->stride[0] = frame->stride[1] = width;
-    frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+    frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
     frame->ctx.dev_type = DevContext::DevType::CPU;
     frame->dst_device_id = std::stoi(device_id);
     frame->ctx.dev_id = std::stoi(device_id);
-    frame->CopyToSyncMem();
+    frame->CopyToSyncMem(ptr_cpu, true);
 
-    data->datas[CNDataFramePtrKey] = frame;
     std::shared_ptr<CNInferObjs> objs(new (std::nothrow) CNInferObjs());
-    data->datas[CNInferObjsPtrKey] = objs;
+    data->collection.Add(kCNDataFrameTag, frame);
+    data->collection.Add(kCNInferObjsTag, objs);
     return data;
   }
   return nullptr;
 }
 
 TEST(Inferencer2, Open) {
-  std::string yolov3_model_path = GetExePath() + GetModelPath();
+  bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
+  std::string exe_path = GetExePath();
   std::string infer_name = "detector";
 
   {  // open success but param is lack
     std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
     ModuleParamSet param;
-    param["model_path"] = yolov3_model_path;
+    if (use_magicmind) {
+      param["model_path"] = exe_path + GetModelPathMM();
+      param["model_input_pixel_format"] = "RGB24";
+    } else {
+      param["model_path"] = exe_path + GetModelPath();
+      param["model_input_pixel_format"] = "ARGB32";
+    }
     param["preproc_name"] = "VideoPreprocCpu";
     param["postproc_name"] = "VideoPostprocSsd";
     EXPECT_TRUE(infer->Open(param));
@@ -161,7 +166,11 @@ TEST(Inferencer2, Open) {
   {  // param is no registered.
     std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
     ModuleParamSet param;
-    param["model_path"] = yolov3_model_path;
+    if (use_magicmind) {
+      param["model_path"] = exe_path + GetModelPathMM();
+    } else {
+      param["model_path"] = exe_path + GetModelPath();
+    }
     param["preproc_name"] = "VideoPreprocCpu";
     param["postproc_name"] = "VideoPostprocSsd";
     param["no_such_key"] = "key";
@@ -171,7 +180,11 @@ TEST(Inferencer2, Open) {
   {  // preproc_name is error
     std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
     ModuleParamSet param;
-    param["model_path"] = yolov3_model_path;
+    if (use_magicmind) {
+      param["model_path"] = exe_path + GetModelPathMM();
+    } else {
+      param["model_path"] = exe_path + GetModelPath();
+    }
     param["preproc_name"] = "no_such_preproc_class";
     param["postproc_name"] = "VideoPostprocSsd";
     EXPECT_FALSE(infer->Open(param));
@@ -180,8 +193,13 @@ TEST(Inferencer2, Open) {
   {  // postproc_name is error
     std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
     ModuleParamSet param;
-    param["model_path"] = yolov3_model_path;
-    param["preproc_name"] = "RCOP";
+    if (use_magicmind) {
+      param["model_path"] = exe_path + GetModelPathMM();
+      param["preproc_name"] = "CNCV";
+    } else {
+      param["model_path"] = exe_path + GetModelPath();
+      param["preproc_name"] = "RCOP";
+    }
     param["postproc_name"] = "no_such_postproc_name";
     EXPECT_FALSE(infer->Open(param));
   }
@@ -189,8 +207,13 @@ TEST(Inferencer2, Open) {
   {  // postproc_name is empty
     std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
     ModuleParamSet param;
-    param["model_path"] = yolov3_model_path;
-    param["preproc_name"] = "RCOP";
+    if (use_magicmind) {
+      param["model_path"] = exe_path + GetModelPathMM();
+      param["preproc_name"] = "CNCV";
+    } else {
+      param["model_path"] = exe_path + GetModelPath();
+      param["preproc_name"] = "RCOP";
+    }
     param["postproc_name"] = "";
     EXPECT_FALSE(infer->Open(param));
   }
@@ -198,19 +221,31 @@ TEST(Inferencer2, Open) {
   {  // model_path is error
     std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
     ModuleParamSet param;
-    param["model_path"] = "/home/error_path";
-    param["preproc_name"] = "RCOP";
+    if (use_magicmind) {
+      param["model_path"] = "/home/no.model";
+      param["preproc_name"] = "CNCV";
+    } else {
+      param["model_path"] = "/home/error_path";
+      param["preproc_name"] = "RCOP";
+    }
     param["postproc_name"] = "VideoPostprocSsd";
     EXPECT_FALSE(infer->Open(param));  // check model path in inference, infer_handler no check
   }
 }
 
 TEST(Inferencer2, Process) {
-  std::string yolov3_model_path = GetExePath() + GetModelPath();
+  bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
+  std::string exe_path = GetExePath();
   std::string infer_name = "detector";
   std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
   ModuleParamSet param;
-  param["model_path"] = yolov3_model_path;
+  if (use_magicmind) {
+    param["model_path"] = exe_path + GetModelPathMM();
+    param["model_input_pixel_format"] = "RGB24";
+  } else {
+    param["model_path"] = exe_path + GetModelPath();
+    param["model_input_pixel_format"] = "ARGB32";
+  }
   param["preproc_name"] = "FakeVideoPreproc";
   param["postproc_name"] = "FakeVideoPostproc";
   param["device_id"] = "0";
@@ -239,7 +274,6 @@ TEST(Inferencer2, Process) {
   }
 
   {  // CNFrameInfo no eos and data in cpu
-    param["model_path"] = yolov3_model_path;
     ASSERT_TRUE(infer->Open(param));
     std::string device_id = param["device_id"];
     bool is_eos = false;

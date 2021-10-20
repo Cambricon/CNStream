@@ -81,7 +81,7 @@ std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<
   if (cnstream::IsStreamRemoved(finfo->stream_id)) {
     return NULL;
   }
-  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(finfo);
+  CNDataFramePtr frame = finfo->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
   if (frame->fmt != CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 &&
       frame->fmt != CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) {
     throw CnstreamError("Can not handle this frame with format :" + std::to_string(static_cast<int>(frame->fmt)));
@@ -95,8 +95,8 @@ std::shared_ptr<InferTask> ResizeConvertBatchingStage::Batching(std::shared_ptr<
   QueuingTicket ticket = rcop_res_->PickUpTicket();
   std::shared_ptr<RCOpValue> value = rcop_res_->WaitResourceByTicket(&ticket);
   if (!rcop_res_->Initialized()) {
-    uint32_t dst_w = model_->InputShapes()[0].w;
-    uint32_t dst_h = model_->InputShapes()[0].h;
+    uint32_t dst_w = model_->InputShape(0).W();
+    uint32_t dst_h = model_->InputShape(0).H();
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(dev_id_);
     mlu_ctx.BindDevice();
@@ -130,7 +130,7 @@ ScalerBatchingStage::~ScalerBatchingStage() {}
 
 void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, uint32_t batch_idx,
                                           const IOResValue& value) {
-  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(finfo);
+  CNDataFramePtr frame = finfo->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
 
   // make sure device_id set
   frame->data[0]->SetMluDevContext(0);
@@ -147,14 +147,14 @@ void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, ui
 
   cncodecPixelFormat fmt = CNCODEC_PIX_FMT_NV12;
   switch (frame->fmt) {
-    case CN_PIXEL_FORMAT_YUV420_NV21:
+    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
       fmt = CNCODEC_PIX_FMT_NV21;
       break;
-    case CN_PIXEL_FORMAT_YUV420_NV12:
+    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
       fmt = CNCODEC_PIX_FMT_NV12;
       break;
     default:
-      LOGE(INFERENCER) << "Scaler: unsupport fmt: " + std::to_string(frame->fmt);
+      LOGE(INFERENCER) << "Scaler: unsupport fmt: " << static_cast<int>(frame->fmt);
       break;
   }
 
@@ -174,12 +174,12 @@ void ScalerBatchingStage::ProcessOneFrame(std::shared_ptr<CNFrameInfo> finfo, ui
 
   const auto sp = value.datas[0].shape;  // model input shape
   auto align_to_128 = [](uint32_t x) { return (x + 127) & ~127; };
-  auto row_align = align_to_128(sp.w * 4);
-  dst_frame.width = sp.w;
-  dst_frame.height = sp.h;
+  auto row_align = align_to_128(sp.W() * 4);
+  dst_frame.width = sp.W();
+  dst_frame.height = sp.H();
   dst_frame.pixelFmt = CNCODEC_PIX_FMT_ARGB;
   dst_frame.planeNum = 1;
-  dst_frame.plane[0].size = row_align * sp.h;
+  dst_frame.plane[0].size = row_align * sp.H();
   dst_frame.stride[0] = row_align;
   dst_frame.plane[0].addr = reinterpret_cast<u64_t>(dst);
   dst_frame.deviceId = dev_id_;

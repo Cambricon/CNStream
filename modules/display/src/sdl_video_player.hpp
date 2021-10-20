@@ -1,6 +1,13 @@
 #ifndef _SDL_VIDEO_PLAYER_HPP_
 #define _SDL_VIDEO_PLAYER_HPP_
 
+#include <SDL2/SDL.h>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#if (CV_MAJOR_VERSION >= 3)
+#include <opencv2/imgcodecs/imgcodecs.hpp>
+#endif
+
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -8,21 +15,8 @@
 #include <string>
 #include <utility>
 #include <vector>
-#ifdef HAVE_OPENCV
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
-#if (CV_MAJOR_VERSION >= 3)
-#include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
-#else
-#error OpenCV required
-#endif
 
-#ifdef HAVE_SDL
-#include <SDL2/SDL.h>
-#endif
-
-#include "util/cnstream_time_utility.hpp"
+#include "util/cnstream_timer.hpp"
 
 namespace cnstream {
 
@@ -33,7 +27,6 @@ struct UpdateData {
   std::string stream_id;
 };  // struct UpdateData
 
-#ifdef HAVE_SDL
 class SDLVideoPlayer {  // BGR
  public:
   SDLVideoPlayer();
@@ -88,28 +81,6 @@ class SDLVideoPlayer {  // BGR
   SDL_Thread *refresh_th_ = nullptr;
   std::string module_name_;
 };  // class SDLVideoPlayer
-
-#else
-class SDLVideoPlayer {  // BGR
- public:
-  inline bool Init(int max_chn) { return true; }
-  inline void Destroy() {}
-  inline void SetFullScreen() {}
-  inline void set_window_w(int w) {}
-  inline void set_window_h(int h) {}
-  inline void set_frame_rate(int frame_rate) {}
-  inline bool FeedData(const UpdateData &data) { return true; }
-  void EventLoop(const std::function<void()> &quit_callback) {}
-  std::string CalcFps(const UpdateData &data) { return ""; }
-  inline void SetModuleName(std::string module_name) { module_name_ = module_name; }
-
- private:
-  std::vector<int> flags_;
-  std::vector<TickClock> ticker_;
-  std::vector<int> fps_;
-  std::string module_name_;
-};  // class SDLVideoPlayer
-#endif  // HAVE_SDL
 
 }  // namespace cnstream
 

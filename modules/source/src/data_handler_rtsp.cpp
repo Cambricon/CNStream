@@ -42,12 +42,14 @@ extern "C" {
 namespace cnstream {
 
 std::shared_ptr<SourceHandler> RtspHandler::Create(DataSource *module, const std::string &stream_id,
-                                                   const std::string &url_name, bool use_ffmpeg, int reconnect) {
+                                                   const std::string &url_name, bool use_ffmpeg, int reconnect,
+                                                   const MaximumVideoResolution& maximum_resolution) {
   if (!module || stream_id.empty() || url_name.empty()) {
+    LOGE(SOURCE) << "[RtspHandler] Create function, invalid paramters.";
     return nullptr;
   }
-  std::shared_ptr<RtspHandler> handler(new (std::nothrow)
-                                           RtspHandler(module, stream_id, url_name, use_ffmpeg, reconnect));
+  std::shared_ptr<RtspHandler> handler(new (std::nothrow) RtspHandler(module, stream_id, url_name,
+      use_ffmpeg, reconnect, maximum_resolution));
   return handler;
 }
 
@@ -119,10 +121,10 @@ class FFmpegDemuxer : public rtsp_detail::IDemuxer, public IParserResult {
       pkt.pts = frame->pts;
       pkt.flags = 0;
       if (frame->flags & AV_PKT_FLAG_KEY) {
-        pkt.flags |= ESPacket::FLAG_KEY_FRAME;
+        pkt.flags |= static_cast<size_t>(ESPacket::FLAG::FLAG_KEY_FRAME);
       }
     } else {
-      pkt.flags = ESPacket::FLAG_EOS;
+      pkt.flags = static_cast<size_t>(ESPacket::FLAG::FLAG_EOS);
       eos_reached_ = true;
     }
     if (queue_) {
@@ -202,7 +204,7 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
       pkt.pts = frame->pts;
       pkt.flags = 0;
       if (frame->flags & AV_PKT_FLAG_KEY) {
-        pkt.flags |= ESPacket::FLAG_KEY_FRAME;
+        pkt.flags |= static_cast<size_t>(ESPacket::FLAG::FLAG_KEY_FRAME);
       }
       if (!connect_done_) {
         connect_done_.store(true);
@@ -210,7 +212,7 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
                      << "Rtsp connect success";
       }
     } else {
-      pkt.flags = ESPacket::FLAG_EOS;
+      pkt.flags = static_cast<size_t>(ESPacket::FLAG::FLAG_EOS);
       if (!connect_done_) {
         // Failed to connect server...
         LOGW(SOURCE) << "[" << stream_id_ << "]: "
@@ -237,9 +239,9 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
 };  // class Live555Demuxer
 
 RtspHandler::RtspHandler(DataSource *module, const std::string &stream_id, const std::string &url_name, bool use_ffmpeg,
-                         int reconnect)
+                         int reconnect, const MaximumVideoResolution& maximum_resolution)
     : SourceHandler(module, stream_id) {
-  impl_ = new (std::nothrow) RtspHandlerImpl(module, url_name, this, use_ffmpeg, reconnect);
+  impl_ = new (std::nothrow) RtspHandlerImpl(module, url_name, this, use_ffmpeg, reconnect, maximum_resolution);
 }
 
 RtspHandler::~RtspHandler() {
@@ -354,6 +356,7 @@ void RtspHandlerImpl::DemuxLoop() {
     }
     usleep(1000);
   }while(1);
+  stream_info_.maximum_resolution = maximum_resolution_;
   stream_info_set_.store(true);
 
   LOGI(SOURCE) << "[" << stream_id_ << "]: "
@@ -440,7 +443,7 @@ void RtspHandlerImpl::DecodeLoop() {
       continue;
     }
 
-    if (in->pkt_.flags & ESPacket::FLAG_EOS) {
+    if (in->pkt_.flags & static_cast<size_t>(ESPacket::FLAG::FLAG_EOS)) {
       LOGI(SOURCE) << "[" << stream_id_ << "]: "
                    << "EOS reached in RtspHandler";
       decoder_->Process(nullptr);
@@ -475,6 +478,15 @@ void RtspHandlerImpl::DecodeLoop() {
 // IDecodeResult methods
 void RtspHandlerImpl::OnDecodeError(DecodeErrorCode error_code) {
   // FIXME,  handle decode error ...
+  if (nullptr != module_) {
+    Event e;
+    e.type = EventType::EVENT_STREAM_ERROR;
+    e.module_name = module_->GetName();
+    e.message = "Decode failed.";
+    e.stream_id = stream_id_;
+    e.thread_id = std::this_thread::get_id();
+    module_->PostEvent(e);
+  }
   interrupt_.store(true);
 }
 
@@ -482,16 +494,20 @@ void RtspHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
   if (frame_count_++ % param_.interval_ != 0) {
     return;  // discard frames
   }
-  if (!frame) return;
+  if (!frame) {
+    LOGW(SOURCE) << "[RtspHandlerImpl] OnDecodeFrame, frame is nullptr.";
+    return;
+  }
 
   std::shared_ptr<CNFrameInfo> data = this->CreateFrameInfo();
   if (!data) {
+    LOGW(SOURCE) << "[RtspHandlerImpl] OnDecodeFrame, failed to create FrameInfo.";
     return;
   }
 
   data->timestamp = frame->pts;  // FIXME
   if (!frame->valid) {
-    data->flags = CN_FRAME_FLAG_INVALID;
+    data->flags = static_cast<size_t>(CNFrameFlag::CN_FRAME_FLAG_INVALID);
     this->SendFrameInfo(data);
     return;
   }

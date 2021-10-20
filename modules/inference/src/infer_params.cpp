@@ -245,13 +245,13 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
   param.type = "string";
   param.parser = [](const std::string &value, InferParams *param_set) -> bool {
     if ("RGBA32" == value)
-      param_set->model_input_pixel_format = CN_PIXEL_FORMAT_RGBA32;
+      param_set->model_input_pixel_format = CNDataFormat::CN_PIXEL_FORMAT_RGBA32;
     else if ("BGRA32" == value)
-      param_set->model_input_pixel_format = CN_PIXEL_FORMAT_BGRA32;
+      param_set->model_input_pixel_format = CNDataFormat::CN_PIXEL_FORMAT_BGRA32;
     else if ("ARGB32" == value)
-      param_set->model_input_pixel_format = CN_PIXEL_FORMAT_ARGB32;
+      param_set->model_input_pixel_format = CNDataFormat::CN_PIXEL_FORMAT_ARGB32;
     else if ("ABGR32" == value)
-      param_set->model_input_pixel_format = CN_PIXEL_FORMAT_ABGR32;
+      param_set->model_input_pixel_format = CNDataFormat::CN_PIXEL_FORMAT_ABGR32;
     else
       return false;
     return true;
@@ -280,8 +280,8 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
 
   param.name = "pad_method";
   param.desc_str =
-      "Optional. When use mlu preprocessing, set the pad method. set pad_method = center, image in center,set the "
-      "pad_method = origin. image in top left corner";
+      "Optional. When preprocess on mlu, you could set pad_method. If set it to center, the image will be at center."
+      "Or if set it to origin, the image will be at top left corner";
   param.default_value = "center";
   param.type = "string";
   param.parser = [](const std::string &value, InferParams *param_set) -> bool {

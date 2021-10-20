@@ -27,12 +27,10 @@
 #include <thread>
 #include <mutex>
 
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
 #endif
 
 #include "cnstream_logging.hpp"
@@ -53,7 +51,6 @@ class RawImgMemHandlerImpl : public SourceRender {
   bool Open();
   void Close();
 
-#ifdef HAVE_OPENCV
   /**
    * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
    * @param
@@ -64,7 +61,7 @@ class RawImgMemHandlerImpl : public SourceRender {
    * @retval -2: Invalid data.
    */
   int Write(const cv::Mat *mat_data, const uint64_t pts = 0);
-#endif
+
   /**
    * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
    bgr24/rgb24/nv21/nv12 format).
@@ -79,8 +76,8 @@ class RawImgMemHandlerImpl : public SourceRender {
    * @retval -1: Write failed, maybe eos got or handler is closed.
    * @retval -2: Invalid data.
    */
-  int Write(const uint8_t *data, const int size, const uint64_t pts = 0, const int width = 0,
-      const int height = 0, const CNDataFormat pixel_fmt = CN_INVALID);
+  int Write(const uint8_t *data, const int size, const uint64_t pts = 0, const int width = 0, const int height = 0,
+            const CNDataFormat pixel_fmt = CNDataFormat::CN_INVALID);
 
  private:
   DataSource *module_ = nullptr;
@@ -88,9 +85,10 @@ class RawImgMemHandlerImpl : public SourceRender {
   std::string stream_id_;
   DataSourceParam param_;
 
- private:
 #ifdef UNIT_TEST
  public:  // NOLINT
+#else
+ private:  // NOLINT
 #endif
   bool CheckRawImageParams(const uint8_t *data, const int size, const int width,
       const int height, const CNDataFormat pixel_fmt);
@@ -108,10 +106,9 @@ class RawImgMemHandlerImpl : public SourceRender {
   std::atomic<bool> eos_got_{false};
   uint64_t frame_id_ = 0;
 
-#ifdef HAVE_OPENCV
   cv::Mat *src_mat_ = nullptr;  // src mat with bgr24 or rgb24 format
   cv::Mat *dst_mat_ = nullptr;  // dst mat with I420 format
-#endif
+
   int src_width_ = 0;
   int src_height_ = 0;
   CNDataFormat src_fmt_ = CNDataFormat::CN_INVALID;

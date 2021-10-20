@@ -17,7 +17,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include "cnstream_allocator.hpp"
+#include "private/cnstream_allocator.hpp"
 
 #include <exception>
 #include <memory>
@@ -34,17 +34,57 @@ class CnrtInit {
 static CnrtInit cnrt_init_;
 
 MluDeviceGuard::MluDeviceGuard(int device_id) : device_id_(device_id) {
-  // FIXME, check errors
   if (device_id < 0) {
-    LOGE(Allocator) << "device id:  " << device_id << " is invalid";
-    return;
+    // means use cpu, do nothing.
+  } else {
+    unsigned int dev_num = 0;
+    cnrtGetDeviceCount(&dev_num);
+    if (dev_num < 1) {
+      LOGE(CORE) << "There is no valid device";
+    } else if (device_id > static_cast<int>(dev_num - 1)) {
+      LOGE(CORE) << "The device ID: " << device_id << "must be less than " << dev_num;
+    } else {
+      cnrtDev_t dev;
+      cnrtGetDeviceHandle(&dev, device_id_);
+      cnrtSetCurrentDevice(dev);
+    }
   }
-  cnrtDev_t dev;
-  cnrtGetDeviceHandle(&dev, device_id_);
-  cnrtSetCurrentDevice(dev);
+  return;
 }
 
 MluDeviceGuard::~MluDeviceGuard() {}
+
+class MemoryAllocator : public NonCopyable {
+ public:
+  explicit MemoryAllocator(int device_id) : device_id_(device_id) {}
+  virtual ~MemoryAllocator() = default;
+  virtual void *alloc(size_t size, int timeout_ms = 0) = 0;
+  virtual void free(void *p) = 0;
+  int device_id() const { return device_id_; }
+  void set_device_id(int device_id) { device_id_ = device_id; }
+
+ protected:
+  int device_id_ = -1;
+  std::mutex mutex_;
+};
+
+class CpuAllocator : public MemoryAllocator {
+ public:
+  CpuAllocator() : MemoryAllocator(-1) {}
+  ~CpuAllocator() = default;
+
+  void *alloc(size_t size, int timeout_ms = 0) override;
+  void free(void *p) override;
+};
+
+class MluAllocator : public MemoryAllocator {
+ public:
+  explicit MluAllocator(int device_id = 0) : MemoryAllocator(device_id) {}
+  ~MluAllocator() = default;
+
+  void *alloc(size_t size, int timeout_ms = 0) override;
+  void free(void *p) override;
+};
 
 // helper funcs
 class CnAllocDeleter final {
@@ -78,13 +118,11 @@ std::shared_ptr<void> cnMluMemAlloc(size_t size, int device_id) {
 // cpu Var-size allocator
 void *CpuAllocator::alloc(size_t size, int timeout_ms) {
   size_t alloc_size = (size + 4095) & (~0xFFF);  // Align 4096
-  // LOGI("Allocator") << "CpuAllocator::alloc  " << size << "\n";
   return static_cast<void *>(new (std::nothrow) unsigned char[alloc_size]);
 }
 
 void CpuAllocator::free(void *p) {
   unsigned char *ptr = static_cast<unsigned char *>(p);
-  // LOGI("Allocator") << "CpuAllocator::free\n";
   delete[] ptr;
 }
 
@@ -99,7 +137,6 @@ void *MluAllocator::alloc(size_t size, int timeout_ms) {
     return nullptr;
   }
 
-  // LOGI("Allocator") << "MluAllocator::alloc  " << size << "\n";
   return mlu_ptr;
 }
 
@@ -107,7 +144,6 @@ void MluAllocator::free(void *p) {
   std::lock_guard<std::mutex> lk(mutex_);
   MluDeviceGuard guard(device_id_);
   cnrtFree(p);
-  // LOGI("Allocator") << "MluAllocator::free\n";
 }
 
 }  // namespace cnstream

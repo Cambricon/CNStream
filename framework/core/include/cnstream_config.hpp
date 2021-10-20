@@ -26,11 +26,9 @@
  *
  * This file contains a declaration of the CNModuleConfig class.
  */
-#include <unistd.h>
-#include <string.h>
-
 #include <list>
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -40,89 +38,211 @@
 
 namespace cnstream {
 
-static constexpr char kPROFILER_CONFIG_NAME[] = "profiler_config";
+/*!
+ * Defines an alias for std::unordered_map<std::string, std::string>.
+ * ModuleParamSet now denotes an unordered map which contains the pairs of parameter name and parameter value.
+ */
+using ModuleParamSet = std::unordered_map<std::string, std::string>;
 
-struct ProfilerConfig {
-  bool enable_profiling = false;
-  bool enable_tracing = false;
-  size_t trace_event_capacity = 100000;
+// Group:Framework Function
+/**
+ * @brief Gets the complete path of a file.
+ *
+ * If the path you set is an absolute path, returns the absolute path.
+ * If the path you set is a relative path, retuns the path that appends the relative path
+ * to the specified JSON file path.
+ *
+ * @param[in] path The path relative to the JSON file or an absolute path.
+ * @param[in] param_set The module parameters. The JSON file path is one of the parameters.
+ *
+ * @return Returns the complete path of a file.
+ */
+std::string GetPathRelativeToTheJSONFile(const std::string &path, const ModuleParamSet &param_set);
 
+/**
+ * @struct CNConfigBase
+ *
+ * @brief CNConfigBase is a base structure for configurations.
+ */
+struct CNConfigBase {
+  std::string config_root_dir = "";   ///< The directory where a configuration file is stored.
   /**
-   * Parses members from JSON string.
+   * @brief Parses members from a JSON file.
    *
-   * @return Returns true if the JSON file has been parsed successfully. Otherwise, returns false.
-   */
-  bool ParseByJSONStr(const std::string &jstr);
-
-  /**
-   * Parses members from JSON file.
+   * @param[in] jfname JSON configuration file path.
    *
    * @return Returns true if the JSON file has been parsed successfully. Otherwise, returns false.
    */
   bool ParseByJSONFile(const std::string &jfname);
-};  // struct ProfilerConfig
 
-/// Module parameter set.
-using ModuleParamSet = std::unordered_map<std::string, std::string>;
+  /**
+   * @brief Parses members from JSON string.
+   *
+   * @param[in] jstr JSON string of a configuration.
+   *
+   * @return Returns true if the JSON string has been parsed successfully. Otherwise, returns false.
+   */
+  virtual bool ParseByJSONStr(const std::string &jstr) = 0;
+};  // struct CNConfigBase
 
-#define CNS_JSON_DIR_PARAM_NAME "json_file_dir"
 /**
- * @brief The configuration parameters of a module.
+ * @struct ProfilerConfig
  *
- * You can use ``CNModuleConfig`` to add modules in a pipeline.
- * The module configuration can be in JSON file.
+ * @brief ProfilerConfig is a structure for profiler configuration.
  *
- * @code
- * "name(CNModuleConfig::name)": {
- *   custom_params(CNModuleConfig::parameters): {
- *     "key0": "value",
- *     "key1": "value",
- *     ...
+ * The profiler configuration can be a JSON file.
+ *
+ * @code {.json}
+ * {
+ *   "profiler_config" : {
+ *     "enable_profiling" : true,
+ *     "enable_tracing" : true
  *   }
- *  "parallelism(CNModuleConfig::parallelism)": 3,
- *  "max_input_queue_size(CNModuleConfig::maxInputQueueSize)": 20,
- *  "class_name(CNModuleConfig::className)": "Inferencer",
- *  "next_modules": ["module0(CNModuleConfig::name)", "module1(CNModuleConfig::name)", ...],
  * }
  * @endcode
  *
- * @see Pipeline::AddModuleConfig.
+ * @note It will not take effect when the profiler configuration is in the subgraph configuration.
+ **/
+struct ProfilerConfig : public CNConfigBase {
+  bool enable_profiling = false;           ///< Whether to enable profiling.
+  bool enable_tracing = false;             ///< Whether to enable tracing.
+  size_t trace_event_capacity = 100000;    ///< The maximum number of cached trace events.
+
+  /**
+   * @brief Parses members from JSON string.
+   *
+   * @param[in] jstr JSON configuration string.
+   *
+   * @return Returns true if the JSON string has been parsed successfully. Otherwise, returns false.
+   */
+  bool ParseByJSONStr(const std::string &jstr) override;
+};  // struct ProfilerConfig
+
+/**
+ * @struct CNModuleConfig
+ *
+ * CNModuleConfig is a structure for module configuration.
+ * The module configuration can be a JSON file.
+ *
+ * @code {.json}
+ * {
+ *   "name": {
+ *     "parallelism": 3,
+ *     "max_input_queue_size": 20,
+ *     "class_name": "cnstream::Inferencer",
+ *     "next_modules": ["module_name/subgraph:subgraph_name",
+ *                      "module_name/subgraph:subgraph_name", ...],
+ *     "custom_params" : {
+ *       "param_name" : "param_value",
+ *       "param_name" : "param_value",
+ *       ...
+ *     }
+ *   }
+ * }
+ * @endcode
  */
-struct CNModuleConfig {
+struct CNModuleConfig : public CNConfigBase {
   std::string name;  ///< The name of the module.
   std::unordered_map<std::string, std::string>
       parameters;   ///< The key-value pairs. The pipeline passes this value to the CNModuleConfig::name module.
-  int parallelism;  ///< Module parallelism. It is equal to module thread number and the data queue for input data.
+  int parallelism;  ///< Module parallelism. It is equal to module thread number or the data queue of input data.
   int maxInputQueueSize;          ///< The maximum size of the input data queues.
   std::string className;          ///< The class name of the module.
-  std::vector<std::string> next;  ///< The name of the downstream modules.
+  std::set<std::string> next;     ///< The name of the downstream modules/subgraphs.
 
   /**
-   * Parses members from JSON string except CNModuleConfig::name.
+   * @brief Parses members except ``CNModuleConfig::name`` from the JSON file.
    *
-   * @return Returns true if the JSON file has been parsed successfully. Otherwise, returns false.
-   */
-  bool ParseByJSONStr(const std::string &jstr);
-
-  /**
-   * Parses members from JSON file except CNModuleConfig::name.
+   * @param[in] jstr JSON string of a configuration.
    *
-   * @return Returns true if the JSON file has been parsed successfully. Otherwise, returns false.
+   * @return Returns true if the JSON string has been parsed successfully. Otherwise, returns false.
    */
-  bool ParseByJSONFile(const std::string &jfname);
+  bool ParseByJSONStr(const std::string &jstr) override;
 };
 
 /**
- * Parses pipeline configs from json-config-file.
+ * @struct CNSubgraphConfig
  *
- * @return Returns true if the JSON file has been parsed successfully. Otherwise, returns false.
+ * @brief CNSubgraphConfig is a structure for subgraph configuration.
+ *
+ * The subgraph configuration can be a JSON file.
+ *
+ * @code {.json}
+ * {
+ *   "subgraphs:name" : {
+ *     "config_path" : "/your/path/to/config_file.json",
+ *     "next_modules": ["module_name/subgraph:subgraph_name",
+ *                      "module_name/subgraph:subgraph_name", ...]
+ *   }
+ * }
+ * @endcode
  */
-bool ConfigsFromJsonFile(const std::string &config_file,
-                         std::vector<CNModuleConfig> *pmodule_configs,
-                         ProfilerConfig *pprofiler_config);
+struct CNSubgraphConfig : public CNConfigBase {
+  std::string name;              ///< The name of the subgraph.
+  std::string config_path;       ///< The path of configuration file.
+  std::set<std::string> next;    ///< The name of the downstream modules/subgraphs.
+
+  /**
+   * @brief Parses members except ``CNSubgraphConfig::name`` from the JSON file.
+   *
+   * @param[in] jstr JSON string of a configuration.
+   *
+   * @return Returns true if the JSON string has been parsed successfully. Otherwise, returns false.
+   */
+  bool ParseByJSONStr(const std::string &jstr) override;
+};
 
 /**
- * @brief ParamRegister
+ * @struct CNGraphConfig
+ *
+ * @brief CNGraphConfig is a structure for graph configuration.
+ *
+ * You can use ``CNGraphConfig`` to initialize a CNGraph instance.
+ * The graph configuration can be a JSON file.
+ *
+ * @code {.json}
+ * {
+ *   "profiler_config" : {
+ *     "enable_profiling" : true,
+ *     "enable_tracing" : true
+ *   },
+ *   "module1": {
+ *     "parallelism": 3,
+ *     "max_input_queue_size": 20,
+ *     "class_name": "cnstream::DataSource",
+ *     "next_modules": ["subgraph:subgraph1"],
+ *     "custom_params" : {
+ *       "param_name" : "param_value",
+ *       "param_name" : "param_value",
+ *       ...
+ *     }
+ *   },
+ *   "subgraph:subgraph1" : {
+ *     "config_path" : "/your/path/to/subgraph_config_file.json"
+ *   }
+ * }
+ * @endcode
+ */
+struct CNGraphConfig : public CNConfigBase {
+  std::string name = "";                            ///< Graph name.
+  ProfilerConfig profiler_config;                   ///< Configuration of profiler.
+  std::vector<CNModuleConfig> module_configs;       ///< Configurations of modules.
+  std::vector<CNSubgraphConfig> subgraph_configs;   ///< Configurations of subgraphs.
+
+  /**
+   * @brief Parses members except ``CNGraphConfig::name`` from the JSON file.
+   *
+   * @param[in] jstr: Json configuration string.
+   *
+   * @return Returns true if the JSON string has been parsed successfully. Otherwise, returns false.
+   */
+  bool ParseByJSONStr(const std::string &jstr) override;
+};  // struct GraphConfig
+
+/**
+ * @class ParamRegister
+ *
+ * @brief ParamRegister is a class for module parameter registration.
  *
  * Each module registers its own parameters and descriptions.
  * This is used in CNStream Inspect tool to detect parameters of each module.
@@ -139,8 +259,8 @@ class ParamRegister {
    *
    * This is used in CNStream Inspect tool.
    *
-   * @param key The parameter name.
-   * @param desc The description of the paramter.
+   * @param[in] key The parameter name.
+   * @param[in] desc The description of the paramter.
    *
    * @return Void.
    */
@@ -160,7 +280,7 @@ class ParamRegister {
    *
    * This is used in CNStream Inspect tool.
    *
-   * @param key The parameter name.
+   * @param[in] key The parameter name.
    *
    * @return Returns true if the parameter has been registered. Otherwise, returns false.
    */
@@ -180,7 +300,7 @@ class ParamRegister {
    *
    * This is used in CNStream Inspect tool.
    *
-   * @param desc The description of the module.
+   * @param[in] desc The description of the module.
    *
    * @return Void.
    */
@@ -196,31 +316,19 @@ class ParamRegister {
 };
 
 /**
- * @brief Gets the complete path of a file.
+ * @class ParametersChecker
  *
- * If the path you set is an absolute path, returns the absolute path.
- * If the path you set is a relative path, retuns the path that appends the relative path
- * to the specified JSON file path.
- *
- * @param path The path relative to the JSON file or an absolute path.
- * @param param_set The module parameters. The JSON file path is one of the parameters.
- *
- * @return Returns the complete path of a file.
- */
-std::string GetPathRelativeToTheJSONFile(const std::string &path, const ModuleParamSet &param_set);
-
-/**
- * @brief Checks the module parameters.
+ * @brief ParameterChecker is a class used to check module parameters.
  */
 class ParametersChecker {
  public:
   /**
-   * @brief Checks if the path exists.
+   * @brief Checks if a path exists.
    *
-   * @param path The path relative to JSON file or an absolute path.
-   * @param paramSet The module parameters. The JSON file path is one of the parameters.
+   * @param[in] path The path relative to JSON file or an absolute path.
+   * @param[in] paramSet The module parameters. The JSON file path is one of the parameters.
    *
-   * @return Returns true if exists. Otherwise, returns false.
+   * @return Returns true if the path exists. Otherwise, returns false.
    */
   bool CheckPath(const std::string &path, const ModuleParamSet &paramSet) {
     std::string relative_path = GetPathRelativeToTheJSONFile(path, paramSet);
@@ -232,10 +340,10 @@ class ParametersChecker {
   /**
    * @brief Checks if the parameters are number, and the value is specified in the correct range.
    *
-   * @param check_list A list of parameter names.
-   * @param paramSet The module parameters.
-   * @param err_msg The error message.
-   * @param greater_than_zero If this parameter is set to ``true``, the parameter set should be
+   * @param[in] check_list A list of parameter names.
+   * @param[in] paramSet The module parameters.
+   * @param[out] err_msg The error message.
+   * @param[in] greater_than_zero If this parameter is set to ``true``, the parameter set should be
    * greater than or equal to zero. If this parameter is set to ``false``, the parameter set is less than zero.
    *
    * @return Returns true if the parameters are number and the value is in the correct range. Otherwise, returns false.

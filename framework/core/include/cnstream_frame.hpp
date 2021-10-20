@@ -26,13 +26,14 @@
 #include <unordered_map>
 #include <vector>
 
+#include "cnstream_collection.hpp"
 #include "cnstream_common.hpp"
 #include "util/cnstream_any.hpp"
 
 /**
  *  @file cnstream_frame.hpp
  *
- *  This file contains a declaration of the CNFrameInfo struct and its substructure.
+ *  This file contains a declaration of the CNFrameInfo class.
  */
 namespace cnstream {
 
@@ -40,71 +41,114 @@ class Module;
 class Pipeline;
 
 /**
- * An enumerated type that specifies the mask of CNDataFrame.
+ * @enum CNFrameFlag
+ *
+ * @brief Enumeration variables describing the mask of CNDataFrame.
  */
-enum CNFrameFlag {
-  CN_FRAME_FLAG_EOS = 1 << 0,      ///< Identifies the end of data stream.
-  CN_FRAME_FLAG_INVALID = 1 << 1,  ///< Identifies the invalid of frame.
-  CN_FRAME_FLAG_REMOVED = 2 << 1   ///< Identifies the stream has been removed.
+enum class CNFrameFlag {
+  CN_FRAME_FLAG_EOS = 1 << 0,     /*!< This enumeration indicates the end of data stream. */
+  CN_FRAME_FLAG_INVALID = 1 << 1, /*!< This enumeration indicates an invalid frame. */
+  CN_FRAME_FLAG_REMOVED = 1 << 2  /*!< This enumeration indicates that the stream has been removed. */
 };
 
 /**
- *  A structure holding the information of a frame.
+ * @class CNFrameInfo
+ *
+ * @brief CNFrameInfo is a class holding the information of a frame.
+ *
  */
 class CNFrameInfo : private NonCopyable {
  public:
   /**
-   * Creates a CNFrameInfo instance.
+   * @brief Creates a CNFrameInfo instance.
    *
-   * @param stream_id The data stream alias. Identifies which data stream the frame data comes from.
-   * @param eos  Whether this is the end of the stream. This parameter is set to false by default to 
-   *             create a CNFrameInfo instance. If you set this parameter to true, 
-   *             CNDataFrame::flags will be set to ``CN_FRAME_FLAG_EOS``. Then, the modules
-   *            do not have permission to process this frame. This frame should be handed over to 
-   *            the pipeline for processing.
+   * @param[in] stream_id The data stream alias. Identifies which data stream the frame data comes from.
+   * @param[in] eos  Whether this is the end of the stream. This parameter is set to false by default to
+   *                 create a CNFrameInfo instance. If you set this parameter to true,
+   *                 CNDataFrame::flags will be set to ``CN_FRAME_FLAG_EOS``. Then, the modules
+   *                 do not have permission to process this frame. This frame should be handed over to
+   *                 the pipeline for processing.
    *
    * @return Returns ``shared_ptr`` of ``CNFrameInfo`` if this function has run successfully. Otherwise, returns NULL.
    */
   static std::shared_ptr<CNFrameInfo> Create(const std::string& stream_id, bool eos = false,
                                             std::shared_ptr<CNFrameInfo> payload = nullptr);
-  ~CNFrameInfo();
-  /**
-   * Whether DataFrame is end of stream (EOS) or not. 
-   *
-   * @return Returns true if the frame is EOS. Returns false if the frame is not EOS.
-   */
-  bool IsEos() { return (flags & cnstream::CN_FRAME_FLAG_EOS) ? true : false; }
-  bool IsRemoved() { return (flags & cnstream::CN_FRAME_FLAG_REMOVED) ? true : false; }
 
-   /**
-   * Whether DataFrame is availability or not.
-   *
-   * @return true: frame is invalid, false: frame is valid.
-   */
-  bool IsInvalid() { return (flags & cnstream::CN_FRAME_FLAG_INVALID) ? true : false; }
+CNS_IGNORE_DEPRECATED_PUSH
+
+ private:
+  CNFrameInfo() = default;
+
+ public:
   /**
-   * Sets index (usually the index is a number) to identify stream. This is only used for distributing each stream 
-   * data to the appropriate thread.
-   * We do not recommend SDK users to use this API because it will be removed later.
+   * @brief Destructs CNFrameInfo object.
    *
-   * @param index Number to identify stream.
+   * @return No return value.
+   */
+  ~CNFrameInfo();
+CNS_IGNORE_DEPRECATED_POP
+
+  /**
+   * @brief Checks whether DataFrame is end of stream (EOS) or not.
    *
    * @return Returns true if the frame is EOS. Returns false if the frame is not EOS.
+   */
+  bool IsEos() { return (flags & static_cast<size_t>(cnstream::CNFrameFlag::CN_FRAME_FLAG_EOS)) ? true : false; }
+
+  /**
+   * @brief Checks whether DataFrame is removed or not.
+   *
+   * @return Returns true if the frame is EOS. Returns false if the frame is not EOS.
+   */
+  bool IsRemoved() {
+    return (flags & static_cast<size_t>(cnstream::CNFrameFlag::CN_FRAME_FLAG_REMOVED)) ? true : false;
+  }
+
+  /**
+   * @brief Checks if DataFrame is valid or not.
+   *
+   *
+   *
+   * @return Returns true if frame is invalid, otherwise returns false.
+   */
+  bool IsInvalid() {
+    return (flags & static_cast<size_t>(cnstream::CNFrameFlag::CN_FRAME_FLAG_INVALID)) ? true : false;
+  }
+
+  /**
+   * @brief Sets index (usually the index is a number) to identify stream.
+   *
+   * @param[in] index Number to identify stream.
+   *
+   * @return No return value.
+   *
+   * @note This is only used for distributing each stream data to the appropriate thread.
+   * We do not recommend SDK users to use this API because it will be removed later.
    */
   void SetStreamIndex(uint32_t index) { channel_idx = index; }
-  // GetStreamIndex() will be removed later
+
+  /**
+   * @brief Gets index number which identifies stream.
+   *
+   *
+   *
+   * @return Index number.
+   *
+   * @note This is only used for distributing each stream data to the appropriate thread.
+   * We do not recommend SDK users to use this API because it will be removed later.
+   */
   uint32_t GetStreamIndex() const { return channel_idx; }
 
-  std::string stream_id;   ///< The data stream aliases where this frame is located to.
-  int64_t timestamp = -1;  ///< The time stamp of this frame.
-  size_t flags = 0;        ///< The mask for this frame, ``CNFrameFlag``.
+  std::string stream_id;  /*!< The data stream aliases where this frame is located to. */
+  int64_t timestamp = -1; /*!< The time stamp of this frame. */
+  size_t flags = 0;       /*!< The mask for this frame, ``CNFrameFlag``. */
 
   // user-defined DataFrame，InferResult etc...
-  std::unordered_map<int, any> datas;
-  std::mutex datas_lock_;
+  CNS_DEPRECATED std::unordered_map<int, any> datas; /*!< (Deprecated) Uses CNFrameInfo::collection instead. */
+  CNS_DEPRECATED std::mutex datas_lock_;             /*!< (Deprecated) Uses CNFrameInfo::collection instead. */
 
-  // CNFrameInfo instance of parent pipeline
-  std::shared_ptr<cnstream::CNFrameInfo> payload = nullptr;
+  Collection collection;                                    /*!< Stored structured data.  */
+  std::shared_ptr<cnstream::CNFrameInfo> payload = nullptr; /*!< CNFrameInfo instance of parent pipeline. */
 
  private:
   /**
@@ -113,22 +157,19 @@ class CNFrameInfo : private NonCopyable {
   friend class Pipeline;
   mutable uint32_t channel_idx = INVALID_STREAM_IDX;        ///< The index of the channel, stream_index
   void SetModulesMask(uint64_t mask);
-  uint64_t MarkPassed(Module* current);  // return changed mask
   uint64_t GetModulesMask();
+  uint64_t MarkPassed(Module* current);  // return changed mask
 
- private:
   std::mutex mask_lock_;
   /* Identifies which modules have processed this data */
   uint64_t modules_mask_ = 0;
-
- private:
-  CNFrameInfo() {}
-  static std::mutex stream_count_lock_;
-  static std::unordered_map<std::string, int> stream_count_map_;
-
- public:
-  static int flow_depth_;
 };
+
+/*!
+ * Defines an alias for the std::shared_ptr<CNFrameInfo>. CNFrameInfoPtr now denotes a shared pointer of frame
+ * information.
+ */
+using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 
 }  // namespace cnstream
 

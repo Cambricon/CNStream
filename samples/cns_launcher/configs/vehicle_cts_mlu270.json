@@ -1,0 +1,43 @@
+{
+  // vehicle color type sid recognization
+  "detector" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["vehicle_cts"],
+    "custom_params" : {
+      "model_path" : "../../../data/models/resnet34_ssd_b16c16_mlu270.cambricon",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocSsd",
+      "threshold" : 0.5,
+      "model_input_pixel_format" : "BGRA32",
+      "device_id" : 0
+    }
+  },
+
+  "vehicle_cts" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["osd"],
+    "custom_params" : {
+      "model_path" : "../../../data/models/vehicle_cts_b4c4_bgra_mlu270.cambricon",
+      "func_name" : "subnet0",
+      "object_infer" : true,  // input with detection objects
+      "obj_filter_name" : "CarFilter",  // filter objects expect vehicles
+      "postproc_name" : "PostprocVehicleCts",
+      "model_input_pixel_format" : "BGRA32",
+      "device_id" : 0
+    }
+  },
+
+  "osd" : {
+    "class_name" : "cnstream::Osd",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "label_path" : "../../../data/models/label_voc.txt",
+      "attr_keys" : "COLOR, TYPE, TOWARDS"
+    }
+  }
+}

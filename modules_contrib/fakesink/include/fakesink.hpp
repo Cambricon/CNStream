@@ -24,7 +24,6 @@
 #include <memory>
 #include <string>
 
-#include "cnstream_core.hpp"
 #include "cnstream_module.hpp"
 
 namespace cnstream {

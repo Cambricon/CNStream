@@ -20,17 +20,16 @@
 
 #ifndef MODULES_DATA_SOURCE_HPP_
 #define MODULES_DATA_SOURCE_HPP_
-/**
- *  \file data_source.hpp
+/*!
+ *  @file data_source.hpp
  *
- *  This file contains a declaration of struct DataSource and DataSourceParam
+ *  This file contains a declaration of the DataSourceParam and ESPacket struct, and the DataSource, FileHandler,
+ *  RtspHandler, ESMemHandler, ESJpegMemHandler and RawImgMemHandler class.
  */
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
 #endif
 
 #include <memory>
@@ -41,98 +40,68 @@
 #include "cnstream_frame_va.hpp"
 #include "cnstream_pipeline.hpp"
 #include "cnstream_source.hpp"
+#include "data_source_param.hpp"
 
 namespace cnstream {
 
-/**
- * @brief storage type of output frame data for modules, storage on cpu or mlu.
- */
-enum OutputType {
-  OUTPUT_CPU,  /// output decoded buffer to CPU
-  OUTPUT_MLU   /// output decoded buffer to MLU
-};
-/**
- * @brief decoder type used in source module.
- */
-enum DecoderType {
-  DECODER_CPU,  /// use CPU decoder
-  DECODER_MLU   /// use MLU decoder
-};
-/**
- * @brief a structure for private usage
- */
-struct DataSourceParam {
-  OutputType output_type_ = OUTPUT_CPU;         ///< output data to cpu/mlu
-  size_t interval_ = 1;                         ///< output image every "interval" frames
-  DecoderType decoder_type_ = DECODER_CPU;      ///< decoder type
-  bool reuse_cndec_buf = false;                 ///< valid when DECODER_MLU used
-  int device_id_ = -1;                          ///< mlu device id, -1 :disable mlu
-  uint32_t input_buf_number_ = 2;               ///< valid when decoder_type = DECODER_MLU
-  uint32_t output_buf_number_ = 3;              ///< valid when decoder_type = DECODER_MLU
-  bool apply_stride_align_for_scaler_ = false;  //< recommended for use on m200 platforms
-};
-
-/**
- * @brief Class for handling input data
+/*!
+ * @class DataSource
+ *
+ * @brief DataSource is a class to handle encoded input data.
+ *
+ * @note It is always the first module in a pipeline.
  */
 class DataSource : public SourceModule, public ModuleCreator<DataSource> {
  public:
-  /**
-   * @brief Construct DataSource object with a given moduleName
-   * @param
-   * 	moduleName[in]:defined module name
+  /*!
+   * @brief Constructs a DataSource object.
+   *
+   * @param[in] moduleName The name of this module.
+   *
+   * @return No return value.
    */
   explicit DataSource(const std::string &moduleName);
-  /**
-   * @brief Deconstruct DataSource object
+
+  /*!
+   * @brief Destructs a DataSource object.
    *
+   * @return No return value.
    */
   ~DataSource();
 
-  /**
-   * @brief Called by pipeline when the pipeline is started.
-
-   * @param paramSet
-   * @verbatim
-   *   output_type: Optional. The output type. The default output_type is cpu.
-   *                Supported values are ``mlu`` and ``cpu``.
-   *   interval: Optional. Process one frame for every ``interval`` frames. Process every frame by default.
-   *   decoder_type : Optional. The decoder type. The default decoder_type is cpu.
-   *                  Supported values are ``mlu`` and ``cpu``.
-   *   reuse_cndec_buf: Optional. Whether the codec buffer will be reused. The default value is false.
-                        This parameter is used when decoder type is ``mlu``.
-                        Supported values are ``true`` and ``false``.
-   *   device_id: Required when MLU is used. Device id. Set the value to -1 for CPU.
-                  Set the value for MLU in the range 0 - N.
-   *   interlaced: Interlaced mode.
-   *   input_buf_number: Optional. The input buffer number. The default value is 2.
-   *   output_buf_number: Optional. The output buffer number. The default value is 3.
-   *   apply_stride_align_for_scaler: Optional. Apply stride align for scaler on m220(m.2/edge).
-   * @endverbatim
+  /*!
+   * @brief Initializes the configuration of the DataSource module.
    *
-   * @return
-   *    true if paramSet are supported and valid, othersize false
+   * This function will be called by the pipeline when the pipeline starts.
+   *
+   * @param[in] paramSet The module's parameter set to configure a DataSource module.
+   *
+   * @return Returns true if the parammeter set is supported and valid, othersize returns false.
    */
   bool Open(ModuleParamSet paramSet) override;
-  /**
-   * @brief Called by pipeline when pipeline stop.
+
+  /*!
+   * @brief Frees the resources that the object may have acquired.
+   *
+   * This function will be called by the pipeline when the pipeline stops.
+   *
+   * @return No return value.
    */
   void Close() override;
 
-  /**
-   * @brief Check ParamSet for a module.
+  /*!
+   * @brief Checks the parameter set for the DataSource module.
    *
-   * @param paramSet Parameters for this module.
+   * @param[in] paramSet Parameters for this module.
    *
-   * @return Returns true if this API run successfully. Otherwise, returns false.
+   * @return Returns true if all parameters are valid. Otherwise, returns false.
    */
   bool CheckParamSet(const ModuleParamSet &paramSet) const override;
 
- public:
-  /**
-   * @brief Get module parameters.
+  /*!
+   * @brief Gets the parameters of the DataSource module.
    *
-   * @return Returns data source parameters.
+   * @return Returns the parameters of this module.
    *
    * @note This function should be called after ``Open`` function.
    */
@@ -142,319 +111,384 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
   DataSourceParam param_;
 };  // class DataSource
 
-/**
- * @brief The struct of ES data packet.
+/*!
+ * @struct ESPacket
+ *
+ * @brief The ESPacket is a structure describing the elementary stream data packet.
  */
 struct ESPacket {
-  unsigned char *data = nullptr;  /// the data
-  int size = 0;                   /// the size of the data
-  uint64_t pts = 0;               /// the pts of the data
-  uint32_t flags = 0;             /// the flags of the data
-  /**
-   * @brief The flags of frame
-   */
-  enum {
-    FLAG_KEY_FRAME = 0x01,        /// flag of key frame
-    FLAG_EOS = 0x02,              /// flag of eos frame
+  unsigned char *data = nullptr;  /*!< The video data. */
+  int size = 0;                   /*!< The size of the data. */
+  uint64_t pts = 0;               /*!< The presentation time stamp of the data. */
+  uint32_t flags = 0;             /*!< The flags of the data. */
+  enum class FLAG{
+    FLAG_KEY_FRAME = 0x01,  /*!< The flag of key frame. */
+    FLAG_EOS = 0x02,        /*!< The flag of eos (the end of the stream) frame. */
   };
 };  // struct ESPacket
 
-/**
- * @brief Source handler for video with format mp4, flv, matroska and USBCamera("/dev/videoxxx") etc.
- */
 class FileHandlerImpl;
+
+/*!
+ * @struct MaximumVideoResolution
+ *
+ * @brief The MaximumVideoResolution (not supported on MLU220/MLU270) is a structure describing the maximum video
+ * resolution parameters.
+ *
+ */
+struct MaximumVideoResolution {
+  bool enable_variable_resolutions = false;  /*!< Whether to enable variable resolutions. */
+  uint32_t maximum_width;                    /*!< The maximum video width. */
+  uint32_t maximum_height;                   /*!< The maximum video height. */
+};  // struct MaximumVideoResolution
+
+/*!
+ * @class FileHandler
+ *
+ * @brief FileHandler is a class of source handler for video with format mp4, flv, matroska and USBCamera
+ * ("/dev/videoxxx") .
+ */
 class FileHandler : public SourceHandler {
  public:
-  /**
+  /*!
    * @brief Creates source handler.
    *
-   * @param module The data source module.
-   * @param stream_id The stream id of the stream.
-   * @param filename The filename of the stream.
-   * @param framerate Control sending the frames of the stream with specific rate.
-   * @param loop Loop the stream.
+   * @param[in] module The data source module.
+   * @param[in] stream_id The stream id of the stream.
+   * @param[in] filename The filename of the stream.
+   * @param[in] framerate Controls sending the frames of the stream with specific rate.
+   * @param[in] loop Loops the stream.
+   * @param[in] maximum_resolution The maximum video resolution for variable video resolutions.
+   * See ``MaximumVideoResolution`` for detail.
    *
    * @return Returns source handler if it is created successfully, otherwise returns nullptr.
    */
   static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
-                                               const std::string &filename, int framerate, bool loop = false);
-  /**
+                                               const std::string &filename, int framerate, bool loop = false,
+                                               const MaximumVideoResolution& maximum_resolution = {});
+  /*!
    * @brief The destructor of FileHandler.
+   *
+   * @return No return value.
    */
   ~FileHandler();
-  /**
+  /*!
    * @brief Opens source handler.
    *
    * @return Returns true if the source handler is opened successfully, otherwise returns false.
    */
   bool Open() override;
-  /**
+  /*!
    * @brief Closes source handler.
+   *
+   * @return No return value
    */
   void Close() override;
 
  private:
   explicit FileHandler(DataSource *module, const std::string &stream_id, const std::string &filename, int framerate,
-                       bool loop);
+                       bool loop, const MaximumVideoResolution& maximum_resolution);
 
- private:
 #ifdef UNIT_TEST
- public:
+ public:  // NOLINT
 #endif
   FileHandlerImpl *impl_ = nullptr;
 };  // class FileHandler
 
 class RtspHandlerImpl;
-/**
- * @brief Source handler for rtsp stream.
+/*!
+ * @class RtspHandler
+ *
+ * @brief RtspHandler is a class of source handler for rtsp stream.
  */
 class RtspHandler : public SourceHandler {
  public:
-  /**
+  /*!
    * @brief Creates source handler.
    *
-   * @param module The data source module.
-   * @param stream_id The stream id of the stream.
-   * @param url_name The url of the stream.
-   * @param use_ffmpeg Uses ffmpeg demuxer if it is true, otherwise uses live555 demuxer.
-   * @param reconnect It is valid when "use_ffmpeg" set false.
+   * @param[in] module The data source module.
+   * @param[in] stream_id The stream ID of the stream.
+   * @param[in] url_name The url of the stream.
+   * @param[in] use_ffmpeg Uses ffmpeg demuxer if it is true, otherwise uses live555 demuxer.
+   * @param[in] reconnect It is valid when "use_ffmpeg" set false.
+   * @param[in] maximum_resolution The maximum video resolution for variable video resolutions.
+   * See ``MaximumVideoResolution`` for detail.
    *
    * @return Returns source handler if it is created successfully, otherwise returns nullptr.
    */
   static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
                                                const std::string &url_name, bool use_ffmpeg = false,
-                                               int reconnect = 10);
-  /**
+                                               int reconnect = 10,
+                                               const MaximumVideoResolution& maximum_resolution = {});
+  /*!
    * @brief The destructor of RtspHandler.
+   *
+   * @return No return value.
    */
   ~RtspHandler();
-  /**
+
+  /*!
    * @brief Opens source handler.
    *
    * @return Returns true if the source handler is opened successfully, otherwise returns false.
    */
   bool Open() override;
-  /**
+  /*!
    * @brief Closes source handler.
+   *
+   * @return No return value.
    */
   void Close() override;
 
  private:
   explicit RtspHandler(DataSource *module, const std::string &stream_id, const std::string &url_name, bool use_ffmpeg,
-                       int reconnect);
+                       int reconnect, const MaximumVideoResolution& maximum_resolution);
 
- private:
 #ifdef UNIT_TEST
- public:
+ public:  // NOLINT
 #endif
   RtspHandlerImpl *impl_ = nullptr;
 };  // class RtspHandler
 
 class ESMemHandlerImpl;
-/**
- * @brief Source handler for H264/H265 bitstreams in memory(with prefix-start-code).
+/*!
+ * @class ESMemHandler
+ *
+ * @brief ESMemHandler is a class of source handler for H264/H265 bitstreams in memory (with prefix-start-code).
  */
 class ESMemHandler : public SourceHandler {
  public:
-  /**
+  /*!
    * @brief Creates source handler.
    *
-   * @param module The data source module.
-   * @param stream_id The stream id of the stream.
+   * @param[in] module The data source module.
+   * @param[in] stream_id The stream id of the stream.
+   * @param[in] maximum_resolution The maximum video resolution for variable video resolutions.
+   * See ``MaximumVideoResolution`` for detail.
    *
    * @return Returns source handler if it is created successfully, otherwise returns nullptr.
    */
-  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id);
-  /**
+  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
+                                               const MaximumVideoResolution& maximum_resolution = {});
+  /*!
    * @brief The destructor of ESMemHandler.
+   *
+   * @return No return value.
    */
   ~ESMemHandler();
-  /**
+  /*!
    * @brief Opens source handler.
    *
    * @return Returns true if the source handler is opened successfully, otherwise returns false.
    */
   bool Open() override;
-  /**
+  /*!
    * @brief Closes source handler.
+   *
+   * @return No return value.
    */
   void Close() override;
 
-  /**
-   * @brief The enum of data type.
+  /*!
+   * @enum DataType
+   *
+   * @brief Enumeration variables describing ES data type.
    */
-  enum DataType {
-    INVALID,     /// Invalid data type.
-    H264,        /// The data type of H264.
-    H265         /// The data type of H265.
+  enum class DataType {
+    INVALID,  /*!< Invalid data type. */
+    H264,     /*!< The data type is H264. */
+    H265      /*!< The data type is H265. */
   };
 
-  /**
+  /*!
    * @brief Sets data type.
    *
-   * @param type The data type.
+   * @param[in] type The data type.
    *
    * @return Returns 0 if data type is set successfully, otherwise returns -1.
-   * @note This function must be called before ``Write`` function
+   * @note This function must be called before ``Write`` function.
    */
   int SetDataType(DataType type);
 
-  /**
+  /*!
    * @brief Sends data in frame mode.
    *
-   * @param pkt The data packet
+   * @param[in] pkt The data packet
    *
-   * @retval 0: The data is write successfully,
-   * @retval -1: Write failed, maybe the handler is closed.
-   * @retval -2: Invalid data. Can not parse video infomations from `pkt`.
+   * @return Returns 0 if the data is written successfully.
+   *         Returns -1 if failed to write data. The possible reasons are the handler is closed,
+   *         the end of the stream is received, the data is nullptr and the data is invalid,
+   *         so that the video infomations can not be parsed from it.
    */
-  int Write(ESPacket *pkt);                // frame mode
-  /**
+  int Write(ESPacket *pkt);
+  /*!
    * @brief Sends data in chunk mode.
    *
-   * @param buf The data buffer
-   * @param len The len of the data
+   * @param[in] buf The data buffer
+   * @param[in] len The length of the data
    *
-   * @retval 0: The data is write successfully,
-   * @retval -1: Write failed, maybe the handler is closed.
-   * @retval -2: Invalid data. Can not parse video infomations from `buf`.
+   * @return Returns 0 if the data is written successfully.
+   *         Returns -1 if failed to write data. The possible reasons are the handler is closed, the end of the stream
+   *         is received and the data is invalid, so that the video infomations can not be parsed from it.
    */
   int Write(unsigned char *buf, int len);
+  /*!
+   * @brief Sends the end of the stream.
+   *
+   * The data remains in the parser will be dropped. Call this function, when the data of a stream is not completely
+   * written and the stream needed to be removed.
+   *
+   * @return Returns 0 if the end of the stream is written successfully.
+   *         Returns -1 if failed to write data. The possible reason is the handler is closed.
+   */
+  int WriteEos();
 
  private:
-  explicit ESMemHandler(DataSource *module, const std::string &stream_id);
+  explicit ESMemHandler(DataSource *module, const std::string &stream_id,
+                        const MaximumVideoResolution& maximum_resolution);
 
- private:
 #ifdef UNIT_TEST
- public:
+ public:  // NOLINT
 #endif
   ESMemHandlerImpl *impl_ = nullptr;
 };  // class ESMemHandler
 
 class ESJpegMemHandlerImpl;
-/**
- * @brief Source handler for Jpeg bitstreams in memory
+/*!
+ * @class ESJpegMemHandler
+ *
+ * @brief ESJpegMemHandler is a class of source handler for Jpeg bitstreams in memory.
  */
 class ESJpegMemHandler : public SourceHandler {
  public:
-  /**
+  /*!
    * @brief Creates source handler.
    *
-   * @param module The data source module.
-   * @param stream_id The stream id of the stream.
-   * @param max_width The maximum width of the image.
-   * @param max_height The maximum height of the image.
+   * @param[in] module The data source module.
+   * @param[in] stream_id The stream id of the stream.
+   * @param[in] max_width The maximum width of the image.
+   * @param[in] max_height The maximum height of the image.
    *
    * @return Returns source handler if it is created successfully, otherwise returns nullptr.
    */
   static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
       int max_width = 7680, int max_height = 4320/*Jpeg decoder maximum resolution 8K*/);
-  /**
+  /*!
    * @brief The destructor of ESJpegMemHandler.
+   *
+   * @return No return value.
    */
   ~ESJpegMemHandler();
-  /**
+  /*!
    * @brief Opens source handler.
    *
    * @return Returns true if the source handler is opened successfully, otherwise returns false.
    */
   bool Open() override;
-  /**
+  /*!
    * @brief Closes source handler.
+   *
+   * @return No return value.
    */
   void Close() override;
 
-  /**
+  /*!
    * @brief Sends data in frame mode.
    *
-   * @param pkt The data packet.
+   * @param[in] pkt The data packet.
    *
-   * @retval 0: The data is write successfully,
-   * @retval -1: Write failed, maybe the handler is closed.
-   * @retval -2: Invalid data. Can not parse image infomations from `pkt`.
+   * @return Returns 0 if the data is written successfully.
+   *         Returns -1 if failed to write data. The possible reason is the handler is closed or the data is nullptr.
    */
   int Write(ESPacket *pkt);
 
  private:
   explicit ESJpegMemHandler(DataSource *module, const std::string &stream_id, int max_width, int max_height);
 
- private:
 #ifdef UNIT_TEST
- public:
+ public:  // NOLINT
 #endif
   ESJpegMemHandlerImpl *impl_ = nullptr;
 };  // class ESJpegMemHandler
 
 class RawImgMemHandlerImpl;
-/**
- * @brief Source handler for raw image data in memory.
+/*!
+ * @class RawImgMemHandler
+ *
+ * @brief RawImgMemHandler is a class of source handler for raw image data in memory.
+ *
+ * @note This handler will not send data to MLU decoder as the raw data has been decoded.
  */
 class RawImgMemHandler : public SourceHandler {
  public:
-  /**
+  /*!
    * @brief Creates source handler.
    *
-   * @param module The data source module.
-   * @param stream_id The stream id of the stream.
+   * @param[in] module The data source module.
+   * @param[in] stream_id The stream id of the stream.
    *
    * @return Returns source handler if it is created successfully, otherwise returns nullptr.
    */
   static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id);
-  /**
+  /*!
    * @brief The destructor of RawImgMemHandler.
+   *
+   * @return No return value.
    */
   ~RawImgMemHandler();
-  /**
+  /*!
    * @brief Opens source handler.
    *
    * @return Returns true if the source handler is opened successfully, otherwise returns false.
    */
   bool Open() override;
-  /**
+  /*!
    * @brief Closes source handler.
+   *
+   * @return No return value.
    */
   void Close() override;
 
-#ifdef HAVE_OPENCV
-  /**
+  /*!
    * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
    *
-   * @param mat_data The bgr24 format image data.
-   * @param pts The pts for mat_data, should be different for each image.
+   * @param[in] mat_data The bgr24 format image data.
+   * @param[in] pts The pts for mat_data, should be different for each image.
    *
-   * @retval 0: The data is write successfully,
-   * @retval -1: Write failed, maybe eos got or handler is closed.
-   * @retval -2: Invalid data.
+   * @return Returns 0 if the data is written successfully.
+   *         Returns -1 if failed to write data. The possible reason is the end of the stream is received or failed to
+   *         process the data.
+   *         Returns -2 if the data is invalid.
    *
    * @note Sends nullptr after all data are sent.
    */
   int Write(const cv::Mat *mat_data, const uint64_t pts);
-#endif
-  /**
+
+  /*!
    * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
    *
-   * @param data The data of the image, which is a continuous buffer.
-   * @param size The size of the data.
-   * @param pts The pts for raw image, should be different for each image.
-   * @param width The width of the image.
-   * @param height The height of the image.
-   * @param pixel_fmt The pixel format of the image. These formats are supported, bgr24, rgb24, nv21 and nv12.
+   * @param[in] data The data of the image, which is a continuous buffer.
+   * @param[in] size The size of the data.
+   * @param[in] pts The pts for raw image, should be different for each image.
+   * @param[in] width The width of the image.
+   * @param[in] height The height of the image.
+   * @param[in] pixel_fmt The pixel format of the image. These formats are supported, bgr24, rgb24, nv21 and nv12.
    *
-   * @retval 0: The data is write successfully,
-   * @retval -1: Write failed, maybe eos got or handler is closed.
-   * @retval -2: Invalid data.
+   * @return Returns 0 if the data is written successfully.
+   *         Returns -1 if failed to write data. The possible reason is the end of the stream is received or failed to
+   *         process the data.
+   *         Returns -2 if the data is invalid.
    *
    * @note Sends nullptr as data and passes 0 as size after all data are sent.
    */
-  int Write(const uint8_t *data, const int size, const uint64_t pts, const int width = 0,
-      const int height = 0, const CNDataFormat pixel_fmt = CN_INVALID);
+  int Write(const uint8_t *data, const int size, const uint64_t pts, const int width = 0, const int height = 0,
+            const CNDataFormat pixel_fmt = CNDataFormat::CN_INVALID);
 
  private:
   explicit RawImgMemHandler(DataSource *module, const std::string &stream_id);
 
 #ifdef UNIT_TEST
-
- public:
+ public:  // NOLINT
 #endif
   RawImgMemHandlerImpl *impl_ = nullptr;
 };  // class RawImgMemHandler

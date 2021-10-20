@@ -37,8 +37,7 @@ bool ModuleProfiler::RegisterProcessName(const std::string& process_name) {
   if (process_profilers_.find(process_name) != process_profilers_.end()) return false;
   process_profilers_.insert(std::make_pair(process_name,
                             std::unique_ptr<ProcessProfiler>(new ProcessProfiler(config_, process_name, tracer_))));
-  process_profilers_[process_name]->SetModuleName(module_name_)
-                                   .SetTraceLevel(TraceEvent::MODULE);
+  process_profilers_[process_name]->SetModuleName(module_name_).SetTraceLevel(TraceEvent::Level::MODULE);
   return true;
 }
 

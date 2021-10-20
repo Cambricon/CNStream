@@ -35,18 +35,22 @@ namespace cnstream {
 
 TEST(Inferencer2, CheckParamSet) {
   std::string ssd_model_path = GetExePath() + "../../data/models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon";
+  std::string model_path = GetExePath() + "../../data/models/resnet50_nhwc.model";
   std::string infer_name = "detector";
   std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
 
   ModuleParamSet param;
   param.clear();
   param["postproc_name"] = "empty_postproc";
-  param["model_path"] = ssd_model_path;
-  EXPECT_TRUE(infer->CheckParamSet(param));
-  param["func_name"] = "";  // func name must no empty
-  EXPECT_FALSE(infer->CheckParamSet(param));
-  param["func_name"] = "subnet0";
-  EXPECT_TRUE(infer->CheckParamSet(param));
+  if (infer_server::Predictor::Backend() == "magicmind") {
+    param["model_path"] = model_path;
+    EXPECT_TRUE(infer->CheckParamSet(param));
+  } else {
+    param["model_path"] = ssd_model_path;
+    EXPECT_TRUE(infer->CheckParamSet(param));
+    param["func_name"] = "subnet0";
+    EXPECT_TRUE(infer->CheckParamSet(param));
+  }
 
   param["preproc_name"] = "empty_preproc";
   EXPECT_TRUE(infer->CheckParamSet(param));
@@ -111,14 +115,24 @@ TEST(Inferencer2, CheckParamSet) {
     EXPECT_TRUE(infer->CheckParamSet(param));
   }
 
+  // normalize must be one of bool_type
+  param["normalize"] = "error_type";
+  EXPECT_FALSE(infer->CheckParamSet(param));
+  for (auto type : bool_type) {
+    param["normalize"] = type;
+    EXPECT_TRUE(infer->CheckParamSet(param));
+  }
+
   // model_input_pixel_format must be one of format
-  std::list<std::string> format = {"RGBA32", "BGRA32", "ARGB32", "ABGR32"};
+  std::list<std::string> format = {"RGBA32", "BGRA32", "ARGB32", "ABGR32", "RGB24", "BGR24"};
   param["model_input_pixel_format"] = "error_type";
   EXPECT_FALSE(infer->CheckParamSet(param));
   for (auto type : format) {
     param["model_input_pixel_format"] = type;
     EXPECT_TRUE(infer->CheckParamSet(param));
   }
+
+  // TODO(dmh): test mean and std
 }
 
 }  // namespace cnstream

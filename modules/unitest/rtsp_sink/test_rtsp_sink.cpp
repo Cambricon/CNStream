@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2020] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,152 +18,118 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <gtest/gtest.h>
+#include <ifaddrs.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
+#ifdef __cplusplus
+}
+#endif
 
-#include <iostream>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#if (CV_MAJOR_VERSION >= 3)
+#include <opencv2/imgcodecs/imgcodecs.hpp>
+#endif
+
+#include <cstdlib>
+#include <ctime>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
+#include <future>
 
-#include "device/mlu_context.h"
-#include "easyinfer/mlu_memory_op.h"
-
+#include "gtest/gtest.h"
 #include "cnstream_frame_va.hpp"
+#include "easyinfer/mlu_memory_op.h"
 #include "rtsp_sink.hpp"
+#include "rtsp_server.hpp"
 #include "test_base.hpp"
 
 namespace cnstream {
-static constexpr const char *gname = "rtsp";
-static constexpr int g_channel_id = 0;
+static constexpr const char *gname = "rstp_sink";
+static constexpr int g_device_id = 0;
+static constexpr int g_dev_id = 0;
+static constexpr int g_width = 1280;
+static constexpr int g_height = 720;
 
-extern void TestAllCase(std::shared_ptr<Module> ptr, ModuleParamSet params, int line);
-extern bool PullRtspStreamOpencv();
-extern bool PullRtspStreamFFmpeg();
-extern std::string GetIp();
-extern std::shared_ptr<CNFrameInfo> GenTestData(ColorFormat cmode, int width, int height);
-extern void Process(std::shared_ptr<Module> ptr, ColorFormat cmode, int width, int height, int line);
-
-TEST(RtspSink, Open) {
-  std::shared_ptr<Module> ptr = std::make_shared<RtspSink>(gname);
+extern void TestAllCase(ModuleParamSet params, int frame_rate, bool tiler, int line);
+extern bool PullRtspStreamOpencv(int port = 9554);
+extern bool PullRtspStreamFFmpeg(int port = 9554);
+extern std::shared_ptr<CNFrameInfo> GenTestData(CNPixelFormat pix_fmt, int width, int height);
+TEST(RtspModule, OpenClose) {
+  RtspSink module(gname);
   ModuleParamSet params;
-  EXPECT_TRUE(ptr->Open(params));
-  params["udp_port"] = "9999";
-  params["http_port"] = "8000";
-  params["frame_rate"] = "35";
-  params["kbit_rate"] = "512";
-  params["gop_size"] = "30";
-  params["view_mode"] = "single";
-  params["dst_width"] = "352";
-  params["dst_height"] = "288";
-  params["color_mode"] = "nv";
-  params["preproc_type"] = "cpu";
-  params["encoder_type"] = "mlu";
-  params["device_id"] = "0";
-  EXPECT_TRUE(ptr->CheckParamSet(params));
-  ASSERT_NO_THROW(ptr->Close());
+  EXPECT_FALSE(module.Open(params));
 
-  EXPECT_TRUE(ptr->Open(params));
-  params.clear();
-  params["view_mode"] = "mosaic";
-  params["view_rows"] = "3";
-  params["view_cols"] = "2";
-  EXPECT_TRUE(ptr->CheckParamSet(params));
-  ASSERT_NO_THROW(ptr->Close());
-  // EXPECT_TRUE(ptr->Open(params));
+  params["port"] = "9554";
+  params["rtsp_over_http"] = "false";
+  params["frame_rate"] = "25";
+  params["bit_rate"] = "4000000";
+  params["gop_size"] = "10";
+  params["view_cols"] = "1";
+  params["view_rows"] = "1";
+  params["resample"] = "false";
+  EXPECT_TRUE(module.Open(params));
+
+  params["device_id"] = "0";
+  params["encoder_type"] = "mlu";
+  params["input_frame"] = "cpu";
+  EXPECT_TRUE(module.Open(params));
+
+  params["dst_width"] = "1280";
+  params["dst_height"] = "720";
+  EXPECT_TRUE(module.Open(params));
+
+  params["input_frame"] = "mlu";
+  params["encoder_type"] = "mlu";
+  params["device_id"] = "-1";
+  EXPECT_FALSE(module.Open(params));
+
+  params["encoder_type"] = "abc";
+  EXPECT_FALSE(module.Open(params));
+  module.Close();
 }
 
-TEST(RtspSink, Process) {
-  std::shared_ptr<Module> ptr = std::make_shared<RtspSink>(gname);
+TEST(RtspModule, Process) {
+  // create rtsp_sink
+  std::shared_ptr<RtspSink> ptr = std::make_shared<RtspSink>(gname);
   ModuleParamSet params;
+  int frame_rate = 25;
 
-  params.clear();
-  params["view_mode"] = "single";
-  params["dst_width"] = "0";
-  params["dst_height"] = "0";
-  params["color_mode"] = "nv";
-  TestAllCase(ptr, params, __LINE__);
+  std::string device_id = "-1";
+  params["port"] = "9554";
+  params["encoder_type"] = "cpu";
+  params["input_frame"] = "cpu";
+  params["device_id"] = device_id;
 
-  params["color_mode"] = "bgr";
-  TestAllCase(ptr, params, __LINE__);
-
-  params["view_mode"] = "mosaic";
   int col = 3;
   int row = 2;
   params["view_cols"] = std::to_string(col);
   params["view_rows"] = std::to_string(row);
-  TestAllCase(ptr, params, __LINE__);
+  params["frame_rate"] = std::to_string(frame_rate);
+  TestAllCase(params, frame_rate, true, __LINE__);
 
   EXPECT_TRUE(ptr->Open(params));
   for (int i = 0; i < col * row; i++) {
     auto data = cnstream::CNFrameInfo::Create(std::to_string(i));
     std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
-    data->datas[CNDataFramePtrKey] = frame;
+    data->collection.Add(kCNDataFrameTag, frame);
     EXPECT_EQ(ptr->Process(data), -1);
     data = cnstream::CNFrameInfo::Create(std::to_string(i), true);
   }
-  // PullRtspStreamOpencv();
-  PullRtspStreamFFmpeg();
+  auto fut = std::async(std::launch::async, PullRtspStreamFFmpeg, 9445);
   auto data = cnstream::CNFrameInfo::Create(std::to_string(col * row + 1));
   std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
-  data->datas[CNDataFramePtrKey] = frame;
+  data->collection.Add(kCNDataFrameTag, frame);
   EXPECT_EQ(ptr->Process(data), -1);
   data = cnstream::CNFrameInfo::Create(std::to_string(col * row + 1), true);
+  fut.get();
   ptr->Close();
-
-  params["color_mode"] = "nv";
-  EXPECT_TRUE(ptr->Open(params));
-
-  data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
-  data->datas[CNDataFramePtrKey] = frame;
-
-  // test nv12
-  EXPECT_EQ(ptr->Process(data), -1);
-  ptr->Close();
-  cnstream::CNFrameInfo::Create(std::to_string(g_channel_id), true);
 }
 
-TEST(RtspSink, CheckParam) {
-  std::shared_ptr<Module> ptr = std::make_shared<RtspSink>(gname);
-  ModuleParamSet params;
-  params["wrong"] = "9999";
-  EXPECT_TRUE(ptr->CheckParamSet(params));
-
-  params.clear();
-  params["udp_port"] = "str";
-  EXPECT_FALSE(ptr->CheckParamSet(params));
-  params["udp_port"] = "-1";
-  EXPECT_FALSE(ptr->CheckParamSet(params));
-  params.clear();
-  params["http_port"] = "str";
-  params["frame_rate"] = "-1";
-  params["kbit_rate"] = "-1";
-  params["gop_size"] = "-1";
-  params["dst_width"] = "-1";
-  params["dst_height"] = "-1";
-  params["view_rows"] = "-1";
-  params["view_cols"] = "-1";
-  EXPECT_FALSE(ptr->CheckParamSet(params));
-
-  params.clear();
-  EXPECT_TRUE(ptr->CheckParamSet(params));
-
-  params["encoder_type"] = "wrong";
-  EXPECT_FALSE(ptr->CheckParamSet(params));
-
-  params.clear();
-  params["preproc_type"] = "wrong";
-  EXPECT_FALSE(ptr->CheckParamSet(params));
-
-  params.clear();
-  params["view_mode"] = "wrong";
-  EXPECT_FALSE(ptr->CheckParamSet(params));
-
-  params.clear();
-  params["color_mode"] = "wrong";
-  EXPECT_FALSE(ptr->CheckParamSet(params));
-
-  params.clear();
-  params["view_mode"] = "mosaic";
-  params["color_mode"] = "nv";
-  EXPECT_TRUE(ptr->CheckParamSet(params));
-}
 }  // namespace cnstream

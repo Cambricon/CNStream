@@ -1,0 +1,30 @@
+{
+  "profiler_config" : {
+    "enable_profiling" : true,
+    "enable_tracing" : false
+  },
+
+  "subgraph:decode" : {
+    "config_path" : "../configs/decode_config.json",
+    "next_modules" : ["subgraph:object_detection"]
+  },
+
+  "subgraph:object_detection" : {
+    "config_path" : "../configs/__NN___object_detection___PLATFORM_PLACEHOLDER__.json",
+    "next_modules" : ["subgraph:object_tracking"]
+  },
+
+  "subgraph:object_tracking" : {
+    "config_path" : "../configs/object_tracking___PLATFORM_PLACEHOLDER__.json",
+    "next_modules" : ["subgraph:osd_label_map_coco"]
+  },
+
+  "subgraph:osd_label_map_coco" : {
+    "config_path" : "../configs/osd_configs/osd_label_map_coco.json",
+    "next_modules" : ["subgraph:sinker"]
+  },
+
+  "subgraph:sinker" : {
+    "config_path" : "../configs/sinker_configs/__SINKER_PLACEHOLDER__"
+  }
+}

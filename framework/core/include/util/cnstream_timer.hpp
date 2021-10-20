@@ -99,6 +99,7 @@
 #include <mutex>
 #include <set>
 #include <stack>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -106,6 +107,12 @@
 namespace /*CppTime*/ cnstream {
 
 // Public types
+using std::chrono::duration_cast;
+using std::chrono::microseconds;
+using std::chrono::milliseconds;
+using std::chrono::steady_clock;
+using std::chrono::time_point;
+
 using timer_id = std::size_t;
 using handler_t = std::function<void(timer_id)>;
 using clock = std::chrono::steady_clock;
@@ -284,6 +291,187 @@ class Timer {
     }
   }
 };
+
+/// Timestamp utilities
+/****************************************************************************
+  class TimeStamp provides a way to generate unique timestamps which based on
+  the epoch time. The default precision of timestamps is in microseconds and
+  configurable in class TimeStampBase.
+  Samples are as follows:
+
+  uint64_t time_stamp = TimeStamp::Current();
+  std::string ts_str = TimeStamp::CurrentToString();
+
+  uint64_t ts2 = TimeStampBase<std::chrono::nanoseconds>::Current();
+
+  ***************************************************************************/
+
+/**
+ * @brief a timestamp generator
+ */
+template <typename precision = microseconds>
+class TimeStampBase {
+ public:
+  /**
+   * @brief generate timestamp
+   * @return timestamp as uint64_t
+   */
+  static uint64_t Current() {
+    return duration_cast<precision>(std::chrono::system_clock::now().time_since_epoch()).count();
+  }
+
+  /**
+   * @brief generate timestamp
+   * @return timestamp as string
+   */
+  static std::string CurrentToString() { return std::to_string(Current()); }
+  /**
+   * @brief generate timestamp and format it to date
+   * @return date as string
+   */
+  static std::string CurrentToDate() {
+    uint64_t now = Current();
+    time_t now_in_sec = now / 1e6;
+    uint64_t remainder = now % 1000000;
+    struct tm now_time;
+    char buf[80];
+    localtime_r(&now_in_sec, &now_time);
+    strftime(buf, sizeof(buf), "%Y-%m-%d-%H.%M.%S", &now_time);
+    std::string result = buf;
+    return result + "." + std::to_string(remainder);
+  }
+};
+
+/**
+ * @brief simplified interface
+ */
+using TimeStamp = TimeStampBase<>;
+
+/// Clock utilities
+/****************************************************************************
+  Clock classes provides two kinds of clocks. TickClock is a ticker-tape clock
+  and TickTockClock is a duration recorder. The default precision is in
+  microseconds and configurable in class ClockBase.
+  Samples are as follows:
+
+  TickClock tick_clock;
+  for (int i = 0; i < 10; ++i) {
+    tick_clock.Tick();
+    // do something...
+  }
+  double average_execute_time = tick_clock.ElapsedAverageAsDouble();
+
+  TickTockClock duration_recorder;
+  void foo() {
+    duration_recorder.Tick();
+    // do something...
+    duration_recorder.Tock();
+  }
+  for (int i = 0; i < 10; ++i) {
+    foo();
+  }
+  double average_duration = duration_recorder.ElapsedAverageAsDouble();
+
+  ***************************************************************************/
+
+enum class ClockType {
+  Tick,
+  TickTock,
+};
+
+template <ClockType type, typename precision = std::micro>
+class ClockBase {
+ public:
+  using Elapsed_t = std::chrono::duration<double, precision>;
+
+  /**
+   * @brief calculate total elapsed time
+   * @return elapsed duration
+   */
+  Elapsed_t ElapsedTotal() const { return total_; }
+
+  /**
+   * @brief calculate total elapsed time
+   * @return elapsed duration as double
+   */
+  double ElapsedTotalAsDouble() const { return total_.count(); }
+
+  /**
+   * @brief calculate average elapsed time
+   * @return average elapsed duration
+   */
+  Elapsed_t ElapsedAverage() const { return times_ == 0 ? Elapsed_t::zero() : total_ / times_; }
+
+  /**
+   * @brief calculate average elapsed time
+   * @return average elapsed duration as double
+   */
+  double ElapsedAverageAsDouble() const { return ElapsedAverage().count(); }
+
+  /**
+   * @brief clear records
+   * @return void
+   */
+  void Clear() {
+    total_ = Elapsed_t::zero();
+    times_ = 0;
+  }
+
+ protected:
+  Elapsed_t total_ = Elapsed_t::zero();
+  uint32_t times_ = 0;
+};
+
+/**
+ * @brief a ticker-tape clock
+ */
+class TickClock final : public ClockBase<ClockType::Tick> {
+ public:
+  /**
+   * @brief tick
+   * @return void
+   */
+  void Tick() {
+    curr_ = steady_clock::now();
+    if (!started_) {
+      started_ = true;
+    } else {
+      total_ += curr_ - prev_;
+      ++times_;
+    }
+    prev_ = curr_;
+  }
+
+ private:
+  time_point<steady_clock> prev_, curr_;
+  bool started_ = false;
+};
+
+/**
+ * @brief a duration recorder
+ */
+class TickTockClock final : public ClockBase<ClockType::TickTock> {
+ public:
+  /**
+   * @brief record start time
+   * @return void
+   */
+  void Tick() { start_ = steady_clock::now(); }
+
+  /**
+   * @brief record end time
+   * @return void
+   */
+  void Tock() {
+    end_ = steady_clock::now();
+    total_ += end_ - start_;
+    ++times_;
+  }
+
+ private:
+  time_point<steady_clock> start_, end_;
+};
+
 
 }  // namespace cnstream
 

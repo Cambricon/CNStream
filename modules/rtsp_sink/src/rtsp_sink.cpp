@@ -19,352 +19,350 @@
  *************************************************************************/
 
 #include "rtsp_sink.hpp"
-#include "rtsp_sink_stream.hpp"
 
 #include <memory>
-#include <sstream>
 #include <string>
+#include <vector>
 
-#include "cnstream_frame_va.hpp"
+#include "rtsp_server/rtsp_server.hpp"
+#include "video/video_stream/video_stream.hpp"
 
 namespace cnstream {
 
+typedef struct RtspSinkParam {
+  int port = 8554;
+  bool rtsp_over_http = false;
+  int device_id = 0;
+  bool mlu_encoder = true;
+  bool mlu_input_frame = false;  // The input frame. true: source data , false: ImageBGR()
+  int width = 0;
+  int height = 0;
+  double frame_rate = 0;
+  int bit_rate = 4000000;
+  int gop_size = 10;
+  int tile_cols = 0;
+  int tile_rows = 0;
+  bool resample = false;
+} RtspSinkParam;
+
 struct RtspSinkContext {
-  std::unique_ptr<RtspSinkJoinStream> rtsp_stream_ = nullptr;
-  std::unique_ptr<uint8_t> image_data = nullptr;
+  std::unique_ptr<VideoStream> stream = nullptr;
+  std::unique_ptr<RtspServer> server = nullptr;
 };
 
-std::shared_ptr<RtspSinkContext> RtspSink::GetRtspSinkContext(CNFrameInfoPtr data) {
-  std::shared_ptr<RtspSinkContext> ctx = nullptr;
-
-  if (is_mosaic_style_) {
-    if (data->GetStreamIndex() >= static_cast<uint32_t>(params_.view_cols * params_.view_rows)) {
-      LOGI(RTSP) << "================================================================================";
-      LOGE(RTSP) << "[RtspSink] Input stream number must no more than " << params_.view_cols * params_.view_rows
-                 << " (view window col: " << params_.view_cols << " row: " << params_.view_rows << ")";
-      LOGI(RTSP) << "=================================================================================";
-      return nullptr;
+RtspSinkContext *RtspSink::GetContext(CNFrameInfoPtr data) {
+  auto params = param_helper_->GetParams();
+  std::lock_guard<std::mutex> lk(ctx_lock_);
+  RtspSinkContext *ctx = nullptr;
+  if (params.tile_cols > 1 || params.tile_rows > 1) {
+    if (!contexts_.empty()) {
+      ctx = contexts_.begin()->second;
+    } else {
+      ctx = CreateContext(data, "0");
     }
-
-    {
-      RwLockReadGuard lg(rtsp_lock_);
-      auto search = contexts_.find(0);
-      if (search != contexts_.end()) {
-        return search->second;
+    if (positions_.find(data->stream_id) == positions_.end()) {
+      int pos = positions_.size();
+      if (pos >= params.tile_cols * params.tile_rows) {
+        LOGE(RtspSink) << "GetContext() input video stream count over " << params.tile_cols << " * " << params.tile_rows
+                       << " = " << params.tile_cols * params.tile_rows;
+        return nullptr;
       }
+      positions_[data->stream_id] = pos;
     }
-
-    RwLockWriteGuard lg(rtsp_lock_);
-    ctx = CreateRtspSinkContext(data);
-    contexts_[0] = ctx;
   } else {
-    uint32_t channel_idx = data->GetStreamIndex();
-    {
-      RwLockReadGuard lg(rtsp_lock_);
-      auto search = contexts_.find(channel_idx);
-      if (search != contexts_.end()) {
-        return search->second;
-      }
-    }
-
-    RwLockWriteGuard lg(rtsp_lock_);
-    ctx = CreateRtspSinkContext(data);
-    contexts_[channel_idx] = ctx;
-    }
-
-    return ctx;
-  }
-
-  std::shared_ptr<RtspSinkContext> RtspSink::CreateRtspSinkContext(CNFrameInfoPtr data) {
-    std::shared_ptr<RtspSinkContext> context = std::make_shared<RtspSinkContext>();
-    context->rtsp_stream_.reset(new RtspSinkJoinStream());
-
-    RtspParam rtsp_param = GetRtspParam(data);
-    bool ret = context->rtsp_stream_->Open(rtsp_param);
-
-    if (!ret) {
-      LOGE(RTSP) << "[RtspSink] Open rtsp stream failed. Invalid parameter";
-      return nullptr;
+    auto search = contexts_.find(data->stream_id);
+    if (search != contexts_.end()) {
+      ctx = search->second;
     } else {
-      return context;
+      ctx = CreateContext(data, data->stream_id);
     }
   }
+  return ctx;
+}
 
-  void RtspSink::OnStreamEos(CNFrameInfoPtr data) {
-    assert(data->IsEos());
-    if (is_mosaic_style_) return;
-    const uint32_t channel_idx = data->GetStreamIndex();
-    RwLockWriteGuard lg(rtsp_lock_);
-    if (contexts_.find(channel_idx) != contexts_.end()) {
-      LOGI(RTSP) << "[" << data->stream_id << "]: Remove rtsp stream";
-      contexts_.erase(channel_idx);
+int RtspSink::GetPosition(const std::string &stream_id) {
+  int ret = -1;
+  auto params = param_helper_->GetParams();
+  std::lock_guard<std::mutex> lk(ctx_lock_);
+  if (params.tile_cols > 1 || params.tile_rows > 1) {
+    auto search = positions_.find(stream_id);
+    if (search != positions_.end()) {
+      ret = search->second;
     }
   }
+  return ret;
+}
 
-  RtspParam RtspSink::GetRtspParam(CNFrameInfoPtr data) {
-    CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
-    switch (frame->fmt) {
-      case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
-        params_.color_format = BGR24;
-        if (params_.color_mode != "bgr") {
-          params_.color_mode = "bgr";
-          LOGW(RTSP) << "Color mode should be bgr.";
-        }
-        break;
-      case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
-        params_.color_format = NV12;
-        break;
-      case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
-        params_.color_format = NV21;
-        break;
-      default:
-        LOGW(RTSP) << "[CNEncoder] unsuport color format.";
-        params_.color_format = BGR24;
-        if (params_.color_mode != "bgr") {
-          params_.color_mode = "bgr";
-          LOGW(RTSP) << "Color mode should be bgr.";
-        }
-        break;
-    }
-
-    RtspParam rtsp_params;
-    rtsp_params = params_;
-    if (!is_mosaic_style_) {
-      rtsp_params.udp_port += data->GetStreamIndex();
-    }
-
-    if (rtsp_params.dst_width <= 0) {
-      rtsp_params.dst_width = frame->width;
-    }
-    if (rtsp_params.dst_height <= 0) {
-      rtsp_params.dst_height = frame->height;
-    }
-
-    rtsp_params.src_width = frame->width;
-    rtsp_params.src_height = frame->height;
-
-    return rtsp_params;
+RtspSinkContext *RtspSink::CreateContext(CNFrameInfoPtr data, const std::string &stream_id) {
+  CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
+  auto params = param_helper_->GetParams();
+  RtspSinkContext *ctx = new RtspSinkContext;
+  VideoStream::Param sparam;
+  sparam.width = params.width > 0 ? params.width : frame->width;
+  sparam.height = params.height > 0 ? params.height : frame->height;
+  sparam.tile_cols = params.tile_cols;
+  sparam.tile_rows = params.tile_rows;
+  sparam.resample = params.resample;
+  sparam.frame_rate = params.frame_rate;
+  sparam.time_base = 90000;
+  sparam.bit_rate = params.bit_rate;
+  sparam.gop_size = params.gop_size;
+  VideoPixelFormat pixel_format =
+      frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 ? VideoPixelFormat::NV12 : VideoPixelFormat::NV21;
+  sparam.pixel_format = (params.mlu_encoder || params.mlu_input_frame) ? pixel_format : VideoPixelFormat::I420;
+  sparam.codec_type = VideoCodecType::H264;
+  sparam.mlu_encoder = params.mlu_encoder;
+  sparam.device_id = params.device_id;
+  ctx->stream.reset(new VideoStream(sparam));
+  if (!ctx->stream) {
+    LOGE(RtspSink) << "CreateContext() create video stream failed";
+    delete ctx;
+    return nullptr;
   }
 
-  RtspSink::~RtspSink() { Close(); }
-
-  void RtspSink::SetParam(const ModuleParamSet &paramSet, std::string name, int *variable, int default_value) {
-    if (paramSet.find(name) == paramSet.end()) {
-      *variable = default_value;
-    } else {
-      *variable = std::stoi(paramSet.at(name));
+  auto get_packet = [](VideoStream *stream, uint32_t time_base, uint8_t *data, int size, double *timestamp) {
+    if (!stream) return -1;
+    VideoPacket packet, *pkt;
+    memset(&packet, 0, sizeof(VideoPacket));
+    if (size < 0) {  // skip packet
+      pkt = nullptr;
+    } else if (!data) {  // get packet size/timestamp
+      packet.data = nullptr;
+      pkt = &packet;
+    } else {  // read out packet data
+      packet.data = data;
+      packet.size = size;
+      pkt = &packet;
     }
+    int ret = stream->GetPacket(pkt);
+    if (ret > 0 && pkt && timestamp) *timestamp = static_cast<double>(pkt->pts) / time_base;
+    return ret;
+  };
+
+  RtspServer::Param rparam;
+  rparam.port = params.port + stream_index_++;
+  rparam.rtsp_over_http = params.rtsp_over_http;
+  rparam.authentication = false;
+  rparam.width = sparam.width;
+  rparam.height = sparam.height;
+  rparam.bit_rate = sparam.bit_rate;
+  rparam.codec_type = sparam.codec_type == VideoCodecType::H264 ? RtspServer::H264 : RtspServer::H265;
+  rparam.get_packet = std::bind(get_packet, ctx->stream.get(), sparam.time_base, std::placeholders::_1,
+                                std::placeholders::_2, std::placeholders::_3);
+  ctx->server.reset(new RtspServer(rparam));
+  if (!ctx->server) {
+    LOGE(RtspSink) << "CreateContext() create rtsp server failed";
+    delete ctx;
+    return nullptr;
+  }
+  if (!ctx->server->Start()) {
+    LOGE(RtspSink) << "CreateContext() start rtsp server failed";
+    delete ctx;
+    return nullptr;
   }
 
-  void RtspSink::SetParam(const ModuleParamSet &paramSet, std::string name, std::string *variable,
-                          std::string default_value) {
-    if (paramSet.find(name) == paramSet.end()) {
-      *variable = default_value;
-    } else {
-      *variable = paramSet.at(name);
+  auto event_callback = [](RtspServer *server, VideoStream::Event event) {
+    if (!server) return;
+    if (event == VideoStream::Event::EVENT_DATA) {
+      server->OnEvent(RtspServer::Event::EVENT_DATA);
+    } else if (event == VideoStream::Event::EVENT_EOS) {
+      LOGI(RtspSink) << "CreateContext() EVENT_EOS";
+      server->OnEvent(RtspServer::Event::EVENT_EOS);
+    } else if (event == VideoStream::Event::EVENT_ERROR) {
+      LOGE(RtspSink) << "CreateContext() EVENT_ERROR";
+    }
+  };
+
+  if (!ctx->stream->Open()) {
+    LOGE(RtspSink) << "CreateContext() open video stream failed";
+    ctx->server->Stop();
+    delete ctx;
+    return nullptr;
+  }
+  ctx->stream->SetEventCallback(std::bind(event_callback, ctx->server.get(), std::placeholders::_1));
+
+  contexts_[stream_id] = ctx;
+  return ctx;
+}
+
+RtspSink::~RtspSink() {
+  if (param_helper_) {
+    delete param_helper_;
+    param_helper_ = nullptr;
+  }
+  Close();
+}
+
+bool RtspSink::Open(ModuleParamSet paramSet) {
+  if (!param_helper_->ParseParams(paramSet)) {
+    LOGE(RtspSink) << "[" << GetName() << "] parse parameters failed.";
+    return false;
+  }
+  auto params = param_helper_->GetParams();
+  if (params.mlu_encoder && params.device_id < 0) {
+    LOGE(RtspSink) << "Open() mlu encoder, but specified device_id < 0";
+    return false;
+  }
+  if (params.mlu_input_frame && (params.tile_cols > 1 || params.tile_rows > 1)) {
+    LOGE(RtspSink) << "Open() mlu input tiling is not supported";
+    return false;
+  }
+  return true;
+}
+
+void RtspSink::Close() {
+  if (contexts_.empty()) {
+    return;
+  }
+  for (auto &it : contexts_) {
+    RtspSinkContext *ctx = it.second;
+    if (ctx) {
+      if (ctx->stream) ctx->stream->Close();
+      if (ctx->server) ctx->server->Stop();
+      delete ctx;
     }
   }
+  contexts_.clear();
+}
 
-  static inline bool StrToBool(const std::string &str, bool *out) {
-    if ("False" == str || "false" == str || "FALSE" == str || "0" == str) {
-      *out = false;
-    } else if ("True" == str || "true" == str || "TRUE" == str || "1" == str) {
-      *out = true;
-    } else {
-      return false;
+int RtspSink::Process(CNFrameInfoPtr data) {
+  RtspSinkContext *ctx = GetContext(data);
+  auto params = param_helper_->GetParams();
+  if (!ctx) return -1;
+  CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
+
+  if (!params.mlu_input_frame) {
+    if (!ctx->stream->Update(frame->ImageBGR(), VideoStream::ColorFormat::BGR, data->timestamp,
+                             GetPosition(data->stream_id))) {
+      LOGE(RtspSink) << "Process() video stream update failed";
     }
-    return true;
-  }
-
-  void RtspSink::SetParam(const ModuleParamSet &paramSet, std::string name, bool *variable, bool default_value) {
-    *variable = default_value;
-    if (paramSet.find(name) != paramSet.end()) {
-      StrToBool(paramSet.at(name), variable);
-    }
-  }
-
-  bool RtspSink::Open(ModuleParamSet paramSet) {
-    if (!CheckParamSet(paramSet)) {
-      return false;
-    }
-    SetParam(paramSet, "udp_port", &params_.udp_port, 9554);
-    SetParam(paramSet, "http_port", &params_.http_port, 8080);
-    SetParam(paramSet, "frame_rate", &params_.frame_rate, 25);
-
-    SetParam(paramSet, "kbit_rate", &params_.kbps, 1000);
-
-    SetParam(paramSet, "gop_size", &params_.gop, 30);
-
-    SetParam(paramSet, "dst_width", &params_.dst_width, 0);
-    SetParam(paramSet, "dst_height", &params_.dst_height, 0);
-
-    SetParam(paramSet, "preproc_type", &params_.preproc_type, "cpu");
-    SetParam(paramSet, "encoder_type", &params_.encoder_type, "mlu");
-    params_.enc_type = params_.encoder_type == "mlu" ? MLU : FFMPEG;
-    SetParam(paramSet, "device_id", &params_.device_id, 0);
-
-    SetParam(paramSet, "color_mode", &params_.color_mode, "nv");
-    SetParam(paramSet, "view_mode", &params_.view_mode, "single");
-
-    SetParam(paramSet, "resample", &params_.resample, true);
-
-    if ("mosaic" == params_.view_mode) {
-      params_.preproc_type = "cpu";
-      params_.color_mode = "bgr";
-      is_mosaic_style_ = true;
-      SetParam(paramSet, "view_cols", &params_.view_cols, 4);
-      SetParam(paramSet, "view_rows", &params_.view_rows, 4);
-    }
-    return true;
-  }
-
-  void RtspSink::Close() { contexts_.clear(); }
-
-  int RtspSink::Process(CNFrameInfoPtr data) {
-    if (data->IsEos()) {
-      OnStreamEos(data);
-      TransmitData(data);
-      return 0;
-    }
-    std::shared_ptr<RtspSinkContext> ctx = GetRtspSinkContext(data);
-    if (!ctx) {
-      LOGE(RTSP) << data->stream_id << "can't get rtsp sink context !!!";
+  } else {
+#ifndef HAVE_CNCV
+    if (params.mlu_input_frame && params.mlu_encoder) {
+      LOGE(RtspSink) << "Process() Encode mlu input frame on mlu is not supported. Please install CNCV.";
       return -1;
     }
-    CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
-    if ("cpu" == params_.preproc_type) {
-      if ("bgr" == params_.color_mode || params_.color_format == BGR24) {
-        cv::Mat image = frame->ImageBGR();
-        int64_t timestamp = data->timestamp;
-        if (!params_.resample) {
-          timestamp = frame->frame_id * 1e3 / params_.frame_rate;
-        }
-        ctx->rtsp_stream_->UpdateBGR(image, timestamp, data->GetStreamIndex());
-      } else if ("nv" == params_.color_mode) {
-        if (ctx->image_data == nullptr) {
-          // Acoording to function UpdateYUV, the image_data size should be no change between each frames.
-          ctx->image_data.reset(new uint8_t[frame->GetBytes()]);
-        }
-        const uint8_t *plane_0 = reinterpret_cast<const uint8_t *>(frame->data[0]->GetCpuData());
-        const uint8_t *plane_1 = reinterpret_cast<const uint8_t *>(frame->data[1]->GetCpuData());
-        memcpy(ctx->image_data.get(), plane_0, frame->GetPlaneBytes(0) * sizeof(uint8_t));
-        memcpy(ctx->image_data.get() + frame->GetPlaneBytes(0), plane_1, frame->GetPlaneBytes(1) * sizeof(uint8_t));
-        ctx->rtsp_stream_->UpdateYUV(ctx->image_data.get(), data->timestamp);
-      } else {
-        LOGE(RTSP) << "color type must be set nv or bgr !!!";
-        return -1;
-      }
-      /*
-      } else if ("mlu" == preproc_type_) {
-        ctx->UpdateYUVs(data->frame.data[0]->GetMutableMluData(),
-                      data->frame.data[1]->GetMutableMluData(), data->frame.timestamp);
-        data->frame.deAllocator_.reset();
-      */
+#endif
+    if (frame->dst_device_id != params.device_id) {
+      LOGE(RtspSink) << "Process() Encode mlu input frame on different device is not supported";
+      return -1;
     }
-    TransmitData(data);
-    return 0;
+    VideoStream::Buffer buffer;
+    memset(&buffer, 0, sizeof(VideoStream::Buffer));
+    buffer.width = frame->width;
+    buffer.height = frame->height;
+    buffer.data[0] = static_cast<uint8_t *>(const_cast<void *>(frame->data[0]->GetMluData()));
+    buffer.data[1] = static_cast<uint8_t *>(const_cast<void *>(frame->data[1]->GetMluData()));
+    buffer.stride[0] = frame->stride[0];
+    buffer.stride[1] = frame->stride[1];
+    buffer.color = frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 ? VideoStream::ColorFormat::YUV_NV12
+                                                                           : VideoStream::ColorFormat::YUV_NV21;
+    buffer.mlu_device_id = frame->dst_device_id;
+    if (!ctx->stream->Update(&buffer, data->timestamp, GetPosition(data->stream_id))) {
+      LOGE(RtspSink) << "Process() video stream update failed";
+    }
   }
 
-  bool RtspSink::CheckParamSet(const ModuleParamSet &paramSet) const {
-    bool ret = true;
-    ParametersChecker checker;
-    for (auto &it : paramSet) {
-      if (!param_register_.IsRegisted(it.first)) {
-        LOGW(RTSP) << "[RtspSink] (WARNING) Unknown param: \"" << it.first << "\"";
-      }
-    }
+  return 0;
+}
 
-    std::string err_msg;
-    if (!checker.IsNum({"http_port", "udp_port", "frame_rate", "kbit_rate", "gop_size", "view_cols", "view_rows",
-                        "device_id", "dst_width", "dst_height"},
-                       paramSet, err_msg, true)) {
-      LOGE(RTSP) << "[RtspSink] (ERROR) " << err_msg;
-      ret = false;
+RtspSink::RtspSink(const std::string &name) : Module(name) {
+  param_register_.SetModuleDesc("RtspSink is a module to deliver stream by RTSP protocol.");
+  param_helper_ = new ModuleParamsHelper<RtspSinkParam>(name);
+  auto input_encoder_type_parser = [](const ModuleParamSet &param_set, const std::string &param_name,
+                                      const std::string &value, void *result) -> bool {
+    if (value == "cpu") {
+      *static_cast<bool *>(result) = false;
+    } else if (value == "mlu") {
+      *static_cast<bool *>(result) = true;
+    } else {
+      LOGE(RtspSink) << "[ModuleParamParser] [" << param_name << "]:" << value << " failed"
+                     << "\". Choose from \"mlu\", \"cpu\".";
+      return false;
     }
+    return true;
+  };
 
-    if (paramSet.find("dst_width") == paramSet.end()) {
-      LOGI(RTSP) << "[RtspSink] (INFO) destination *width* is not given. Keep source width.";
-    }
-    if (paramSet.find("dst_height") == paramSet.end()) {
-      LOGI(RTSP) << "[RtspSink] (INFO) destination *height* is not given. Keep source height.";
-    }
+  static const std::vector<ModuleParamDesc> regist_param = {
+      {"port", "8554", "RTSP port.", PARAM_REQUIRED, OFFSET(RtspSinkParam, port), ModuleParamParser<int>::Parser,
+       "int"},
+      {"rtsp_over_http", "false", "RTSP Over HTTP.", PARAM_OPTIONAL, OFFSET(RtspSinkParam, rtsp_over_http),
+       ModuleParamParser<bool>::Parser, "bool"},
+      {"device_id", "0", "Which MLU device will be used.", PARAM_OPTIONAL, OFFSET(RtspSinkParam, device_id),
+       ModuleParamParser<int>::Parser, "int"},
+      {"encoder_type", "mlu", "Selection for encoder type. It should be 'mlu' or 'cpu.", PARAM_OPTIONAL,
+       OFFSET(RtspSinkParam, mlu_encoder), input_encoder_type_parser, "bool"},
+      {"input_frame", "cpu", "Frame source type. It should be 'mlu' or 'cpu'.", PARAM_OPTIONAL,
+       OFFSET(RtspSinkParam, mlu_input_frame), input_encoder_type_parser, "bool"},
+      {"dst_width", "0", "Output video width. 0 means dst width is same with source", PARAM_OPTIONAL,
+       OFFSET(RtspSinkParam, width), ModuleParamParser<int>::Parser, "int"},
+      {"dst_height", "0", "Output video height. 0 means dst height is same with source", PARAM_OPTIONAL,
+       OFFSET(RtspSinkParam, height), ModuleParamParser<int>::Parser, "int"},
+      {"frame_rate", "30", "Frame rate of video encoding. Higher value means more fluent.", PARAM_OPTIONAL,
+       OFFSET(RtspSinkParam, frame_rate), ModuleParamParser<double>::Parser, "double"},
+      {"bit_rate", "4000000", "Bit rate of video encoding. Higher value means better video quality.", PARAM_OPTIONAL,
+       OFFSET(RtspSinkParam, bit_rate), ModuleParamParser<int>::Parser, "int"},
+      {"gop_size", "10", "Group of pictures. gop_size is the number of frames between two IDR frames.", PARAM_OPTIONAL,
+       OFFSET(RtspSinkParam, gop_size), ModuleParamParser<int>::Parser, "int"},
+      {"view_cols", "1", "Grids in horizontally of video tiling, only support cpu input.", PARAM_OPTIONAL,
+       OFFSET(RtspSinkParam, tile_cols), ModuleParamParser<int>::Parser, "int"},
+      {"view_rows", "1", "Grids in vertically of video tiling, only support cpu input.", PARAM_OPTIONAL,
+       OFFSET(RtspSinkParam, tile_rows), ModuleParamParser<int>::Parser, "int"},
+      {"resample", "false", "Resample frame with canvas, only support cpu input.", PARAM_OPTIONAL,
+       OFFSET(RtspSinkParam, resample), ModuleParamParser<bool>::Parser, "bool"},
+      {"udp_port", "", "Replaced by port", PARAM_DEPRECATED},
+      {"http_port", "", "Replaced by rtsp_over_http", PARAM_DEPRECATED},
+      {"kbit_rate", "", "Replaced by bit_rate", PARAM_DEPRECATED},
+      {"view_mode", "", "Replaced by view_rows & view_cols", PARAM_DEPRECATED},
+      {"preproc_type", "", "selected automatically.", PARAM_DEPRECATED},
+      {"color_mode", "", "selected automatically.", PARAM_DEPRECATED}};
 
-    if (paramSet.find("encoder_type") != paramSet.end()) {
-      if (paramSet.at("encoder_type") != "mlu" && paramSet.at("encoder_type") != "ffmpeg") {
-        LOGE(RTSP) << "[RtspSink] (ERROR) Not support encoder type: \"" << paramSet.at("encoder_type")
-                   << "\". Choose from \"mlu\", \"ffmpeg\".";
-        ret = false;
-      }
-    }
-    if (paramSet.find("preproc_type") != paramSet.end()) {
-      if (paramSet.at("preproc_type") != "cpu") {
-        LOGE(RTSP) << "[RtspSink] (ERROR) Not support preprocess type: \"" << paramSet.at("preproc_type")
-                   << "\". Choose from \"cpu\".";
-        ret = false;
-      }
-    }
+  param_helper_->Register(regist_param, &param_register_);
+  hasTransmit_.store(0);  // for receive eos
+}
 
-    bool resample = true;
-    if (paramSet.find("resample") != paramSet.end()) {
-      if (!StrToBool(paramSet.at("resample"), &resample)) {
-        ret = false;
-      }
-    }
-
-    if (paramSet.find("view_mode") != paramSet.end()) {
-      if (paramSet.at("view_mode") != "single" && paramSet.at("view_mode") != "mosaic") {
-        LOGE(RTSP) << "[RtspSink] (ERROR) Not support view mode: \"" << paramSet.at("view_mode")
-                   << "\". Choose from \"single\",\" mosaic\".";
-        ret = false;
-      }
-      if (paramSet.at("view_mode") == "mosaic") {
-        if (paramSet.find("color_mode") != paramSet.end() && paramSet.at("color_mode") != "bgr") {
-          LOGW(RTSP) << "[RtspSink] (WARNING) view mode is \"mosaic\". Only support plane type \"bgr\"!";
+void RtspSink::OnEos(const std::string &stream_id) {
+  auto params = param_helper_->GetParams();
+  std::lock_guard<std::mutex> lk(ctx_lock_);
+  if (params.tile_cols > 1 || params.tile_rows > 1) {
+    if (contexts_.empty()) return;
+    RtspSinkContext *ctx = contexts_.begin()->second;
+    auto search = positions_.find(stream_id);
+    if (search != positions_.end()) {
+      int pos = search->second;
+      positions_.erase(search);
+      LOGI(RtspSink) << "OnEos() stream " << stream_id << " stopped in position " << pos;
+      // move ahead the grids behind erased grid
+      for (auto it = positions_.begin(); it != positions_.end(); ++it) {
+        if (it->second > pos) {
+          it->second--;
         }
-        if (paramSet.find("view_cols") == paramSet.end()) {
-          LOGW(RTSP) << "[RtspSink] (WARNING) View *column* number is not given. Default 4.";
+      }
+      // clear last grid
+      if (ctx->stream && !positions_.empty()) ctx->stream->Clear(positions_.size() - 1);
+      if (positions_.empty()) {
+        LOGI(RtspSink) << "OnEos() all streams stopped";
+        RtspSinkContext *ctx = contexts_.begin()->second;
+        if (ctx) {
+          if (ctx->stream) ctx->stream->Close();
+          if (ctx->server) ctx->server->Stop();
+          delete ctx;
         }
-        if (paramSet.find("view_rows") == paramSet.end()) {
-          LOGW(RTSP) << "[RtspSink] (WARNING) View *row* number is not given. Default 4.";
-        }
-        if (!resample) {
-          LOGE(RTSP) << "Resample is \"false\". Not support mosaic view mode with non-resample.";
-          ret = false;
-        }
+        contexts_.clear();
       }
     }
-
-    if (paramSet.find("color_mode") != paramSet.end()) {
-      if (paramSet.at("color_mode") != "nv" && paramSet.at("color_mode") != "bgr") {
-        LOGE(RTSP) << "[RtspSink] (ERROR) Not support plane type: \"" << paramSet.at("color_mode")
-                   << "\". Choose from \"nv\", \"bgr\".";
-        ret = false;
+  } else {
+    auto search = contexts_.find(stream_id);
+    if (search != contexts_.end()) {
+      RtspSinkContext *ctx = search->second;
+      if (ctx) {
+        if (ctx->stream) ctx->stream->Close();
+        if (ctx->server) ctx->server->Stop();
+        delete ctx;
       }
+      contexts_.erase(stream_id);
     }
-    return ret;
   }
-
-  RtspSink::RtspSink(const std::string &name) : ModuleEx(name) {
-    param_register_.SetModuleDesc("RtspSink is a module to deliver stream by RTSP protocol.");
-    param_register_.Register("http_port", "Http port.");
-    param_register_.Register("udp_port", "UDP port.");
-    param_register_.Register("preproc_type", "Resize and colorspace convert type, e.g., cpu.");
-    param_register_.Register("encoder_type", "Encode type. It should be 'mlu' or 'ffmpeg'");
-    param_register_.Register("dst_width", "The image width of the output.");
-    param_register_.Register("dst_height", "The image height of the output.");
-    param_register_.Register("color_mode", "Input picture color mode, include nv and bgr.");
-    param_register_.Register("resample", "Resample before encode.False can be used only in single mode.");
-    param_register_.Register("view_mode", "Use set rtsp view mode, inlcude single and mosaic mode.");
-    param_register_.Register("view_cols", "Divide the screen horizontally, set only for mosaic mode.");
-    param_register_.Register("view_rows", "Divide the screen vertically, set only for mosaic mode.");
-    param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
-    param_register_.Register("frame_rate", "Frame rate of the encoded video.");
-    param_register_.Register("kbit_rate",
-                             "The amount data encoded for a unit of time."
-                             "A higher bitrate means a higher quality video.");
-    param_register_.Register("gop_size",
-                             "Group of pictures is known as GOP."
-                             "gop_size is the number of frames between two I-frames.");
-  }
+}
 
 }  // namespace cnstream

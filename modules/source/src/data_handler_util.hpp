@@ -55,7 +55,7 @@ struct EsPacket {
     } else {
       pkt_.data = nullptr;
       pkt_.size = 0;
-      pkt_.flags = ESPacket::FLAG_EOS;
+      pkt_.flags = static_cast<size_t>(ESPacket::FLAG::FLAG_EOS);
       pkt_.pts = ~0;
     }
   }
@@ -173,9 +173,9 @@ class SourceRender {
     if (!inferdata) {
       return nullptr;
     }
-    data->datas[CNDataFramePtrKey] = dataframe;
-    data->datas[CNInferObjsPtrKey] = inferobjs;
-    data->datas[CNInferDataPtrKey] = inferdata;
+    data->collection.Add(kCNDataFrameTag, dataframe);
+    data->collection.Add(kCNInferObjsTag, inferobjs);
+    data->collection.Add(kCNInferDataTag, inferdata);
     return data;
   }
 
@@ -190,7 +190,7 @@ class SourceRender {
     SendFrameInfo(data);
     eos_sent_ = true;
     LOGI(SOURCE) << "[" << handler_->GetStreamId() << "]: "
-                  << "Sent EOS frame info";
+                  << "Send EOS frame info";
   }
 
   bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) {

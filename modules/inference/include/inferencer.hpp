@@ -22,9 +22,9 @@
 #define MODULES_INFERENCE_INCLUDE_INFERENCER_HPP_
 
 /**
- *  \file inferencer.hpp
+ *  @file inferencer.hpp
  *
- *  This file contains a declaration of struct Inferencer and its subtructure.
+ *  This file contains a declaration of struct Inferencer and its substructure.
  */
 
 #include <memory>
@@ -32,8 +32,8 @@
 #include <thread>
 #include <vector>
 
-#include "cnstream_error.hpp"
 #include "cnstream_module.hpp"
+#include "exception.hpp"
 
 #define DECLARE_PRIVATE(d_ptr, Class) \
   friend class Class##Private;        \
@@ -51,24 +51,19 @@ class InferencerPrivate;
 class InferParamManager;
 
 /**
- * @brief Constructs a pointer to CNFrameInfo.
- */
-using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
-
-/**
- * @brief Inferencer is a module for running offline model inference.
+ * @class Inferencer
  *
- * @detail
- * The input could come from Decoder or other plugins, in MLU memory
+ * @brief Inferencer is a module for running offline model to do inference.
+ * The input data could come from Decoder or other plugins, in MLU memory
  * or CPU memory. Also, If the ``preproc_name`` parameter is set to ``PreprocCpu``
- * in the Open function or configuration file,
- * CPU is used for image preprocessing. Otherwise, if the ``preproc_name`` parameter is not
+ * in the Open function or configuration file, CPU is used for image preprocessing.
+ * Otherwise, if the ``preproc_name`` parameter is not
  * set, MLU is used for image preprocessing. The image preprocessing includes
  * data shape resizing and color space convertion.
  * Afterwards, you can infer with offline model loading from the model path.
  *
  * @attention
- * The error log will be reported when the following two situations occur as mlu is used to do preprocessing.
+ * The error log will be reported when the following two situations occur as MLU is used to do preprocessing.
  *   case 1: scale-up factor is greater than 100.
  *   case 2: the image width before resize is greater than 7680.
  */
@@ -77,20 +72,24 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
   /**
    * @brief Creates Inferencer module.
    *
-   * @param name The name of the Inferencer module.
+   * @param[in] name The name of the Inferencer module.
    *
-   * @return None
+   * @return None.
    */
   explicit Inferencer(const std::string& name);
   /**
-   * @brief Virtual function that does nothing.
+   * @brief Destructor, destructs the inference instance.
+   *
+   * @param None.
+   *
+   * @return None.
    */
   virtual ~Inferencer();
 
   /**
    * @brief Called by pipeline when the pipeline is started.
    *
-   * @param paramSet:
+   * @param[in] paramSet:
    * @verbatim
    *   model_path: Required. The path of the offline model.
    *   func_name: Required. The function name that is defined in the offline model.
@@ -124,11 +123,13 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
    *                          if not set this param, the default value is "center"
    * @endverbatim
    *
-   * @return Returns ture if the inferencer has been opened successfully.
+   * @return Returns true if the inferencer has been opened successfully.
    */
   bool Open(ModuleParamSet paramSet) override;
   /**
    * @brief Called by pipeline when the pipeline is stopped.
+   *
+   * @param None.
    *
    * @return Void.
    */
@@ -136,7 +137,7 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
   /**
    * @brief Performs inference for each frame.
    *
-   * @param data The information and data of frames.
+   * @param[in] data The information and data of frames.
    *
    * @retval 1: The process has run successfully.
    * @retval -1: The process is failed.
@@ -146,7 +147,7 @@ class Inferencer : public Module, public ModuleCreator<Inferencer> {
   /**
    * @brief Check ParamSet for inferencer..
    *
-   * @param param_set Parameters for this module.
+   * @param[in] param_set Parameters for this module.
    *
    * @return Returns true if this API run successfully. Otherwise, returns false.
    */

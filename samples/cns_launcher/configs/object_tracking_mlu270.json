@@ -1,0 +1,12 @@
+{
+  "tracker" : {
+    "class_name" : "cnstream::Tracker",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path" : "../../../data/models/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon",
+      "max_cosine_distance": "0.06",
+      "device_id" : 0
+    }
+  }
+}
