@@ -158,33 +158,28 @@ const char* const LogSeverityNames[NUM_SEVERITIES] = {
   "FATAL", "ERROR", "WARNING", "INFO", "DEBUG", "TRACE", "ALL"
 };
 
-enum LogColor {
-  COLOR_DEFAULT,
-  COLOR_RED,
-  COLOR_GREEN,
-  COLOR_YELLOW
-};
+enum class LogColor { COLOR_DEFAULT, COLOR_RED, COLOR_GREEN, COLOR_YELLOW };
 
 static LogColor SeverityToColor(LogSeverity severity) {
-  assert(severity >= 0 && severity < NUM_SEVERITIES);
-  LogColor color = COLOR_DEFAULT;
+  assert(static_cast<int>(severity) >= 0 && static_cast<int>(severity) < NUM_SEVERITIES);
+  LogColor color = LogColor::COLOR_DEFAULT;
   switch (severity) {
-  case LOG_INFO:
-  case LOG_DEBUG:
-  case LOG_TRACE:
-  case LOG_ALL:
-    color = COLOR_DEFAULT;
-    break;
-  case LOG_WARNING:
-    color = COLOR_YELLOW;
-    break;
-  case LOG_ERROR:
-  case LOG_FATAL:
-    color = COLOR_RED;
-    break;
-  default:
-    // should never get here.
-    assert(false);
+    case LogSeverity::LOG_INFO:
+    case LogSeverity::LOG_DEBUG:
+    case LogSeverity::LOG_TRACE:
+    case LogSeverity::LOG_ALL:
+      color = LogColor::COLOR_DEFAULT;
+      break;
+    case LogSeverity::LOG_WARNING:
+      color = LogColor::COLOR_YELLOW;
+      break;
+    case LogSeverity::LOG_ERROR:
+    case LogSeverity::LOG_FATAL:
+      color = LogColor::COLOR_RED;
+      break;
+    default:
+      // should never get here.
+      assert(false);
   }
   return color;
 }
@@ -193,9 +188,12 @@ static LogColor SeverityToColor(LogSeverity severity) {
 // Returns the character attribute for the given color.
 static WORD GetColorAttribute(LogColor color) {
   switch (color) {
-    case COLOR_RED:    return FOREGROUND_RED;
-    case COLOR_GREEN:  return FOREGROUND_GREEN;
-    case COLOR_YELLOW: return FOREGROUND_RED | FOREGROUND_GREEN;
+    case LogColor::COLOR_RED:
+      return FOREGROUND_RED;
+    case LogColor::COLOR_GREEN:
+      return FOREGROUND_GREEN;
+    case LogColor::COLOR_YELLOW:
+      return FOREGROUND_RED | FOREGROUND_GREEN;
     default:           return 0;
   }
 }
@@ -203,10 +201,14 @@ static WORD GetColorAttribute(LogColor color) {
 // Returns the ANSI color code for the given color.
 static const char* GetAnsiColorCode(LogColor color) {
   switch (color) {
-    case COLOR_RED:     return "1";
-    case COLOR_GREEN:   return "2";
-    case COLOR_YELLOW:  return "3";
-    case COLOR_DEFAULT:  return "";
+    case LogColor::COLOR_RED:
+      return "1";
+    case LogColor::COLOR_GREEN:
+      return "2";
+    case LogColor::COLOR_YELLOW:
+      return "3";
+    case LogColor::COLOR_DEFAULT:
+      return "";
   }
   return NULL;  // stop warning about return type.
 }
@@ -218,7 +220,7 @@ static void ColoredWriteToStderr(LogSeverity severity,
 
   // Avoid using cerr from this module since we may get called during
   // exit code, and cerr may be partially or fully destroyed by then.
-  if (COLOR_DEFAULT == color) {
+  if (LogColor::COLOR_DEFAULT == color) {
     fwrite(message, len, 1, stderr);
     return;
   }
@@ -288,7 +290,7 @@ static bool CategoryActivated(const char* category, LogSeverity severity) {
     auto it = filter_maps->find(std::string(category));
     return it != filter_maps->end() && it->second >= severity;
   }
-  return FLAGS_min_log_level >= severity;
+  return FLAGS_min_log_level >= static_cast<int>(severity);
 }
 
 std::string LogSink::ToString(LogSeverity severity, const char* category,
@@ -297,23 +299,11 @@ std::string LogSink::ToString(LogSeverity severity, const char* category,
                               const char* message, size_t message_len) {
   std::ostringstream stream;
   stream.fill('0');
-  stream << "CNSTREAM " << category
-         << ' '
-         << LogSeverityNames[severity][0]
-         << std::setw(4) << 1900 + tm_time->tm_year
-         << std::setw(2) << 1 + tm_time->tm_mon
-         << std::setw(2) << tm_time->tm_mday
-         << ' '
-         << std::setw(2) << tm_time->tm_hour << ':'
-         << std::setw(2) << tm_time->tm_min << ':'
-         << std::setw(2) << tm_time->tm_sec << '.'
-         << std::setw(6) << usecs
-         << ' '
-         << std::setfill(' ') << std::setw(5)
-         << static_cast<unsigned int>(GetTID())
-         << ' '
-         << filename << ':' << line
-         << "] ";
+  stream << "CNSTREAM " << category << ' ' << LogSeverityNames[static_cast<int>(severity)][0] << std::setw(4)
+         << 1900 + tm_time->tm_year << std::setw(2) << 1 + tm_time->tm_mon << std::setw(2) << tm_time->tm_mday << ' '
+         << std::setw(2) << tm_time->tm_hour << ':' << std::setw(2) << tm_time->tm_min << ':' << std::setw(2)
+         << tm_time->tm_sec << '.' << std::setw(6) << usecs << ' ' << std::setfill(' ') << std::setw(5)
+         << static_cast<unsigned int>(GetTID()) << ' ' << filename << ':' << line << "] ";
   stream << std::string(message, message_len);
   return stream.str();
 }
@@ -692,23 +682,15 @@ void LogMessage::Init(const char* category, const char* file, int line, LogSever
   data_->category_ = category;
   data_->has_been_flushed_ = false;
 
-  stream() << "CNSTREAM " << data_->category_
-           << ' '
-           << LogSeverityNames[severity][0]
+  stream() << "CNSTREAM " << data_->category_ << ' '
+           << LogSeverityNames[static_cast<int>(severity)][0]
            // << setw(4) << 1900+data_->tm_time_.tm_year
-           << std::setw(2) << 1 + data_->tm_time_.tm_mon
-           << std::setw(2) << data_->tm_time_.tm_mday
-           << ' '
-           << std::setw(2) << data_->tm_time_.tm_hour  << ':'
-           << std::setw(2) << data_->tm_time_.tm_min   << ':'
-           << std::setw(2) << data_->tm_time_.tm_sec   << "."
-           << std::setw(6) << data_->usecs_
-           << ' '
-           << std::setfill(' ') << std::setw(5)
-           << static_cast<unsigned int>(GetTID())
+           << std::setw(2) << 1 + data_->tm_time_.tm_mon << std::setw(2) << data_->tm_time_.tm_mday << ' '
+           << std::setw(2) << data_->tm_time_.tm_hour << ':' << std::setw(2) << data_->tm_time_.tm_min << ':'
+           << std::setw(2) << data_->tm_time_.tm_sec << "." << std::setw(6) << data_->usecs_ << ' ' << std::setfill(' ')
+           << std::setw(5) << static_cast<unsigned int>(GetTID())
 #ifdef DEBUG
-           << ' '
-           << data_->filename_ << ':' << data_->line_
+           << ' ' << data_->filename_ << ':' << data_->line_
 #endif
            << "] ";
   data_->num_prefix_chars_ = data_->stream_.pcount();
@@ -749,7 +731,7 @@ void LogMessage::SendToLog() {
   LogDestination::LogToSinks(data_);
   LogDestination::LogToFile(data_->message_buf_, data_->num_chars_to_log_, false);
 
-  if (data_->severity_ == LOG_FATAL) {
+  if (data_->severity_ == LogSeverity::LOG_FATAL) {
     LogDestination::LogToFile("", 0, true);  // force flush
     abort();
   }

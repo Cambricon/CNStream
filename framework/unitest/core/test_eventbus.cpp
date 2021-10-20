@@ -30,7 +30,7 @@
 
 namespace cnstream {
 
-const EventType g_type = EVENT_ERROR;
+const EventType g_type = EventType::EVENT_ERROR;
 const char *g_message = "test post event";
 std::thread::id g_thread_id;
 
@@ -39,7 +39,7 @@ EventHandleFlag TestBusWatcher(const Event &event) {
   EXPECT_STREQ(event.message.c_str(), g_message);
   // EXPECT_EQ(event.module_name, module);
   EXPECT_EQ(event.thread_id, g_thread_id);
-  return EVENT_HANDLE_SYNCED;
+  return EventHandleFlag::EVENT_HANDLE_SYNCED;
 }
 
 TEST(CoreEventBus, AddBusWatcher) {
@@ -74,11 +74,11 @@ TEST(CoreEventBus, PollEvent) {
   Pipeline pipe("pipe");
   auto bus = pipe.GetEventBus();
   Event event;
-  event.type = EVENT_WARNING;
+  event.type = EventType::EVENT_WARNING;
   event.message = "test poll";
   event.stream_id = "test_stream";
   event.module_name = "pipe";
-  EXPECT_EQ(bus->PollEvent().type, EVENT_STOP);
+  EXPECT_EQ(bus->PollEvent().type, EventType::EVENT_STOP);
   bus->ClearAllWatchers();
   pipe.Start();
   std::this_thread::sleep_for(std::chrono::milliseconds(10));

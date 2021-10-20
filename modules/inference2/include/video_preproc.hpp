@@ -32,63 +32,65 @@
 #include <utility>
 #include <vector>
 
+#include "cnis/contrib/video_helper.h"
+#include "cnis/infer_server.h"
+#include "cnis/processor.h"
 #include "cnstream_frame.hpp"
 #include "cnstream_frame_va.hpp"
-#include "infer_server.h"
-#include "processor.h"
 #include "reflex_object.h"
-#include "video_helper.h"
 
 namespace cnstream {
 
 /**
- * @brief Base class of video preprocessing
+ * @brief VideoPreproc is the base class of video preprocessing.
  */
 class VideoPreproc : virtual public ReflexObjectEx<VideoPreproc> {
  public:
   /**
-   * @brief do nothing
+   * @brief Destructs an object.
+   *
+   * @return No return value.
    */
   virtual ~VideoPreproc() {}
   /**
-   * @brief create relative preprocess object
+   * @brief Creates a preprocess object with the given preprocess's class name.
    *
-   * @param proc_name: preprocess class name
+   * @param[in] proc_name The preprocess class name.
    *
-   * @return relative preprocess object pointer
+   * @return The pointer to preprocess object.
    */
   static VideoPreproc* Create(const std::string& proc_name);
 
   /**
-   * @brief set model input pixel format
+   * @brief Sets model input pixel format.
    *
-   * @param fmt the model input pixel format
+   * @param[in] fmt The model input pixel format.
    *
-   * @return void
+   * @return No return value.
    */
   void SetModelInputPixelFormat(infer_server::video::PixelFmt fmt) {
     model_input_pixel_format_ = fmt;
   }
 
   /**
-   * @brief Execute preprocessing
+   * @brief Executes preprocessing on the origin data.
    *
-   * @param model_input: the input of neural network. The preproc result should be set to it.
-   * @param input_data: the raw input data. The user could get infer_server::video::VideoFrame object from it.
-   * @param model_info: model information, e.g., input/output number, shape and etc.
+   * @param[out] model_input The input of neural network.
+   * @param[in] input_data The raw input data. The user could get infer_server::video::VideoFrame object from it.
+   * @param[in] model_info The model information, e.g., input/output number, shape and etc.
    *
-   * @note The input_data holds infer_server::video::VideoFrame object. Use the statement to get video frame,
-   *       `const infer_server::video::VideoFrame& frame = input_data.GetLref<infer_server::video::VideoFrame>();`.
+   * @note The input_data holds infer_server::video::VideoFrame object. Use the statement to get video frame: 
+   *      `const infer_server::video::VideoFrame& frame = input_data.GetLref<infer_server::video::VideoFrame>();`.
    *       After preprocessing, you should set the result to model_output. For example, the model only has one input,
    *       then you should copy the result to `model_input->buffers[0].MutableData()`  which is a void pointer.
-   * 
-   * @return return true if succeed
+   *
+   * @return Returns true if successful, otherwise returns false.
    */
   virtual bool Execute(infer_server::ModelIO* model_input, const infer_server::InferData& input_data,
                        const infer_server::ModelInfo& model_info) = 0;
 
  protected:
-  infer_server::video::PixelFmt model_input_pixel_format_ = infer_server::video::PixelFmt::ARGB;
+  infer_server::video::PixelFmt model_input_pixel_format_ = infer_server::video::PixelFmt::RGB24;
 };  // class VideoPreproc
 
 }  // namespace cnstream

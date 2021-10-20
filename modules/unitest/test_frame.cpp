@@ -24,12 +24,10 @@
 #include <vector>
 
 #include "gtest/gtest.h"
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
 #endif
 
 #include "cnrt.h"
@@ -42,108 +40,109 @@ static const int width = 1280;
 static const int height = 720;
 static const int g_dev_id = 0;
 
-void InitFrame(CNDataFrame* frame, int image_type) {
-  frame->ctx.dev_type = DevContext::CPU;
+void InitFrame(CNDataFrame* frame, int image_type, void** ptr_cpu) {
+  frame->ctx.dev_type = DevContext::DevType::CPU;
   frame->height = 1080;
   frame->width = 1920;
   frame->stride[0] = 1920;
   if (image_type == 0) {  // RGB or BGR
-    frame->ptr_cpu[0] = malloc(sizeof(uint32_t) * frame->height * frame->stride[0] * 3);
+    ptr_cpu[0] = malloc(sizeof(uint8_t) * frame->height * frame->stride[0] * 3);
   } else if (image_type == 1) {  // YUV and height % 2 == 0
     frame->stride[1] = 1920;
-    frame->ptr_cpu[0] = malloc(sizeof(uint32_t) * frame->height * frame->stride[0]);
-    frame->ptr_cpu[1] = malloc(sizeof(uint32_t) * frame->height * frame->stride[1] * 0.5);
+    ptr_cpu[0] = malloc(sizeof(uint8_t) * frame->height * frame->stride[0]);
+    ptr_cpu[1] = malloc(sizeof(uint8_t) * frame->height * frame->stride[1] * 0.5);
   } else if (image_type == 2) {  // YUV and height % 2 != 0
     frame->stride[1] = 1920;
     frame->height -= 1;
-    frame->ptr_cpu[0] = malloc(sizeof(uint32_t) * (frame->height) * frame->stride[0]);
-    frame->ptr_cpu[1] = malloc(sizeof(uint32_t) * (frame->height) * frame->stride[1] * 0.5);
+    ptr_cpu[0] = malloc(sizeof(uint8_t) * (frame->height) * frame->stride[0]);
+    ptr_cpu[1] = malloc(sizeof(uint8_t) * (frame->height) * frame->stride[1] * 0.5);
   }
 }
 
-void RunConvertImageTest(CNDataFrame* frame, int image_type) {
+void RunConvertImageTest(CNDataFrame* frame, int image_type, void** ptr_cpu) {
   frame->dst_device_id = g_dev_id;
-  frame->CopyToSyncMem(true);
+  frame->CopyToSyncMem(ptr_cpu, true);
   EXPECT_FALSE(frame->ImageBGR().empty());
-  free(frame->ptr_cpu[0]);
+  free(ptr_cpu[0]);
   if (image_type == 1 || image_type == 2) {  // YUV
-    free(frame->ptr_cpu[1]);
+    free(ptr_cpu[1]);
   }
 }
 
-#ifdef HAVE_OPENCV
 TEST(CoreFrame, ConvertBGRImageToBGR) {
   CNDataFrame frame;
-  InitFrame(&frame, 0);
-  frame.fmt = CN_PIXEL_FORMAT_BGR24;
-
-  RunConvertImageTest(&frame, 0);
-
-  EXPECT_FALSE(frame.ImageBGR().empty());
+  void* ptr_cpu[1];
+  InitFrame(&frame, 0, ptr_cpu);
+  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
+  RunConvertImageTest(&frame, 0, ptr_cpu);
 }
 
 TEST(CoreFrame, ConvertRGBImageToBGR) {
   CNDataFrame frame;
-  InitFrame(&frame, 0);
-  frame.fmt = CN_PIXEL_FORMAT_RGB24;
-
-  RunConvertImageTest(&frame, 0);
+  void* ptr_cpu[1];
+  InitFrame(&frame, 0, ptr_cpu);
+  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_RGB24;
+  RunConvertImageTest(&frame, 0, ptr_cpu);
 }
 
 TEST(CoreFrame, ConvertYUV12ImageToBGR) {
   CNDataFrame frame;
-  InitFrame(&frame, 1);
-  frame.fmt = CN_PIXEL_FORMAT_YUV420_NV12;
-
-  RunConvertImageTest(&frame, 1);
+  void* ptr_cpu[2];
+  InitFrame(&frame, 1, ptr_cpu);
+  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
+  RunConvertImageTest(&frame, 1, ptr_cpu);
 }
 
 TEST(CoreFrame, ConvertYUV12ImageToBGR2) {  // height % 2 != 0
   CNDataFrame frame;
-  InitFrame(&frame, 2);
-  frame.fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+  void* ptr_cpu[2];
+  InitFrame(&frame, 2, ptr_cpu);
+  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
 
-  RunConvertImageTest(&frame, 2);
+  RunConvertImageTest(&frame, 2, ptr_cpu);
 }
 
 TEST(CoreFrame, ConvertYUV21ImageToBGR) {
   CNDataFrame frame;
-  InitFrame(&frame, 1);
-  frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+  void* ptr_cpu[2];
+  InitFrame(&frame, 1, ptr_cpu);
+  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
 
-  RunConvertImageTest(&frame, 1);
+  RunConvertImageTest(&frame, 1, ptr_cpu);
 }
 
 TEST(CoreFrame, ConvertYUV21ImageToBGR2) {
   CNDataFrame frame;
-  InitFrame(&frame, 2);
-  frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+  void* ptr_cpu[2];
+  InitFrame(&frame, 2, ptr_cpu);
+  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
 
-  RunConvertImageTest(&frame, 2);
+  RunConvertImageTest(&frame, 2, ptr_cpu);
 }
 
 TEST(CoreFrame, ConvertImageToBGRFailed) {
   CNDataFrame frame;
-  InitFrame(&frame, 1);
-  frame.fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+  void* ptr_cpu[2];
+  InitFrame(&frame, 1, ptr_cpu);
+  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
   frame.dst_device_id = g_dev_id;
-  frame.CopyToSyncMem();
-  frame.fmt = CN_INVALID;
-  EXPECT_DEATH(frame.ImageBGR(), ".*Unsupport pixel format.*");
-  free(frame.ptr_cpu[0]);
-  free(frame.ptr_cpu[1]);
+  frame.CopyToSyncMem(ptr_cpu, true);
+  frame.fmt = CNDataFormat::CN_INVALID;
+  EXPECT_DEATH(frame.ImageBGR(), ".*Unsupported pixel format.*");
+  free(ptr_cpu[0]);
+  free(ptr_cpu[1]);
 }
-#endif
 
 TEST(CoreFrameDeathTest, CopyToSyncMemFailed) {
   CNDataFrame frame;
-  InitFrame(&frame, 0);
-  frame.fmt = CN_PIXEL_FORMAT_BGR24;
-  EXPECT_DEATH(frame.CopyToSyncMem(true), "");
-  frame.ctx.dev_type = DevContext::INVALID;
-  EXPECT_DEATH(frame.CopyToSyncMem(false), "");
+  void* ptr_cpu[2];
+  InitFrame(&frame, 0, ptr_cpu);
+  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
+  EXPECT_DEATH(frame.CopyToSyncMem(ptr_cpu, true), "");
+  frame.ctx.dev_type = DevContext::DevType::INVALID;
+  EXPECT_DEATH(frame.CopyToSyncMem(ptr_cpu, false), "");
 
-  free(frame.ptr_cpu[0]);
+  free(ptr_cpu[0]);
 }
 
 TEST(CoreFrameDeathTest, CopyToSyncMemOnDevice) {
@@ -169,8 +168,8 @@ TEST(CoreFrameDeathTest, CopyToSyncMemOnDevice) {
   frame->stride[1] = width;
   frame->ctx.ddr_channel = 0;
   frame->ctx.dev_id = g_dev_id;
-  frame->ctx.dev_type = DevContext::MLU;
-  frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+  frame->ctx.dev_type = DevContext::DevType::MLU;
+  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
 
   EXPECT_DEATH(frame->CopyToSyncMemOnDevice(g_dev_id), "");
   // check device num, if num > 1, do sync
@@ -178,7 +177,7 @@ TEST(CoreFrameDeathTest, CopyToSyncMemOnDevice) {
   // if (dev_num > 1) frame->CopyToSyncMemOnDevice(1);
 
   EXPECT_DEATH(frame->CopyToSyncMemOnDevice(dev_num + 1), "");
-  frame->ctx.dev_type = DevContext::INVALID;
+  frame->ctx.dev_type = DevContext::DevType::INVALID;
   EXPECT_DEATH(frame->CopyToSyncMemOnDevice(1), "");
 }
 
@@ -263,41 +262,11 @@ TEST(CoreFrame, InferObjAddAndGetfeature) {
   EXPECT_EQ(infer_obj.GetFeature("feature2"), infer_feature2);
 }
 
-TEST(CoreFrame, SetAndGetFlowDepth) {
-  int flow_depth = 32;
-  SetFlowDepth(flow_depth);
-  EXPECT_EQ(GetFlowDepth(), flow_depth);
-  SetFlowDepth(0);
-  EXPECT_EQ(GetFlowDepth(), 0);
-}
-
 TEST(CoreFrame, CreateFrameInfo) {
   // create frame success
   EXPECT_NE(CNFrameInfo::Create("0"), nullptr);
   // create eos frame success
   EXPECT_NE(CNFrameInfo::Create("0", true), nullptr);
-}
-
-TEST(CoreFrame, CreateFrameInfoMultiFlow_Depth) {
-  uint32_t seed = (uint32_t)time(0);
-  int flow_depth = rand_r(&seed) % 64 + 1;
-  {
-    SetFlowDepth(flow_depth);
-    EXPECT_EQ(GetFlowDepth(), flow_depth);
-    std::vector<std::shared_ptr<CNFrameInfo>> frame_info_ptrs;
-    for (int i = 0; i < flow_depth; i++) {
-      // create frame
-      frame_info_ptrs.push_back(CNFrameInfo::Create("0"));
-      EXPECT_NE(frame_info_ptrs[i], nullptr);
-    }
-
-    // exceed parallelism
-    EXPECT_EQ(CNFrameInfo::Create("0"), nullptr);
-
-    // create eos frame
-    EXPECT_NE(CNFrameInfo::Create("0", true), nullptr);
-  }
-  SetFlowDepth(0);
 }
 
 }  // namespace cnstream

@@ -42,17 +42,19 @@ TEST(CoreLog, CreateLogFile) {
   LOGW(CoreLog) << "Test long log " << longlog;
 }
 
-TEST(CoreLog, LogFatal) {
-  InitCNStreamLogging("./");
-  EXPECT_DEATH_IF_SUPPORTED(LOGF(CoreLog) << "Should abort", "");
-  ShutdownCNStreamLogging();
-}
+// This test case sometimes results in hang.
+//
+// TEST(CoreLog, LogFatal) {
+//   InitCNStreamLogging("./");
+//   EXPECT_DEATH_IF_SUPPORTED(LOGF(CoreLog) << "Should abort", "");
+//   ShutdownCNStreamLogging();
+// }
 
 TEST(CoreLog, LogSink) {
   class MyLogSink : public cnstream::LogSink {
     void Send(cnstream::LogSeverity severity, const char* category, const char* filename, int line,
               const struct ::tm* tm_time, int32_t usecs, const char* message, size_t message_len) override {
-      EXPECT_EQ(3, severity);
+      EXPECT_EQ(3, static_cast<int>(severity));
       EXPECT_STREQ(category, "CoreLog");
       EXPECT_STREQ("test_logging.cpp", filename);
       EXPECT_STREQ(message, "This log should be transmitted by LogSink::Send\n");

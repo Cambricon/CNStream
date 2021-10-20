@@ -31,12 +31,8 @@
 #include FT_FREETYPE_H
 #endif
 
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
-#else
-#error OpenCV required
-#endif
 
 namespace cnstream {
 

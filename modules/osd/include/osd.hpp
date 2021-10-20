@@ -31,14 +31,9 @@
 #include <unordered_map>
 #include <vector>
 
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
-#else
-#error OpenCV required
-#endif
 
-#include "cnstream_core.hpp"
 #include "cnstream_module.hpp"
 
 namespace cnstream {

@@ -22,9 +22,11 @@
 #include <string>
 #include <vector>
 
+#include "cnis/processor.h"
 #include "cnstream_frame_va.hpp"
 #include "device/mlu_context.h"
 #include "feature_extractor.hpp"
+#include "profiler/module_profiler.hpp"
 #include "track.hpp"
 
 #define CLIP(x) ((x) < 0 ? 0 : ((x) > 1 ? 1 : (x)))
@@ -39,85 +41,89 @@ struct TrackerContext {
   TrackerContext &operator=(const TrackerContext &) = delete;
 };
 
-static thread_local std::unique_ptr<edk::MluContext> g_tl_mlu_env;
-static thread_local std::unique_ptr<FeatureExtractor> g_tl_feature_extractor;
+thread_local std::unique_ptr<FeatureExtractor> g_feature_extractor;
 
 Tracker::Tracker(const std::string &name) : Module(name) {
+  hasTransmit_.store(true);
   param_register_.SetModuleDesc("Tracker is a module for realtime tracking.");
   param_register_.Register("model_path",
                            "The offline model path. Normally offline model is a file"
-                           " with cambricon extension.");
-  param_register_.Register("func_name", "The offline model function name, usually is 'subnet0'.");
-  param_register_.Register("track_name", "Track algorithm name. Choose from FeatureMatch and KCF.");
+                           " with cambricon or model extension.");
+  param_register_.Register("func_name",
+                           "The offline model function name, usually is 'subnet0'."
+                           "Works only if backend is CNRT.");
+  param_register_.Register("engine_num", "Infer server engine number.");
+  param_register_.Register("track_name", "Track algorithm name. Choose from FeatureMatch and IoUMatch.");
   param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
   param_register_.Register("max_cosine_distance", "Threshold of cosine distance.");
 }
 
 Tracker::~Tracker() { Close(); }
 
-TrackerContext *Tracker::GetContext(CNFrameInfoPtr data) {
-  if (!g_tl_mlu_env) {
-    g_tl_mlu_env.reset(new edk::MluContext);
-    g_tl_mlu_env->SetDeviceId(device_id_);
-    g_tl_mlu_env->BindDevice();
-  }
-  if (!g_tl_feature_extractor) {
-    if (!model_loader_) {
+bool Tracker::InitFeatureExtractor(const CNFrameInfoPtr &data) {
+  if (!g_feature_extractor) {
+    if (!model_) {
       LOGI(TRACK) << "[Track] FeatureExtract model not set, extract feature on CPU";
-      g_tl_feature_extractor.reset(new FeatureExtractor());
+      g_feature_extractor.reset(new FeatureExtractor(match_func_));
     } else {
-      g_tl_feature_extractor.reset(new FeatureExtractor(model_loader_, device_id_));
-      if (data->IsEos()) {
-        return nullptr;
-      }
-      edk::CoreVersion core_ver = g_tl_mlu_env->GetCoreVersion();
-      if (!g_tl_feature_extractor->Init(GetCNDataFramePtr(data)->fmt, core_ver)) {
-        LOGE(TRACK) << "[Track] Extract feature on MLU. Init resize and convert op failed.";
-        return nullptr;
+      if (!infer_server::SetCurrentDevice(device_id_)) return false;
+      g_feature_extractor.reset(new FeatureExtractor(model_, match_func_, device_id_));
+      if (!g_feature_extractor->Init(engine_num_)) {
+        LOGE(TRACK) << "[Track] Extract feature on MLU. Init extractor failed.";
+        g_feature_extractor.reset();
+        return false;
       }
     }
   }
+  return true;
+}
 
+TrackerContext *Tracker::GetContext(const CNFrameInfoPtr &data) {
   TrackerContext *ctx = nullptr;
   std::unique_lock<std::mutex> guard(mutex_);
   auto search = contexts_.find(data->GetStreamIndex());
-  if (data->GetStreamIndex() >= GetMaxStreamNumber()) {
-    return nullptr;
-  }
   if (search != contexts_.end()) {
     // context exists
     ctx = search->second;
   } else {
     ctx = new TrackerContext;
-    if ("KCF" == track_name_) {
-#ifdef ENABLE_KCF
-      ctx->processer_.reset(new edk::KcfTrack);
-      dynamic_cast<edk::KcfTrack *>(ctx->processer_.get())->SetModel(model_loader_, device_id_);
-      contexts_[data->GetStreamIndex()] = ctx;
-#endif
-    } else {  // "FeatureMatch by default"
-      edk::FeatureMatchTrack *track = new edk::FeatureMatchTrack;
-      track->SetParams(max_cosine_distance_, 100, 0.7, 30, 3);
-      ctx->processer_.reset(track);
-      contexts_[data->GetStreamIndex()] = ctx;
-    }
+    edk::FeatureMatchTrack *track = new edk::FeatureMatchTrack;
+    track->SetParams(max_cosine_distance_, 100, 0.7, 30, 3);
+    ctx->processer_.reset(track);
+    contexts_[data->GetStreamIndex()] = ctx;
   }
   return ctx;
 }
 
 bool Tracker::Open(ModuleParamSet paramSet) {
-  if (paramSet.find("model_path") != paramSet.end()) {
-    model_path_ = paramSet["model_path"];
-    model_path_ = GetPathRelativeToTheJSONFile(model_path_, paramSet);
-  }
+  bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
+  if (use_magicmind) {
+    if (paramSet.find("model_path") != paramSet.end()) {
+      model_pattern1_ = paramSet["model_path"];
+      model_pattern1_ = GetPathRelativeToTheJSONFile(model_pattern1_, paramSet);
+    }
+    if (!model_pattern1_.empty())
+      model_ = infer_server::InferServer::LoadModel(model_pattern1_);
+  } else {
+    if (paramSet.find("model_path") != paramSet.end()) {
+      model_pattern1_ = paramSet["model_path"];
+      model_pattern1_ = GetPathRelativeToTheJSONFile(model_pattern1_, paramSet);
+    }
 
-  std::string func_name_ = "subnet0";
-  if (paramSet.find("func_name") != paramSet.end()) {
-    func_name_ = paramSet["func_name"];
+    std::string model_pattern2_ = "subnet0";
+    if (paramSet.find("func_name") != paramSet.end()) {
+      model_pattern2_ = paramSet["func_name"];
+    }
+    if (!model_pattern1_.empty() && !model_pattern2_.empty())
+      model_ = infer_server::InferServer::LoadModel(model_pattern1_, model_pattern2_);
   }
 
   if (paramSet.find("max_cosine_distance") != paramSet.end()) {
     max_cosine_distance_ = std::stof(paramSet["max_cosine_distance"]);
+  }
+
+  if (paramSet.find("engine_num") != paramSet.end()) {
+    engine_num_ = std::stoi(paramSet["engine_num"]);
   }
 
   if (paramSet.find("device_id") != paramSet.end()) {
@@ -129,73 +135,21 @@ bool Tracker::Open(ModuleParamSet paramSet) {
     track_name_ = paramSet["track_name"];
   }
 
-  if (!model_path_.empty()) {
-    try {
-      model_loader_ = std::make_shared<edk::ModelLoader>(model_path_, func_name_);
-    } catch (edk::Exception &e) {
-      LOGE(TRACK) << e.what();
-      return false;
-    }
-  }
-  return true;
-}
-
-void Tracker::Close() {
-  if (model_loader_) {
-    model_loader_.reset();
-  }
-  if (g_tl_feature_extractor) {
-    g_tl_feature_extractor.reset();
-  }
-  if (g_tl_mlu_env) {
-    g_tl_mlu_env.reset();
-  }
-
-  for (auto &pair : contexts_) {
-    delete pair.second;
-  }
-  contexts_.clear();
-}
-
-int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
-  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
-  if (frame->width <= 0 || frame->height <= 0) {
-    LOGE(TRACK) << "Frame width and height can not be lower than 0.";
+  if (track_name_ != "FeatureMatch" && track_name_ != "IoUMatch") {
+    LOGE(TRACK) << "Unsupported track type: " << track_name_;
     return -1;
   }
+  need_feature_ = (track_name_ == "FeatureMatch");
 
-  if (data->datas.find(CNInferObjsPtrKey) == data->datas.end()) {
-    return 0;
-  }
-
-  CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(data);
-  for (size_t idx = 0; idx < objs_holder->objs_.size(); ++idx) {
-    auto& obj = objs_holder->objs_[idx];
-    cnstream::CNInferBoundingBox &bbox = obj->bbox;
-    bbox.x = CLIP(bbox.x);
-    bbox.w = CLIP(bbox.w);
-    bbox.y = CLIP(bbox.y);
-    bbox.h = CLIP(bbox.h);
-    bbox.w = (bbox.x + bbox.w > 1.0) ? (1.0 - bbox.x) : bbox.w;
-    bbox.h = (bbox.y + bbox.h > 1.0) ? (1.0 - bbox.y) : bbox.h;
-  }
-
-  TrackerContext *ctx = GetContext(data);
-  if (nullptr == ctx || nullptr == ctx->processer_) {
-    LOGE(TRACK) << "Get Tracker Context Failed.";
-    return -1;
-  }
-
-  if (track_name_ == "FeatureMatch") {
-    std::vector<std::vector<float>> features;
-    g_tl_feature_extractor->ExtractFeature(frame, objs_holder, &features);
-
-    if (features.size() != objs_holder->objs_.size()) {
-      LOGE(TRACK) << "Extract feature Failed.";
-      return -1;
+  match_func_ = [this](const CNFrameInfoPtr data, bool valid) {
+    if (!valid) {
+      PostEvent(EventType::EVENT_ERROR, "Extract feature failed");
+      return;
     }
+    CNInferObjsPtr objs_holder = data->collection.Get<CNInferObjsPtr>(kCNInferObjsTag);
 
     std::vector<edk::DetectObject> in, out;
+    in.reserve(objs_holder->objs_.size());
     for (size_t i = 0; i < objs_holder->objs_.size(); i++) {
       edk::DetectObject obj;
       obj.label = std::stoi(objs_holder->objs_[i]->id);
@@ -204,57 +158,73 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
       obj.bbox.y = objs_holder->objs_[i]->bbox.y;
       obj.bbox.width = objs_holder->objs_[i]->bbox.w;
       obj.bbox.height = objs_holder->objs_[i]->bbox.h;
-      obj.feature = features[i];
-      in.push_back(obj);
+      obj.feature = objs_holder->objs_[i]->GetFeature("track");
+      in.emplace_back(obj);
     }
 
-    edk::TrackFrame tframe;
-    ctx->processer_->UpdateFrame(tframe, in, &out);
+    GetContext(data)->processer_->UpdateFrame(edk::TrackFrame(), in, &out);
 
     for (size_t i = 0; i < out.size(); i++) {
       objs_holder->objs_[out[i].detect_id]->track_id = std::to_string(out[i].track_id);
     }
-  } else if (track_name_ == "KCF") {
-#ifdef ENABLE_KCF
-    if (frame->fmt != CN_PIXEL_FORMAT_YUV420_NV21) {
-      LOGE(TRACK) << "KCF Only support frame in CN_PIXEL_FORMAT_YUV420_NV21 format.";
+    TransmitData(data);
+  };
+
+  return true;
+}
+
+void Tracker::Close() {
+  for (auto &pair : contexts_) {
+    delete pair.second;
+  }
+  contexts_.clear();
+  g_feature_extractor.reset();
+}
+
+int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
+  if (data->GetStreamIndex() >= GetMaxStreamNumber()) {
+    return -1;
+  }
+  if (need_feature_ && !InitFeatureExtractor(data)) {
+    LOGE(TRACK) << "Init Feature Extractor Failed.";
+    return -1;
+  }
+
+  if (!data->IsEos()) {
+    CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
+    if (frame->width <= 0 || frame->height <= 0) {
+      LOGE(TRACK) << "Frame width and height can not be lower than 0.";
       return -1;
     }
-    std::vector<edk::DetectObject> in, out;
-    for (size_t i = 0; i < objs_holder->objs_.size(); i++) {
-      edk::DetectObject obj;
-      obj.label = std::stoi(objs_holder->objs_[i]->id);
-      obj.score = objs_holder->objs_[i]->score;
-      obj.bbox.x = objs_holder->objs_[i]->bbox.x;
-      obj.bbox.y = objs_holder->objs_[i]->bbox.y;
-      obj.bbox.width = objs_holder->objs_[i]->bbox.w;
-      obj.bbox.height = objs_holder->objs_[i]->bbox.h;
-      in.push_back(obj);
+    bool have_obj = data->collection.HasValue(kCNInferObjsTag);
+    if (have_obj) {
+      CNInferObjsPtr objs_holder = data->collection.Get<CNInferObjsPtr>(kCNInferObjsTag);
+      for (size_t idx = 0; idx < objs_holder->objs_.size(); ++idx) {
+        auto &obj = objs_holder->objs_[idx];
+        cnstream::CNInferBoundingBox &bbox = obj->bbox;
+        bbox.x = CLIP(bbox.x);
+        bbox.w = CLIP(bbox.w);
+        bbox.y = CLIP(bbox.y);
+        bbox.h = CLIP(bbox.h);
+        bbox.w = (bbox.x + bbox.w > 1.0) ? (1.0 - bbox.x) : bbox.w;
+        bbox.h = (bbox.y + bbox.h > 1.0) ? (1.0 - bbox.y) : bbox.h;
+      }
     }
 
-    edk::TrackFrame tframe;
-    tframe.data = const_cast<void*>(frame->data[0]->GetMluData());
-    tframe.width = frame->width;
-    tframe.height = frame->height;
-    tframe.format = edk::TrackFrame::ColorSpace::NV21;
-    tframe.frame_id = frame->frame_id;
-    tframe.dev_type = edk::TrackFrame::DevType::MLU;
-    tframe.device_id = frame->ctx.dev_id;
-    ctx->processer_->UpdateFrame(tframe, in, &out);
-
-    objs_holder->objs_.clear();
-    for (size_t i = 0; i < out.size(); i++) {
-      std::shared_ptr<CNInferObject> obj = std::make_shared<CNInferObject>();
-      obj->id = std::to_string(out[i].label);
-      obj->track_id = std::to_string(out[i].track_id);
-      obj->score = out[i].score;
-      obj->bbox.x = out[i].bbox.x;
-      obj->bbox.y = out[i].bbox.y;
-      obj->bbox.w = out[i].bbox.width;
-      obj->bbox.h = out[i].bbox.height;
-      objs_holder->objs_.push_back(obj);
+    if (need_feature_) {
+      // async extract feature
+      if (!g_feature_extractor->ExtractFeature(data)) {
+        LOGE(TRACK) << "Extract Feature failed";
+        return -1;
+      }
+    } else {
+      match_func_(data, true);
     }
-#endif
+  } else {
+    if (need_feature_) {
+      g_feature_extractor->WaitTaskDone(data->stream_id);
+    }
+    TransmitData(data);
   }
   return 0;
 }
@@ -277,7 +247,7 @@ bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
 
   if (paramSet.find("track_name") != paramSet.end()) {
     std::string track_name = paramSet.at("track_name");
-    if (track_name != "FeatureMatch" && track_name != "KCF") {
+    if (track_name != "FeatureMatch" && track_name != "IoUMatch") {
       LOGE(TRACK) << "[Tracker] [track_name] : Unsupported tracker type " << track_name;
       ret = false;
     }
@@ -286,6 +256,13 @@ bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
   std::string err_msg;
   if (paramSet.find("device_id") != paramSet.end()) {
     if (!checker.IsNum({"device_id"}, paramSet, err_msg)) {
+      LOGE(TRACK) << "[Tracker] " << err_msg;
+      ret = false;
+    }
+  }
+
+  if (paramSet.find("engine_num") != paramSet.end()) {
+    if (!checker.IsNum({"engine_num"}, paramSet, err_msg)) {
       LOGE(TRACK) << "[Tracker] " << err_msg;
       ret = false;
     }

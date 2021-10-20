@@ -25,15 +25,12 @@
 #include "cnstream_logging.hpp"
 #include "video_parser.hpp"
 
+CNS_IGNORE_DEPRECATED_PUSH
+
 namespace cnstream {
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-
 /**
- * FFMPEG use FF_AV_INPUT_BUFFER_PADDING_SIZE instead of 
+ * FFMPEG use FF_AV_INPUT_BUFFER_PADDING_SIZE instead of
  * FF_INPUT_BUFFER_PADDING_SIZE since from version 2.8
  * (avcodec.h/version:56.56.100)
  * */
@@ -41,7 +38,7 @@ namespace cnstream {
 #define FFMPEG_VERSION_2_8 AV_VERSION_INT(56, 56, 100)
 
 /**
- * FFMPEG use AVCodecParameters instead of AVCodecContext 
+ * FFMPEG use AVCodecParameters instead of AVCodecContext
  * since from version 3.1(libavformat/version:57.40.100)
  **/
 
@@ -49,9 +46,12 @@ namespace cnstream {
 
 struct local_ffmpeg_init {
   local_ffmpeg_init() {
-    avcodec_register_all();   
+    avcodec_register_all();
     av_register_all();
     avformat_network_init();
+#ifdef HAVE_FFMPEG_AVDEVICE
+    avdevice_register_all();
+#endif
   }
 };
 static local_ffmpeg_init init_ffmpeg;
@@ -94,25 +94,29 @@ class FFParserImpl {
     url_name_ = url;
 
     AVInputFormat* ifmt = NULL;
-#if HAVE_FFMPEG_AVDEVICE
+    // for usb camera
+#ifdef HAVE_FFMPEG_AVDEVICE
+    const char* usb_prefix = "/dev/video";
+    if (0 == strncasecmp(url_name_.c_str(), usb_prefix, strlen(usb_prefix))) {
     // open v4l2 input
-  #if defined(__linux) || defined(__unix)
-    ifmt = av_find_input_format("video4linux2");
-    if (!ifmt) {
-      LOGE(SOURCE) << "[" << stream_id_ << "]: Could not find v4l2 format.";
-      return false;
-    }
-  #elif defined(_WIN32) || defined(_WIN64)
-    ifmt = av_find_input_format("dshow");
-    if (!ifmt) {
-      LOGE(SOURCE) << "[" << stream_id_ << "]: Could not find dshow.";
-      return false;
-    }
-  #else
-    LOGE(SOURCE) << "[" << stream_id_ << "]: Unsupported Platform";
-    return false;
-  #endif
+#if defined(__linux) || defined(__unix)
+      ifmt = av_find_input_format("video4linux2");
+      if (!ifmt) {
+        LOGE(SOURCE) << "[" << stream_id_ << "]: Could not find v4l2 format.";
+        return false;
+      }
+#elif defined(_WIN32) || defined(_WIN64)
+      ifmt = av_find_input_format("dshow");
+      if (!ifmt) {
+        LOGE(SOURCE) << "[" << stream_id_ << "]: Could not find dshow.";
+        return false;
+      }
 #else
+      LOGE(SOURCE) << "[" << stream_id_ << "]: Unsupported Platform";
+      return false;
+#endif
+    }
+#endif
     int ret_code;
     const char* p_rtsp_start_str = "rtsp://";
     if (0 == strncasecmp(url_name_.c_str(), p_rtsp_start_str, strlen(p_rtsp_start_str))) {
@@ -129,7 +133,7 @@ class FFParserImpl {
       av_dict_set(&options_, "buffer_size", "1024000", 0);
       av_dict_set(&options_, "max_delay", "500000", 0);
     }
-#endif
+
     // open input
     ret_code = avformat_open_input(&fmt_ctx_, url_name_.c_str(), ifmt, &options_);
     if (0 != ret_code) {
@@ -167,9 +171,19 @@ class FFParserImpl {
 
 #if LIBAVFORMAT_VERSION_INT >= FFMPEG_VERSION_3_1
     info->codec_id = st->codecpar->codec_id;
+#ifdef HAVE_FFMPEG_AVDEVICE  // for usb camera
+    info->format = st->codecpar->format;
+    info->width = st->codecpar->width;
+    info->height = st->codecpar->height;
+#endif
     int field_order = st->codecpar->field_order;
 #else
     info->codec_id = st->codec->codec_id;
+#ifdef HAVE_FFMPEG_AVDEVICE  // for usb camera
+    info->format = st->codec->format;
+    info->width = st->codec->width;
+    info->height = st->codec->height;
+#endif
     int field_order = st->codec->field_order;
 #endif
 
@@ -398,7 +412,7 @@ class EsParserImpl {
       return -1;
     }
     av_init_packet(&packet_);
-    open_sucess_ = true;
+    open_success_ = true;
     return 0;
   }
   void Close() {
@@ -418,7 +432,7 @@ class EsParserImpl {
       av_free(codec_ctx_);
       codec_ctx_ = nullptr;
     }
-    open_sucess_ = false;
+    open_success_ = false;
   }
   void ParseEos();
   int Parse(const VideoEsPacket &pkt);
@@ -433,7 +447,7 @@ class EsParserImpl {
   AVPacket packet_;
   std::vector<uint8_t> paramset_;
   bool first_time_ = true;
-  bool open_sucess_ = false;
+  bool open_success_ = false;
   std::mutex mutex_;
 };  // class StreamParserImpl
 
@@ -464,6 +478,13 @@ int EsParser::Parse(const VideoEsPacket &pkt) {
   }
   return -1;
 }
+int EsParser::ParseEos() {
+  if (impl_) {
+    impl_->ParseEos();
+    return 0;
+  }
+  return -1;
+}
 
 inline void EsParserImpl::ParseEos() {
   if (result_) {
@@ -477,13 +498,13 @@ inline void EsParserImpl::ParseEos() {
 
 int EsParserImpl::Parse(const VideoEsPacket &pkt) {
   std::unique_lock<std::mutex> guard(mutex_);
-  if (!open_sucess_) {
+  if (!open_success_) {
     ParseEos();
     return 0;
   }
+
   uint8_t *cur_ptr = pkt.data;
   int cur_size = pkt.len;
-  if (!pkt.data) cur_size = 0;
 
   do {
     int len = av_parser_parse2(parser_ctx_, codec_ctx_, &packet_.data, &packet_.size,
@@ -496,7 +517,7 @@ int EsParserImpl::Parse(const VideoEsPacket &pkt) {
     if (parser_ctx_->pict_type == AV_PICTURE_TYPE_I) {
       packet_.flags |= AV_PKT_FLAG_KEY;
     }
-    packet_.pts = pkt.pts;  // FIXME
+    packet_.pts = parser_ctx_->pts != AV_NOPTS_VALUE ? parser_ctx_->pts : parser_ctx_->last_pts;
 
     if (first_time_) {
       if (!(packet_.flags & AV_PKT_FLAG_KEY)) {
@@ -549,9 +570,14 @@ int EsParserImpl::Parse(const VideoEsPacket &pkt) {
     av_packet_unref(&packet_);
   } while (cur_size > 0);
 
-  if (!pkt.data || !pkt.len)
+  if (!pkt.data || !pkt.len) {
     ParseEos();
+  }
+
   return 0;
 }
 
 }  // namespace cnstream
+
+CNS_IGNORE_DEPRECATED_POP
+

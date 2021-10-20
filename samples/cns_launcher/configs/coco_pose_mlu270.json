@@ -1,0 +1,28 @@
+{
+  "body_pose" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["pose_osd"],
+    "custom_params" : {
+      "model_path" : "../../../data/models/coco_pose_b4c4_bgra_mlu270.cambricon",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocCOCOPose",
+      "model_input_pixel_format" : "BGRA32",
+      "keep_aspect_ratio" : true,
+      "data_order" : "NCHW",
+      "batching_timeout" : 100,
+      "device_id" : 0
+    }
+  },
+
+  "pose_osd" : {
+    "class_name" : "cns_openpose::PoseOsd",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "nkeypoints" : 18,  // coco has 18 keypoints, ignore background
+      "nlimbs" : 19  // coco has 19 limbs
+    }
+  }
+}

@@ -29,36 +29,10 @@
 
 namespace cnstream {
 
-#ifdef UNIT_TEST
-static std::mutex module_id_lock_;
-static uint64_t module_id_mask_ = 0;
-static size_t _GetId() {
-  std::lock_guard<std::mutex> guard(module_id_lock_);
-  for (size_t i = 0; i < sizeof(module_id_mask_) * 8; i++) {
-    if (!(module_id_mask_ & ((uint64_t)1 << i))) {
-      module_id_mask_ |= (uint64_t)1 << i;
-      return i;
-    }
-  }
-  return INVALID_MODULE_ID;
-}
-static void _ReturnId(size_t id_) {
-  std::lock_guard<std::mutex>  guard(module_id_lock_);
-  if (id_ >= sizeof(module_id_mask_) * 8) {
-    return;
-  }
-  module_id_mask_ &= ~(1 << id_);
-}
-#endif
-
 Module::~Module() {
   RwLockReadGuard guard(container_lock_);
   if (container_) {
     container_->ReturnModuleIdx(id_);
-  } else {
-#ifdef UNIT_TEST
-    _ReturnId(id_);
-#endif
   }
 }
 
@@ -79,13 +53,8 @@ void Module::SetContainer(Pipeline* container) {
 size_t Module::GetId() {
   if (id_ == INVALID_MODULE_ID) {
     RwLockReadGuard guard(container_lock_);
-    if (container_) {
+    if (container_)
       id_ = container_->GetModuleIdx();
-    } else {
-#ifdef UNIT_TEST
-      id_ = _GetId();
-#endif
-    }
   }
   return id_;
 }
@@ -148,7 +117,7 @@ int Module::DoProcess(std::shared_ptr<CNFrameInfo> data) {
     }
   } else {
     if (removed) {
-      data->flags |= CN_FRAME_FLAG_REMOVED;
+      data->flags |= static_cast<size_t>(CNFrameFlag::CN_FRAME_FLAG_REMOVED);
     }
     return Process(data);
   }

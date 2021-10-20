@@ -143,18 +143,18 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
         cnrtMemcpy(reinterpret_cast<void*>(cpu_input_value.data()), data.ptr, len, CNRT_MEM_TRANS_DIR_DEV2HOST);
         for (int i = 0; i < frame_num; i++) {
           info = finfos[i].first;
-          CNDataFramePtr frame = cnstream::GetCNDataFramePtr(info);
+          CNDataFramePtr frame = info->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
           char* img = reinterpret_cast<char*>(cpu_input_value.data()) + batch_offset * i;
-          cv::Mat bgr(data.shape.h, data.shape.w, CV_8UC3);
-          cv::Mat bgra(data.shape.h, data.shape.w, CV_8UC4, img);
+          cv::Mat bgr(data.shape.H(), data.shape.W(), CV_8UC3);
+          cv::Mat bgra(data.shape.H(), data.shape.W(), CV_8UC4, img);
           switch (model_input_fmt_) {
-            case CN_PIXEL_FORMAT_RGBA32:
+            case CNDataFormat::CN_PIXEL_FORMAT_RGBA32:
               cv::cvtColor(bgra, bgr, cv::COLOR_RGBA2BGR);
               break;
-            case CN_PIXEL_FORMAT_BGRA32:
+            case CNDataFormat::CN_PIXEL_FORMAT_BGRA32:
               cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
               break;
-            case CN_PIXEL_FORMAT_ARGB32: {
+            case CNDataFormat::CN_PIXEL_FORMAT_ARGB32: {
               std::vector<cv::Mat> chns;
               cv::split(bgra, chns);
               std::swap(chns[1], chns[3]);
@@ -162,7 +162,7 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
               cv::merge(chns, bgr);
               break;
             }
-            case CN_PIXEL_FORMAT_ABGR32: {
+            case CNDataFormat::CN_PIXEL_FORMAT_ABGR32: {
               std::vector<cv::Mat> chns;
               cv::split(bgra, chns);
               chns.erase(chns.begin());
@@ -171,7 +171,7 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
             }
             default:
               LOGE(INFERENCER) << "Unsupported fmt, dump resized image failed."
-                               << "fmt :" << model_input_fmt_;
+                               << "fmt :" << static_cast<int>(model_input_fmt_);
               break;
           }
           std::string stream_index = std::to_string(info->GetStreamIndex());
@@ -207,8 +207,8 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
       if (mlu_input_value.datas.size() == 1) {
         for (int j = 0; j < frame_num; ++j) {
           std::shared_ptr<InferData> iodata(new (std::nothrow) InferData);
-          iodata->input_height_ = mlu_input_value.datas[0].shape.h;
-          iodata->input_width_ = mlu_input_value.datas[0].shape.w;
+          iodata->input_height_ = mlu_input_value.datas[0].shape.H();
+          iodata->input_width_ = mlu_input_value.datas[0].shape.W();
 
           // infer model input_fmt only support RBGA32, ARGB32, BGRA32, ABGR32
           iodata->input_size_ = iodata->input_height_ * iodata->input_width_ * 4;
@@ -222,7 +222,7 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
 
           // save model output
           for (size_t k = 0; k < iodata->output_num_; ++k) {
-            iodata->output_sizes_.push_back(cpu_output_value.datas[k].shape.hwc());
+            iodata->output_sizes_.push_back(cpu_output_value.datas[k].shape.DataCount());
             std::shared_ptr<void> output_cpu_addr = cnCpuMemAlloc(iodata->output_sizes_[k] * sizeof(float*));
             memcpy(output_cpu_addr.get(),
                    cpu_output_value.datas[k].Offset(j), sizeof(float*) * iodata->output_sizes_[k]);
@@ -230,7 +230,7 @@ std::vector<std::shared_ptr<InferTask>> InferBatchingDoneStage::BatchingDone(con
           }
 
           // save iodata
-          auto data_map = GetCNInferDataPtr(finfos[j].first);
+          auto data_map = finfos[j].first->collection.Get<CNInferDataPtr>(kCNInferDataTag);
           std::lock_guard<std::mutex> lk(data_map->mutex_);
           if (data_map->datas_map_.find(module_name_) != data_map->datas_map_.end()) {
             data_map->datas_map_[module_name_].push_back(iodata);

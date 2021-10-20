@@ -1,0 +1,10 @@
+{
+  "osd" : {
+    "class_name" : "cnstream::Osd",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "label_path" : "../../../../data/models/synset_words.txt" 
+    }
+  }
+}

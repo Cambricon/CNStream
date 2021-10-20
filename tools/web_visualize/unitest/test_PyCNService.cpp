@@ -30,22 +30,16 @@
 #include <string>
 #include <vector>
 
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
 #endif
-#endif
 
-#include "cnstream_core.hpp"
 #include "data_source.hpp"
 #include "displayer.hpp"
 #include "util.hpp"
 #include "cnstream_logging.hpp"
-#ifdef BUILD_IPC
-#include "module_ipc.hpp"
-#endif
 
 #include "profiler/pipeline_profiler.hpp"
 #include "profiler/profile.hpp"

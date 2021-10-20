@@ -201,7 +201,7 @@ void ProcessProfiler::RecordStart(const RecordKey& key) {
   if (!config_.enable_tracing && !config_.enable_profiling) return;
   std::lock_guard<std::mutex>  lk(lk_);
   Time now = Clock::now();
-  if (config_.enable_tracing) Tracing(key, now, TraceEvent::START);
+  if (config_.enable_tracing) Tracing(key, now, TraceEvent::Type::START);
   if (config_.enable_profiling) RecordStart(key, now);
 }
 
@@ -222,7 +222,7 @@ void ProcessProfiler::RecordEnd(const RecordKey& key) {
   if (!config_.enable_tracing && !config_.enable_profiling) return;
   std::lock_guard<std::mutex>  lk(lk_);
   Time now = Clock::now();
-  if (config_.enable_tracing) Tracing(key, now, TraceEvent::END);
+  if (config_.enable_tracing) Tracing(key, now, TraceEvent::Type::END);
   if (config_.enable_profiling) RecordEnd(key, now);
 }
 
@@ -277,9 +277,9 @@ ProcessProfile ProcessProfiler::GetProfile() {
 ProcessProfile ProcessProfiler::GetProfile(const ProcessTrace& trace) const {
   ProcessProfiler profiler(ProfilerConfig(), process_name_, nullptr);
   for (const auto& elem : trace) {
-    if (elem.type == TraceEvent::START)
+    if (elem.type == TraceEvent::Type::START)
       profiler.RecordStart(elem.key, elem.time);
-    else if (elem.type == TraceEvent::END)
+    else if (elem.type == TraceEvent::Type::END)
       profiler.RecordEnd(elem.key, elem.time);
   }
   return profiler.GetProfile();
@@ -292,6 +292,7 @@ void ProcessProfiler::OnStreamEos(const std::string& stream_name) {
   uint64_t number_remaining = 0;
   record_policy_->OnStreamEos(stream_name, &number_remaining);
   AddDropped(stream_name, number_remaining);
+  ongoing_ -= number_remaining;
   stream_profilers_.erase(stream_name);
 }
 

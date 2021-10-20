@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2020] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2020-2021] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,268 +27,321 @@
 #include <utility>
 #include <vector>
 
+/*!
+ *  @file trace.hpp
+ *
+ *  This file contains declarations of the TraceEvent class, the TraceElem struct and the TraceElem struct.
+ */
 namespace cnstream {
 
-/**
- * Class Clock represents a monotonic clock.
- * It will be used to get time when logging events.
- **/
-using Clock    = std::chrono::steady_clock;
+/*!
+ * Defines an alias for the std::chrono::steady_clock.
+ */
+using Clock = std::chrono::steady_clock;
 
-/**
- * Class Duration represents the length of a period of time.
- **/
+/*!
+ * Defines an alias for the std::chrono::duration<double, std::milli>.
+ */
 using Duration = std::chrono::duration<double, std::milli>;
 
-/**
- * Time type.
- **/
-using Time     = Clock::time_point;
+/*!
+ * Defines an alias for the std::chrono::steady_clock::timepoint.
+ */
+using Time = Clock::time_point;
 
-/**
- * Unique identification of a frame in tracing and profiling.
- * Usually, first: stream_name(CNFrameInfo::stream_id), second: pts(CNFrameInfo::timestamp).
- **/
+/*!
+ * Defines an alias for the std::pair<std::string, int64_t>. RecordKey now denotes a pair of the stream name
+ * ``CNFrameInfo::stream_id`` and pts ``CNFrameInfo::timestamp``.
+ */
 using RecordKey = std::pair<std::string, int64_t>;
 
-/**
- * Class TraceEvent represents an trace event.
- **/
-struct TraceEvent {
-  RecordKey key;                 ///< Unique identification of a frame.
-  std::string module_name;       ///< Module name.
-  std::string process_name;      ///< Process name. A process can be a function call or a piece of code.
-  Time time;                     ///< Event time.
-  enum Level {
-    PIPELINE = 0,                ///< Event in pipeline.
-    MODULE                       ///< Event in module.
-  } level = PIPELINE;            ///< Event level.
-  enum Type {
-    START = 1 << 0,              ///< Process start event.
-    END = 1 << 1                 ///< Process end event.
-  } type = START;                ///< Event type.
+/*!
+ * @class TraceEvent
+ *
+ * @brief TraceEvent is a class representing a trace event used by Profile.
+ */
+class TraceEvent {
+ public:
+  RecordKey key;             /*!< The unique identification of a frame. */
+  std::string module_name;   /*!< The name of a module. */
+  std::string process_name;  /*!< The name of a process. A process can be a function call or a piece of code. */
+  Time time;                 /*!< The timestamp of an event. */
+  /*!
+   * @enum Level
+   *
+   * @brief Enumeration variables describing the level of an event. The default level is 0 (pipeline's event).
+   */
+  enum class Level {
+    PIPELINE = 0,  /*!< A event of a pipeline. */
+    MODULE         /*!< An event of a module. */
+  } level = Level::PIPELINE;
+  /*!
+   * @enum Type
+   *
+   * @brief Enumeration variables describing the type of an event. The default type is 1 (START).
+   */
+  enum class Type {
+    START = 1 << 0,  /*!< A process-start event. */
+    END = 1 << 1     /*!< A process-end event. */
+  } type = Type::START;
 
-  /*
-   * TraceEvent constructor.
+  /*!
+   * @brief Constructs a TraceEvent object by using default constructor.
+   *
+   * @return No return value.
    */
   TraceEvent() = default;
-  /**
-   * TraceEvent constructor.
+  /*!
+   * @brief Constructs a TraceEvent object with a RecordKey instance.
    *
-   * @param key Unique identification of a frame.
+   * @param[in] key The unique identification of a frame.
+   *
+   * @return No return value.
    */
   explicit TraceEvent(const RecordKey& key);
-  /**
-   * TraceEvent constructor.
+  /*!
+   * @brief Constructs a TraceEvent object with a RecordKey using move semantics.
    *
-   * @param key Unique identification of a frame.
+   * @param[in] key The unique identification of a frame.
+   *
+   * @return No return value.
    */
   explicit TraceEvent(RecordKey&& key);
-  /**
-   * TraceEvent copy constructor.
+  /*!
+   * @brief Constructs a TraceEvent object with the copy of the contents of another object.
    *
-   * @param other which instance copy from.
+   * @param[in] other Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   TraceEvent(const TraceEvent& other) = default;
-  /**
-   * TraceEvent operator =.
+  /*!
+   * @brief Replaces the contents with a copy of the contents of another TraceEvent object.
    *
-   * @param other Which instance copy from.
+   * @param[in] other Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& operator=(const TraceEvent& other) = default;
-  /**
-   * TraceEvent move constructor.
+  /*!
+   * @brief Constructs a TraceEvent object with the contents of another object using move semantics.
    *
-   * @param other which instance move from.
+   * @param[in] other Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   TraceEvent(TraceEvent&& other);
-  /**
-   * TraceEvent operator =.
+  /*!
+   * @brief Replaces the contents with those of another TraceEvent object using move semantics.
    *
-   * @param other Which instance move from.
+   * @param[in] other Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& operator=(TraceEvent&& other);
-  /**
-   * Set unique identification of a frame.
+  /*!
+   * @brief Sets a unique identification for a frame.
    *
-   * @param key Unique identification of a frame.
+   * @param[in] key The unique identification of a frame.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& SetKey(const RecordKey& key);
-  /**
-   * Set unique identification of a frame.
+  /*!
+   * @brief Sets a unique identification for a frame using move semantics.
    *
-   * @param key Unique identification of a frame.
+   * @param[in] key The unique identification of a frame.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& SetKey(RecordKey&& key);
-  /**
-   * Set module name.
+  /*!
+   * @brief Sets the name of a module.
    *
-   * @param module_name Module name.
+   * @param[in] module_name The name of a module.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& SetModuleName(const std::string& module_name);
-  /**
-   * Set module name.
+  /*!
+   * @brief Sets the name of a module using move semantics.
    *
-   * @param module_name Module name.
+   * @param[in] module_name The name of a module.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& SetModuleName(std::string&& module_name);
-  /**
-   * Set process name.
+  /*!
+   * @brief Sets the name of a process.
    *
-   * @param process_name Process name.
+   * @param[in] process_name The name of a process.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& SetProcessName(const std::string& process_name);
-  /**
-   * Set process name.
+  /*!
+   * @brief Sets the name of a process using move semantics.
    *
-   * @param process_name Process name.
+   * @param[in] process_name The name of a process.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& SetProcessName(std::string&& process_name);
-  /**
-   * Set time.
+  /*!
+   * @brief Sets the timestamp of this event.
    *
-   * @param time Time.
+   * @param[in] time The timestamp of the event.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& SetTime(const Time& time);
-  /**
-   * Set time.
+  /*!
+   * @brief Sets the timestamp of this event using move semantics.
    *
-   * @param time Time.
+   * @param[in] time The timestamp of the event.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& SetTime(Time&& time);
-  /**
-   * Set event level.
+  /*!
+   * @brief Sets the level of this event.
    *
-   * @param level event level.
+   * @param[in] level the level of the event.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& SetLevel(const Level& level);
-  /**
-   * Set event type.
+  /*!
+   * @brief Sets the type of this event.
    *
-   * @param type event type.
+   * @param[in] type The type of th event.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceEvent& SetType(const Type& type);
-};  // struct TraceEvent
+};  // class TraceEvent
 
+/*!
+ * @struct TraceElem
+ *
+ * @brief The TraceElem is a structure describing a trace element used by profilers.
+ */
 struct TraceElem {
-  RecordKey key;                ///< Unique identification of a frame.
-  Time time;                    ///< Event time.
-  TraceEvent::Type type;        ///< Event type. Process start or process end.
+  RecordKey key;          /*!< The unique identification of a frame. */
+  Time time;              /*!< The timestamp of an event. */
+  TraceEvent::Type type;  /*!< The type of an event. It could be START or END. */
 
-  /*
-   * TraceElem constructor.
+  /*!
+   * @brief Constructs a TraceElem object by using default constructor.
+   *
+   * @return No return value.
    */
   TraceElem() = default;
-  /**
-   * TraceElem copy constructor.
+  /*!
+   * @brief Constructs a TraceElem object with the copy of the contents of another object.
    *
-   * @param other which instance copy from.
+   * @param[in] other Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   TraceElem(const TraceElem& other) = default;
-  /**
-   * TraceElem operator =.
+  /*!
+   * @brief Replaces the contents with a copy of the contents of another TraceElem object.
    *
-   * @param other Which instance copy from.
+   * @param[in] other Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceElem& operator=(const TraceElem& other) = default;
-  /**
-   * TraceElem move constructor.
+  /*!
+   * @brief Constructs a TraceElem object with the contents of another object using move semantics.
    *
-   * @param other which instance move from.
+   * @param[in] other Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   TraceElem(TraceElem&& other);
-  /**
-   * TraceElem operator =.
+  /*!
+   * @brief Replaces the contents with those of another TraceElem object using move semantics.
    *
-   * @param other Which instance move from.
+   * @param[in] other Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   TraceElem& operator=(TraceElem&& other);
-  /**
-   * TraceElem constructor.
+  /*!
+   * @brief Constructs a TraceElem object with a trace event.
    *
-   * @param event Trace event.
+   * @param[in] event A specific trace event instance.
+   *
+   * @return No return value.
    */
   explicit TraceElem(const TraceEvent& event);
-  /**
-   * TraceElem constructor.
+  /*!
+   * @brief Constructs a TraceElem object with a trace event using move semantics.
    *
-   * @param event Trace event.
+   * @param[in] event A specific trace event instance.
+   *
+   * @return No return value.
    */
   explicit TraceElem(TraceEvent&& event);
 };  // struct TraceElem
 
-/**
- * Type of trace data for a process.
- **/
+/*!
+ * Defines an alias for the std::vector<TraceElem>. ProcessTrace now denotes a vector which contains trace elements for
+ * a process.
+ */
 using ProcessTrace = std::vector<TraceElem>;
 
-/**
- * Type of trace data for a module.
- **/
+
+/*!
+ * Defines an alias for the std::unordered_map<std::string, ProcessTrace>. ModuleTrace now denotes an unordered map
+ * which contains the pairs of the process name and the ProcessTrace object for a module.
+ */
 using ModuleTrace = std::unordered_map<std::string, ProcessTrace>;
 
-/**
- * Trace data for a pipeline.
- **/
+/*!
+ * @struct PipelineTrace
+ *
+ * @brief The PipelineTrace is a structure describing the trace data of a pipeline.
+ */
 struct PipelineTrace {
-  std::unordered_map<std::string, ProcessTrace> process_traces;  ///> process traces
-  std::unordered_map<std::string, ModuleTrace> module_traces;    ///> module traces
-  /*
-   * PipelineTrace constructor.
+  std::unordered_map<std::string, ProcessTrace> process_traces;  /*!< The trace data of processes. */
+  std::unordered_map<std::string, ModuleTrace> module_traces;    /*!< The trace data of modules. */
+  /*!
+   * @brief Constructs a PipelineTrace object by using default constructor.
+   *
+   * @return No return value.
    */
   PipelineTrace() = default;
-  /**
-   * PipelineTrace copy constructor.
+  /*!
+   * @brief Constructs a PipelineTrace object with the copy of the contents of another object.
    *
-   * @param other which instance copy from.
+   * @param[in] other Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   PipelineTrace(const PipelineTrace& other) = default;
-  /**
-   * PipelineTrace operator =.
+  /*!
+   * @brief Replaces the contents with a copy of the contents of another PipelineTrace object.
    *
-   * @param other Which instance copy from.
+   * @param[in] other Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   PipelineTrace& operator=(const PipelineTrace& other) = default;
-  /**
-   * PipelineTrace move constructor.
+  /*!
+   * @brief Constructs a PipelineTrace object with the contents of another object using move semantics.
    *
-   * @param other which instance move from.
+   * @param[in] other Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   PipelineTrace(PipelineTrace&& other);
-  /**
-   * PipelineTrace operator =.
+  /*!
+   * @brief Replaces the contents with those of another PipelineTrace object using move semantics.
    *
-   * @param other Which instance move from.
+   * @param[in] other Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
@@ -299,9 +352,7 @@ inline TraceEvent::TraceEvent(const RecordKey& key) : key(key) {}
 
 inline TraceEvent::TraceEvent(RecordKey&& key) : key(std::forward<RecordKey>(key)) {}
 
-inline TraceEvent::TraceEvent(TraceEvent&& other) {
-  *this = std::forward<TraceEvent>(other);
-}
+inline TraceEvent::TraceEvent(TraceEvent&& other) { *this = std::forward<TraceEvent>(other); }
 
 inline TraceEvent& TraceEvent::operator=(TraceEvent&& other) {
   key = std::move(other.key);
@@ -363,9 +414,7 @@ inline TraceEvent& TraceEvent::SetType(const Type& type) {
   return *this;
 }
 
-inline TraceElem::TraceElem(TraceElem&& other) {
-  *this = std::forward<TraceElem>(other);
-}
+inline TraceElem::TraceElem(TraceElem&& other) { *this = std::forward<TraceElem>(other); }
 
 inline TraceElem& TraceElem::operator=(TraceElem&& other) {
   key = std::move(other.key);
@@ -386,9 +435,7 @@ inline TraceElem::TraceElem(TraceEvent&& event) {
   type = event.type;
 }
 
-inline PipelineTrace::PipelineTrace(PipelineTrace&& other) {
-  *this = std::forward<PipelineTrace>(other);
-}
+inline PipelineTrace::PipelineTrace(PipelineTrace&& other) { *this = std::forward<PipelineTrace>(other); }
 
 inline PipelineTrace& PipelineTrace::operator=(PipelineTrace&& other) {
   process_traces = std::move(other.process_traces);

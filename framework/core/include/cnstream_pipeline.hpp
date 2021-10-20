@@ -28,7 +28,6 @@
  */
 
 #include <atomic>
-#include <bitset>
 #include <future>
 #include <iostream>
 #include <memory>
@@ -51,402 +50,312 @@
 namespace cnstream {
 
 class Connector;
+struct NodeContext;
+template<typename T>
+class CNGraph;
+class IdxManager;
 
 /**
- * Data stream message type.
+ * @enum StreamMsgType
+ *
+ * @brief Enumeration variables describing the data stream message type.
  */
-enum StreamMsgType {
-  EOS_MSG = 0,     ///< The end of a stream message. The stream has received EOS message in all modules.
-  ERROR_MSG,       ///< An error message. The stream process has failed in one of the modules.
-  STREAM_ERR_MSG,  ///< Stream error message, stream process failed at source.
-  FRAME_ERR_MSG,   ///< Frame error message, frame decode failed at source.
-  USER_MSG0 = 32,  ///< Reserved message. You can define your own messages.
-  USER_MSG1,       ///< Reserved message. You can define your own messages.
-  USER_MSG2,       ///< Reserved message. You can define your own messages.
-  USER_MSG3,       ///< Reserved message. You can define your own messages.
-  USER_MSG4,       ///< Reserved message. You can define your own messages.
-  USER_MSG5,       ///< Reserved message. You can define your own messages.
-  USER_MSG6,       ///< Reserved message. You can define your own messages.
-  USER_MSG7,       ///< Reserved message. You can define your own messages.
-  USER_MSG8,       ///< Reserved message. You can define your own messages.
-  USER_MSG9        ///< Reserved message. You can define your own messages.
-};                 // enum StreamMsg
+enum class StreamMsgType {
+  EOS_MSG = 0,    /*!< The end of a stream message. The stream has received EOS message in all modules. */
+  ERROR_MSG,      /*!< An error message. The stream process has failed in one of the modules. */
+  STREAM_ERR_MSG, /*!< Stream error message. */
+  FRAME_ERR_MSG,  /*!< Frame error message. */
+  USER_MSG0 = 32, /*!< Reserved message. You can define your own messages. */
+  USER_MSG1,      /*!< Reserved message. You can define your own messages. */
+  USER_MSG2,      /*!< Reserved message. You can define your own messages. */
+  USER_MSG3,      /*!< Reserved message. You can define your own messages. */
+  USER_MSG4,      /*!< Reserved message. You can define your own messages. */
+  USER_MSG5,      /*!< Reserved message. You can define your own messages. */
+  USER_MSG6,      /*!< Reserved message. You can define your own messages. */
+  USER_MSG7,      /*!< Reserved message. You can define your own messages. */
+  USER_MSG8,      /*!< Reserved message. You can define your own messages. */
+  USER_MSG9       /*!< Reserved message. You can define your own messages. */
+};                // enum StreamMsg
 
 /**
- * Specifies a stream message.
+ * @struct StreamMsg
+ *
+ * @brief The StreamMsg is a structure holding the information of a stream message.
  *
  * @see StreamMsgType.
  */
 struct StreamMsg {
-  StreamMsgType type;       ///< The type of a message.
-  std::string stream_id;    ///< Stream id, set by user in CNFrameINfo::stream_id.
-  std::string module_name;  ///< The module that posts this event.
-  int64_t pts = -1;  ///< The pts of this frame.
+  StreamMsgType type;      /*!< The type of a message. */
+  std::string stream_id;   /*!< Stream ID, set in CNFrameInfo::stream_id. */
+  std::string module_name; /*!< The module that posts this event. */
+  int64_t pts = -1;        /*!< The PTS (Presentation Timestamp) of this frame. */
 };
 
 /**
- * @brief Stream message observer.
+ * @class StreamMsgObserver
  *
- * Receives stream messages from a pipeline.
+ * @brief Receives stream messages from a pipeline.
  * To receive stream messages from the pipeline, you can define a class to inherit the
  * StreamMsgObserver class and call the ``Update`` function. The
- * observer instance is bounded to the pipeline using the
- * Pipeline::SetStreamMsgObserver function .
+ * observer instance is bounded to the pipeline using the Pipeline::SetStreamMsgObserver function .
  *
  * @see Pipeline::SetStreamMsgObserver StreamMsg StreamMsgType.
  */
 class StreamMsgObserver {
  public:
   /**
-   * Receives stream messages from a pipeline passively.
+   * @brief Receives stream messages from a pipeline passively.
    *
-   * @param msg The stream message from a pipeline.
+   * @param[in] msg The stream message from a pipeline.
+   *
+   * @return No return value.
    */
   virtual void Update(const StreamMsg& msg) = 0;
+
+  /**
+   * @brief Default destructor to destruct stream message observer.
+   *
+   * @return No return value.
+   */
   virtual ~StreamMsgObserver() = default;
 };  // class StreamMsgObserver
 
 /**
- * The link status between modules.
- */
-struct LinkStatus {
-  bool stopped;                      ///< Whether the data transmissions between the modules are stopped.
-  std::vector<uint32_t> cache_size;  ///< The size of each queue that is used to cache data between modules.
-};
-
-static constexpr uint32_t MAX_STREAM_NUM = 64;
-
-/**
- * @brief ModuleId&StreamIdx manager for pipeline.
+ * @class Pipeline
  *
- * Allocates and deallocates id for Pipeline modules & Streams.
- *
- */
-class IdxManager {
- public:
-  IdxManager() = default;
-  IdxManager(const IdxManager&) = delete;
-  IdxManager& operator=(const IdxManager&) = delete;
-  uint32_t GetStreamIndex(const std::string& stream_id);
-  void ReturnStreamIndex(const std::string& stream_id);
-  size_t GetModuleIdx();
-  void ReturnModuleIdx(size_t id_);
-
- private:
-  std::mutex id_lock;
-  std::unordered_map<std::string, uint32_t> stream_idx_map;
-  std::bitset<MAX_STREAM_NUM> stream_bitset;
-  uint64_t module_id_mask_ = 0;
-};  // class IdxManager
-
-/**
- * The manager of the modules.
- * Manages data transmission between modules, and
- * controls messages delivery.
+ * @brief Pipeline is the manager of the modules, which manages data transmission between modules and controls messages delivery.
  */
 class Pipeline : private NonCopyable {
  public:
   /**
-   * Constructor.
+   * @brief A constructor to construct one pipeline.
    *
-   * @param name The name of the pipeline.
+   * @param[in] name The name of the pipeline.
+   *
+   * @return No return value.
    */
   explicit Pipeline(const std::string& name);
-  ~Pipeline();
-  const std::string& GetName() const { return name_; }
   /**
-   * Provides data for this pipeline that is used in source module or the module
-   * transmission by itself.
+   * @brief A destructor to destruct one pipeline.
    *
-   * @param module The module that provides data.
-   * @param data The data that is transmitted to the pipeline.
+   * @param[in] name The name of the pipeline.
    *
-   * @return Returns true if this function has run successfully. Returns false if the module
-   *         is not added in the pipeline or the pipeline has been stopped.
-   *
-   * @see Module::Process.
+   * @return No return value.
    */
-  bool ProvideData(const Module* module, std::shared_ptr<CNFrameInfo> data);
-
+  virtual ~Pipeline();
   /**
-   * Gets the event bus in the pipeline.
+   * @brief Gets the pipeline's name.
    *
-   * @return Returns the event bus.
+   * @return Returns the pipeline's name.
    */
-  EventBus* GetEventBus() const { return event_bus_; }
+  const std::string& GetName() const;
   /**
-   * Starts a pipeline.
+   * @brief Builds a pipeline by module configurations.
+   *
+   * @param[in] module_configs The configurations of a module.
+   * @param[in] profiler_config The configuration of a profiler.
+   *
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
+   */
+  bool BuildPipeline(const std::vector<CNModuleConfig>& module_configs,
+                     const ProfilerConfig& profiler_config = ProfilerConfig());
+  /**
+   * @brief Builds a pipeline by graph configuration.
+   *
+   * @param[in] graph_config The configuration of a graph.
+   *
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
+   */
+  bool BuildPipeline(const CNGraphConfig& graph_config);
+  /**
+   * @brief Builds a pipeline from a JSON file.
+   * You can learn to write a configuration file by looking at the description of CNGraphConfig.
+   *
+   * @see CNGraphConfig
+   *
+   * @param[in] config_file The configuration file in JSON format.
+   *
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
+   *
+   */
+  bool BuildPipelineByJSONFile(const std::string& config_file);
+  /**
+   * @brief Starts a pipeline.
    * Starts data transmission in a pipeline.
    * Calls the ``Open`` function for all modules. See Module::Open.
-   * Links modules.
    *
    * @return Returns true if this function has run successfully. Returns false if the ``Open``
-   *         function did not run successfully in one of the modules, or
-   *         the link modules failed.
+   *         function did not run successfully in one of the modules, or the link modules failed.
    */
   bool Start();
   /**
-   * Stops data transmissions in a pipeline.
+   * @brief Stops data transmissions in a pipeline.
    *
    * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
   bool Stop();
   /**
-   * The running status of a pipeline.
+   * @brief The running status of a pipeline.
    *
-   * @return Returns true if the pipeline is running. Returns false if the pipeline is
-   *         not running.
+   * @return Returns true if the pipeline is running. Returns false if the pipeline is not running.
    */
-  inline bool IsRunning() const { return running_; }
-
- public:
+  bool IsRunning() const;
   /**
-   * Adds module configurations in a pipeline.
+   * @brief Gets a module in current pipeline by name.
    *
-   * @param The configuration of a module.
+   * @param[in] module_name The module name specified in the module configuration.
+   * If you specify a module name written in the module configuration, the first module with the same name as
+   * the specified module name in the order of DFS will be returned.
+   * When there are modules with the same name as other graphs in the subgraph, you can also find the
+   * module by adding the graph name prefix divided by slash. eg. pipeline_name/subgraph1/module1.
    *
-   * @return Returns 0 if this function has run successfully. Otherwise, returns -1.
+   * @return Returns the module pointer if the module has been added to
+   *         the current pipeline. Otherwise, returns nullptr.
    */
-  int AddModuleConfig(const CNModuleConfig& config);
+  Module* GetModule(const std::string& module_name) const;
   /**
-   * Builds a pipeline by module configurations.
+   * @brief Gets the module configuration by the module name.
    *
-   * @param module_configs The configurations of a module.
-   * 
-   * @param profiler_config The configuration of profiler.
-   *
-   * @return Returns 0 if this function has run successfully. Otherwise, returns -1.
-   */
-  int BuildPipeline(const std::vector<CNModuleConfig>& module_configs,
-                    const ProfilerConfig& profiler_config = ProfilerConfig());
-  /**
-   * Builds a pipeline from a JSON file.
-   * @code
-   * {
-   *   "source" : {
-   *                 "class_name" : "cnstream::DataSource",
-   *                 "parallelism" : 0,
-   *                 "next_modules" : ["detector"],
-   *                 "custom_params" : {
-   *                   "decoder_type" : "mlu",
-   *                   "device_id" : 0
-   *                 }
-   *              },
-   *    "detector" : {...}
-   * }
-   * @endcode
-   *
-   * @param config_file The configuration file in JSON format.
-   *
-   * @return Returns 0 if this function has run successfully. Otherwise, returns -1.
-   *
-   */
-  int BuildPipelineByJSONFile(const std::string& config_file);
-  /**
-   * Gets a module in a pipeline by name.
-   *
-   * @param moduleName The module name specified in the module constructor.
-   *
-   * @return Returns the module pointer if the module named ``moduleName`` has been added to
-   *         the pipeline. Otherwise, returns nullptr.
-   */
-  Module* GetModule(const std::string& moduleName);
-  /**
-   * @brief Gets end module in pipeline(only valid when pipeline graph converged at end module).
-   *
-   * @return Returns endmodule pointer when endmodule found and pipeline graph is converged at it,
-   *   otherwise return nullptr.
-   */
-  Module* GetEndModule();
-  /**
-   * Gets parameter set of a module.
-   * Module parameter set is used in Module::Open. It provides the ability for modules to
-   * customize parameters.
-   *
-   * @param moduleName The module name specified in the module constructor.
-   *
-   * @return Returns the customized parameters of the module. If the module does not
-   *         have customized parameters or the module has not been
-   *         added to this pipeline, then the value of size (ModuleParamSet::size) is 0.
-   *
-   * @see Module::Open.
-   */
-  ModuleParamSet GetModuleParamSet(const std::string& moduleName);
-  /**
-   * Gets the module configuration by the module name.
-   *
-   * @param module_name The module name specified in module constructor.
+   * @param[in] module_name The module name specified in module configuration.
+   * The module name can be specified by two ways, see Pipeline::GetModule for detail.
    *
    * @return Returns module configuration if this function has run successfully.
    *         Returns NULL if the module specified by ``module_name`` has not been
-   *         added to this pipeline.
+   *         added to the current pipeline.
    */
-  CNModuleConfig GetModuleConfig(const std::string& module_name);
-
+  CNModuleConfig GetModuleConfig(const std::string& module_name) const;
   /**
-   * Adds the module to a pipeline.
+   * @brief Checks if profiling is enabled.
    *
-   * @param module The module instance to be added to this pipeline.
-   *
-   * @return Returns true if this function has run successfully. Returns false if
-   *         the module has been added to this pipeline.
-   */
-  bool AddModule(std::shared_ptr<Module> module);
-
-  /**
-   * Sets the parallelism and conveyor capacity attributes of the module.
-   *
-   * The SetModuleParallelism function is deprecated. Please use the SetModuleAttribute function instead.
-   *
-   * @param module The module to be configured.
-   * @param parallelism Module parallelism, as well as Module's conveyor number of input connector.
-   * @param queue_capacity The queue capacity of the Module input conveyor.
-   *
-   * @return Returns true if this function has run successfully. Returns false if this module
-   *         has not been added to this pipeline.
-   *
-   * @note You must call this function before calling Pipeline::Start.
-   *
-   * @see CNModuleConfig::parallelism.
-   */
-  bool SetModuleAttribute(std::shared_ptr<Module> module, uint32_t parallelism, size_t queue_capacity = 20);
-
-  /**
-   * Links two modules.
-   * The upstream node will process data before the downstream node.
-   *
-   * @param up_node The upstream module.
-   * @param down_node The downstream module.
-   *
-   * @return Returns the link-index if this function has run successfully. The link-index can
-   *         used to query link status between ``up_node`` and ``down_node``.
-   *         See Pipeline::QueryStatus for details. Returns NULL if one of the two nodes
-   *         has not been added to this pipeline.
-   *
-   * @note Both ``up_node`` and ``down_node`` should be added to this pipeline before calling
-   *       this function.
-   *
-   * @see Pipeline::QueryStatus.
-   */
-  std::string LinkModules(std::shared_ptr<Module> up_node, std::shared_ptr<Module> down_node);
-
-  /**
-   * Queries the link status by link-index.
-   * link-index is returned by Pipeline::LinkModules.
-   *
-   * @param status The link status to query.
-   * @param link_id The Link-index returned by Pipeline::LinkModules,  in shape "up node name --> down node name".
-   *
-   * @return Returns true if this function has run successfully. Otherwise, returns false.
-   *
-   * @see Pipeline::LinkModules.
-   */
-  bool QueryLinkStatus(LinkStatus* status, const std::string& link_id);
-
-  /**
-   * Is profiling enabled.
-   * 
    * @return Returns true if profiling is enabled.
    **/
   bool IsProfilingEnabled() const;
-
   /**
-   * Is tracing enabled
-   * 
+   * @brief Checks if tracing is enabled.
+   *
    * @return Returns true if tracing is enabled.
    **/
   bool IsTracingEnabled() const;
-
-  /* -----stream message methods------ */
- public:
   /**
-   * Binds the stream message observer with this pipeline to receive stream message from
-   * this pipeline.
+   * @brief Provides data for the pipeline that is used in source module or the module transmitted by itself.
    *
-   * @param observer The stream message observer.
+   * @param[in] module The module that provides data.
+   * @param[in] data The data that is transmitted to the pipeline.
    *
-   * @return Void.
+   * @return Returns true if this function has run successfully. Returns false if the module
+   *         is not added in the pipeline or the pipeline has been stopped.
+   *
+   * @note ProvideData can be only called by the head modules in pipeline. A head module means the module
+   * has no parent modules.
+   *
+   * @see Module::Process.
+   */
+  bool ProvideData(const Module* module, std::shared_ptr<CNFrameInfo> data);
+  /**
+   * @brief Gets the event bus in the pipeline.
+   *
+   * @return Returns the event bus.
+   */
+  EventBus* GetEventBus() const;
+  /**
+   * @brief Binds the stream message observer with a pipeline to receive stream message from this pipeline.
+   *
+   * @param[in] observer The stream message observer.
+   *
+   * @return No return value.
    *
    * @see StreamMsgObserver.
    */
   void SetStreamMsgObserver(StreamMsgObserver* observer);
   /**
-   * Gets the stream message observer that has been bound with this pipeline.
+   * @brief Gets the stream message observer that has been bound with this pipeline.
    *
    * @return Returns the stream message observer that has been bound with this pipeline.
    *
    * @see Pipeline::SetStreamMsgObserver.
    */
   StreamMsgObserver* GetStreamMsgObserver() const;
-
-  /** profiler **/
-  PipelineProfiler* GetProfiler() const;
-
-  /** tracer **/
-  PipelineTracer* GetTracer() const;
-
-  /* called by pipeline */
   /**
-   * Registers a callback to be called after the frame process is done.
+   * @brief Gets this pipeline's profiler.
    *
-   * @return Void.
+   * @return Returns profiler.
+   */
+  PipelineProfiler* GetProfiler() const;
+  /**
+   * @brief Gets this pipeline's tracer.
+   *
+   * @return Returns tracer.
+   */
+  PipelineTracer* GetTracer() const;
+  /**
+   * @brief Checks if module is root node of pipeline or not.
+   * The module name can be specified by two ways, see Pipeline::GetModule for detail.
+   *
+   * @param[in] module_name module name.
+   *
+   * @return Returns true if it's root node, otherwise returns false.
+   **/
+  bool IsRootNode(const std::string& module_name) const;
+  /**
+   * @brief Checks if module is leaf node of pipeline.
+   * The module name can be specified by two ways, see Pipeline::GetModule for detail.
+   *
+   * @param[in] module_name module name.
+   *
+   * @return Returns true if it's leaf node, otherwise returns false.
+   **/
+  bool IsLeafNode(const std::string& module_name) const;
+
+  /**
+   * @brief Registers a callback to be called after the frame process is done.
+   *
+   * @param[in] callback The call back function.
+   *
+   * @return No return value.
    *
    */
-  inline void RegistIPCFrameDoneCallBack(std::function<void(std::shared_ptr<CNFrameInfo>)> callback) {
-    frame_done_callback_ = std::move(callback);
-  }
-
-  /**
-   * Return if module is root node of pipeline.
-   * 
-   * @param node_name module name.
-   *
-   * @return True for yes, false for no.
-   **/
-  bool IsRootNode(const std::string& node_name) const;
-
-  /**
-   * Return if module is leaf node of pipeline.
-   * 
-   * @param node_name module name.
-   *
-   * @return True for yes, false for no.
-   **/
-  bool IsLeafNode(const std::string& node_name) const;
-
-  /**
-   * Return modules' names.
-   *
-   * @param none
-   *
-   * @return modules' names.
-   **/
-  std::vector<std::string> GetModuleNames();
+  void RegisterFrameDoneCallBack(const std::function<void(std::shared_ptr<CNFrameInfo>)>& callback);
 
  private:
   /** called by BuildPipeline **/
-  void GenerateRouteMask();
+  bool CreateModules();
+  void GenerateModulesMask();
+  bool CreateConnectors();
 
   /* ------Internal methods------ */
+  bool PassedByAllModules(uint64_t mask) const;
+  void OnProcessStart(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data);
+  void OnProcessEnd(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data);
+  void OnProcessFailed(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data, int ret);
+  void OnDataInvalid(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data);
+  void OnEos(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data);
+  void OnPassThrough(const std::shared_ptr<CNFrameInfo>& data);
+
+  void TransmitData(NodeContext* context, const std::shared_ptr<CNFrameInfo>& data);
+  void TaskLoop(NodeContext* context, uint32_t conveyor_idx);
+  EventHandleFlag DefaultBusWatch(const Event& event);
   void UpdateByStreamMsg(const StreamMsg& msg);
   void StreamMsgHandleFunc();
-  bool ShouldTransmit(std::shared_ptr<CNFrameInfo> finfo, Module* module) const;
-  bool ShouldTransmit(uint64_t passed_modules_mask, Module* module) const;
-  bool PassedByAllModules(std::shared_ptr<CNFrameInfo> finfo) const;
-  bool PassedByAllModules(uint64_t passed_modules_mask) const;
 
- private:
-#ifdef UNIT_TEST
+  std::unique_ptr<CNGraph<NodeContext>> graph_;
 
- public:
-#endif
-  void TransmitData(const std::string node_name, std::shared_ptr<CNFrameInfo> data);
+  std::string name_;
+  std::atomic<bool> running_{false};
+  std::unique_ptr<EventBus> event_bus_ = nullptr;
 
-  void TaskLoop(std::string node_name, uint32_t conveyor_idx);
+  std::unique_ptr<IdxManager> idxManager_ = nullptr;
+  std::vector<std::thread> threads_;
 
-  void EventLoop();
+  // message observer members
+  ThreadSafeQueue<StreamMsg> msgq_;
+  std::thread smsg_thread_;
+  StreamMsgObserver* smsg_observer_ = nullptr;
+  std::atomic<bool> exit_msg_loop_{false};
 
-  EventHandleFlag DefaultBusWatch(const Event& event);
+  uint64_t all_modules_mask_ = 0;
+  std::unique_ptr<PipelineProfiler> profiler_;
+
+  std::function<void(std::shared_ptr<CNFrameInfo>)> frame_done_cb_ = NULL;
 
   /**
    * StreamIdx helpers for SourceModule instances.
@@ -480,84 +389,68 @@ class Pipeline : private NonCopyable {
       idxManager_->ReturnModuleIdx(idx);
     }
   }
-
-  /**
-   * The module associated information.
-   */
-  struct ModuleAssociatedInfo {
-    uint32_t parallelism = 0;
-    std::shared_ptr<Connector> connector;
-    std::set<std::string> down_nodes;
-    std::vector<std::string> input_connectors;
-    std::vector<std::string> output_connectors;
-  };
-
-  std::string name_;
-  std::atomic<bool> running_{false};
-  EventBus* event_bus_ = nullptr;
-  IdxManager* idxManager_ = nullptr;
-  std::function<void(std::shared_ptr<CNFrameInfo>)> frame_done_callback_ = nullptr;
-
-  ThreadSafeQueue<StreamMsg> msgq_;
-  std::thread smsg_thread_;
-  StreamMsgObserver* smsg_observer_ = nullptr;
-  std::atomic<bool> exit_msg_loop_{false};
-
-  std::vector<std::thread> threads_;
-  std::unordered_map<std::string, std::shared_ptr<Module>> modules_map_;
-  std::unordered_map<std::string, std::shared_ptr<Connector>> links_;
-  std::unordered_map<std::string, ModuleAssociatedInfo> modules_;
-  std::unordered_map<std::string, CNModuleConfig> modules_config_;
-  std::unordered_map<std::string, std::vector<std::string>> connections_config_;
-  /** first: root node name, second: mask used in Transmit **/
-  std::unordered_map<std::string, uint64_t> route_masks_;
-  uint64_t all_modules_mask_ = 0;
-
-  std::vector<std::string> stream_ids_;
-
-  ProfilerConfig profiler_config_;
-  std::unique_ptr<PipelineProfiler> profiler_;
 };  // class Pipeline
 
+inline const std::string& Pipeline::GetName() const {
+  return name_;
+}
+
+inline bool Pipeline::BuildPipeline(const std::vector<CNModuleConfig>& module_configs,
+    const ProfilerConfig& profiler_config) {
+  CNGraphConfig graph_config;
+  graph_config.name = GetName();
+  graph_config.module_configs = module_configs;
+  graph_config.profiler_config = profiler_config;
+  return BuildPipeline(graph_config);
+}
+
+inline bool Pipeline::BuildPipelineByJSONFile(const std::string& config_file) {
+  CNGraphConfig graph_config;
+  if (!graph_config.ParseByJSONFile(config_file)) {
+    LOGE(CORE) << "Parse graph config file failed.";
+    return false;
+  }
+  return BuildPipeline(graph_config);
+}
+
+inline bool Pipeline::IsRunning() const {
+  return running_;
+}
+
+inline EventBus* Pipeline::GetEventBus() const {
+  return event_bus_.get();
+}
+
+inline void Pipeline::SetStreamMsgObserver(StreamMsgObserver* observer) {
+  smsg_observer_ = observer;
+}
+
+inline StreamMsgObserver* Pipeline::GetStreamMsgObserver() const {
+  return smsg_observer_;
+}
+
 inline bool Pipeline::IsProfilingEnabled() const {
-  return profiler_config_.enable_profiling;
+  return profiler_ ? profiler_->GetConfig().enable_profiling : false;
 }
 
 inline bool Pipeline::IsTracingEnabled() const {
-  return profiler_config_.enable_tracing;
+  return profiler_ ? profiler_->GetConfig().enable_tracing : false;
 }
 
 inline PipelineProfiler* Pipeline::GetProfiler() const {
-  return profiler_.get();
+  return IsProfilingEnabled() ? profiler_.get() : nullptr;
 }
 
 inline PipelineTracer* Pipeline::GetTracer() const {
-  return IsTracingEnabled() ? GetProfiler()->GetTracer() : nullptr;
+  return IsTracingEnabled() ? profiler_->GetTracer() : nullptr;
 }
 
-inline bool Pipeline::ShouldTransmit(std::shared_ptr<CNFrameInfo> finfo, Module* module) const {
-  return ShouldTransmit(finfo->GetModulesMask(), module);
+inline bool Pipeline::PassedByAllModules(uint64_t mask) const {
+  return mask == all_modules_mask_;
 }
 
-inline bool Pipeline::ShouldTransmit(uint64_t passed_modules_mask, Module* module) const {
-  uint64_t modules_mask = module->GetModulesMask();
-  return (passed_modules_mask & modules_mask) == modules_mask;
-}
-
-inline bool Pipeline::PassedByAllModules(std::shared_ptr<CNFrameInfo> finfo) const {
-  return PassedByAllModules(finfo->GetModulesMask());
-}
-
-inline bool Pipeline::PassedByAllModules(uint64_t passed_modules_mask) const {
-  return passed_modules_mask == all_modules_mask_;
-}
-
-inline bool Pipeline::IsRootNode(const std::string& node_name) const {
-  return !modules_.find(node_name)->second.input_connectors.size();
-}
-
-inline bool Pipeline::IsLeafNode(const std::string& node_name) const {
-  return !modules_.find(node_name)->second.down_nodes.size();
+inline void Pipeline::RegisterFrameDoneCallBack(const std::function<void(std::shared_ptr<CNFrameInfo>)>& callback) {
+  frame_done_cb_ = callback;
 }
 
 }  // namespace cnstream

@@ -34,7 +34,7 @@
 namespace py = pybind11;
 #endif
 
-#include "cnstream_core.hpp"
+#include "cnstream_frame.hpp"
 #include "cnstype.h"
 
 class PipelineHandler;
@@ -79,6 +79,7 @@ class PyCNService {
   CNSDataObserver *data_observer_ = nullptr;
   PipelineHandler *ppipe_handler_ = nullptr;
   CNSQueue<CNSFrame> *cache_frameq_ = nullptr;
+  std::string stream_id_ = "";
 };
 
 #endif

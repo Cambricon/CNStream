@@ -24,14 +24,10 @@
 #include <string>
 #include <utility>
 
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
-#else
-#error OpenCV required
 #endif
 #include "cnstream_frame_va.hpp"
 #include "cnstream_module.hpp"
@@ -108,12 +104,12 @@ TEST(Osd, Process) {
   data->timestamp = 1000;
   frame->width = width;
   frame->height = height;
-  frame->ptr_cpu[0] = img.data;
+  void* ptr_cpu[1] = {img.data};
   frame->stride[0] = width;
   frame->ctx.dev_type = DevContext::DevType::CPU;
-  frame->fmt = CN_PIXEL_FORMAT_BGR24;
-  frame->CopyToSyncMem(false);
-  data->datas[CNDataFramePtrKey] = frame;
+  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
+  frame->CopyToSyncMem(ptr_cpu, false);
+  data->collection.Add(kCNDataFrameTag, frame);
 
   std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
   auto obj = std::make_shared<CNInferObject>();
@@ -137,18 +133,10 @@ TEST(Osd, Process) {
     objs_holder->objs_.push_back(obj);
   }
 
-  data->datas[cnstream::CNInferObjsPtrKey] = objs_holder;
+  data->collection.Add(kCNInferObjsTag, objs_holder);
   EXPECT_EQ(osd->Process(data), 0);
   EXPECT_EQ(osd->Process(data), 0);
   frame->width = -1;
-  data->datas[CNDataFramePtrKey] = frame;
-  EXPECT_EQ(osd->Process(data), -1);
-  frame->width = 1920;
-  frame->ptr_cpu[0] = nullptr;
-  frame->ptr_mlu[0] = nullptr;
-  frame->cpu_data = nullptr;
-  frame->mlu_data = nullptr;
-  data->datas[CNDataFramePtrKey] = frame;
   EXPECT_EQ(osd->Process(data), -1);
 }
 
@@ -173,12 +161,12 @@ TEST(Osd, ProcessSecondary) {
   data->timestamp = 1000;
   frame->width = width;
   frame->height = height;
-  frame->ptr_cpu[0] = img.data;
+  void* ptr_cpu[1] = {img.data};
   frame->stride[0] = width;
   frame->ctx.dev_type = DevContext::DevType::CPU;
-  frame->fmt = CN_PIXEL_FORMAT_BGR24;
-  frame->CopyToSyncMem(false);
-  data->datas[CNDataFramePtrKey] = frame;
+  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
+  frame->CopyToSyncMem(ptr_cpu, false);
+  data->collection.Add(kCNDataFrameTag, frame);
 
   std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
   auto obj = std::make_shared<CNInferObject>();
@@ -212,7 +200,7 @@ TEST(Osd, ProcessSecondary) {
     objs_holder->objs_.push_back(obj);
   }
 
-  data->datas[cnstream::CNInferObjsPtrKey] = objs_holder;
+  data->collection.Add(kCNInferObjsTag, objs_holder);
   EXPECT_EQ(osd->Process(data), 0);
 }
 

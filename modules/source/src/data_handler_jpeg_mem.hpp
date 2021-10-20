@@ -60,9 +60,10 @@ class ESJpegMemHandlerImpl : public IDecodeResult, public SourceRender {
   std::string stream_id_;
   DataSourceParam param_;
 
- private:
 #ifdef UNIT_TEST
  public:  // NOLINT
+#else
+ private:  // NOLINT
 #endif
   bool InitDecoder();
   bool ProcessImage(ESPacket *pkt);
@@ -72,6 +73,9 @@ class ESJpegMemHandlerImpl : public IDecodeResult, public SourceRender {
   // maximum resolution 8K
   int max_width_ = 7680;
   int max_height_ = 4320;
+
+  std::atomic<bool> running_{false};
+  std::atomic<bool> eos_reached_{false};
 
 #ifdef UNIT_TEST
  public:  // NOLINT

@@ -25,10 +25,25 @@
 #include <string>
 
 #include "cnstream_config.hpp"
+#include "test_base.hpp"
 
 namespace cnstream {
 
-TEST(CoreProfilerConfig, ParseByJSONStr) {
+TEST(CoreConfig, ParseByJSONFile) {
+  class TestConfig : public CNConfigBase {
+   public:
+    bool ParseByJSONStr(const std::string& jstr) {return true;}
+  } test_config;
+  auto config_file = CreateTempFile("test_config");
+  EXPECT_TRUE(test_config.ParseByJSONFile(config_file.second));
+  EXPECT_TRUE(test_config.config_root_dir.empty());
+  // wrong path
+  EXPECT_FALSE(test_config.ParseByJSONFile("wrong_file_path"));
+  unlink(config_file.second.c_str());
+  close(config_file.first);
+}
+
+TEST(CoreConfig, ProfilerConfig) {
   ProfilerConfig config;
   std::string jstr = "{ \"enable_profiling\": true, \"enable_tracing\": true, \"trace_event_capacity\": 1}";
   std::string wrong_jstr0 = "{ \"enable_profiling\": true, \"enable_tracing\": true, \"trace_event_capacity\":";
@@ -48,27 +63,126 @@ TEST(CoreProfilerConfig, ParseByJSONStr) {
   EXPECT_EQ(1, config.trace_event_capacity);
 }
 
-TEST(CoreProfilerConfig, ParseByJSONFile) {
-  ProfilerConfig config;
-  static const std::string config_path = "profiler_config_test.json";
-  remove(config_path.c_str());
-  EXPECT_FALSE(config.ParseByJSONFile(config_path));
-  std::string jstr = "{ \"enable_profiling\": true, \"enable_tracing\": true, \"trace_event_capacity\": 1}";
-  std::string wrong_jstr1 = "{ \"enable_profiling\": \"ds\", \"enable_tracing\": true, \"trace_event_capacity\": 1}";
-  std::ofstream ofs(config_path);
-  ofs << wrong_jstr1;
-  ofs.close();
-  EXPECT_FALSE(config.ParseByJSONFile(config_path));
+TEST(CoreConfig, CNModuleConfig) {
+  CNModuleConfig config;
+  // case1: wrong json format
+  std::string jstr = "{\"parallelism\" : 1,}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case2: no class_name
+  jstr = "{\"parallelism\" : 1}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case3: class_name with wrong format
+  jstr = "{\"class_name\" : 3}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case4: parallelism with wrong fromat
+  jstr = "{\"class_name\" : \"test_class_name\","
+      "\"parallelism\" : \"wrong_format\"}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case5: max input queue size with wrong fromat
+  jstr = "{\"class_name\" : \"test_class_name\","
+      "\"max_input_queue_size\" : \"wrong_format\"}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case6: next modules not an array type
+  jstr = "{\"class_name\" : \"test_class_name\","
+      "\"next_modules\" : \"wrong_format\"}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case7: next modules not a string array
+  jstr = "{\"class_name\" : \"test_class_name\","
+      "\"next_modules\" : [1, \"test_next_module\"]}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case8: custom_params not an object type
+  jstr = "{\"class_name\" : \"test_class_name\","
+      "\"custom_params\" : \"wrong_type\"}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case9: success
+  jstr = "{\"class_name\" : \"test_class_name\","
+      "\"parallelism\" : 15,"
+      "\"max_input_queue_size\" : 30,"
+      "\"next_modules\" : [\"next_module1\", \"next_module2\"],"
+      "\"custom_params\" : {\"param1\" : 20, \"param2\" : \"param2_value\"}"
+      "}";
+  config.config_root_dir = "test_root_dir";
+  EXPECT_TRUE(config.ParseByJSONStr(jstr));
+  EXPECT_EQ(config.className, "test_class_name");
+  EXPECT_EQ(config.parallelism, 15);
+  EXPECT_EQ(config.maxInputQueueSize, 30);
+  EXPECT_EQ(config.next.size(), 2);
+  EXPECT_NE(config.next.find("next_module1"), config.next.end());
+  EXPECT_NE(config.next.find("next_module2"), config.next.end());
+  EXPECT_EQ(config.parameters.size(), 3);
+  EXPECT_EQ(config.parameters["param1"], "20");
+  EXPECT_EQ(config.parameters["param2"], "param2_value");
+  EXPECT_EQ(config.config_root_dir, config.parameters[CNS_JSON_DIR_PARAM_NAME]);
+}
 
-  ofs.open(config_path);
-  ofs << jstr;
-  ofs.close();
-  EXPECT_TRUE(config.ParseByJSONFile(config_path));
-  EXPECT_TRUE(config.enable_profiling);
-  EXPECT_TRUE(config.enable_tracing);
-  EXPECT_EQ(1, config.trace_event_capacity);
+TEST(CoreConfig, CNSubgraphConfig) {
+  CNSubgraphConfig config;
+  // case1: wrong json format
+  std::string jstr = "{,}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case2: no config path
+  jstr = "{}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case3: config path with wrong format
+  jstr = "{\"config_path\": 123}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case4: next modules not an array type
+  jstr = "{\"config_path\": \"test_config_path\","
+      "\"next_modules\" : \"wrong_format\"}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case5: next modules not a string array
+  jstr = "{\"config_path\": \"test_config_path\","
+      "\"next_modules\" : [1, \"test_next_module\"]}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case6: success
+  jstr = "{\"config_path\": \"test_config_path\","
+      "\"next_modules\" : [\"next_module1\", \"next_module2\"]"
+      "}";
+  config.config_root_dir = "test_root_dir/";
+  EXPECT_TRUE(config.ParseByJSONStr(jstr));
+  EXPECT_EQ("test_root_dir/test_config_path", config.config_path);
+  EXPECT_EQ("test_root_dir/test_config_path", config.config_path);
+  EXPECT_EQ(config.next.size(), 2);
+  EXPECT_NE(config.next.find("next_module1"), config.next.end());
+  EXPECT_NE(config.next.find("next_module2"), config.next.end());
+}
 
-  remove(config_path.c_str());
+TEST(CoreConfig, CNGraphConfig) {
+  CNGraphConfig config;
+  // case1: wrong json format
+  std::string jstr = "{,}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case2: wrong profiler config failed
+  jstr = "{\"profiler_config\" : { \"enable_profiling\": \"ds\", \"enable_tracing\": true,"
+      " \"trace_event_capacity\": 1}}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case3: wrong subgraph config
+  jstr = "{\"subgraph:test_subgraph\" : {}}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case4: wrong module config
+  jstr = "{\"test_module\" : {}}";
+  EXPECT_FALSE(config.ParseByJSONStr(jstr));
+  // case5: success
+  jstr = "{"
+      "\"profiler_config\" : {"
+        "\"enable_profiling\" : true,"
+        "\"enable_tracing\" : true"
+      "},"
+      "\"node1\" : {"
+        "\"class_name\" : \"test_class\","
+        "\"parallelism\" : 2,"
+        "\"max_input_queue_size\" : 15,"
+        "\"next_modules\" : [\"subgraph:node2\"]"
+      "},"
+      "\"subgraph:node2\" : {"
+        "\"config_path\" : \"test_config_path\""
+      "}"
+    "}";
+  EXPECT_TRUE(config.ParseByJSONStr(jstr));
+  EXPECT_EQ(1, config.module_configs.size());
+  EXPECT_EQ(1, config.subgraph_configs.size());
+  EXPECT_TRUE(config.profiler_config.enable_profiling);
+  EXPECT_TRUE(config.profiler_config.enable_tracing);
 }
 
 }  // namespace cnstream

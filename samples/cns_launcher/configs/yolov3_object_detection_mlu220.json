@@ -1,0 +1,17 @@
+{
+  "detector" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path" : "../../../data/models/yolov3_b4c4_argb_mlu220.cambricon",
+      "func_name" : "subnet0",
+      "postproc_name" : "PostprocYolov3",
+      "keep_aspect_ratio" : "true",
+      "threshold" : 0.5,
+      "model_input_pixel_format" : "ARGB32",
+      "batching_timeout" : 100,
+      "device_id" : 0
+    }
+  }
+}

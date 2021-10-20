@@ -30,10 +30,6 @@
 
 namespace cnstream {
 
-void InferHandler::TransmitData(const CNFrameInfoPtr& data) {
-  if (module_) module_->TransmitData(data);
-}
-
 Inferencer2::Inferencer2(const std::string& name) : Module(name) {
   hasTransmit_.store(true);
   param_register_.SetModuleDesc("Inferencer2 is a module for running offline model inference, preprocessing and "
@@ -52,26 +48,20 @@ bool Inferencer2::Open(ModuleParamSet raw_params) {
 
   infer_params_ = params;
 
-  // check preprocess
-  std::shared_ptr<VideoPreproc> pre_processor = nullptr;
-  edk::MluContext mlu_ctx;
-  mlu_ctx.SetDeviceId(params.device_id);
-  mlu_ctx.BindDevice();
+  // fix paths
+  if (!infer_params_.model_path.empty())
+    infer_params_.model_path = GetPathRelativeToTheJSONFile(infer_params_.model_path, raw_params);
 
-  std::string model_path = GetPathRelativeToTheJSONFile(params.model_path, raw_params);
-  if (FILE* file = fopen(model_path.c_str(), "r")) {
-    fclose(file);
-  } else {
-    LOGE(INFERENCER2) << "Model path is wrong. Wrong path is [ " << model_path << " ], please check it.";
-    return false;
-  }
+  // check preprocess
+  if (!infer_server::SetCurrentDevice(params.device_id)) return false;
 
   if (params.preproc_name.empty()) {
     LOGE(INFERENCER2) << "Preproc name can't be empty string. Please set preproc_name.";
     return false;
   }
-  if (params.preproc_name != "RCOP" && params.preproc_name != "SCALER") {
-    pre_processor = std::shared_ptr<VideoPreproc>(VideoPreproc::Create(params.preproc_name));
+  std::shared_ptr<VideoPreproc> pre_processor = nullptr;
+  if (params.preproc_name != "RCOP" && params.preproc_name != "SCALER" && params.preproc_name != "CNCV") {
+    pre_processor.reset(VideoPreproc::Create(params.preproc_name));
     if (!pre_processor) {
       LOGE(INFERENCER2) << "Can not find VideoPreproc implemention by name: " << params.preproc_name;
       return false;
@@ -84,34 +74,63 @@ bool Inferencer2::Open(ModuleParamSet raw_params) {
     LOGE(INFERENCER2) << "Postproc name can't be empty string. Please set postproc_name.";
     return false;
   }
-  post_processor = std::shared_ptr<VideoPostproc>(VideoPostproc::Create(params.postproc_name));
+  post_processor.reset(VideoPostproc::Create(params.postproc_name));
   if (!post_processor) {
-    LOGE(INFERENCER2) << "Can not find Postproc implemention by name: " << params.postproc_name;
+    LOGE(INFERENCER2) << "Can not find VideoPostproc implemention by name: " << params.postproc_name;
     return false;
   }
   post_processor->SetThreshold(params.threshold);
 
-  infer_handler_ = std::make_shared<InferHandlerImpl>(this, infer_params_, post_processor, pre_processor);
+  std::shared_ptr<ObjFilter> obj_filter = nullptr;
+  if (!params.obj_filter_name.empty()) {
+    obj_filter.reset(ObjFilter::Create(params.obj_filter_name));
+    if (!obj_filter) {
+      LOGE(INFERENCER2) << "Can not find ObjFilter implemention by name: " << params.obj_filter_name;
+      return false;
+    }
+  }
+
+  infer_handler_ = std::make_shared<InferHandlerImpl>(this, infer_params_, post_processor, pre_processor, obj_filter);
   return infer_handler_->Open();
 }
 
 void Inferencer2::Close() { infer_handler_.reset(); }
 
 int Inferencer2::Process(std::shared_ptr<CNFrameInfo> data) {
-  if (!data) return -1;
+  if (!data) {
+    LOGE(INFERENCE2) << "Process inputdata is nulltpr!";
+    return -1;
+  }
 
   if (!data->IsEos()) {
-    CNDataFramePtr frame = GetCNDataFramePtr(data);
-    if (frame->dst_device_id < 0) {  /* origin data is on Cpu */
+    CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
+    if (frame->dst_device_id < 0) {
+      /* CNSyncedMemory data is on CPU */
       for (int i = 0; i < frame->GetPlanes(); i++) {
         frame->data[i]->SetMluDevContext(infer_params_.device_id);
       }
       frame->dst_device_id = infer_params_.device_id;
-    } else if ((unsigned)frame->dst_device_id != infer_params_.device_id) {  /* origin data is on another device */
+    } else if (static_cast<uint32_t>(frame->dst_device_id) != infer_params_.device_id &&
+               frame->ctx.dev_type == DevContext::DevType::MLU) {
+      /* CNSyncedMemory data is on different MLU from the data this module needed, and SOURCE data is on MLU*/
       frame->CopyToSyncMemOnDevice(infer_params_.device_id);
       frame->dst_device_id = infer_params_.device_id;
+    } else if (static_cast<uint32_t>(frame->dst_device_id) != infer_params_.device_id &&
+               frame->ctx.dev_type == DevContext::DevType::CPU) {
+      /* CNSyncedMemory data is on different MLU from the data this module needed, and SOURCE data is on CPU*/
+      void *dst = frame->cpu_data.get();
+      for (int i = 0; i < frame->GetPlanes(); i++) {
+        size_t plane_size = frame->GetPlaneBytes(i);
+        frame->data[i].reset(new CNSyncedMemory(plane_size));
+        frame->data[i]->SetCpuData(dst);
+        dst = reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(dst) + plane_size);
+        frame->data[i]->SetMluDevContext(infer_params_.device_id);
+      }
+      frame->dst_device_id = infer_params_.device_id;  // set dst_device_id to param_.device_id
     }
-    infer_handler_->Process(data, infer_params_.object_infer);
+    if (infer_handler_->Process(data, infer_params_.object_infer) != 0) {
+      return -1;
+    }
   } else {
     infer_handler_->WaitTaskDone(data->stream_id);
     TransmitData(data);
@@ -121,9 +140,6 @@ int Inferencer2::Process(std::shared_ptr<CNFrameInfo> data) {
 }
 
 Inferencer2::~Inferencer2() {
-  edk::MluContext mlu_ctx;
-  mlu_ctx.SetDeviceId(infer_params_.device_id);
-  mlu_ctx.BindDevice();
   Close();
 }
 

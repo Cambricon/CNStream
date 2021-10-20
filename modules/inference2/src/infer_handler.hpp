@@ -36,9 +36,9 @@ class InferDataObserver;
 class InferHandlerImpl : public InferHandler {
  public:
   explicit InferHandlerImpl(Inferencer2* module, Infer2Param infer_params,
-                            std::shared_ptr<VideoPostproc> post_processor,
-                            std::shared_ptr<VideoPreproc> pre_processor)
-      : InferHandler(module, infer_params, post_processor, pre_processor) {}
+                            std::shared_ptr<VideoPostproc> post_processor, std::shared_ptr<VideoPreproc> pre_processor,
+                            std::shared_ptr<ObjFilter> obj_filter)
+      : InferHandler(module, infer_params, post_processor, pre_processor, obj_filter) {}
 
   virtual ~InferHandlerImpl();
 
@@ -49,6 +49,8 @@ class InferHandlerImpl : public InferHandler {
 
   void WaitTaskDone(const std::string& stream_id) override;
 
+  void PostEvent(EventType e, const std::string& msg) { module_->PostEvent(e, msg); }
+
  private:
   bool LinkInferServer();
 
@@ -58,6 +60,10 @@ class InferHandlerImpl : public InferHandler {
   InferEngineSession session_ = nullptr;
   InferPreprocessType scale_platform_ = InferPreprocessType::UNKNOWN;
 };
+
+inline void InferHandler::TransmitData(const CNFrameInfoPtr& data) {
+  if (module_) module_->TransmitData(data);
+}
 
 }  // namespace cnstream
 

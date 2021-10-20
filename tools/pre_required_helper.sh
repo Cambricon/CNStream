@@ -50,8 +50,8 @@ installAptLibs() {
 
 installYumLibs() {
   ${SUDO_CMD} yum -y install opencv-devel.x86_64\
-    gflags.x86_64\
-    glog.x86_64\
+    gflags-devel\
+    glog-devel\
     cmake3.x86_64\
     freetype-devel\
     SDL2_gfx-devel.x86_64\

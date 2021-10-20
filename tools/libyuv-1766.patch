@@ -1,0 +1,1009 @@
+diff -rNua libyuv-o/include/libyuv/convert_argb.h libyuv/include/libyuv/convert_argb.h
+--- libyuv-o/include/libyuv/convert_argb.h	2020-10-23 15:16:00.638324198 +0800
++++ libyuv/include/libyuv/convert_argb.h	2020-10-23 15:16:11.390462130 +0800
+@@ -51,6 +51,9 @@
+   I420AlphaToARGBMatrix(a, b, e, f, c, d, g, h, i, j, k##VU, l, m, n)
+
+ // Alias.
++#define RAWCopy    RGB24Copy
++#define RAWToRAW   RGB24Copy
++#define RGB24ToRAW RAWToRGB24
+ #define ARGBToARGB ARGBCopy
+
+ // Copy ARGB to ARGB.
+@@ -62,6 +65,16 @@
+              int width,
+              int height);
+
++// Copy RGB24 to RGB24
++#define RGB24ToRGB24 RGB24Copy
++LIBYUV_API
++int RGB24Copy(const uint8_t* src_rgb24,
++             int src_stride_rgb24,
++             uint8_t* dst_rgb24,
++             int dst_stride_rgb24,
++             int width,
++             int height);
++
+ // Convert I420 to ARGB.
+ LIBYUV_API
+ int I420ToARGB(const uint8_t* src_y,
+diff -rNua libyuv-o/include/libyuv/convert.h libyuv/include/libyuv/convert.h
+--- libyuv-o/include/libyuv/convert.h	2020-10-23 15:16:00.638324198 +0800
++++ libyuv/include/libyuv/convert.h	2020-10-23 15:16:11.390462130 +0800
+@@ -122,6 +122,22 @@
+              int width,
+              int height);
+
++// Copy NV12 to NV12.
++#define NV21Copy NV12Copy
++#define NV12ToNV12 NV12Copy
++#define NV21ToNV21 NV12Copy
++LIBYUV_API
++int NV12Copy(const uint8_t* src_y,
++             int src_stride_y,
++             const uint8_t* src_uv,
++             int src_stride_uv,
++             uint8_t* dst_y,
++             int dst_stride_y,
++             uint8_t* dst_uv,
++             int dst_stride_uv,
++             int width,
++             int height);
++
+ // Copy I010 to I010
+ #define I010ToI010 I010Copy
+ #define H010ToH010 I010Copy
+@@ -346,6 +362,28 @@
+                 int width,
+                 int height);
+
++// RGB little endian (bgr in memory) to NV12.
++LIBYUV_API
++int RGB24ToNV12(const uint8_t* src_rgb24,
++                int src_stride_rgb24,
++                uint8_t* dst_y,
++                int dst_stride_y,
++                uint8_t* dst_uv,
++                int dst_stride_uv,
++                int width,
++                int height);
++
++// RGB little endian (bgr in memory) to NV21.
++LIBYUV_API
++int RGB24ToNV21(const uint8_t* src_rgb24,
++                int src_stride_rgb24,
++                uint8_t* dst_y,
++                int dst_stride_y,
++                uint8_t* dst_vu,
++                int dst_stride_vu,
++                int width,
++                int height);
++
+ // RGB little endian (bgr in memory) to J420.
+ LIBYUV_API
+ int RGB24ToJ420(const uint8_t* src_rgb24,
+@@ -372,6 +410,28 @@
+               int width,
+               int height);
+
++// RGB big endian (rgb in memory) to NV12.
++LIBYUV_API
++int RAWToNV12(const uint8_t* src_raw,
++              int src_stride_raw,
++              uint8_t* dst_y,
++              int dst_stride_y,
++              uint8_t* dst_uv,
++              int dst_stride_uv,
++              int width,
++              int height);
++
++// RGB big endian (rgb in memory) to NV21.
++LIBYUV_API
++int RAWToNV21(const uint8_t* src_raw,
++              int src_stride_raw,
++              uint8_t* dst_y,
++              int dst_stride_y,
++              uint8_t* dst_vu,
++              int dst_stride_vu,
++              int width,
++              int height);
++
+ // RGB16 (RGBP fourcc) little endian to I420.
+ LIBYUV_API
+ int RGB565ToI420(const uint8_t* src_rgb565,
+diff -rNua libyuv-o/source/convert_argb.cc libyuv/source/convert_argb.cc
+--- libyuv-o/source/convert_argb.cc	2020-10-23 15:16:00.642324251 +0800
++++ libyuv/source/convert_argb.cc	2020-10-23 15:16:11.390462130 +0800
+@@ -47,6 +47,29 @@
+   return 0;
+ }
+
++// Copy RGB24 with optional flipping
++LIBYUV_API
++int RGB24Copy(const uint8_t* src_rgb24,
++             int src_stride_rgb24,
++             uint8_t* dst_rgb24,
++             int dst_stride_rgb24,
++             int width,
++             int height) {
++  if (!src_rgb24 || !dst_rgb24 || width <= 0 || height == 0) {
++    return -1;
++  }
++  // Negative height means invert the image.
++  if (height < 0) {
++    height = -height;
++    src_rgb24 = src_rgb24 + (height - 1) * src_stride_rgb24;
++    src_stride_rgb24 = -src_stride_rgb24;
++  }
++
++  CopyPlane(src_rgb24, src_stride_rgb24, dst_rgb24, dst_stride_rgb24,
++            width * 3, height);
++  return 0;
++}
++
+ // Convert I420 to ARGB with matrix.
+ LIBYUV_API
+ int I420ToARGBMatrix(const uint8_t* src_y,
+diff -rNua libyuv-o/source/convert.cc libyuv/source/convert.cc
+--- libyuv-o/source/convert.cc	2020-10-23 15:16:00.642324251 +0800
++++ libyuv/source/convert.cc	2020-10-23 15:16:11.390462130 +0800
+@@ -106,6 +106,41 @@
+   return 0;
+ }
+
++// Copy NV12 with optional flipping.
++// TODO(fbarchard): Use Scale plane which supports mirroring, but ensure
++// is does row coalescing.
++LIBYUV_API
++int NV12Copy(const uint8_t* src_y,
++             int src_stride_y,
++             const uint8_t* src_uv,
++             int src_stride_uv,
++             uint8_t* dst_y,
++             int dst_stride_y,
++             uint8_t* dst_uv,
++             int dst_stride_uv,
++             int width,
++             int height) {
++  int halfheight = (height + 1) >> 1;
++  if (!src_uv || !dst_uv || width <= 0 || height == 0) {
++    return -1;
++  }
++  // Negative height means invert the image.
++  if (height < 0) {
++    height = -height;
++    src_y = src_y + (height - 1) * src_stride_y;
++    src_uv = src_uv + (height - 1) * src_stride_uv;
++    src_stride_y = -src_stride_y;
++    src_stride_uv = -src_stride_uv;
++  }
++
++  if (dst_y) {
++    CopyPlane(src_y, src_stride_y, dst_y, dst_stride_y, width, height);
++  }
++  // Copy UV planes.
++  CopyPlane(src_uv, src_stride_uv, dst_uv, dst_stride_uv, width, halfheight);
++  return 0;
++}
++
+ // Copy I010 with optional flipping.
+ LIBYUV_API
+ int I010Copy(const uint16_t* src_y,
+@@ -1477,6 +1512,408 @@
+   return 0;
+ }
+
++// Convert RGB24 to NV12.
++LIBYUV_API
++int RGB24ToNV12(const uint8_t* src_rgb24,
++                int src_stride_rgb24,
++                uint8_t* dst_y,
++                int dst_stride_y,
++                uint8_t* dst_uv,
++                int dst_stride_uv,
++                int width,
++                int height) {
++  int y;
++  int halfwidth = (width + 1) >> 1;
++#if (defined(HAS_RGB24TOYROW_NEON) || defined(HAS_RGB24TOYROW_MSA) || \
++     defined(HAS_RGB24TOYROW_MMI))
++  void (*RGB24ToUVRow)(const uint8_t* src_rgb24, int src_stride_rgb24,
++                       uint8_t* dst_u, uint8_t* dst_v, int width) =
++      RGB24ToUVRow_C;
++  void (*RGB24ToYRow)(const uint8_t* src_rgb24, uint8_t* dst_y, int width) =
++      RGB24ToYRow_C;
++#else
++  void (*RGB24ToARGBRow)(const uint8_t* src_rgb, uint8_t* dst_argb, int width) =
++      RGB24ToARGBRow_C;
++  void (*ARGBToUVRow)(const uint8_t* src_argb0, int src_stride_argb,
++                      uint8_t* dst_u, uint8_t* dst_v, int width) =
++      ARGBToUVRow_C;
++  void (*ARGBToYRow)(const uint8_t* src_argb, uint8_t* dst_y, int width) =
++      ARGBToYRow_C;
++#endif
++  void (*MergeUVRow_)(const uint8_t* src_u, const uint8_t* src_v,
++                      uint8_t* dst_uv, int width) = MergeUVRow_C;
++  if (!src_rgb24 || !dst_y || !dst_uv || width <= 0 || height == 0) {
++    return -1;
++  }
++  // Negative height means invert the image.
++  if (height < 0) {
++    height = -height;
++    src_rgb24 = src_rgb24 + (height - 1) * src_stride_rgb24;
++    src_stride_rgb24 = -src_stride_rgb24;
++  }
++
++// Neon version does direct RGB24 to YUV.
++#if defined(HAS_RGB24TOYROW_NEON)
++  if (TestCpuFlag(kCpuHasNEON)) {
++    RGB24ToUVRow = RGB24ToUVRow_Any_NEON;
++    RGB24ToYRow = RGB24ToYRow_Any_NEON;
++    if (IS_ALIGNED(width, 8)) {
++      RGB24ToYRow = RGB24ToYRow_NEON;
++      if (IS_ALIGNED(width, 16)) {
++        RGB24ToUVRow = RGB24ToUVRow_NEON;
++      }
++    }
++  }
++// MMI and MSA version does direct RGB24 to YUV.
++#elif (defined(HAS_RGB24TOYROW_MMI) || defined(HAS_RGB24TOYROW_MSA))
++#if defined(HAS_RGB24TOYROW_MMI) && defined(HAS_RGB24TOUVROW_MMI)
++  if (TestCpuFlag(kCpuHasMMI)) {
++    RGB24ToUVRow = RGB24ToUVRow_Any_MMI;
++    RGB24ToYRow = RGB24ToYRow_Any_MMI;
++    if (IS_ALIGNED(width, 8)) {
++      RGB24ToYRow = RGB24ToYRow_MMI;
++      if (IS_ALIGNED(width, 16)) {
++        RGB24ToUVRow = RGB24ToUVRow_MMI;
++      }
++    }
++  }
++#endif
++#if defined(HAS_RGB24TOYROW_MSA) && defined(HAS_RGB24TOUVROW_MSA)
++  if (TestCpuFlag(kCpuHasMSA)) {
++    RGB24ToUVRow = RGB24ToUVRow_Any_MSA;
++    RGB24ToYRow = RGB24ToYRow_Any_MSA;
++    if (IS_ALIGNED(width, 16)) {
++      RGB24ToYRow = RGB24ToYRow_MSA;
++      RGB24ToUVRow = RGB24ToUVRow_MSA;
++    }
++  }
++#endif
++// Other platforms do intermediate conversion from RGB24 to ARGB.
++#else
++#if defined(HAS_RGB24TOARGBROW_SSSE3)
++  if (TestCpuFlag(kCpuHasSSSE3)) {
++    RGB24ToARGBRow = RGB24ToARGBRow_Any_SSSE3;
++    if (IS_ALIGNED(width, 16)) {
++      RGB24ToARGBRow = RGB24ToARGBRow_SSSE3;
++    }
++  }
++#endif
++#if defined(HAS_ARGBTOYROW_SSSE3) && defined(HAS_ARGBTOUVROW_SSSE3)
++  if (TestCpuFlag(kCpuHasSSSE3)) {
++    ARGBToUVRow = ARGBToUVRow_Any_SSSE3;
++    ARGBToYRow = ARGBToYRow_Any_SSSE3;
++    if (IS_ALIGNED(width, 16)) {
++      ARGBToUVRow = ARGBToUVRow_SSSE3;
++      ARGBToYRow = ARGBToYRow_SSSE3;
++    }
++  }
++#endif
++#if defined(HAS_ARGBTOYROW_AVX2) && defined(HAS_ARGBTOUVROW_AVX2)
++  if (TestCpuFlag(kCpuHasAVX2)) {
++    ARGBToUVRow = ARGBToUVRow_Any_AVX2;
++    ARGBToYRow = ARGBToYRow_Any_AVX2;
++    if (IS_ALIGNED(width, 32)) {
++      ARGBToUVRow = ARGBToUVRow_AVX2;
++      ARGBToYRow = ARGBToYRow_AVX2;
++    }
++  }
++#endif
++#endif
++#if defined(HAS_MERGEUVROW_SSE2)
++  if (TestCpuFlag(kCpuHasSSE2)) {
++    MergeUVRow_ = MergeUVRow_Any_SSE2;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_SSE2;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_AVX2)
++  if (TestCpuFlag(kCpuHasAVX2)) {
++    MergeUVRow_ = MergeUVRow_Any_AVX2;
++    if (IS_ALIGNED(halfwidth, 32)) {
++      MergeUVRow_ = MergeUVRow_AVX2;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_NEON)
++  if (TestCpuFlag(kCpuHasNEON)) {
++    MergeUVRow_ = MergeUVRow_Any_NEON;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_NEON;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_MMI)
++  if (TestCpuFlag(kCpuHasMMI)) {
++    MergeUVRow_ = MergeUVRow_Any_MMI;
++    if (IS_ALIGNED(halfwidth, 8)) {
++      MergeUVRow_ = MergeUVRow_MMI;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_MSA)
++  if (TestCpuFlag(kCpuHasMSA)) {
++    MergeUVRow_ = MergeUVRow_Any_MSA;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_MSA;
++    }
++  }
++#endif
++
++  {
++    // Allocate a rows of uv.
++    align_buffer_64(row_u, ((halfwidth + 31) & ~31) * 2);
++    uint8_t* row_v = row_u + ((halfwidth + 31) & ~31);
++
++#if !(defined(HAS_RGB24TOYROW_NEON) || defined(HAS_RGB24TOYROW_MSA) || \
++      defined(HAS_RGB24TOYROW_MMI))
++    // Allocate 2 rows of ARGB.
++    const int kRowSize = (width * 4 + 31) & ~31;
++    align_buffer_64(row, kRowSize * 2);
++#endif
++
++    for (y = 0; y < height - 1; y += 2) {
++#if (defined(HAS_RGB24TOYROW_NEON) || defined(HAS_RGB24TOYROW_MSA) || \
++     defined(HAS_RGB24TOYROW_MMI))
++      RGB24ToUVRow(src_rgb24, src_stride_rgb24, row_u, row_v, width);
++      MergeUVRow_(row_u, row_v, dst_uv, halfwidth);
++      RGB24ToYRow(src_rgb24, dst_y, width);
++      RGB24ToYRow(src_rgb24 + src_stride_rgb24, dst_y + dst_stride_y, width);
++#else
++      RGB24ToARGBRow(src_rgb24, row, width);
++      RGB24ToARGBRow(src_rgb24 + src_stride_rgb24, row + kRowSize, width);
++      ARGBToUVRow(row, kRowSize, row_u, row_v, width);
++      MergeUVRow_(row_u, row_v, dst_uv, halfwidth);
++      ARGBToYRow(row, dst_y, width);
++      ARGBToYRow(row + kRowSize, dst_y + dst_stride_y, width);
++#endif
++      src_rgb24 += src_stride_rgb24 * 2;
++      dst_y += dst_stride_y * 2;
++      dst_uv += dst_stride_uv;
++    }
++    if (height & 1) {
++#if (defined(HAS_RGB24TOYROW_NEON) || defined(HAS_RGB24TOYROW_MSA) || \
++     defined(HAS_RGB24TOYROW_MMI))
++      RGB24ToUVRow(src_rgb24, 0, row_u, row_v, width);
++      MergeUVRow_(row_u, row_v, dst_uv, halfwidth);
++      RGB24ToYRow(src_rgb24, dst_y, width);
++#else
++      RGB24ToARGBRow(src_rgb24, row, width);
++      ARGBToUVRow(row, 0, row_u, row_v, width);
++      MergeUVRow_(row_u, row_v, dst_uv, halfwidth);
++      ARGBToYRow(row, dst_y, width);
++#endif
++    }
++#if !(defined(HAS_RGB24TOYROW_NEON) || defined(HAS_RGB24TOYROW_MSA) || \
++      defined(HAS_RGB24TOYROW_MMI))
++    free_aligned_buffer_64(row);
++#endif
++    free_aligned_buffer_64(row_u);
++  }
++  return 0;
++}
++
++// Convert RGB24 to NV21.
++LIBYUV_API
++int RGB24ToNV21(const uint8_t* src_rgb24,
++                int src_stride_rgb24,
++                uint8_t* dst_y,
++                int dst_stride_y,
++                uint8_t* dst_vu,
++                int dst_stride_vu,
++                int width,
++                int height) {
++  int y;
++  int halfwidth = (width + 1) >> 1;
++#if (defined(HAS_RGB24TOYROW_NEON) || defined(HAS_RGB24TOYROW_MSA) || \
++     defined(HAS_RGB24TOYROW_MMI))
++  void (*RGB24ToUVRow)(const uint8_t* src_rgb24, int src_stride_rgb24,
++                       uint8_t* dst_u, uint8_t* dst_v, int width) =
++      RGB24ToUVRow_C;
++  void (*RGB24ToYRow)(const uint8_t* src_rgb24, uint8_t* dst_y, int width) =
++      RGB24ToYRow_C;
++#else
++  void (*RGB24ToARGBRow)(const uint8_t* src_rgb, uint8_t* dst_argb, int width) =
++      RGB24ToARGBRow_C;
++  void (*ARGBToUVRow)(const uint8_t* src_argb0, int src_stride_argb,
++                      uint8_t* dst_u, uint8_t* dst_v, int width) =
++      ARGBToUVRow_C;
++  void (*ARGBToYRow)(const uint8_t* src_argb, uint8_t* dst_y, int width) =
++      ARGBToYRow_C;
++#endif
++  void (*MergeUVRow_)(const uint8_t* src_u, const uint8_t* src_v,
++                      uint8_t* dst_uv, int width) = MergeUVRow_C;
++  if (!src_rgb24 || !dst_y || !dst_vu || width <= 0 || height == 0) {
++    return -1;
++  }
++  // Negative height means invert the image.
++  if (height < 0) {
++    height = -height;
++    src_rgb24 = src_rgb24 + (height - 1) * src_stride_rgb24;
++    src_stride_rgb24 = -src_stride_rgb24;
++  }
++
++// Neon version does direct RGB24 to YUV.
++#if defined(HAS_RGB24TOYROW_NEON)
++  if (TestCpuFlag(kCpuHasNEON)) {
++    RGB24ToUVRow = RGB24ToUVRow_Any_NEON;
++    RGB24ToYRow = RGB24ToYRow_Any_NEON;
++    if (IS_ALIGNED(width, 8)) {
++      RGB24ToYRow = RGB24ToYRow_NEON;
++      if (IS_ALIGNED(width, 16)) {
++        RGB24ToUVRow = RGB24ToUVRow_NEON;
++      }
++    }
++  }
++// MMI and MSA version does direct RGB24 to YUV.
++#elif (defined(HAS_RGB24TOYROW_MMI) || defined(HAS_RGB24TOYROW_MSA))
++#if defined(HAS_RGB24TOYROW_MMI) && defined(HAS_RGB24TOUVROW_MMI)
++  if (TestCpuFlag(kCpuHasMMI)) {
++    RGB24ToUVRow = RGB24ToUVRow_Any_MMI;
++    RGB24ToYRow = RGB24ToYRow_Any_MMI;
++    if (IS_ALIGNED(width, 8)) {
++      RGB24ToYRow = RGB24ToYRow_MMI;
++      if (IS_ALIGNED(width, 16)) {
++        RGB24ToUVRow = RGB24ToUVRow_MMI;
++      }
++    }
++  }
++#endif
++#if defined(HAS_RGB24TOYROW_MSA) && defined(HAS_RGB24TOUVROW_MSA)
++  if (TestCpuFlag(kCpuHasMSA)) {
++    RGB24ToUVRow = RGB24ToUVRow_Any_MSA;
++    RGB24ToYRow = RGB24ToYRow_Any_MSA;
++    if (IS_ALIGNED(width, 16)) {
++      RGB24ToYRow = RGB24ToYRow_MSA;
++      RGB24ToUVRow = RGB24ToUVRow_MSA;
++    }
++  }
++#endif
++// Other platforms do intermediate conversion from RGB24 to ARGB.
++#else
++#if defined(HAS_RGB24TOARGBROW_SSSE3)
++  if (TestCpuFlag(kCpuHasSSSE3)) {
++    RGB24ToARGBRow = RGB24ToARGBRow_Any_SSSE3;
++    if (IS_ALIGNED(width, 16)) {
++      RGB24ToARGBRow = RGB24ToARGBRow_SSSE3;
++    }
++  }
++#endif
++#if defined(HAS_ARGBTOYROW_SSSE3) && defined(HAS_ARGBTOUVROW_SSSE3)
++  if (TestCpuFlag(kCpuHasSSSE3)) {
++    ARGBToUVRow = ARGBToUVRow_Any_SSSE3;
++    ARGBToYRow = ARGBToYRow_Any_SSSE3;
++    if (IS_ALIGNED(width, 16)) {
++      ARGBToUVRow = ARGBToUVRow_SSSE3;
++      ARGBToYRow = ARGBToYRow_SSSE3;
++    }
++  }
++#endif
++#if defined(HAS_ARGBTOYROW_AVX2) && defined(HAS_ARGBTOUVROW_AVX2)
++  if (TestCpuFlag(kCpuHasAVX2)) {
++    ARGBToUVRow = ARGBToUVRow_Any_AVX2;
++    ARGBToYRow = ARGBToYRow_Any_AVX2;
++    if (IS_ALIGNED(width, 32)) {
++      ARGBToUVRow = ARGBToUVRow_AVX2;
++      ARGBToYRow = ARGBToYRow_AVX2;
++    }
++  }
++#endif
++#endif
++#if defined(HAS_MERGEUVROW_SSE2)
++  if (TestCpuFlag(kCpuHasSSE2)) {
++    MergeUVRow_ = MergeUVRow_Any_SSE2;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_SSE2;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_AVX2)
++  if (TestCpuFlag(kCpuHasAVX2)) {
++    MergeUVRow_ = MergeUVRow_Any_AVX2;
++    if (IS_ALIGNED(halfwidth, 32)) {
++      MergeUVRow_ = MergeUVRow_AVX2;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_NEON)
++  if (TestCpuFlag(kCpuHasNEON)) {
++    MergeUVRow_ = MergeUVRow_Any_NEON;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_NEON;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_MMI)
++  if (TestCpuFlag(kCpuHasMMI)) {
++    MergeUVRow_ = MergeUVRow_Any_MMI;
++    if (IS_ALIGNED(halfwidth, 8)) {
++      MergeUVRow_ = MergeUVRow_MMI;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_MSA)
++  if (TestCpuFlag(kCpuHasMSA)) {
++    MergeUVRow_ = MergeUVRow_Any_MSA;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_MSA;
++    }
++  }
++#endif
++
++  {
++    // Allocate a rows of uv.
++    align_buffer_64(row_u, ((halfwidth + 31) & ~31) * 2);
++    uint8_t* row_v = row_u + ((halfwidth + 31) & ~31);
++
++#if !(defined(HAS_RGB24TOYROW_NEON) || defined(HAS_RGB24TOYROW_MSA) || \
++      defined(HAS_RGB24TOYROW_MMI))
++    // Allocate 2 rows of ARGB.
++    const int kRowSize = (width * 4 + 31) & ~31;
++    align_buffer_64(row, kRowSize * 2);
++#endif
++
++    for (y = 0; y < height - 1; y += 2) {
++#if (defined(HAS_RGB24TOYROW_NEON) || defined(HAS_RGB24TOYROW_MSA) || \
++     defined(HAS_RGB24TOYROW_MMI))
++      RGB24ToUVRow(src_rgb24, src_stride_rgb24, row_u, row_v, width);
++      MergeUVRow_(row_v, row_u, dst_vu, halfwidth);
++      RGB24ToYRow(src_rgb24, dst_y, width);
++      RGB24ToYRow(src_rgb24 + src_stride_rgb24, dst_y + dst_stride_y, width);
++#else
++      RGB24ToARGBRow(src_rgb24, row, width);
++      RGB24ToARGBRow(src_rgb24 + src_stride_rgb24, row + kRowSize, width);
++      ARGBToUVRow(row, kRowSize, row_u, row_v, width);
++      MergeUVRow_(row_v, row_u, dst_vu, halfwidth);
++      ARGBToYRow(row, dst_y, width);
++      ARGBToYRow(row + kRowSize, dst_y + dst_stride_y, width);
++#endif
++      src_rgb24 += src_stride_rgb24 * 2;
++      dst_y += dst_stride_y * 2;
++      dst_vu += dst_stride_vu;
++    }
++    if (height & 1) {
++#if (defined(HAS_RGB24TOYROW_NEON) || defined(HAS_RGB24TOYROW_MSA) || \
++     defined(HAS_RGB24TOYROW_MMI))
++      RGB24ToUVRow(src_rgb24, 0, row_u, row_v, width);
++      MergeUVRow_(row_v, row_u, dst_vu, halfwidth);
++      RGB24ToYRow(src_rgb24, dst_y, width);
++#else
++      RGB24ToARGBRow(src_rgb24, row, width);
++      ARGBToUVRow(row, 0, row_u, row_v, width);
++      MergeUVRow_(row_v, row_u, dst_vu, halfwidth);
++      ARGBToYRow(row, dst_y, width);
++#endif
++    }
++#if !(defined(HAS_RGB24TOYROW_NEON) || defined(HAS_RGB24TOYROW_MSA) || \
++      defined(HAS_RGB24TOYROW_MMI))
++    free_aligned_buffer_64(row);
++#endif
++    free_aligned_buffer_64(row_u);
++  }
++  return 0;
++}
++
+ // TODO(fbarchard): Use Matrix version to implement I420 and J420.
+ // Convert RGB24 to J420.
+ LIBYUV_API
+@@ -1779,6 +2216,406 @@
+   }
+   return 0;
+ }
++
++// Convert RAW to NV12.
++LIBYUV_API
++int RAWToNV12(const uint8_t* src_raw,
++              int src_stride_raw,
++              uint8_t* dst_y,
++              int dst_stride_y,
++              uint8_t* dst_uv,
++              int dst_stride_uv,
++              int width,
++              int height) {
++  int y;
++  int halfwidth = (width + 1) >> 1;
++#if (defined(HAS_RAWTOYROW_NEON) && defined(HAS_RAWTOUVROW_NEON)) || \
++    defined(HAS_RAWTOYROW_MSA) || defined(HAS_RAWTOYROW_MMI)
++  void (*RAWToUVRow)(const uint8_t* src_raw, int src_stride_raw, uint8_t* dst_u,
++                     uint8_t* dst_v, int width) = RAWToUVRow_C;
++  void (*RAWToYRow)(const uint8_t* src_raw, uint8_t* dst_y, int width) =
++      RAWToYRow_C;
++#else
++  void (*RAWToARGBRow)(const uint8_t* src_rgb, uint8_t* dst_argb, int width) =
++      RAWToARGBRow_C;
++  void (*ARGBToUVRow)(const uint8_t* src_argb0, int src_stride_argb,
++                      uint8_t* dst_u, uint8_t* dst_v, int width) =
++      ARGBToUVRow_C;
++  void (*ARGBToYRow)(const uint8_t* src_argb, uint8_t* dst_y, int width) =
++      ARGBToYRow_C;
++#endif
++  void (*MergeUVRow_)(const uint8_t* src_u, const uint8_t* src_v,
++                      uint8_t* dst_uv, int width) = MergeUVRow_C;
++  if (!src_raw || !dst_y || !dst_uv || width <= 0 || height == 0) {
++    return -1;
++  }
++  // Negative height means invert the image.
++  if (height < 0) {
++    height = -height;
++    src_raw = src_raw + (height - 1) * src_stride_raw;
++    src_stride_raw = -src_stride_raw;
++  }
++
++// Neon version does direct RAW to YUV.
++#if defined(HAS_RAWTOYROW_NEON) && defined(HAS_RAWTOUVROW_NEON)
++  if (TestCpuFlag(kCpuHasNEON)) {
++    RAWToUVRow = RAWToUVRow_Any_NEON;
++    RAWToYRow = RAWToYRow_Any_NEON;
++    if (IS_ALIGNED(width, 8)) {
++      RAWToYRow = RAWToYRow_NEON;
++      if (IS_ALIGNED(width, 16)) {
++        RAWToUVRow = RAWToUVRow_NEON;
++      }
++    }
++  }
++// MMI and MSA version does direct RAW to YUV.
++#elif (defined(HAS_RAWTOYROW_MMI) || defined(HAS_RAWTOYROW_MSA))
++#if defined(HAS_RAWTOYROW_MMI) && defined(HAS_RAWTOUVROW_MMI)
++  if (TestCpuFlag(kCpuHasMMI)) {
++    RAWToUVRow = RAWToUVRow_Any_MMI;
++    RAWToYRow = RAWToYRow_Any_MMI;
++    if (IS_ALIGNED(width, 8)) {
++      RAWToYRow = RAWToYRow_MMI;
++      if (IS_ALIGNED(width, 16)) {
++        RAWToUVRow = RAWToUVRow_MMI;
++      }
++    }
++  }
++#endif
++#if defined(HAS_RAWTOYROW_MSA) && defined(HAS_RAWTOUVROW_MSA)
++  if (TestCpuFlag(kCpuHasMSA)) {
++    RAWToUVRow = RAWToUVRow_Any_MSA;
++    RAWToYRow = RAWToYRow_Any_MSA;
++    if (IS_ALIGNED(width, 16)) {
++      RAWToYRow = RAWToYRow_MSA;
++      RAWToUVRow = RAWToUVRow_MSA;
++    }
++  }
++#endif
++// Other platforms do intermediate conversion from RAW to ARGB.
++#else
++#if defined(HAS_RAWTOARGBROW_SSSE3)
++  if (TestCpuFlag(kCpuHasSSSE3)) {
++    RAWToARGBRow = RAWToARGBRow_Any_SSSE3;
++    if (IS_ALIGNED(width, 16)) {
++      RAWToARGBRow = RAWToARGBRow_SSSE3;
++    }
++  }
++#endif
++#if defined(HAS_ARGBTOYROW_SSSE3) && defined(HAS_ARGBTOUVROW_SSSE3)
++  if (TestCpuFlag(kCpuHasSSSE3)) {
++    ARGBToUVRow = ARGBToUVRow_Any_SSSE3;
++    ARGBToYRow = ARGBToYRow_Any_SSSE3;
++    if (IS_ALIGNED(width, 16)) {
++      ARGBToUVRow = ARGBToUVRow_SSSE3;
++      ARGBToYRow = ARGBToYRow_SSSE3;
++    }
++  }
++#endif
++#if defined(HAS_ARGBTOYROW_AVX2) && defined(HAS_ARGBTOUVROW_AVX2)
++  if (TestCpuFlag(kCpuHasAVX2)) {
++    ARGBToUVRow = ARGBToUVRow_Any_AVX2;
++    ARGBToYRow = ARGBToYRow_Any_AVX2;
++    if (IS_ALIGNED(width, 32)) {
++      ARGBToUVRow = ARGBToUVRow_AVX2;
++      ARGBToYRow = ARGBToYRow_AVX2;
++    }
++  }
++#endif
++#endif
++#if defined(HAS_MERGEUVROW_SSE2)
++  if (TestCpuFlag(kCpuHasSSE2)) {
++    MergeUVRow_ = MergeUVRow_Any_SSE2;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_SSE2;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_AVX2)
++  if (TestCpuFlag(kCpuHasAVX2)) {
++    MergeUVRow_ = MergeUVRow_Any_AVX2;
++    if (IS_ALIGNED(halfwidth, 32)) {
++      MergeUVRow_ = MergeUVRow_AVX2;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_NEON)
++  if (TestCpuFlag(kCpuHasNEON)) {
++    MergeUVRow_ = MergeUVRow_Any_NEON;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_NEON;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_MMI)
++  if (TestCpuFlag(kCpuHasMMI)) {
++    MergeUVRow_ = MergeUVRow_Any_MMI;
++    if (IS_ALIGNED(halfwidth, 8)) {
++      MergeUVRow_ = MergeUVRow_MMI;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_MSA)
++  if (TestCpuFlag(kCpuHasMSA)) {
++    MergeUVRow_ = MergeUVRow_Any_MSA;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_MSA;
++    }
++  }
++#endif
++
++  {
++    // Allocate a rows of uv.
++    align_buffer_64(row_u, ((halfwidth + 31) & ~31) * 2);
++    uint8_t* row_v = row_u + ((halfwidth + 31) & ~31);
++
++#if !(defined(HAS_RAWTOYROW_NEON) || defined(HAS_RAWTOYROW_MSA) || \
++      defined(HAS_RAWTOYROW_MMI))
++    // Allocate 2 rows of ARGB.
++    const int kRowSize = (width * 4 + 31) & ~31;
++    align_buffer_64(row, kRowSize * 2);
++#endif
++
++    for (y = 0; y < height - 1; y += 2) {
++#if (defined(HAS_RAWTOYROW_NEON) || defined(HAS_RAWTOYROW_MSA) || \
++     defined(HAS_RAWTOYROW_MMI))
++      RAWToUVRow(src_raw, src_stride_raw, row_u, row_v, width);
++      MergeUVRow_(row_u, row_v, dst_uv, halfwidth);
++      RAWToYRow(src_raw, dst_y, width);
++      RAWToYRow(src_raw + src_stride_raw, dst_y + dst_stride_y, width);
++#else
++      RAWToARGBRow(src_raw, row, width);
++      RAWToARGBRow(src_raw + src_stride_raw, row + kRowSize, width);
++      ARGBToUVRow(row, kRowSize, row_u, row_v, width);
++      MergeUVRow_(row_u, row_v, dst_uv, halfwidth);
++      ARGBToYRow(row, dst_y, width);
++      ARGBToYRow(row + kRowSize, dst_y + dst_stride_y, width);
++#endif
++      src_raw += src_stride_raw * 2;
++      dst_y += dst_stride_y * 2;
++      dst_uv += dst_stride_uv;
++    }
++    if (height & 1) {
++#if (defined(HAS_RAWTOYROW_NEON) || defined(HAS_RAWTOYROW_MSA) || \
++     defined(HAS_RAWTOYROW_MMI))
++      RAWToUVRow(src_raw, 0, row_u, row_v, width);
++      MergeUVRow_(row_u, row_v, dst_uv, halfwidth);
++      RAWToYRow(src_raw, dst_y, width);
++#else
++      RAWToARGBRow(src_raw, row, width);
++      ARGBToUVRow(row, 0, row_u, row_v, width);
++      MergeUVRow_(row_u, row_v, dst_uv, halfwidth);
++      ARGBToYRow(row, dst_y, width);
++#endif
++    }
++#if !(defined(HAS_RAWTOYROW_NEON) || defined(HAS_RAWTOYROW_MSA) || \
++      defined(HAS_RAWTOYROW_MMI))
++    free_aligned_buffer_64(row);
++#endif
++    free_aligned_buffer_64(row_u);
++  }
++  return 0;
++}
++
++// Convert RAW to NV21.
++LIBYUV_API
++int RAWToNV21(const uint8_t* src_raw,
++              int src_stride_raw,
++              uint8_t* dst_y,
++              int dst_stride_y,
++              uint8_t* dst_vu,
++              int dst_stride_vu,
++              int width,
++              int height) {
++  int y;
++  int halfwidth = (width + 1) >> 1;
++#if (defined(HAS_RAWTOYROW_NEON) && defined(HAS_RAWTOUVROW_NEON)) || \
++    defined(HAS_RAWTOYROW_MSA) || defined(HAS_RAWTOYROW_MMI)
++  void (*RAWToUVRow)(const uint8_t* src_raw, int src_stride_raw, uint8_t* dst_u,
++                     uint8_t* dst_v, int width) = RAWToUVRow_C;
++  void (*RAWToYRow)(const uint8_t* src_raw, uint8_t* dst_y, int width) =
++      RAWToYRow_C;
++#else
++  void (*RAWToARGBRow)(const uint8_t* src_rgb, uint8_t* dst_argb, int width) =
++      RAWToARGBRow_C;
++  void (*ARGBToUVRow)(const uint8_t* src_argb0, int src_stride_argb,
++                      uint8_t* dst_u, uint8_t* dst_v, int width) =
++      ARGBToUVRow_C;
++  void (*ARGBToYRow)(const uint8_t* src_argb, uint8_t* dst_y, int width) =
++      ARGBToYRow_C;
++#endif
++  void (*MergeUVRow_)(const uint8_t* src_u, const uint8_t* src_v,
++                      uint8_t* dst_uv, int width) = MergeUVRow_C;
++  if (!src_raw || !dst_y || !dst_vu || width <= 0 || height == 0) {
++    return -1;
++  }
++  // Negative height means invert the image.
++  if (height < 0) {
++    height = -height;
++    src_raw = src_raw + (height - 1) * src_stride_raw;
++    src_stride_raw = -src_stride_raw;
++  }
++
++// Neon version does direct RAW to YUV.
++#if defined(HAS_RAWTOYROW_NEON) && defined(HAS_RAWTOUVROW_NEON)
++  if (TestCpuFlag(kCpuHasNEON)) {
++    RAWToUVRow = RAWToUVRow_Any_NEON;
++    RAWToYRow = RAWToYRow_Any_NEON;
++    if (IS_ALIGNED(width, 8)) {
++      RAWToYRow = RAWToYRow_NEON;
++      if (IS_ALIGNED(width, 16)) {
++        RAWToUVRow = RAWToUVRow_NEON;
++      }
++    }
++  }
++// MMI and MSA version does direct RAW to YUV.
++#elif (defined(HAS_RAWTOYROW_MMI) || defined(HAS_RAWTOYROW_MSA))
++#if defined(HAS_RAWTOYROW_MMI) && defined(HAS_RAWTOUVROW_MMI)
++  if (TestCpuFlag(kCpuHasMMI)) {
++    RAWToUVRow = RAWToUVRow_Any_MMI;
++    RAWToYRow = RAWToYRow_Any_MMI;
++    if (IS_ALIGNED(width, 8)) {
++      RAWToYRow = RAWToYRow_MMI;
++      if (IS_ALIGNED(width, 16)) {
++        RAWToUVRow = RAWToUVRow_MMI;
++      }
++    }
++  }
++#endif
++#if defined(HAS_RAWTOYROW_MSA) && defined(HAS_RAWTOUVROW_MSA)
++  if (TestCpuFlag(kCpuHasMSA)) {
++    RAWToUVRow = RAWToUVRow_Any_MSA;
++    RAWToYRow = RAWToYRow_Any_MSA;
++    if (IS_ALIGNED(width, 16)) {
++      RAWToYRow = RAWToYRow_MSA;
++      RAWToUVRow = RAWToUVRow_MSA;
++    }
++  }
++#endif
++// Other platforms do intermediate conversion from RAW to ARGB.
++#else
++#if defined(HAS_RAWTOARGBROW_SSSE3)
++  if (TestCpuFlag(kCpuHasSSSE3)) {
++    RAWToARGBRow = RAWToARGBRow_Any_SSSE3;
++    if (IS_ALIGNED(width, 16)) {
++      RAWToARGBRow = RAWToARGBRow_SSSE3;
++    }
++  }
++#endif
++#if defined(HAS_ARGBTOYROW_SSSE3) && defined(HAS_ARGBTOUVROW_SSSE3)
++  if (TestCpuFlag(kCpuHasSSSE3)) {
++    ARGBToUVRow = ARGBToUVRow_Any_SSSE3;
++    ARGBToYRow = ARGBToYRow_Any_SSSE3;
++    if (IS_ALIGNED(width, 16)) {
++      ARGBToUVRow = ARGBToUVRow_SSSE3;
++      ARGBToYRow = ARGBToYRow_SSSE3;
++    }
++  }
++#endif
++#if defined(HAS_ARGBTOYROW_AVX2) && defined(HAS_ARGBTOUVROW_AVX2)
++  if (TestCpuFlag(kCpuHasAVX2)) {
++    ARGBToUVRow = ARGBToUVRow_Any_AVX2;
++    ARGBToYRow = ARGBToYRow_Any_AVX2;
++    if (IS_ALIGNED(width, 32)) {
++      ARGBToUVRow = ARGBToUVRow_AVX2;
++      ARGBToYRow = ARGBToYRow_AVX2;
++    }
++  }
++#endif
++#endif
++#if defined(HAS_MERGEUVROW_SSE2)
++  if (TestCpuFlag(kCpuHasSSE2)) {
++    MergeUVRow_ = MergeUVRow_Any_SSE2;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_SSE2;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_AVX2)
++  if (TestCpuFlag(kCpuHasAVX2)) {
++    MergeUVRow_ = MergeUVRow_Any_AVX2;
++    if (IS_ALIGNED(halfwidth, 32)) {
++      MergeUVRow_ = MergeUVRow_AVX2;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_NEON)
++  if (TestCpuFlag(kCpuHasNEON)) {
++    MergeUVRow_ = MergeUVRow_Any_NEON;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_NEON;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_MMI)
++  if (TestCpuFlag(kCpuHasMMI)) {
++    MergeUVRow_ = MergeUVRow_Any_MMI;
++    if (IS_ALIGNED(halfwidth, 8)) {
++      MergeUVRow_ = MergeUVRow_MMI;
++    }
++  }
++#endif
++#if defined(HAS_MERGEUVROW_MSA)
++  if (TestCpuFlag(kCpuHasMSA)) {
++    MergeUVRow_ = MergeUVRow_Any_MSA;
++    if (IS_ALIGNED(halfwidth, 16)) {
++      MergeUVRow_ = MergeUVRow_MSA;
++    }
++  }
++#endif
++
++  {
++    // Allocate a rows of uv.
++    align_buffer_64(row_u, ((halfwidth + 31) & ~31) * 2);
++    uint8_t* row_v = row_u + ((halfwidth + 31) & ~31);
++
++#if !(defined(HAS_RAWTOYROW_NEON) || defined(HAS_RAWTOYROW_MSA) || \
++      defined(HAS_RAWTOYROW_MMI))
++    // Allocate 2 rows of ARGB.
++    const int kRowSize = (width * 4 + 31) & ~31;
++    align_buffer_64(row, kRowSize * 2);
++#endif
++
++    for (y = 0; y < height - 1; y += 2) {
++#if (defined(HAS_RAWTOYROW_NEON) || defined(HAS_RAWTOYROW_MSA) || \
++     defined(HAS_RAWTOYROW_MMI))
++      RAWToUVRow(src_raw, src_stride_raw, row_u, row_v, width);
++      MergeUVRow_(row_v, row_u, dst_vu, halfwidth);
++      RAWToYRow(src_raw, dst_y, width);
++      RAWToYRow(src_raw + src_stride_raw, dst_y + dst_stride_y, width);
++#else
++      RAWToARGBRow(src_raw, row, width);
++      RAWToARGBRow(src_raw + src_stride_raw, row + kRowSize, width);
++      ARGBToUVRow(row, kRowSize, row_u, row_v, width);
++      MergeUVRow_(row_v, row_u, dst_vu, halfwidth);
++      ARGBToYRow(row, dst_y, width);
++      ARGBToYRow(row + kRowSize, dst_y + dst_stride_y, width);
++#endif
++      src_raw += src_stride_raw * 2;
++      dst_y += dst_stride_y * 2;
++      dst_vu += dst_stride_vu;
++    }
++    if (height & 1) {
++#if (defined(HAS_RAWTOYROW_NEON) || defined(HAS_RAWTOYROW_MSA) || \
++     defined(HAS_RAWTOYROW_MMI))
++      RAWToUVRow(src_raw, 0, row_u, row_v, width);
++      MergeUVRow_(row_v, row_u, dst_vu, halfwidth);
++      RAWToYRow(src_raw, dst_y, width);
++#else
++      RAWToARGBRow(src_raw, row, width);
++      ARGBToUVRow(row, 0, row_u, row_v, width);
++      MergeUVRow_(row_v, row_u, dst_vu, halfwidth);
++      ARGBToYRow(row, dst_y, width);
++#endif
++    }
++#if !(defined(HAS_RAWTOYROW_NEON) || defined(HAS_RAWTOYROW_MSA) || \
++      defined(HAS_RAWTOYROW_MMI))
++    free_aligned_buffer_64(row);
++#endif
++    free_aligned_buffer_64(row_u);
++  }
++  return 0;
++}
+
+ // Convert RGB565 to I420.
+ LIBYUV_API
+

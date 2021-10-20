@@ -39,9 +39,9 @@ namespace cnstream {
 class FileHandlerImpl : public IParserResult, public IDecodeResult, public SourceRender {
  public:
   explicit FileHandlerImpl(DataSource *module, const std::string &filename, int framerate, bool loop,
-                           FileHandler *handler)  // NOLINT
+                           const MaximumVideoResolution& maximum_resolution, FileHandler *handler)  // NOLINT
       :SourceRender(handler), module_(module), filename_(filename),
-       framerate_(framerate), loop_(loop), handler_(*handler),
+       framerate_(framerate), loop_(loop), maximum_resolution_(maximum_resolution), handler_(*handler),
        stream_id_(handler_.GetStreamId()), parser_(stream_id_) {}
   ~FileHandlerImpl() {}
   bool Open();
@@ -52,13 +52,15 @@ class FileHandlerImpl : public IParserResult, public IDecodeResult, public Sourc
   std::string filename_;
   int framerate_;
   bool loop_ = false;
+  MaximumVideoResolution maximum_resolution_;
   FileHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;
 
- private:
 #ifdef UNIT_TEST
  public:  // NOLINT
+#else
+ private:  // NOLINT
 #endif
   bool PrepareResources(bool demux_only = false);
   void ClearResources(bool demux_only = false);

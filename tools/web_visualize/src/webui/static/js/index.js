@@ -394,8 +394,6 @@ $(document).ready(function(){
             json = "ssd.json";
         } else if (selected_demo === "tracking") {
             json = "yolov3_track.json";
-        } else if (selected_demo === "secondary") {
-            json = "secondary.json";
         } else {
             json = "/user/" + selected_demo_text;
         }

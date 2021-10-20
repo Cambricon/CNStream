@@ -33,103 +33,123 @@
 #include "cnstream_logging.hpp"
 #include "trace.hpp"
 
+/*!
+ *  @file trace_serialize_helper.hpp
+ *
+ *  This file contains a declaration of the TraceSerializeHelper class.
+ */
 namespace cnstream {
 
-/**
- * Serialize trace data into json format.
- * You can load json file by chrome-tracing to show the trace data.
+/*!
+ * @class TraceSerializeHelper
+ *
+ * @brief Serializes trace data into JSON format. You can load JSON file by chrome-tracing to show the trace data.
  */
 class TraceSerializeHelper {
  public:
-  /**
-   * Deserialize from json string.
-   * 
-   * @param jsonstr Json string.
-   * @param pout Output pointer.
-   * 
-   * @return True for deserialized successfully. False for deserialized failed.
-   **/
+  /*!
+   * @brief Deserializes a JSON string.
+   *
+   * @param[in] jsonstr The JSON string.
+   * @param[out] pout The output pointer stores the results.
+   *
+   * @return Returns true if the JSON string is deserialized successfully, otherwise returns false.
+   */
   static bool DeserializeFromJSONStr(const std::string& jsonstr, TraceSerializeHelper* pout);
-
-  /**
-   * Deserialize from json file.
-   * 
-   * @param jsonstr Json file path.
-   * @param pout Output pointer.
-   * 
-   * @return True for deserialized successfully. False for deserialized failed.
-   **/
+  /*!
+   * @brief Deserializes a JSON file.
+   *
+   * @param[in] jsonstr The JSON file path.
+   * @param[out] pout The output pointer stores the results.
+   *
+   * @return Returns true if the JSON string is deserialized successfully, otherwise returns false.
+   */
   static bool DeserializeFromJSONFile(const std::string& filename, TraceSerializeHelper* pout);
-  /*
-   * TraceSerializeHelper constructor.
+  /*!
+   * @brief Constructs a TraceSerializeHelper object.
+   *
+   * @return No return value.
    */
   TraceSerializeHelper();
-  /**
-   * TraceSerializeHelper copy constructor.
+  /*!
+   * @brief Constructs a TraceSerializeHelper object with the copy of the contents of another object.
    *
-   * @param t which instance copy from.
+   * @param[in] other Another object used to initialize an object.
+   *
+   * @return No return value.
    */
-  TraceSerializeHelper(const TraceSerializeHelper& t);
-  /**
-   * TraceSerializeHelper move constructor.
+  TraceSerializeHelper(const TraceSerializeHelper& other);
+  /*!
+   * @brief Constructs a TraceSerializeHelper object with the contents of another object using move semantics.
    *
-   * @param t which instance move from.
+   * @param[in] other Another object used to initialize an object.
+   *
+   * @return No return value.
    */
-  TraceSerializeHelper(TraceSerializeHelper&& t);
-  /**
-   * TraceSerializeHelper operator =.
+  TraceSerializeHelper(TraceSerializeHelper&& other);
+  /*!
+   * @brief Replaces the contents with a copy of the contents of another TraceSerializeHelper object.
    *
-   * @param t Which instance copy from.
+   * @param[in] other Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
-  TraceSerializeHelper& operator=(const TraceSerializeHelper& t);
-  /**
-   * TraceSerializeHelper operator =.
+  TraceSerializeHelper& operator=(const TraceSerializeHelper& other);
+  /*!
+   * @brief Replaces the contents with those of another TraceSerializeHelper object using move semantics.
    *
-   * @param t Which instance move from.
+   * @param[in] other Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
-  TraceSerializeHelper& operator=(TraceSerializeHelper&& t);
-  /*
-   * TraceSerializeHelper destructor.
+  TraceSerializeHelper& operator=(TraceSerializeHelper&& other);
+  /*!
+   * @brief Destructs a TraceSerializeHelper object by using default constructor.
+   *
+   * @return No return value.
    */
   ~TraceSerializeHelper() = default;
-
-  /**
-   * Serialize trace data.
-   * 
-   * @param pipeline_trace Trace data, you can get it by pipeline.GetTracer()->GetTrace().
-   **/
+  /*!
+   * @brief Serializes trace data.
+   *
+   * @param[in] pipeline_trace The trace data. Get it by ``pipeline.GetTracer()->GetTrace()``.
+   *
+   * @return No return value.
+   */
   void Serialize(const PipelineTrace& pipeline_trace);
 
-  /**
-   * Merge a trace serialize helper tool's data.
+  /*!
+   * @brief Merges another trace serialization helper tool data.
    *
-   * @param t the trace serialize helper tool to be merged.
-   **/
+   * @param[in] t The trace serialization helper tool to be merged.
+   *
+   * @return No return value.
+   */
   void Merge(const TraceSerializeHelper& t);
 
-  /**
-   * Serialize to json string.
-   * 
-   * @return Return a json string.
-   **/
+  /*!
+   * @brief Serializes to a JSON string.
+   *
+   * @return Returns a JSON string.
+   */
   std::string ToJsonStr() const;
 
-  /**
-   * Serialize to json file.
-   * 
-   * @param filename Json file name.
-   * 
-   * @return True for success, false for failed(The possible reason is that there is no write file permission).
-   **/
+  /*!
+   * @brief Serializes to a JSON file.
+   *
+   * @param[in] filename The JSON file name.
+   *
+   * @return Returns true if the serialization is successful, otherwise returns false.
+   *
+   * @note the possible reason of serialization failure is that writing to the file is not permitted.
+   */
   bool ToFile(const std::string& filename) const;
 
-  /**
-   * Reset serialize helper. Clear datas and free up memory.
-   **/
+  /*!
+   * @brief Resets serialization helper. Clears data and frees up memory.
+   *
+   * @return No return value.
+   */
   void Reset();
 
  private:

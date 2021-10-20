@@ -1,0 +1,13 @@
+{
+  "encode" : {
+    "class_name" : "cnstream::Encode",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "frame_rate" : 25,
+      "encoder_type" : "cpu",
+      "file_name" : "output/output.mp4",
+      "device_id": 0
+    }
+  }
+}

@@ -21,23 +21,21 @@
 #ifndef MODULES_INFER_BASE_HPP_
 #define MODULES_INFER_BASE_HPP_
 
-#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "cnstream_core.hpp"
+#include "cnis/contrib/video_helper.h"
+#include "cnis/infer_server.h"
+#include "cnis/processor.h"
 #include "cnstream_frame_va.hpp"
-#include "infer_server.h"
-#include "processor.h"
-#include "reflex_object.h"
-#include "video_helper.h"
+#include "obj_filter.hpp"
 #include "video_postproc.hpp"
 #include "video_preproc.hpp"
 
 namespace cnstream {
 
-using InferEngine = infer_server::video::VideoInferServer;
+using InferEngine = infer_server::InferServer;
 using InferVideoPixelFmt = infer_server::video::PixelFmt;
 using InferVideoFrame = infer_server::video::VideoFrame;
 using VFrameBoundingBox = infer_server::video::BoundingBox;
@@ -63,10 +61,8 @@ using InferShape = infer_server::Shape;
 using InferCpuPreprocess = infer_server::PreprocessorHost;
 using InferPostprocess = infer_server::Postprocessor;
 
-using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
-
 /**
- * @brief inference parameters used in Inferencer2 Module.
+ * @brief The inference parameters used in Inferencer2 Module.
  */
 struct Infer2Param {
   uint32_t device_id = 0;
@@ -75,27 +71,33 @@ struct Infer2Param {
   bool show_stats = false;
   InferBatchStrategy batch_strategy = InferBatchStrategy::DYNAMIC;
   uint32_t batching_timeout = 1000;   ///< only support in dynamic batch strategy
-  bool keep_aspect_ratio = false;  ///< only support in rcop
+  bool keep_aspect_ratio = false;
   InferVideoPixelFmt model_input_pixel_format = InferVideoPixelFmt::RGBA;
   InferDimOrder data_order = InferDimOrder::NHWC;
+  std::vector<float> mean_;
+  std::vector<float> std_;
   std::string func_name = "";
   std::string model_path = "";
   std::string preproc_name = "";
   std::string postproc_name = "";
+  std::string obj_filter_name = "";
+  bool normalize = false;
   bool object_infer = false;
   float threshold = 0.f;
+  uint32_t infer_interval = 0;
 };  // struct Infer2Param
 
 class Inferencer2;
 class InferHandler {
  public:
   explicit InferHandler(Inferencer2* module, const Infer2Param& infer_params,
-                        std::shared_ptr<VideoPostproc> post_processor, std::shared_ptr<VideoPreproc> pre_processor) {
-    module_ = module;
-    params_ = infer_params;
-    preprocessor_ = pre_processor;
-    postprocessor_ = post_processor;
-  }
+                        std::shared_ptr<VideoPostproc> post_processor, std::shared_ptr<VideoPreproc> pre_processor,
+                        std::shared_ptr<ObjFilter> obj_filter)
+      : module_(module),
+        params_(infer_params),
+        postprocessor_(post_processor),
+        preprocessor_(pre_processor),
+        obj_filter_(obj_filter) {}
 
   virtual ~InferHandler() {}
 
@@ -112,6 +114,7 @@ class InferHandler {
   Infer2Param params_;
   std::shared_ptr<VideoPostproc> postprocessor_ = nullptr;
   std::shared_ptr<VideoPreproc> preprocessor_ = nullptr;
+  std::shared_ptr<ObjFilter> obj_filter_ = nullptr;
 };
 
 }  // namespace cnstream

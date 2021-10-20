@@ -64,7 +64,7 @@ def getPreviewStatus():
 
 @app.route('/getDemoResult', methods=['GET', 'POST'])
 def getDemoResult():
-  return Response(core.getDemoConsleOutput())
+  return Response(core.getDemoConsoleOutput())
 
 @app.route('/getPreview', methods=['GET', 'POST'])
 def getPreview():
@@ -74,7 +74,6 @@ def getPreview():
 def runDemo():
   logging.info('[CNStreamService] start run pipeline')
   if request.method == 'POST':
-    subprocess.run(["rm", "-rf", "perf_cache"])
     input_filename = request.form.get('filename')
     config_json = request.form.get('json')
     mode = request.form.get('mode')

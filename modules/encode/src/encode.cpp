@@ -17,519 +17,418 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-
 #include "encode.hpp"
 
 #include <algorithm>
+#include <fstream>
 #include <memory>
-#include <sstream>
 #include <string>
+#include <vector>
 
-#include "cnencode.hpp"
-#include "cnstream_frame_va.hpp"
-#include "common.hpp"
-#include "image_preproc.hpp"
+#include "video/video_sink/video_sink.hpp"
+#include "video/video_stream/video_stream.hpp"
 
 namespace cnstream {
 
-struct EncodeParam {
-  int frame_rate = 25;               // Target fps
+typedef struct EncodeParam {
+  int device_id = 0;                 // mlu device id, -1 :disable mlu
+  bool mlu_input_frame = false;      // The input frame. true: source data , false: ImageBGR()
+  bool mlu_encoder = true;           // whether use mlu encoding, default is true
   int dst_width = 0;                 // Target width, preferred size same with input
   int dst_height = 0;                // Target height, preferred size same with input
-  int gop = 30;                      // Target gop, default is 30
-  int bit_rate = 0x100000;           // Target bit rate, default is 1Mbps
-  bool use_ffmpeg = false;           // Whether use ffmpeg to do image preprocessing, default is false
-  CNCodecType codec_type = H264;     // Video codec type
-  std::string encoder_type = "cpu";  // Encoding type, cpu or mlu encoding, default is cpu encoding
-  std::string preproc_type = "cpu";  // Preproc type, do image preprocessing on cpu ot mlu, default is cpu
-  std::string output_dir = "";       // Output directory
-  int device_id = -1;                // mlu device id, -1 :disable mlu
+  double frame_rate = 0;             // Target fps
+  int bit_rate = 0x400000;           // Target bit rate, default is 1Mbps
+  int gop_size = 10;                 // Target gop, default is 30
+  int tile_cols = 0;                 // Grids in horizontally of video tiling, only support cpu input
+  int tile_rows = 0;                 // Grids in vertically of video tiling, only support cpu input
+  bool resample = false;             // Resample frame with canvas, only support cpu input
+  std::string file_name = "";        // File name to encode to
+} EncodeParam;
+
+struct EncoderContext {
+  std::unique_ptr<VideoStream> stream = nullptr;
+  std::unique_ptr<VideoSink> sink = nullptr;
+  std::unique_ptr<uint8_t> buffer = nullptr;
+  int buffer_size = 0;
+  std::ofstream file;
+  int64_t frame_count = 0;
 };
 
-/**
- * @brief Encode context
- */
-struct EncodeContext {
-  std::unique_ptr<ImagePreproc> preproc = nullptr;
-  std::unique_ptr<CNEncode> cnencode = nullptr;
-  CNPixelFormat src_pix_fmt = NV21;
-  uint8_t *data_yuv = nullptr;
-  cv::Mat dst_image;
-};
-
-Encode::Encode(const std::string &name) : Module(name) {
-  param_register_.SetModuleDesc("Encode is a module to encode videos or images.");
-  param_register_.Register("encoder_type", "Use cpu encoding or mlu encoding. It could be cpu or mlu.");
-  param_register_.Register("codec_type", "encoder type, it could be h264, hevc or jpeg.");
-  param_register_.Register("preproc_type",
-                           "preprocess data on cpu or mlu(mlu is not supported yet). "
-                           "Normally, preprocessing includes resizing and color space converting.");
-  param_register_.Register("use_ffmpeg", "Do resize and color space convert using ffmpeg. It could be true or false.");
-  param_register_.Register("dst_width", "The width of the output.");
-  param_register_.Register("dst_height", "The height of the output.");
-  param_register_.Register("frame_rate", "Frame rate of the encoded video.");
-  param_register_.Register("kbit_rate",
-                           "The amount data encoded for a unit of time. Only valid when encode on mlu."
-                           "A higher bit rate means a higher quality video, but lower encoding speed.");
-  param_register_.Register("gop_size",
-                           "Group of pictures is known as GOP. Only valid when encode on mlu."
-                           "gop_size is the number of frames between two I-frames.");
-  param_register_.Register("output_dir", "Where to store the encoded video. Default dir is {CURRENT_DIR}/output.");
-  param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
-
-  hasTransmit_.store(1);  // for receive eos
-}
-
-std::shared_ptr<EncodeContext> Encode::GetEncodeContext(CNFrameInfoPtr data) {
-  if (!data) {
-    LOGE(ENCODE) << "[Encode] data is nullptr.";
-    return nullptr;
-  }
-
-  {
-    RwLockReadGuard lg(ctx_lock_);
-    if (ctxs_.find(data->stream_id) != ctxs_.end()) {
-      return ctxs_[data->stream_id];
-    }
-  }
-
-  if (data->IsEos()) {
-    LOGW(ENCODE) << "[Encode] data is eos, get EncodeContext failed.";
-    return nullptr;
-  }
-
-  // Create encode context
-  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
-  std::shared_ptr<EncodeContext> ctx = std::make_shared<EncodeContext>();
-
-  CNPixelFormat src_pix_fmt;
-  CNPixelFormat dst_pix_fmt;
-  CNPixelFormat frame_pix_fmt;
-  bool has_bgr_img = frame->HasBGRImage();
-  switch (frame->fmt) {
-    case cnstream::CNDataFormat::CN_PIXEL_FORMAT_BGR24:
-      frame_pix_fmt = BGR24;
-      break;
-    case cnstream::CNDataFormat::CN_PIXEL_FORMAT_RGB24:
-      frame_pix_fmt = RGB24;
-      break;
-    case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
-      frame_pix_fmt = NV12;
-      break;
-    case cnstream::CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
-      frame_pix_fmt = NV21;
-      break;
-    default:
-      LOGE(ENCODE) << "[Encode] unsupported pixel format.";
-      return nullptr;
-  }
-
-  if (has_bgr_img || frame_pix_fmt == BGR24 || frame_pix_fmt == RGB24 || param_->encoder_type == "cpu") {
-    src_pix_fmt = BGR24;
-  } else {
-    src_pix_fmt = frame_pix_fmt;
-  }
-  if (param_->encoder_type == "mlu") {
-    if (frame_pix_fmt != NV12 && frame_pix_fmt != NV21) {
-      dst_pix_fmt = NV12;
+EncoderContext *Encode::GetContext(CNFrameInfoPtr data) {
+  auto params = param_helper_->GetParams();
+  std::lock_guard<std::mutex> lk(ctx_lock_);
+  EncoderContext *ctx = nullptr;
+  if (params.tile_cols > 1 || params.tile_rows > 1) {
+    if (!contexts_.empty()) {
+      ctx = contexts_.begin()->second;
     } else {
-      dst_pix_fmt = frame_pix_fmt;
+      ctx = CreateContext(data, "0");
+      if (!ctx) return nullptr;
+    }
+    if (positions_.find(data->stream_id) == positions_.end()) {
+      int pos = positions_.size();
+      if (pos >= params.tile_cols * params.tile_rows) {
+        LOGE(Encode) << "GetContext() input video stream count over " << params.tile_cols << " * " << params.tile_rows
+                     << " = " << params.tile_cols * params.tile_rows;
+        return nullptr;
+      }
+      positions_[data->stream_id] = pos;
     }
   } else {
-    dst_pix_fmt = BGR24;
-  }
-  ctx->src_pix_fmt = src_pix_fmt;
-  if (param_->dst_height <= 0) param_->dst_height = frame->height & (~0x01);
-  if (param_->dst_width <= 0) param_->dst_width = frame->width & (~0x01);
-  if (param_->codec_type == JPEG && param_->encoder_type == "mlu") {
-    dst_stride_ = ALIGN(param_->dst_width, JPEG_ENC_ALIGNMENT);
-  } else {
-    dst_stride_ = param_->dst_width;
-  }
-
-  // build preproc
-  ImagePreproc::ImagePreprocParam preproc_param;
-  preproc_param.src_width = frame->width;
-  preproc_param.src_height = frame->height;
-  if (!has_bgr_img) {
-    preproc_param.src_stride = frame->stride[0];
-  }
-  preproc_param.dst_width = param_->dst_width;
-  preproc_param.dst_height = param_->dst_height;
-  preproc_param.dst_stride = dst_stride_;
-  preproc_param.src_pix_fmt = src_pix_fmt;
-  preproc_param.dst_pix_fmt = dst_pix_fmt;
-  preproc_param.preproc_type = param_->preproc_type;
-  preproc_param.use_ffmpeg = param_->use_ffmpeg;
-  if (param_->preproc_type == "mlu") {
-    preproc_param.device_id = param_->device_id;
-  }
-
-  {
-    RwLockWriteGuard lg(ctx_lock_);
-    ctx->preproc.reset(new ImagePreproc(preproc_param));
-    if (!ctx->preproc->Init()) {
-      LOGE(ENCODE) << "[Encode] encoder preproc init failed.";
-      return nullptr;
+    auto search = contexts_.find(data->stream_id);
+    if (search != contexts_.end()) {
+      ctx = search->second;
+    } else {
+      ctx = CreateContext(data, data->stream_id);
+      if (!ctx) return nullptr;
     }
   }
-
-  // build cnencode
-  CNEncode::CNEncodeParam cnencode_param;
-  cnencode_param.dst_width = param_->dst_width;
-  cnencode_param.dst_height = param_->dst_height;
-  cnencode_param.dst_stride = dst_stride_;
-  cnencode_param.dst_pix_fmt = dst_pix_fmt;
-  cnencode_param.encoder_type = param_->encoder_type;
-  cnencode_param.codec_type = param_->codec_type;
-  cnencode_param.frame_rate = param_->frame_rate;
-  cnencode_param.bit_rate = param_->bit_rate;
-  cnencode_param.gop = param_->gop;
-  cnencode_param.stream_id = data->stream_id;
-  cnencode_param.output_dir = param_->output_dir;
-  if (param_->encoder_type == "mlu") {
-    cnencode_param.device_id = param_->device_id;
-  }
-
-  RwLockWriteGuard lg(ctx_lock_);  // cnencode->Init isn't thread safe, so lock guard here.
-  ctx->cnencode.reset(new CNEncode(cnencode_param));
-  if (!ctx->cnencode->Init()) {
-    LOGE(ENCODE) << "[Encode] CNEncode type object initialized failed.";
-    return nullptr;
-  }
-  if (param_->encoder_type == "mlu" && (param_->preproc_type == "cpu" || ctx->src_pix_fmt == BGR24)) {
-    ctx->data_yuv = new uint8_t[dst_stride_ * param_->dst_height * 3 / 2];
-    memset(ctx->data_yuv, 0, sizeof(uint8_t) * dst_stride_ * param_->dst_height * 3 / 2);
-  }
-  if (param_->encoder_type == "cpu") {
-    ctx->dst_image = cv::Mat(param_->dst_height, param_->dst_width, CV_8UC3);
-  }
-  ctx->cnencode->SetModuleName(GetName());
-  ctxs_[data->stream_id] = ctx;
   return ctx;
 }
 
-Encode::~Encode() { Close(); }
+int Encode::GetPosition(const std::string &stream_id) {
+  int ret = -1;
+  auto params = param_helper_->GetParams();
+  std::lock_guard<std::mutex> lk(ctx_lock_);
+  if (params.tile_cols > 1 || params.tile_rows > 1) {
+    auto search = positions_.find(stream_id);
+    if (search != positions_.end()) {
+      ret = search->second;
+    }
+  }
+  return ret;
+}
+
+EncoderContext *Encode::CreateContext(CNFrameInfoPtr data, const std::string &stream_id) {
+  if (data->IsEos()) {
+    LOGI(Encode) << "CreateContext() the data is an EOS frame";
+    return nullptr;
+  }
+  CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
+
+  bool with_container = false;
+  VideoCodecType codec_type = VideoCodecType::H264;
+  auto params = param_helper_->GetParams();
+  auto dot = params.file_name.find_last_of(".");
+  if (dot == std::string::npos) {
+    LOGE(Encode) << "CreateContext() unknown file type \"" << params.file_name << "\"";
+    return nullptr;
+  }
+  std::string file_name = params.file_name;
+  std::transform(file_name.begin(), file_name.end(), file_name.begin(), ::tolower);
+  if (file_name.find("hevc") != std::string::npos || file_name.find("h265") != std::string::npos) {
+    codec_type = VideoCodecType::H265;
+  }
+  std::string ext_name = file_name.substr(dot + 1);
+  file_name = file_name.substr(0, dot);
+  if (ext_name == "mp4" || ext_name == "mkv") {
+    with_container = true;
+  } else if (ext_name == "jpg" || ext_name == "jpeg") {
+    codec_type = VideoCodecType::JPEG;
+  }
+
+  EncoderContext *ctx = new EncoderContext;
+  VideoStream::Param sparam;
+  sparam.width = params.dst_width > 0 ? params.dst_width : frame->width;
+  sparam.height = params.dst_height > 0 ? params.dst_height : frame->height;
+  sparam.tile_cols = params.tile_cols;
+  sparam.tile_rows = params.tile_rows;
+  sparam.resample = params.resample;
+  sparam.frame_rate = params.frame_rate;
+  sparam.time_base = 90000;
+  sparam.bit_rate = params.bit_rate;
+  sparam.gop_size = params.gop_size;
+  VideoPixelFormat pixel_format =
+      frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 ? VideoPixelFormat::NV12 : VideoPixelFormat::NV21;
+  sparam.pixel_format = (params.mlu_encoder) ? pixel_format : VideoPixelFormat::I420;
+  sparam.codec_type = codec_type;
+  sparam.mlu_encoder = params.mlu_encoder;
+  sparam.device_id = params.device_id;
+  ctx->stream.reset(new VideoStream(sparam));
+  if (!ctx->stream) {
+    LOGE(Encode) << "CreateContext() create video stream failed";
+    delete ctx;
+    return nullptr;
+  }
+
+  if (with_container) {
+    VideoSink::Param kparam;
+    kparam.width = sparam.width;
+    kparam.height = sparam.height;
+    kparam.frame_rate = sparam.frame_rate;
+    kparam.time_base = sparam.time_base;
+    kparam.bit_rate = sparam.bit_rate;
+    kparam.gop_size = sparam.gop_size;
+    kparam.pixel_format = VideoPixelFormat::I420;
+    kparam.codec_type = sparam.codec_type;
+    kparam.file_name = params.file_name.substr(0, dot) + "_" + stream_id + "." + ext_name;
+    ctx->sink.reset(new VideoSink(kparam));
+    if (!ctx->sink) {
+      LOGE(Encode) << "CreateContext() create video sink failed";
+      delete ctx;
+      return nullptr;
+    }
+    if (VideoSink::SUCCESS != ctx->sink->Start()) {
+      LOGE(Encode) << "CreateContext() start video sink failed";
+      return nullptr;
+    }
+  }
+
+  auto event_callback = [=](EncoderContext *ctx, VideoStream::Event event) {
+    if (!ctx || !ctx->stream || (with_container && !ctx->sink)) return;
+    if (event == VideoStream::Event::EVENT_DATA) {
+      VideoPacket packet;
+      memset(&packet, 0, sizeof(VideoPacket));
+      int ret = ctx->stream->GetPacket(&packet);
+      if (ret < 0) {
+        LOGE(Encode) << "CreateContext() stream get packet size failed, ret=" << ret;
+        return;
+      }
+      if (ctx->buffer_size < ret) {
+        ctx->buffer.reset(new uint8_t[ret]);
+        ctx->buffer_size = ret;
+      }
+      packet.data = ctx->buffer.get();
+      packet.size = ctx->buffer_size;
+      ret = ctx->stream->GetPacket(&packet);
+      if (ret <= 0) {
+        LOGE(Encode) << "CreateContext() stream get packet failed, ret=" << ret;
+        return;
+      }
+      if (with_container) {
+        ret = ctx->sink->Write(&packet);
+        if (ret != VideoSink::SUCCESS) {
+          LOGE(Encode) << "CreateContext() sink write failed, ret=" << ret;
+          return;
+        }
+      } else if (codec_type == VideoCodecType::JPEG) {
+        std::string jpeg_file = file_name + "_" + stream_id + "_" + std::to_string(ctx->frame_count++) + "." + ext_name;
+        std::ofstream file(jpeg_file);
+        if (!file.good()) {
+          LOGE(Encoder) << "CreateContext() open " << jpeg_file << " failed";
+        } else {
+          file.write(reinterpret_cast<char *>(packet.data), packet.size);
+        }
+        file.close();
+      } else {
+        if (!ctx->file.is_open()) {
+          std::string video_file = file_name + "_" + stream_id + "." + ext_name;
+          ctx->file.open(video_file);
+          if (!ctx->file.good()) {
+            LOGE(Encoder) << "CreateContext() open " << video_file << " failed";
+            return;
+          }
+        }
+        if (ctx->file.good()) ctx->file.write(reinterpret_cast<char *>(packet.data), packet.size);
+      }
+    } else if (event == VideoStream::Event::EVENT_EOS) {
+      LOGI(Encode) << "CreateContext() EVENT_EOS";
+    } else if (event == VideoStream::Event::EVENT_ERROR) {
+      LOGE(Encoder) << "CreateContext() EVENT_ERROR";
+      PostEvent(EventType::EVENT_ERROR, "encode receives error event");
+    }
+  };
+
+  if (!ctx->stream->Open()) {
+    LOGE(Encode) << "CreateContext() open video stream failed. stream_id [" << stream_id << "]";
+    if (ctx->sink) ctx->sink->Stop();
+    delete ctx;
+    return nullptr;
+  }
+  ctx->stream->SetEventCallback(std::bind(event_callback, ctx, std::placeholders::_1));
+
+  contexts_[stream_id] = ctx;
+  return ctx;
+}
+
+Encode::~Encode() {
+  if (param_helper_) {
+    delete param_helper_;
+    param_helper_ = nullptr;
+  }
+  Close();
+}
 
 bool Encode::Open(ModuleParamSet paramSet) {
-  if (param_) {
-    LOGW(ENCODE) << "[Encode] encode param is existed. Please Close before Open.";
+  if (!param_helper_->ParseParams(paramSet)) {
+    LOGE(ENCODE) << "[" << GetName() << "] parse parameters failed.";
     return false;
   }
-  param_ = new EncodeParam();
-  if (paramSet.find("dump_dir") != paramSet.end()) {
-    LOGE(ENCODE) << "[Encode] parameter ``dump_dir`` is deprecated. Please use ``output_dir`` instead.";
+  auto params = param_helper_->GetParams();
+  if (params.mlu_encoder && params.device_id < 0) {
+    LOGE(ENCODE) << "Open() device_id is required to be greater than 0, if mlu encoding is used";
     return false;
   }
-  if (paramSet.find("dump_type") != paramSet.end()) {
-    LOGE(ENCODE) << "[Encode] parameter ``dump_type`` is deprecated. Please use ``codec_type`` instead. "
-               << "Supported options are jpeg, h264 and hevc.";
-    return false;
-  }
-  if (paramSet.find("bit_rate") != paramSet.end()) {
-    LOGE(ENCODE) << "[Encode] parameter ``bit_rate`` is deprecated. Please use ``kbit_rate`` instead.";
-    return false;
-  }
-  if (paramSet.find("pre_type") != paramSet.end()) {
-    LOGE(ENCODE) << "[Encode] parameter ``pre_type`` is deprecated. Please use ``preproc_type`` instead.";
-    return false;
-  }
-  if (paramSet.find("enc_type") != paramSet.end()) {
-    LOGE(ENCODE) << "[Encode] parameter ``enc_type`` is deprecated. Please use ``codec_type`` instead. "
-               << "Supported options are jpeg, h264 and hevc.";
-    return false;
-  }
-  if (paramSet.find("frame_rate") != paramSet.end()) {
-    param_->frame_rate = std::stoi(paramSet["frame_rate"]);
-  }
-  if (paramSet.find("kbit_rate") != paramSet.end()) {
-    param_->bit_rate = std::stoi(paramSet["kbit_rate"]) * 1024;
-  }
-  if (paramSet.find("gop_size") != paramSet.end()) {
-    param_->gop = std::stoi(paramSet["gop_size"]);
-  }
-  if (paramSet.find("dst_width") != paramSet.end()) {
-    param_->dst_width = std::stoi(paramSet["dst_width"]);
-  }
-  if (paramSet.find("dst_height") != paramSet.end()) {
-    param_->dst_height = std::stoi(paramSet["dst_height"]);
-  }
-  if (paramSet.find("output_dir") != paramSet.end()) {
-    param_->output_dir = paramSet["output_dir"];
-  } else {
-    param_->output_dir = "./output";
-  }
-
-  if (paramSet.find("use_ffmpeg") != paramSet.end() && paramSet["use_ffmpeg"] == "true") {
-    param_->use_ffmpeg = true;
-  }
-  if (paramSet.find("encoder_type") != paramSet.end()) {
-    std::string encoder_type = paramSet["encoder_type"];
-    std::transform(encoder_type.begin(), encoder_type.end(), encoder_type.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
-    if (encoder_type == "mlu") {
-      param_->encoder_type = "mlu";
-    } else if (encoder_type == "cpu") {
-      param_->encoder_type = "cpu";
-    } else {
-      LOGW(ENCODE) << "[Encode] encoder type should be chosen from mlu and cpu. "
-                   << "It is invalid, cpu will be selected as default.";
-    }
-  }
-  if (paramSet.find("preproc_type") != paramSet.end()) {
-    std::string preproc_type = paramSet["preproc_type"];
-    std::transform(preproc_type.begin(), preproc_type.end(), preproc_type.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
-    if (preproc_type == "mlu") {
-      LOGE(ENCODE) << "[Encode] Preproc on MLU is not supported now.";
-      return false;
-    } else if (preproc_type == "cpu") {
-      param_->preproc_type = "cpu";
-    } else {
-      LOGW(ENCODE) << "[Encode] preprocess type should be chosen from mlu and cpu. "
-                   << "It is invalid, cpu will be selected as default.";
-    }
-  }
-  if (paramSet.find("codec_type") != paramSet.end()) {
-    std::string codec_type = paramSet["codec_type"];
-    std::transform(codec_type.begin(), codec_type.end(), codec_type.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
-    if ("h264" == codec_type) {
-      param_->codec_type = H264;
-    } else if ("hevc" == codec_type) {
-      param_->codec_type = HEVC;
-    } else if ("jpeg" == codec_type) {
-      param_->codec_type = JPEG;
-    } else {
-      LOGW(ENCODE) << "[Encode] codec type should be chosen from h264, h265 and jpeg. "
-                   << "It is invalid, h264 will be selected as default.";
-    }
-  }
-  if (paramSet.find("device_id") != paramSet.end()) {
-    param_->device_id = std::stoi(paramSet["device_id"]);
-  }
-  if ((param_->preproc_type == "mlu" || param_->encoder_type == "mlu") && param_->device_id < 0) {
-    LOGE(ENCODE) << "[Encode] Please set device id if use mlu to encode or preprocess.";
-    return false;
-  }
-  if (param_->preproc_type == "mlu" && param_->encoder_type == "cpu") {
-    LOGE(ENCODE) << "[Encode] Not supported cpu encoding after mlu preprocessing";
-    return false;
-  }
-  if (param_->encoder_type == "mlu" && (param_->dst_height % 2 || param_->dst_width % 2)) {
-    LOGE(ENCODE) << "[Encode] Not supported mlu encoding image the height or the width of which is odd.";
+  if (params.mlu_input_frame && (params.tile_cols > 1 || params.tile_rows > 1)) {
+    LOGE(Encode) << "Open() mlu input tiling is not supported";
     return false;
   }
   return true;
 }
 
 void Encode::Close() {
-  if (param_) {
-    delete param_;
-    param_ = nullptr;
-  }
-  if (ctxs_.empty()) {
+  if (contexts_.empty()) {
     return;
   }
-  for (auto &pair : ctxs_) {
-    if (pair.second->data_yuv) {
-      delete[] pair.second->data_yuv;
-      pair.second->data_yuv = nullptr;
+  for (auto &it : contexts_) {
+    EncoderContext *ctx = it.second;
+    if (ctx) {
+      if (ctx->stream) ctx->stream->Close();
+      if (ctx->sink) ctx->sink->Stop();
+      ctx->buffer_size = 0;
+      ctx->file.close();
+      delete ctx;
     }
   }
-  ctxs_.clear();
+  contexts_.clear();
 }
 
 int Encode::Process(CNFrameInfoPtr data) {
-  if (!data) {
+  if (nullptr == data) {
     return -1;
   }
-  bool eos = data->IsEos();
-  std::shared_ptr<EncodeContext> ctx = GetEncodeContext(data);
-  if (!ctx) {
-    LOGE(ENCODE) << "[Encode] Get encode context failed.";
-    return -1;
-  }
-  if (ctx->data_yuv) {
-    memset(ctx->data_yuv, 0, sizeof(uint8_t) * dst_stride_ * param_->dst_height * 3 / 2);
-  }
-  cv::Mat image;
-  uint8_t *dst_y = nullptr, *dst_uv = nullptr;
-
-  if (eos) {
-    if (param_->encoder_type == "mlu") {
-      if (!ctx->cnencode->Update(dst_y, dst_uv, data->timestamp, eos)) {
-        LOGE(ENCODE) << "[Encode] Encode frame on Mlu failed.";
-        return -1;
-      }
-    }
-    TransmitData(data);
-    return 1;
+  if (data->IsRemoved()) {
+    return 0;
   }
 
-  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);;
-  if (frame->width * frame->height == 0) {
-    LOGE(ENCODE) << "[Encode] The height or the width of the data frame is invalid.";
-    return -1;
-  }
+  EncoderContext *ctx = GetContext(data);
+  if (!ctx) return -1;
 
-  if (param_->encoder_type == "mlu") {
-    if (frame->HasBGRImage()) {
-      ctx->preproc->SetSrcWidthHeight(frame->width, frame->height);
-    } else {
-      ctx->preproc->SetSrcWidthHeight(frame->width, frame->height, frame->stride[0]);
-    }
-    if (ctx->src_pix_fmt == BGR24) {
-      image = frame->ImageBGR();
-    }
-    if (param_->preproc_type == "mlu") {
-      // Mlu Preproc
-      // if (!image) {
-      //   const uint8_t *src_y = reinterpret_cast<const uint8_t*>(frame->data[0]->GetMluData());
-      //   const uint8_t *src_uv = reinterpret_cast<const uint8_t*>(frame->data[1]->GetMluData());
-      //   // TODO: Get encoder mlu address
-      //   if (!ctx->preproc->Yuv2Yuv(src_y, src_uv, dst_y, dst_uv)) {
-      //     LOGE(ENCODE) << "[Encode] mlu yuv2yuv resize failed.";
-      //     return -1;
-      //   }
-      // } else {
-      //   // bgr 2 yuv (mlu is not supported, use cpu instead opencv/ffmpeg)
-      //   if (!ctx->preproc->Bgr2Yuv(*image, ctx->data_yuv)) {
-      //     LOGE(ENCODE) << "[Encode] cpu bgr2yuv resize failed. (mlu is not supported yet)";
-      //     return -1;
-      //   }
-      // }
-      LOGE(ENCODE) << "[Encode] mlu preproc is not supported yet.";
-      return -1;
-    } else {
-      // Cpu Preproc
-      if (image.empty()) {
-        const uint8_t *src_y = reinterpret_cast<const uint8_t *>(frame->data[0]->GetCpuData());
-        const uint8_t *src_uv = reinterpret_cast<const uint8_t *>(frame->data[1]->GetCpuData());
-        if (!ctx->preproc->Yuv2Yuv(src_y, src_uv, ctx->data_yuv)) {
-          LOGE(ENCODE) << "[Encode] cpu yuv resize failed.";
-          return -1;
-        }
-      } else {
-        if (!ctx->preproc->Bgr2Yuv(image, ctx->data_yuv)) {
-          LOGE(ENCODE) << "[Encode] cpu bgr2yuv and resize failed.";
-          return -1;
-        }
-      }
-      if (ctx->data_yuv) {
-        dst_y = ctx->data_yuv;
-        dst_uv = ctx->data_yuv + param_->dst_height * dst_stride_;
-      }
-    }
+  auto params = param_helper_->GetParams();
+  CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
 
-    // Mlu Encode
-    if (!ctx->cnencode->Update(dst_y, dst_uv, data->timestamp, eos)) {
-      LOGE(ENCODE) << "[Encode] Encode frame on Mlu failed.";
+  if (!params.mlu_input_frame) {
+    if (!ctx->stream->Update(frame->ImageBGR(), VideoStream::ColorFormat::BGR, data->timestamp,
+                             GetPosition(data->stream_id))) {
+      LOGE(Encode) << "Process() video stream update failed.";
+    }
+  } else {
+#ifndef HAVE_CNCV
+    if (params.mlu_input_frame && params.mlu_encoder) {
+      LOGE(Encode) << "Process() Encode mlu input frame on mlu is not supported. Please install CNCV.";
       return -1;
     }
-  } else if (param_->encoder_type == "cpu") {
-    ctx->preproc->SetSrcWidthHeight(frame->width, frame->height);
-    image = frame->ImageBGR();
-    // Cpu Preproc
-    if (!ctx->preproc->Bgr2Bgr(image, ctx->dst_image)) {
-      LOGE(ENCODE) << "[Encode] cpu bgr resize failed.";
+#endif
+    if (frame->dst_device_id != params.device_id) {
+      LOGE(Encode) << "Process() Encode mlu input frame on different device is not supported";
       return -1;
     }
-    // Cpu Encode
-    if (!ctx->cnencode->Update(ctx->dst_image, data->timestamp)) {
-      LOGE(ENCODE) << "[Encode] Encode frame on Cpu failed.";
-      return -1;
+    VideoStream::Buffer buffer;
+    memset(&buffer, 0, sizeof(VideoStream::Buffer));
+    buffer.width = frame->width;
+    buffer.height = frame->height;
+    buffer.data[0] = static_cast<uint8_t *>(const_cast<void *>(frame->data[0]->GetMluData()));
+    buffer.data[1] = static_cast<uint8_t *>(const_cast<void *>(frame->data[1]->GetMluData()));
+    buffer.stride[0] = frame->stride[0];
+    buffer.stride[1] = frame->stride[1];
+    buffer.color = frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 ? VideoStream::ColorFormat::YUV_NV12
+                                                                           : VideoStream::ColorFormat::YUV_NV21;
+    buffer.mlu_device_id = frame->dst_device_id;
+    if (!ctx->stream->Update(&buffer, data->timestamp, GetPosition(data->stream_id))) {
+      LOGE(Encode) << "Process() video stream update failed";
     }
   }
-  TransmitData(data);
-  return 1;
+  return 0;
 }
 
-bool Encode::CheckParamSet(const ModuleParamSet &paramSet) const {
-  bool ret = true;
-  ParametersChecker checker;
-  for (auto &it : paramSet) {
-    if (!param_register_.IsRegisted(it.first)) {
-      LOGW(ENCODE) << "[Encode] Unknown param: " << it.first;
+Encode::Encode(const std::string &name) : Module(name) {
+  param_register_.SetModuleDesc("Encode is a module to encode videos or images.");
+  param_helper_ = new ModuleParamsHelper<EncodeParam>(name);
+  auto input_encoder_type_parser = [](const ModuleParamSet &param_set, const std::string &param_name,
+                                      const std::string &value, void *result) -> bool {
+    if (value == "cpu") {
+      *static_cast<bool *>(result) = false;
+    } else if (value == "mlu") {
+      *static_cast<bool *>(result) = true;
+    } else {
+      LOGE(Encoder) << "[ModuleParamParser] [" << param_name << "]: " << value << " failed"
+                    << "\". Choose from \"mlu\", \"cpu\".";
+      return false;
+    }
+    return true;
+  };
+
+  static const std::vector<ModuleParamDesc> regist_param = {
+      {"device_id", "0", "Which MLU device will be used.", PARAM_OPTIONAL, OFFSET(EncodeParam, device_id),
+       ModuleParamParser<int>::Parser, "int"},
+      {"input_frame", "cpu", "Selection for the input frame. It should be 'mlu' or 'cpu." , PARAM_OPTIONAL,
+       OFFSET(EncodeParam, mlu_input_frame), input_encoder_type_parser, "bool"},
+      {"encoder_type", "cpu", "Selection for encoder type. It should be 'mlu' or 'cpu.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, mlu_encoder), input_encoder_type_parser, "bool"},
+      {"dst_width", "0", "Output video width. 0 means dst width is same with source", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, dst_width), ModuleParamParser<int>::Parser, "int"},
+      {"dst_height", "0", "Output video height. 0 means dst height is same with source", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, dst_height), ModuleParamParser<int>::Parser, "int"},
+      {"frame_rate", "30", "Frame rate of video encoding. Higher value means more fluent.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, frame_rate), ModuleParamParser<double>::Parser, "double"},
+      {"bit_rate", "4000000", "Bit rate of video encoding. Higher value means better video quality.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, bit_rate), ModuleParamParser<int>::Parser, "int"},
+      {"gop_size", "10", "Group of pictures. gop_size is the number of frames between two IDR frames.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, gop_size), ModuleParamParser<int>::Parser, "int"},
+      {"view_cols", "1", "Grids in horizontally of video tiling, only support cpu input.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, tile_cols), ModuleParamParser<int>::Parser, "int"},
+      {"view_rows", "1", "Grids in vertically of video tiling, only support cpu input.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, tile_rows), ModuleParamParser<int>::Parser, "int"},
+      {"resample", "false", "Resample frame with canvas, only support cpu input.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, resample), ModuleParamParser<bool>::Parser, "bool"},
+      {"file_name", "output/output.mp4",
+       "File name and path to store, the final name will be added with stream id or frame count", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, file_name), ModuleParamParser<std::string>::Parser, "string"},
+      {"codec_type", "", "Replaced by file_name's extension name.", PARAM_DEPRECATED},
+      {"output_dir", "", "Replaced by file_name's path.", PARAM_DEPRECATED},
+      {"use_ffmpeg", "", "Always is FFMpeg if doing CPU encoding.", PARAM_DEPRECATED},
+      {"kbit_rate", "", "Replaced by bit_rate", PARAM_DEPRECATED},
+      {"preproc_type", "", "selected automatically.", PARAM_DEPRECATED}};
+
+  param_helper_->Register(regist_param, &param_register_);
+}
+
+void Encode::OnEos(const std::string &stream_id) {
+  auto params = param_helper_->GetParams();
+  std::lock_guard<std::mutex> lk(ctx_lock_);
+  if (params.tile_cols > 1 || params.tile_rows > 1) {
+    if (contexts_.empty()) return;
+    EncoderContext *ctx = contexts_.begin()->second;
+    auto search = positions_.find(stream_id);
+    if (search != positions_.end()) {
+      int pos = search->second;
+      positions_.erase(search);
+      LOGI(Encode) << "OnEos() stream " << stream_id << " stopped in position " << pos;
+      // move ahead the grids behind erased grid
+      for (auto it = positions_.begin(); it != positions_.end(); ++it) {
+        if (it->second > pos) {
+          it->second--;
+        }
+      }
+      // clear last grid
+      if (ctx->stream && !positions_.empty()) ctx->stream->Clear(positions_.size() - 1);
+      if (positions_.empty()) {
+        LOGI(Encode) << "OnEos() all streams stopped";
+        EncoderContext *ctx = contexts_.begin()->second;
+        if (ctx) {
+          if (ctx->stream) ctx->stream->Close();
+          if (ctx->sink) ctx->sink->Stop();
+          ctx->buffer_size = 0;
+          ctx->file.close();
+          delete ctx;
+        }
+        contexts_.clear();
+      }
+    }
+  } else {
+    auto search = contexts_.find(stream_id);
+    if (search != contexts_.end()) {
+      EncoderContext *ctx = search->second;
+      if (ctx) {
+        if (ctx->stream) ctx->stream->Close(!IsStreamRemoved(stream_id));
+        if (ctx->sink) ctx->sink->Stop();
+        ctx->buffer_size = 0;
+        ctx->file.close();
+        delete ctx;
+      }
+      contexts_.erase(stream_id);
     }
   }
-  if (paramSet.find("dump_dir") != paramSet.end()) {
-    LOGE(ENCODE) << "[Encode] parameter ``dump_dir`` is deprecated. Please use ``output_dir`` instead.";
-    ret = false;
-  }
-  if (paramSet.find("dump_type") != paramSet.end()) {
-    LOGE(ENCODE) << "[Encode] parameter ``dump_type`` is deprecated. Please use ``codec_type`` instead. "
-               << "Supported options are jpeg, h264 and hevc.";
-    ret = false;
-  }
-  if (paramSet.find("bit_rate") != paramSet.end()) {
-    LOGE(ENCODE) << "[Encode] parameter ``bit_rate`` is deprecated. Please use ``kbit_rate`` instead.";
-    ret = false;
-  }
-  if (paramSet.find("pre_type") != paramSet.end()) {
-    LOGE(ENCODE) << "[Encode] parameter ``pre_type`` is deprecated. Please use ``preproc_type`` instead.";
-    ret = false;
-  }
-  if (paramSet.find("enc_type") != paramSet.end()) {
-    LOGE(ENCODE) << "[Encode] parameter ``enc_type`` is deprecated. Please use ``codec_type`` instead. "
-               << "Supported options are jpeg, h264 and hevc.";
-    ret = false;
-  }
-  std::string preproc_type = "cpu";
-  std::string encoder_type = "cpu";
-  if (paramSet.find("preproc_type") != paramSet.end()) {
-    preproc_type = paramSet.at("preproc_type");
-    if (preproc_type != "cpu") {
-      LOGE(ENCODE) << "[Encode] preproc_type is invalid, ``" << paramSet.at("preproc_type")
-                 << "``. Choose ``cpu``. (mlu preproc is not supported yet.)";
-      ret = false;
-    }
-  }
-  if (paramSet.find("use_ffmpeg") != paramSet.end() && paramSet.at("use_ffmpeg") != "true" &&
-      paramSet.at("use_ffmpeg") != "false") {
-    LOGE(ENCODE) << "[Encode] use_ffmpeg is invalid, ``" << paramSet.at("use_ffmpeg")
-               << "``. Choose from ``true`` and ``false``.";
-    ret = false;
-  }
-  if (paramSet.find("encoder_type") != paramSet.end()) {
-    encoder_type = paramSet.at("encoder_type");
-    if (encoder_type != "mlu" && encoder_type != "cpu") {
-      LOGE(ENCODE) << "[Encode] encoder_type is invalid, ``" << paramSet.at("encoder_type")
-                 << "``. Choose from ``mlu`` and ``cpu``.";
-      ret = false;
-    }
-  }
-
-  if (paramSet.find("codec_type") != paramSet.end() && paramSet.at("codec_type") != "jpeg" &&
-      paramSet.at("codec_type") != "h264" && paramSet.at("codec_type") != "hevc") {
-    LOGE(ENCODE) << "[Encode] codec_type is invalid, ``" << paramSet.at("codec_type")
-               << "``. Choose from ``jpeg``, ``h264`` and ``hevc``.";
-    ret = false;
-  }
-
-  std::string err_msg;
-  if (!checker.IsNum({"dst_width", "dst_height", "frame_rate", "kbit_rate", "gop_size", "device_id"}, paramSet, err_msg,
-                     true)) {
-    LOGE(ENCODE) << "[Encode] " << err_msg;
-    return false;
-  }
-
-  if ((preproc_type == "mlu" || encoder_type == "mlu") && paramSet.find("device_id") == paramSet.end()) {
-    LOGE(ENCODE) << "[Encode] Must set device id when encoder type is ``mlu``";
-    ret = false;
-  }
-  if (preproc_type == "mlu" && encoder_type == "cpu") {
-    LOGE(ENCODE) << "[Encode] mlu preproc and cpu encoding is not supported.";
-    ret = false;
-  }
-  if (encoder_type == "mlu" &&
-      ((paramSet.find("dst_width") != paramSet.end() && stoi(paramSet.at("dst_width")) % 2 != 0) ||
-       (paramSet.find("dst_height") != paramSet.end() && stoi(paramSet.at("dst_height")) % 2 != 0))) {
-    LOGE(ENCODE) << "[Encode] Not supported mlu encoding image the height or the width of which is odd."
-               << " width: " << paramSet.at("dst_width") << ", height: " << paramSet.at("dst_height");
-    ret = false;
-  }
-  return ret;
 }
 
 }  // namespace cnstream

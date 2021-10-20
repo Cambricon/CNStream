@@ -39,10 +39,10 @@ public:
 struct DecodeFrame {
   bool valid;
   int64_t pts;
-  //  the below pamameters work when 'valid' set true.
+  //  the below parameters work when 'valid' set true.
   int32_t width;
   int32_t height;
-  enum PixFmt {FMT_INVALID, FMT_NV12, FMT_NV21, FMT_I420, FMT_YUYV, FMT_J420} fmt;
+  enum class PixFmt { FMT_INVALID, FMT_NV12, FMT_NV21, FMT_I420, FMT_YUYV, FMT_J420 } fmt;
   bool mlu_addr;
   int32_t device_id;
   int32_t planeNum;
@@ -55,23 +55,18 @@ struct DecodeFrame {
 };
 
 struct ExtraDecoderInfo {
-  // for mlu200 decoders
+  // for mlu decoders
   int32_t device_id = 0;
-  int32_t input_buf_num = 2;
+  int32_t input_buf_num = 2;  // for MLU200
   int32_t output_buf_num = 4;
-  bool apply_stride_align_for_scaler = false;  // for M220
+  bool apply_stride_align_for_scaler = false;  // for MLU220
   int32_t max_width = 0;   // for jpu
   int32_t max_height = 0;  // for jpu
   std::vector<uint8_t> extra_info;
 };
 
 // FIXME
-enum DecodeErrorCode {
-  ERROR_FAILED_TO_START,
-  ERROR_CORRUPT_DATA,
-  ERROR_RESET,
-  ERROR_ABORT
-};
+enum class DecodeErrorCode { ERROR_FAILED_TO_START, ERROR_CORRUPT_DATA, ERROR_RESET, ERROR_ABORT };
 
 class IDecodeResult {
  public:
@@ -94,7 +89,6 @@ class Decoder {
   IDecodeResult *result_;
 };
 
-class MluDecoderImpl;
 class MluDecoder : public Decoder {
  public:
   explicit MluDecoder(const std::string& stream_id, IDecodeResult *cb);
@@ -104,6 +98,7 @@ class MluDecoder : public Decoder {
   bool Process(VideoEsPacket *pkt) override;
 
  private:
+  using MluDecoderImpl = Decoder;
   MluDecoder(const MluDecoder& ) = delete;
   MluDecoder(MluDecoder&& ) = delete;
   MluDecoder& operator=(const MluDecoder& ) = delete;
@@ -119,10 +114,10 @@ class FFmpegCpuDecoder : public Decoder {
   void Destroy() override;
   bool Process(VideoEsPacket *pkt) override;
 
- private:
 #ifdef UNIT_TEST
-
- public:
+ public:  // NOLINT
+#else
+ private:  // NOLINT
 #endif
   bool ProcessFrame(AVFrame *frame);
   bool Process(AVPacket *pkt, bool eos);

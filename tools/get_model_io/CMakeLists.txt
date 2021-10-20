@@ -1,22 +1,39 @@
-# ---[ Google-gflags
-#include("${PROJECT_SOURCE_DIR}/cmake/FindGFlags.cmake")
-include_directories(${GFLAGS_INCLUDE_DIRS})
-
-# ---[ Google-glog
-#include("${PROJECT_SOURCE_DIR}/cmake/FindGlog.cmake")
-include_directories(${GLOG_INCLUDE_DIRS})
-
-include_directories(${PROJECT_SOURCE_DIR}/include)
-
-set(SRC get_model_io.cpp)
-get_filename_component(name "${SRC}" NAME_WE)
-message("target :  ${name}")
-add_executable(${name} ${SRC})
-
-set(LINK_LIBS cnrt cndrv easydk)
-if(MLU STREQUAL MLU220EDGE)
-    list(APPEND LINK_LIBS ion)
+cmake_minimum_required(VERSION 2.8.7)
+if(POLICY CMP0046)
+  cmake_policy(SET CMP0046 NEW)
+endif()
+if(POLICY CMP0054)
+  cmake_policy(SET CMP0054 NEW)
 endif()
 
-target_link_libraries(${name} ${LINK_LIBS} pthread ${GLOG_LIBRARIES} ${GFLAGS_LIBRARIES} dl)
+# compile flags
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG -O2")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG -g")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -D_REENTRANT -fPIC -Wno-deprecated-declarations -Wall -Werror")
 
+set(CNSTREAM_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+set(CNSTREAM_TOOLS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../)
+
+set(EXECUTABLE_OUTPUT_PATH ${CNSTREAM_TOOLS_DIR}/bin)
+
+# ---[ Google-gflags
+include(${CNSTREAM_ROOT_DIR}/cmake/FindGFlags.cmake)
+include_directories(${GFLAGS_INCLUDE_DIRS})
+
+set(CMAKE_MODULE_PATH ${CNSTREAM_ROOT_DIR}/cmake)
+# ---[ neuware
+find_package(Neuware)
+include_directories(${NEUWARE_INCLUDE_DIR})
+
+# ---[ easydk
+include(${CNSTREAM_ROOT_DIR}/cmake/have_cnstream_target.cmake)
+have_easydk_target(${CNSTREAM_ROOT_DIR})
+
+set(CMAKE_EXE_LINKER_FLAGS "-Wl,--no-as-needed")
+add_executable(get_model_io get_model_io.cpp)
+
+if(HAVE_EASYDK_TARGET)
+  add_dependencies(get_model_io easydk)
+endif()
+
+target_link_libraries(get_model_io easydk ${CNCODEC_LIBS} ${CNRT_LIBS} ${GFLAGS_LIBRARIES} pthread dl)

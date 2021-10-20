@@ -46,7 +46,7 @@ PipelineProfiler::PipelineProfiler(const ProfilerConfig& config,
   }
 
   overall_profiler_.reset(new ProcessProfiler(config, kOVERALL_PROCESS_NAME, tracer_.get()));
-  overall_profiler_->SetTraceLevel(TraceEvent::PIPELINE);
+  overall_profiler_->SetTraceLevel(TraceEvent::Level::PIPELINE);
 }
 
 ModuleProfiler* PipelineProfiler::GetModuleProfiler(const std::string& module_name) const {

@@ -27,7 +27,7 @@
 #include "cnstream_frame_va.hpp"
 #include "data_source.hpp"
 
-bool PipelineHandler::CreatePipeline(const std::string &config_fname, const std::string perf_dir) {
+bool PipelineHandler::CreatePipeline(const std::string &config_fname) {
   if (config_fname.empty()) return false;
 
   ppipeline_ = new (std::nothrow) cnstream::Pipeline("cns-pipeline");
@@ -36,7 +36,7 @@ bool PipelineHandler::CreatePipeline(const std::string &config_fname, const std:
     return false;
   }
 
-  if (0 != ppipeline_->BuildPipelineByJSONFile(config_fname)) {
+  if (!ppipeline_->BuildPipelineByJSONFile(config_fname)) {
     LOGE(WEBVISUAL) << "Build pipeline by json file failed.";
     delete ppipeline_;
     ppipeline_ = nullptr;
@@ -46,14 +46,6 @@ bool PipelineHandler::CreatePipeline(const std::string &config_fname, const std:
   auto source = dynamic_cast<cnstream::DataSource *>(ppipeline_->GetModule("source"));
   if (nullptr == source) {
     LOGE(WEBVISUAL) << "Get source module failed, source module name is 'source' by now.";
-    delete ppipeline_;
-    ppipeline_ = nullptr;
-    return false;
-  }
-
-  auto end_module = ppipeline_->GetEndModule();
-  if (end_module == nullptr) {
-    LOGE(WEBVISUAL) << "Get end module failed, please make sure end module is a converged node.";
     delete ppipeline_;
     ppipeline_ = nullptr;
     return false;
@@ -72,8 +64,8 @@ void PipelineHandler::SetMsgObserver(cnstream::StreamMsgObserver *msg_observer) 
 
 void PipelineHandler::SetDataObserver(cnstream::IModuleObserver *data_observer) {
   if (ppipeline_ && data_observer) {
-    auto end_module = ppipeline_->GetEndModule();
-    if (end_module) end_module->SetObserver(data_observer);
+    ppipeline_->RegisterFrameDoneCallBack([data_observer] (std::shared_ptr<cnstream::CNFrameInfo> data) {
+        data_observer->notify(data);});
   }
 }
 
@@ -104,8 +96,6 @@ void PipelineHandler::Stop() {
   LOGI(WEBVISUAL) << "stop pipeline.";
   std::lock_guard<std::mutex> lock(stop_mtx_);
   if (ppipeline_) {
-    RemoveStream(stream_id_);
-    stream_id_ = "";
     ppipeline_->Stop();
     if (ppipeline_->IsProfilingEnabled()) {
       gstop_perf_print = true;
@@ -143,9 +133,10 @@ bool PipelineHandler::RemoveStream(const std::string &stream_id) {
     return false;
   }
 
+  LOGI(WEBVISUAL) << "remove stream " << stream_id;
   auto source = dynamic_cast<cnstream::DataSource *>(ppipeline_->GetModule("source"));
   if (nullptr == source) return false;
 
-  source->RemoveSource(stream_id);
+  source->RemoveSource(stream_id, true);
   return true;
 }

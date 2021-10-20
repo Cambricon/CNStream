@@ -28,73 +28,84 @@
 #include "cnstream_common.hpp"
 #include "profiler/trace.hpp"
 
+/*!
+ *  @file pipeline_tracer.hpp
+ *
+ *  This file contains a declaration of the PipelineTracer class.
+ */
 namespace cnstream {
 
 template<typename T>
 class CircularBuffer;
 
-/**
- * PipelineTracer can be used to record trace events for pipeline.
+/*!
+ * @class PipelineTracer
+ *
+ * @brief PipelineTracer is a class for recording trace events of the pipeline.
  */
 class PipelineTracer : private NonCopyable {
  public:
-  /**
-   * @brief Constructor of PipelineTracer
-   * 
-   * It used to do tracing and store trace events.
-   * 
-   * @param capacity Capacity to store trace events.
-   **/
+  /*!
+   * @brief Constructs a PipelineTracer object.
+   *
+   * @param[in] capacity The capacity to store trace events.
+   *
+   * @return No return value.
+   */
   explicit PipelineTracer(size_t capacity = 100000);
-
+  /*!
+   * @brief Destructs a PipelineTracer object.
+   *
+   * @return No return value.
+   */
   ~PipelineTracer();
 
-  /**
-   * @brief Records trace event.
-   * 
-   * @param event Trace event.
-   * 
-   * @return void.
-   **/
+  /*!
+   * @brief Records a trace event using value reference semantics.
+   *
+   * @param[in] event The trace event.
+   *
+   * @return No return value.
+   */
   void RecordEvent(const TraceEvent& event);
 
-  /**
-   * @brief Records trace event.
-   * 
-   * @param event Trace event.
-   * 
-   * @return void.
-   **/
+  /*!
+   * @brief Records a trace event using move semantics.
+   *
+   * @param[in] event The trace event.
+   *
+   * @return No return value.
+   */
   void RecordEvent(TraceEvent&& event);
 
-  /**
-   * @brief Gets trace data of pipeline for a specified period of time.
-   * 
-   * @param start Start time.
-   * @param end End time.
-   * 
-   * @return Returns trace data of pipeline.
-   **/
+  /*!
+   * @brief Gets the trace data of the pipeline for a specified period of time.
+   *
+   * @param[in] start The start time.
+   * @param[in] end The end time.
+   *
+   * @return Returns the trace data of the pipeline.
+   */
   PipelineTrace GetTrace(const Time& start, const Time& end) const;
 
-  /**
-   * @brief Gets trace data of pipeline for a specified period of time.
-   * 
-   * @param end End time
-   * @param duration Length of time before `end`.
-   * 
-   * @return Returns trace data of pipeline.
-   **/
+  /*!
+   * @brief Gets the trace data of the pipeline for a specified period of time.
+   *
+   * @param[in] end The end time
+   * @param[in] duration The duration in milliseconds. The start time is the end time minus duration.
+   *
+   * @return Returns the trace data of the pipeline.
+   */
   PipelineTrace GetTraceBefore(const Time& end, const Duration& duration) const;
 
-  /**
-   * @brief Gets trace data of pipeline for a specified period of time.
-   * 
-   * @param start Start time.
-   * @param duration Length of time after `start`.
-   * 
-   * @return Returns trace data of pipeline.
-   **/
+  /*!
+   * @brief Gets the trace data of the pipeline for a specified period of time.
+   *
+   * @param[in] start The start time.
+   * @param[in] duration The duration in milliseconds. The end time is the start time plus duration.
+   *
+   * @return Returns the trace data of the pipeline.
+   */
   PipelineTrace GetTraceAfter(const Time& start, const Duration& duration) const;
 
  private:

@@ -19,13 +19,14 @@
  *************************************************************************/
 
 #include "infer_resource.hpp"
+
 #include <cnrt.h>
 #include <map>
 #include <memory>
 #include <string>
 #include <utility>
 #include <bitset>
-#include "cnstream_error.hpp"
+
 #include "inferencer.hpp"
 
 namespace cnstream {
@@ -49,8 +50,8 @@ IOResValue CpuInputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, u
   value.ptrs = mem_op.AllocCpuInput();
   for (int input_idx = 0; input_idx < input_num; ++input_idx) {
     value.datas[input_idx].ptr = value.ptrs[input_idx];
-    value.datas[input_idx].shape = model->InputShapes()[input_idx];
-    value.datas[input_idx].batch_offset = static_cast<size_t>(value.datas[input_idx].shape.hwc()) * sizeof(float);
+    value.datas[input_idx].shape = model->InputShape(input_idx);
+    value.datas[input_idx].batch_offset = value.datas[input_idx].shape.DataCount() * sizeof(float);
     value.datas[input_idx].batchsize = batchsize;
   }
   return value;
@@ -77,9 +78,9 @@ IOResValue CpuOutputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, 
   value.ptrs = mem_op.AllocCpuOutput();
   for (int output_idx = 0; output_idx < output_num; ++output_idx) {
     value.datas[output_idx].ptr = value.ptrs[output_idx];
-    value.datas[output_idx].shape = model->OutputShapes()[output_idx];
+    value.datas[output_idx].shape = model->OutputShape(output_idx);
     value.datas[output_idx].batch_offset =
-        static_cast<size_t>(value.datas[output_idx].shape.nhwc() / batchsize) * sizeof(float);
+        value.datas[output_idx].shape.DataCount() * sizeof(float);
     value.datas[output_idx].batchsize = batchsize;
   }
   return value;
@@ -106,7 +107,7 @@ IOResValue MluInputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, u
   value.ptrs = mem_op.AllocMluInput();
   for (int input_idx = 0; input_idx < input_num; ++input_idx) {
     value.datas[input_idx].ptr = value.ptrs[input_idx];
-    value.datas[input_idx].shape = model->InputShapes()[input_idx];
+    value.datas[input_idx].shape = model->InputShape(input_idx);
     value.datas[input_idx].batch_offset = model->GetInputDataBatchAlignSize(input_idx);
     value.datas[input_idx].batchsize = batchsize;
   }
@@ -134,7 +135,7 @@ IOResValue MluOutputResource::Allocate(std::shared_ptr<edk::ModelLoader> model, 
   value.ptrs = mem_op.AllocMluOutput();
   for (int output_idx = 0; output_idx < output_num; ++output_idx) {
     value.datas[output_idx].ptr = value.ptrs[output_idx];
-    value.datas[output_idx].shape = model->OutputShapes()[output_idx];
+    value.datas[output_idx].shape = model->OutputShape(output_idx);
     value.datas[output_idx].batch_offset = model->GetOutputDataBatchAlignSize(output_idx);
     value.datas[output_idx].batchsize = batchsize;
   }
@@ -166,33 +167,44 @@ RCOpResource::~RCOpResource() {
 
 void RCOpResource::Init(uint32_t dst_w, uint32_t dst_h, CNDataFormat src_fmt,
                         edk::CoreVersion core_ver) {
-  enum : uint64_t {
-    YUV2RGBA32_NV21 = (uint64_t)CN_PIXEL_FORMAT_YUV420_NV21 << 32 | CN_PIXEL_FORMAT_RGBA32,
-    YUV2RGBA32_NV12 = (uint64_t)CN_PIXEL_FORMAT_YUV420_NV12 << 32 | CN_PIXEL_FORMAT_RGBA32,
+  enum class ColorCvt : uint64_t {
+    YUV2RGBA32_NV21 = static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) << 32 |
+                      static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_RGBA32),
+    YUV2RGBA32_NV12 = static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12) << 32 |
+                      static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_RGBA32),
 
-    YUV2BGRA32_NV21 = (uint64_t)CN_PIXEL_FORMAT_YUV420_NV21 << 32 | CN_PIXEL_FORMAT_BGRA32,
-    YUV2BGRA32_NV12 = (uint64_t)CN_PIXEL_FORMAT_YUV420_NV12 << 32 | CN_PIXEL_FORMAT_BGRA32,
+    YUV2BGRA32_NV21 = static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) << 32 |
+                      static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_BGRA32),
+    YUV2BGRA32_NV12 = static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12) << 32 |
+                      static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_BGRA32),
 
-    YUV2ARGB32_NV21 = (uint64_t)CN_PIXEL_FORMAT_YUV420_NV21 << 32 | CN_PIXEL_FORMAT_ARGB32,
-    YUV2ARGB32_NV12 = (uint64_t)CN_PIXEL_FORMAT_YUV420_NV12 << 32 | CN_PIXEL_FORMAT_ARGB32,
+    YUV2ARGB32_NV21 = static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) << 32 |
+                      static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_ARGB32),
+    YUV2ARGB32_NV12 = static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12) << 32 |
+                      static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_ARGB32),
 
-    YUV2ABGR32_NV21 = (uint64_t)CN_PIXEL_FORMAT_YUV420_NV21 << 32 | CN_PIXEL_FORMAT_ABGR32,
-    YUV2ABGR32_NV12 = (uint64_t)CN_PIXEL_FORMAT_YUV420_NV12 << 32 | CN_PIXEL_FORMAT_ABGR32
-  } color_cvt_mode = static_cast<decltype(color_cvt_mode)>((uint64_t)src_fmt << 32 | dst_fmt_);
-
-  static const std::map<decltype(color_cvt_mode), edk::MluResizeConvertOp::ColorMode> cvt_mode_map = {
-    std::make_pair(YUV2RGBA32_NV21, edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV21),
-    std::make_pair(YUV2RGBA32_NV12, edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV12),
-    std::make_pair(YUV2BGRA32_NV21, edk::MluResizeConvertOp::ColorMode::YUV2BGRA_NV21),
-    std::make_pair(YUV2BGRA32_NV12, edk::MluResizeConvertOp::ColorMode::YUV2BGRA_NV12),
-    std::make_pair(YUV2ARGB32_NV21, edk::MluResizeConvertOp::ColorMode::YUV2ARGB_NV21),
-    std::make_pair(YUV2ARGB32_NV12, edk::MluResizeConvertOp::ColorMode::YUV2ARGB_NV12),
-    std::make_pair(YUV2ABGR32_NV21, edk::MluResizeConvertOp::ColorMode::YUV2ABGR_NV21),
-    std::make_pair(YUV2ABGR32_NV12, edk::MluResizeConvertOp::ColorMode::YUV2ABGR_NV12)
+    YUV2ABGR32_NV21 = static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21) << 32 |
+                      static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_ABGR32),
+    YUV2ABGR32_NV12 = static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12) << 32 |
+                      static_cast<uint64_t>(CNDataFormat::CN_PIXEL_FORMAT_ABGR32)
   };
 
+  ColorCvt color_cvt_mode =
+      static_cast<ColorCvt>(static_cast<uint64_t>(src_fmt) << 32 | static_cast<uint64_t>(dst_fmt_));
+
+  static const std::map<decltype(color_cvt_mode), edk::MluResizeConvertOp::ColorMode> cvt_mode_map = {
+      std::make_pair(ColorCvt::YUV2RGBA32_NV21, edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV21),
+      std::make_pair(ColorCvt::YUV2RGBA32_NV12, edk::MluResizeConvertOp::ColorMode::YUV2RGBA_NV12),
+      std::make_pair(ColorCvt::YUV2BGRA32_NV21, edk::MluResizeConvertOp::ColorMode::YUV2BGRA_NV21),
+      std::make_pair(ColorCvt::YUV2BGRA32_NV12, edk::MluResizeConvertOp::ColorMode::YUV2BGRA_NV12),
+      std::make_pair(ColorCvt::YUV2ARGB32_NV21, edk::MluResizeConvertOp::ColorMode::YUV2ARGB_NV21),
+      std::make_pair(ColorCvt::YUV2ARGB32_NV12, edk::MluResizeConvertOp::ColorMode::YUV2ARGB_NV12),
+      std::make_pair(ColorCvt::YUV2ABGR32_NV21, edk::MluResizeConvertOp::ColorMode::YUV2ABGR_NV21),
+      std::make_pair(ColorCvt::YUV2ABGR32_NV12, edk::MluResizeConvertOp::ColorMode::YUV2ABGR_NV12)};
+
   LOGF_IF(INFERENCER, cvt_mode_map.find(color_cvt_mode) == cvt_mode_map.end())
-    << "Unsupport color convert mode. src pixel format : " << src_fmt << ", dst pixel format : " << dst_fmt_;
+      << "Unsupport color convert mode. src pixel format : " << static_cast<uint64_t>(src_fmt)
+      << ", dst pixel format : " << static_cast<uint64_t>(dst_fmt_);
 
   if (Initialized()) {
     Destroy();

@@ -33,7 +33,7 @@
 
 namespace cnstream {
 
-const EventType T_type = EVENT_WARNING;
+const EventType T_type = EventType::EVENT_WARNING;
 const char *T_messgge = "test_post_event";
 
 class TestModuleBase : public Module {
@@ -64,26 +64,6 @@ TEST(CoreModule, OpenCloseProcess) {
   module.Process(nullptr);
 }
 
-TEST(CoreModule, ModuleMask) {
-  uint32_t seed = (uint32_t)time(0);
-  const uint32_t mask_len = 32;
-  TestModuleBase module;
-  uint64_t mask = 0;
-
-  ModuleParamSet params;
-  ASSERT_TRUE(module.Open(params));
-  EXPECT_EQ(module.GetId(), (uint32_t)0);
-  for (uint32_t i = 0; i < mask_len; ++i) {
-    module.SetParentId(rand_r(&seed) % mask_len);
-  }
-  std::vector<size_t> p_ids = module.GetParentIds();
-  for (auto &id : p_ids) {
-    mask |= (uint64_t)1 << id;
-  }
-  EXPECT_EQ(module.GetModulesMask(), mask);
-  module.Close();
-}
-
 TEST(CoreModule, TransmitAttr) {
   TestModuleBase module;
   EXPECT_FALSE(module.HasTransmit());
@@ -94,7 +74,6 @@ TEST(CoreModule, TransmitAttr) {
 TEST(CoreModule, postevent) {
   Pipeline pipe("pipe");
   std::shared_ptr<TestModuleBase> ptr(new (TestModuleBase));
-  TestModuleBase module;
   ModuleParamSet parames;
   ASSERT_TRUE(ptr->Open(parames));
   ptr->SetContainer(&pipe);

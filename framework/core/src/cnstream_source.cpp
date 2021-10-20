@@ -91,13 +91,13 @@ void SourceModule::ReturnStreamIndex(const std::string &stream_id) {
 
 int SourceModule::AddSource(std::shared_ptr<SourceHandler> handler) {
   if (!handler) {
+    LOGE(CORE) << "handler is null";
     return -1;
   }
   std::string stream_id = handler->GetStreamId();
   std::unique_lock<std::mutex> lock(mutex_);
   if (source_map_.find(stream_id) != source_map_.end()) {
-    LOGE(CORE) << "[" << stream_id << "]: "
-               << "Duplicate stream_id";
+    LOGE(CORE) << "[" << stream_id << "]: " << "Duplicate stream_id";
     return -1;
   }
 
@@ -107,15 +107,10 @@ int SourceModule::AddSource(std::shared_ptr<SourceHandler> handler) {
     return -1;
   }
 
-  handler->SetStreamUniqueIdx(source_idx_);
-  source_idx_++;
-
   SetStreamRemoved(stream_id, false);
-  LOGI(CORE) << "[" << handler->GetStreamId() << "]: "
-             << "Stream opening...";
+  LOGI(CORE) << "[" << handler->GetStreamId() << "]: " << "Stream opening...";
   if (handler->Open() != true) {
-    LOGE(CORE) << "[" << stream_id << "]: "
-               << "stream Open failed";
+    LOGE(CORE) << "[" << stream_id << "]: " << "stream Open failed";
     return -1;
   }
   source_map_[stream_id] = handler;
@@ -168,7 +163,7 @@ int SourceModule::RemoveSource(const std::string &stream_id, bool force) {
     }
     source_map_.erase(iter);
   }
-  LOGI(CORE) << "Finish remove stream, stream id : [" << stream_id << "]";
+  LOGI(CORE) << "Finish removing stream, stream id : [" << stream_id << "]";
   return 0;
 }
 
@@ -199,10 +194,6 @@ int SourceModule::RemoveSources(bool force) {
 bool SourceModule::SendData(std::shared_ptr<CNFrameInfo> data) {
   if (!data->IsEos() && IsStreamRemoved(data->stream_id)) {
     return false;
-  }
-  auto profiler = this->GetProfiler();
-  if (profiler && !data->IsEos()) {
-    profiler->RecordProcessEnd(kPROCESS_PROFILER_NAME, std::make_pair(data->stream_id, data->timestamp));
   }
   return this->TransmitData(data);
 }

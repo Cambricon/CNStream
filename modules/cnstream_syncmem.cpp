@@ -78,22 +78,22 @@ CNSyncedMemory::~CNSyncedMemory() {
 inline void CNSyncedMemory::ToCpu() {
   if (0 == size_) return;
   switch (head_) {
-    case UNINITIALIZED:
+    case SyncedHead::UNINITIALIZED:
       CNStreamMallocHost(&cpu_ptr_, size_);
       memset(cpu_ptr_, 0, size_);
-      head_ = HEAD_AT_CPU;
+      head_ = SyncedHead::HEAD_AT_CPU;
       own_cpu_data_ = true;
       break;
-    case HEAD_AT_MLU:
+    case SyncedHead::HEAD_AT_MLU:
       if (NULL == cpu_ptr_) {
         CNStreamMallocHost(&cpu_ptr_, size_);
         own_cpu_data_ = true;
       }
       CALL_CNRT_BY_CONTEXT(cnrtMemcpy(cpu_ptr_, mlu_ptr_, size_, CNRT_MEM_TRANS_DIR_DEV2HOST), dev_id_, ddr_chn_);
-      head_ = SYNCED;
+      head_ = SyncedHead::SYNCED;
       break;
-    case HEAD_AT_CPU:
-    case SYNCED:
+    case SyncedHead::HEAD_AT_CPU:
+    case SyncedHead::SYNCED:
       break;
   }
 }
@@ -101,21 +101,21 @@ inline void CNSyncedMemory::ToCpu() {
 inline void CNSyncedMemory::ToMlu() {
   if (0 == size_) return;
   switch (head_) {
-    case UNINITIALIZED:
+    case SyncedHead::UNINITIALIZED:
       CALL_CNRT_BY_CONTEXT(cnrtMalloc(&mlu_ptr_, size_), dev_id_, ddr_chn_);
-      head_ = HEAD_AT_MLU;
+      head_ = SyncedHead::HEAD_AT_MLU;
       own_mlu_data_ = true;
       break;
-    case HEAD_AT_CPU:
+    case SyncedHead::HEAD_AT_CPU:
       if (NULL == mlu_ptr_) {
         CALL_CNRT_BY_CONTEXT(cnrtMalloc(&mlu_ptr_, size_), dev_id_, ddr_chn_);
         own_mlu_data_ = true;
       }
       CALL_CNRT_BY_CONTEXT(cnrtMemcpy(mlu_ptr_, cpu_ptr_, size_, CNRT_MEM_TRANS_DIR_HOST2DEV), dev_id_, ddr_chn_);
-      head_ = SYNCED;
+      head_ = SyncedHead::SYNCED;
       break;
-    case HEAD_AT_MLU:
-    case SYNCED:
+    case SyncedHead::HEAD_AT_MLU:
+    case SyncedHead::SYNCED:
       break;
   }
 }
@@ -135,7 +135,7 @@ void CNSyncedMemory::SetCpuData(void* data) {
     CNStreamFreeHost(cpu_ptr_);
   }
   cpu_ptr_ = data;
-  head_ = HEAD_AT_CPU;
+  head_ = SyncedHead::HEAD_AT_CPU;
   own_cpu_data_ = false;
 }
 
@@ -153,7 +153,7 @@ void CNSyncedMemory::SetMluData(void* data) {
     CALL_CNRT_BY_CONTEXT(cnrtFree(mlu_ptr_), dev_id_, ddr_chn_);
   }
   mlu_ptr_ = data;
-  head_ = HEAD_AT_MLU;
+  head_ = SyncedHead::HEAD_AT_MLU;
   own_mlu_data_ = false;
 }
 
@@ -183,14 +183,14 @@ int CNSyncedMemory::GetMluDdrChnId() const {
 void* CNSyncedMemory::GetMutableCpuData() {
   std::lock_guard<std::mutex> lock(mutex_);
   ToCpu();
-  head_ = HEAD_AT_CPU;
+  head_ = SyncedHead::HEAD_AT_CPU;
   return cpu_ptr_;
 }
 
 void* CNSyncedMemory::GetMutableMluData() {
   std::lock_guard<std::mutex> lock(mutex_);
   ToMlu();
-  head_ = HEAD_AT_MLU;
+  head_ = SyncedHead::HEAD_AT_MLU;
   return mlu_ptr_;
 }
 

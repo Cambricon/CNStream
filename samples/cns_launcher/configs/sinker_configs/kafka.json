@@ -1,0 +1,12 @@
+{
+  "kafka_producer" : {
+    "class_name" : "cnstream::Kafka",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "handler" : "DefaultKafkaHandler",
+      "topic" : "CnstreamData",
+      "brokers" : "localhost:9092"
+    }
+  }
+}
