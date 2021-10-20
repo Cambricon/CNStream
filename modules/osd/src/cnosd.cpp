@@ -162,11 +162,18 @@ void CnOsd::DrawLabel(cv::Mat image, const CNInferObjsPtr& objs_holder, std::vec
     int text_height = 0;
     for (auto& key : attr_keys) {
       CNInferAttr infer_attr = object->GetAttribute(key);
-      if (infer_attr.value < 0 || infer_attr.value > static_cast<int>(secondary_labels_.size()) - 1) continue;
-      std::string secondary_label = secondary_labels_[infer_attr.value];
-      std::string secondary_score = std::to_string(infer_attr.score);
-      std::string secondary_text = secondary_label + " : " + secondary_score;
-      DrawText(image, top_left + cv::Point(0, label_bottom_y), secondary_text, color, 0.5, &text_height);
+      if (infer_attr.value < 0 || infer_attr.value > static_cast<int>(secondary_labels_.size()) - 1) {
+        std::string attr_value = object->GetExtraAttribute(key);
+        if (attr_value.empty()) continue;
+        std::string secondary_text = key + " : " + attr_value;
+        DrawText(image, top_left + cv::Point(0, label_bottom_y), secondary_text, color, 0.5, &text_height);
+      } else {
+        std::string secondary_label = secondary_labels_[infer_attr.value];
+        std::string secondary_score = std::to_string(infer_attr.score);
+        secondary_score = secondary_score.substr(0, std::min(size_t(4), secondary_score.size()));
+        std::string secondary_text = key + " : " + secondary_label + " score[" + secondary_score + "]";
+        DrawText(image, top_left + cv::Point(0, label_bottom_y), secondary_text, color, 0.5, &text_height);
+      }
       label_bottom_y += text_height;
     }
   }

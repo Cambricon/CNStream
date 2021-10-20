@@ -35,10 +35,10 @@
 #include <string>
 #include <vector>
 
+#include "cnstream_logging.hpp"
 #include "cnstream_module.hpp"
 #include "cnstream_pipeline.hpp"
 #include "cnstream_version.hpp"
-#include "cnstream_logging.hpp"
 
 static void Usage() {
   std::cout << "Usage:" << std::endl;
@@ -50,8 +50,6 @@ static void Usage() {
             << "Print all modules" << std::endl;
   std::cout << std::left << std::setw(40) << "\t -m, --module-name"
             << "List the module parameters" << std::endl;
-  std::cout << std::left << std::setw(40) << "\t -c, --check"
-            << "Check the config file" << std::endl;
   std::cout << std::left << std::setw(40) << "\t -v, --version"
             << "Print version information\n"
             << std::endl;
@@ -60,7 +58,6 @@ static void Usage() {
 static const struct option long_option[] = {{"help", no_argument, nullptr, 'h'},
                                             {"all", no_argument, nullptr, 'a'},
                                             {"module-name", required_argument, nullptr, 'm'},
-                                            {"check", required_argument, nullptr, 'c'},
                                             {"version", no_argument, nullptr, 'v'},
                                             {nullptr, 0, nullptr, 0}};
 
@@ -204,148 +201,6 @@ static void PrintModuleParameters(const std::string& module_name) {
   delete module;
 }
 
-static void CheckConfigFile(const std::string& config_file) {
-  bool result = true;
-  std::ifstream ifs(config_file);
-  if (!ifs.is_open()) {
-    std::cout << "Open file filed: " << config_file << std::endl;
-    return;
-  }
-
-  std::string jstr((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-  ifs.close();
-
-  /* traversing modules */
-  std::vector<cnstream::CNModuleConfig> mconfs;
-  std::vector<std::string> namelist;
-  std::vector<std::string> linkedlist;
-  rapidjson::Document doc;
-  if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
-    std::string err_str = "Check pipeline configuration failed. Error code [" + std::to_string(doc.GetParseError()) +
-                          "]" + " Offset [" + std::to_string(doc.GetErrorOffset()) + "]. ";
-    std::cout << err_str << std::endl;
-    return;
-  }
-
-  for (rapidjson::Document::ConstMemberIterator iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter) {
-    rapidjson::StringBuffer sbuf;
-    rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
-    iter->value.Accept(jwriter);
-
-    cnstream::ProfilerConfig profiler_config;
-    std::string item_name = iter->name.GetString();
-    if (cnstream::kPROFILER_CONFIG_NAME == item_name) {
-      LOGI(INSPECT) << "Check profiler [" << item_name << "] ...";
-      if (!profiler_config.ParseByJSONStr(std::string(sbuf.GetString()))) {
-        LOGE(INSPECT) << "Parse profiler config failed.";
-        return;
-      }
-      LOGI(INSPECT) << "Succeed!";
-      continue;
-    }
-
-    cnstream::CNModuleConfig mconf;
-    mconf.name = iter->name.GetString();
-    LOGI(INSPECT) << "Check module [" << mconf.name << "] ...";
-    bool ret = true;
-    if (find(namelist.begin(), namelist.end(), mconf.name) != namelist.end()) {
-      std::string err_str = "Module name should be unique in Jason file. Module name : [" + mconf.name + "]" +
-                            " appeared more than one time.";
-      std::cout << err_str << std::endl;
-      ret = false;
-    }
-    namelist.push_back(mconf.name);
-
-    if (!mconf.ParseByJSONStr(std::string(sbuf.GetString()))) {
-      std::string err_str = "Check module configuration failed, Module name : [" + mconf.name + "].";
-      std::cout << err_str << std::endl;
-      ret = false;
-    }
-
-    /***************************************************
-     * add config file path to custom parameters
-     ***************************************************/
-
-    std::string jf_dir = "";
-    auto slash_pos = config_file.rfind("/");
-    if (slash_pos == std::string::npos) {
-      jf_dir = ".";
-    } else {
-      jf_dir = config_file.substr(0, slash_pos);
-    }
-    jf_dir += '/';
-
-    if (mconf.parameters.end() != mconf.parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
-      std::cout
-        << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
-        << "up by cnstream as the directory where the configuration file is located and passed to the module.";
-      ret = false;
-    }
-
-    mconf.parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;
-
-    mconfs.push_back(mconf);
-    if (!ret) {
-      LOGI(INSPECT) << "Failed!";
-    } else {
-      LOGI(INSPECT) << "Succeed!";
-    }
-    result &= ret;
-  }
-
-  cnstream::ModuleCreatorWorker creator;
-  // check className
-  for (auto& cfg : mconfs) {
-    LOGI(INSPECT) << "Check module [" << cfg.name << "] custom parameter...";
-    bool ret = true;
-    cnstream::Module* module = creator.Create(cfg.className, cfg.name);
-    if (nullptr == module) {
-      std::cout << "Check module configuration failed, Module name : [" << cfg.name << "] class_name : ["
-                << cfg.className << "] non-existent ." << std::endl;
-      ret = false;
-    }
-    if (!module->CheckParamSet(cfg.parameters)) {
-      std::cout << "Check " << cfg.name << " module config file failed!" << std::endl;
-      // delete module;
-      ret = false;
-    }
-    if (module) {
-      delete module;
-    }
-    if (!ret) {
-      LOGI(INSPECT) << "Failed!";
-    } else {
-      LOGI(INSPECT) << "Succeed!";
-    }
-    result &= ret;
-  }
-  // check next_modules
-  for (auto& cfg : mconfs) {
-    for (auto& name : cfg.next) {
-      if (find(namelist.begin(), namelist.end(), name) == namelist.end()) {
-        std::cout << "Check module configuration failed, Module name : [" << cfg.name << "] next_modules : [" << name
-                  << "] non-existent ." << std::endl;
-        result = false;
-      } else {
-        linkedlist.push_back(name);
-      }
-    }
-  }
-  // check linked modules
-  for (auto& cfg : mconfs) {
-    if (cfg.className != "cnstream::DataSource" &&
-        cfg.className != "cnstream::ModuleIPC" &&
-        find(linkedlist.begin(), linkedlist.end(), cfg.name) == linkedlist.end()) {
-      std::cout << cfg.name << " not linked to any module." << std::endl;
-      result = false;
-    }
-  }
-  if (result) {
-    std::cout << "Check module config file successfully!" << std::endl;
-  }
-  return;
-}
-
 int main(int argc, char* argv[]) {
   int opt = 0;
   bool getopt = false;
@@ -375,14 +230,6 @@ int main(int argc, char* argv[]) {
         ss << optarg;
         module_name = ss.str();
         PrintModuleParameters(module_name);
-        break;
-
-      case 'c':
-        ss.clear();
-        ss.str("");
-        ss << optarg;
-        config_file = ss.str();
-        CheckConfigFile(config_file);
         break;
 
       case 'v':

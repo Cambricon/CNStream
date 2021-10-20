@@ -25,14 +25,10 @@
 #include <thread>
 #include <vector>
 
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
-#else
-#error OpenCV required
 #endif
 #include "device/mlu_context.h"
 #include "easyinfer/mlu_memory_op.h"
@@ -59,11 +55,11 @@ static std::string GetModelPath() {
   std::string model_path = "";
   switch (core_ver) {
     case edk::CoreVersion::MLU220:
-      model_path = "../../data/models/MLU220/classification/resnet18/resnet18_bs4_c4.cambricon";
+      model_path = "../../data/models/resnet18_b4c4_bgra_mlu220.cambricon";
       break;
     case edk::CoreVersion::MLU270:
     default:
-      model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
+      model_path = "../../data/models/resnet50_b16c16_bgra_mlu270.cambricon";
       break;
   }
   return model_path;
@@ -91,7 +87,7 @@ void GetResult(std::shared_ptr<InferObserver> observer) {
     auto data = observer->GetOutputFrame();
     if (data != nullptr) {
       if (!data->IsEos()) {
-        CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
+        CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
         EXPECT_EQ(frame->frame_id, i);
         i++;
         std::cout << "Got data, frame id = " << frame->frame_id << std::endl;
@@ -140,21 +136,20 @@ TEST(Inferencer, Demo) {
 
     auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
     std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+    data->collection.Add(kCNDataFrameTag, frame);
+    data->collection.Add(kCNInferObjsTag, std::make_shared<CNInferObjs>());
     frame->frame_id = i;
     data->timestamp = i;
     frame->width = width;
     frame->height = height;
-    frame->ptr_mlu[0] = planes[0];
-    frame->ptr_mlu[1] = planes[1];
+    void *ptr_mlu[2] = {planes[0], planes[1]};
     frame->stride[0] = frame->stride[1] = width;
     frame->ctx.ddr_channel = g_channel_id;
     frame->ctx.dev_id = g_dev_id;
     frame->ctx.dev_type = DevContext::DevType::MLU;
-    frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+    frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
     frame->dst_device_id = g_dev_id;
-    frame->CopyToSyncMem();
-    data->datas[CNDataFramePtrKey] = frame;
-    data->datas[CNInferObjsPtrKey] = std::make_shared<CNInferObjs>();
+    frame->CopyToSyncMem(ptr_mlu, true);
     int ret = infer->Process(data);
     EXPECT_EQ(ret, 1);
   }

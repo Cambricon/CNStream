@@ -38,11 +38,19 @@ extern "C" {
 #include <string>
 #include <vector>
 
+#include "data_source.hpp"
+
 namespace cnstream {
 
 struct VideoInfo {
   AVCodecID codec_id;
+#ifdef HAVE_FFMPEG_AVDEVICE  // for usb camera
+  int format;
+  int width;;
+  int height;
+#endif
   int progressive;
+  MaximumVideoResolution maximum_resolution;
   std::vector<unsigned char> extra_data;
 };
 
@@ -102,6 +110,7 @@ class EsParser {
   int Open(AVCodecID codec_id, IParserResult *result, uint8_t* paramset = nullptr, uint32_t paramset_size = 0);
   void Close();
   int Parse(const VideoEsPacket &pkt);
+  int ParseEos();
 
  private:
   EsParser(const EsParser& ) = delete;

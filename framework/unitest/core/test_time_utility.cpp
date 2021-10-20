@@ -23,7 +23,8 @@
 #include <chrono>
 #include <future>
 #include <string>
-#include "util/cnstream_time_utility.hpp"
+
+#include "util/cnstream_timer.hpp"
 
 using std::chrono::microseconds;
 using std::chrono::milliseconds;
@@ -91,53 +92,6 @@ TEST(TimeUtilityTest, TickTockClockTest) {
   duration_recorder.Clear();
   avg_duration = duration_recorder.ElapsedAverageAsDouble();
   EXPECT_DOUBLE_EQ(avg_duration, 0.0);
-}
-
-TEST(TimeUtilityTest, TimerCallbackTimes) {
-  // ensure every event will be triggered
-  std::atomic<int> call_times{10};
-  std::promise<void> prom;
-  std::future<void> fut = prom.get_future();
-  auto action = [&call_times, &prom] {
-    if (--call_times == 0) {
-      prom.set_value();
-    }
-  };
-
-  Timer timer(microseconds(100));
-  for (int i = call_times; i > 0; --i) {
-    timer.Start(action);
-  }
-
-  fut.wait();
-  EXPECT_EQ(call_times, 0);
-}
-
-TEST(TimeUtilityTest, TimerBlockAction) {
-  // will not blocked by a long term action
-  std::atomic<bool> block{true};
-  auto block_action = [&block] {
-    while (block) {
-    }
-  };
-  Timer timer(microseconds(100));
-  timer.Start(block_action);
-
-  std::atomic<int> call_times{10};
-  std::promise<void> prom;
-  std::future<void> fut = prom.get_future();
-  auto another_action = [&call_times, &prom] {
-    if (--call_times == 0) {
-      prom.set_value();
-    }
-  };
-  for (int i = 0; i < 10; ++i) {
-    timer.Start(another_action, microseconds(100));
-  }
-
-  fut.wait();
-  block = false;
-  SUCCEED();
 }
 
 }  // namespace cnstream

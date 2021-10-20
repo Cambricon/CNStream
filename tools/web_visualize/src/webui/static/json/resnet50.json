@@ -7,26 +7,26 @@
   "source" : {
     "class_name" : "cnstream::DataSource",
     "parallelism" : 0,
-    "next_modules" : ["detector"],
+    "next_modules" : ["classifier"],
     "custom_params" : {
       "reuse_cndec_buf" : "false",
       "output_type" : "mlu",
       "decoder_type" : "mlu",
-      "device_id" : "0"
+      "device_id" : 0
     }
   },
 
-  "detector" : {
+  "classifier" : {
     "class_name" : "cnstream::Inferencer",
     "parallelism" : 1,
     "max_input_queue_size" : 20,
     "next_modules" : ["osd"],
     "custom_params" : {
-      "model_path" : "../models/MLU270/Classification/resnet50/resnet50_offline_v1.3.0.cambricon",
+      "model_path" : "../models/yolov3_b4c4_argb_mlu270.cambricon",
       "func_name" : "subnet0",
       "postproc_name" : "PostprocClassification",
       "batching_timeout" : 30,
-      "device_id" : "0"
+      "device_id" : 0
     }
   },
 
@@ -36,7 +36,7 @@
     "max_input_queue_size" : 20,
     "custom_params" : {
       "chinese_label_flag" : "false", 
-      "label_path" : "../models/MLU270/Classification/resnet50/synset_words.txt"
+      "label_path" : "../models/synset_words.txt"
     }
   }
 }

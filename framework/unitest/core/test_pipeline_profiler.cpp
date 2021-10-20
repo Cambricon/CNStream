@@ -40,15 +40,13 @@ class TestModule : public Module {
   void Close() override { return; }
 };  // class TestModule
 
-static std::pair<std::shared_ptr<Pipeline>, std::vector<std::shared_ptr<Module>>>
-CreatePipeline() {
-  auto pipeline = std::make_shared<Pipeline>("pipeline");
-  auto module1 = std::shared_ptr<Module>(new TestModule("module1"));
-  auto module2 = std::shared_ptr<Module>(new TestModule("module2"));
-  pipeline->AddModule(module1);
-  pipeline->AddModule(module2);
-  pipeline->LinkModules(module1, module2);
-  return std::make_pair(pipeline, std::vector<std::shared_ptr<Module>>({module1, module2}));
+static std::vector<std::shared_ptr<Module>>
+CreateModules() {
+  std::vector<std::shared_ptr<Module>> modules = {
+    std::make_shared<TestModule>("module1"),
+    std::make_shared<TestModule>("module2")
+  };
+  return modules;
 }
 
 TEST(CorePipelineProfiler, GetName) {
@@ -85,10 +83,8 @@ TEST(CorePipelineProfiler, GetProfile) {
   ProfilerConfig config;
   config.enable_tracing = true;
   config.enable_profiling = true;
-  auto pair = CreatePipeline();
-  auto pipeline = pair.first;
-  auto modules = pair.second;
-  PipelineProfiler profiler(config, pipeline->GetName(), modules);
+  auto modules = CreateModules();
+  PipelineProfiler profiler(config, "test_pipeline", modules);
   const std::string stream_name = "stream0";
   Time start_time = Clock::now();
   profiler.RecordInput(std::make_pair(stream_name, 0));
@@ -100,7 +96,7 @@ TEST(CorePipelineProfiler, GetProfile) {
   profiler.GetModuleProfiler(modules[0]->GetName())
       ->RecordProcessEnd(kPROCESS_PROFILER_NAME, std::make_pair(stream_name, 0));
   PipelineProfile profile = profiler.GetProfile();
-  EXPECT_EQ(profile.pipeline_name, pipeline->GetName());
+  EXPECT_EQ(profile.pipeline_name, "test_pipeline");
   EXPECT_EQ(profile.overall_profile.completed, 2);
 
   profile = profiler.GetProfile(Time::min(), Time::max());
@@ -117,10 +113,8 @@ TEST(CorePipelineProfiler, GetProfile_Disable_Tracing) {
   ProfilerConfig config;
   config.enable_tracing = false;
   config.enable_profiling = true;
-  auto pair = CreatePipeline();
-  auto pipeline = pair.first;
-  auto modules = pair.second;
-  PipelineProfiler profiler(config, pipeline->GetName(), modules);
+  auto modules = CreateModules();
+  PipelineProfiler profiler(config, "test_pipeline", modules);
   const std::string stream_name = "stream0";
   profiler.RecordInput(std::make_pair(stream_name, 0));
   profiler.RecordInput(std::make_pair(stream_name, 1));
@@ -135,10 +129,8 @@ TEST(CorePipelineProfiler, RecordInputOutput) {
   ProfilerConfig config;
   config.enable_tracing = true;
   config.enable_profiling = true;
-  auto pair = CreatePipeline();
-  auto pipeline = pair.first;
-  auto modules = pair.second;
-  PipelineProfiler profiler(config, pipeline->GetName(), modules);
+  auto modules = CreateModules();
+  PipelineProfiler profiler(config, "test_pipeline", modules);
   const std::string stream_name = "stream0";
   Time start_time = Clock::now();
   profiler.RecordInput(std::make_pair(stream_name, 0));
@@ -156,10 +148,8 @@ TEST(CorePipelineProfiler, OnStreamEos) {
   ProfilerConfig config;
   config.enable_tracing = true;
   config.enable_profiling = true;
-  auto pair = CreatePipeline();
-  auto pipeline = pair.first;
-  auto modules = pair.second;
-  PipelineProfiler profiler(config, pipeline->GetName(), modules);
+  auto modules = CreateModules();
+  PipelineProfiler profiler(config, "test_pipeline", modules);
   const std::string stream_name = "stream0";
   profiler.RecordInput(std::make_pair(stream_name, 0));
   profiler.RecordOutput(std::make_pair(stream_name, 0));

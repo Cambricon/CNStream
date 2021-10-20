@@ -1,0 +1,20 @@
+{
+  "detector" : {
+    "class_name" : "cnstream::Inferencer2",
+    "parallelism" : 2,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path" : "../../../data/models/yolov5_4c4b_rgb_270.cambricon",
+      "func_name" : "subnet0",
+      "preproc_name" : "CNCV",
+      "postproc_name" : "VideoPostprocYolov5",
+      "normalize" : true,
+      "keep_aspect_ratio" : "true",
+      "model_input_pixel_format" : "RGB24",
+      "batching_timeout" : 100,
+      "threshold" : 0.6,
+      "engine_num" : 4,
+      "device_id" : 0
+    }
+  }
+}

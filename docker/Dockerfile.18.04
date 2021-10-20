@@ -33,7 +33,6 @@ FROM ubuntu:18.04
 MAINTAINER <Cambricon, Inc.>
 
 ARG toolkit_package=""
-ARG mlu_platform=MLU270
 ARG with_cnstream_code=no
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -62,7 +61,7 @@ RUN if [ -n "$toolkit_package" ]; then \
       if [ "$with_cnstream_code" = "yes" ]; then \
         cd /root && git clone https://gitee.com/SolutionSDK/CNStream.git CNStream && \
         cd /root/CNStream && mkdir build && cd build &&\
-        cmake .. -DMLU=$mlu_platform && make -j; \
+        cmake .. && make -j4; \
       fi \
     fi
 

@@ -58,7 +58,7 @@ class ImageReceiver : public cnstream::Module, public cnstream::ModuleCreator<Im
   void Close() override {}
 
   int Process(std::shared_ptr<cnstream::CNFrameInfo> data) override {
-    cnstream::CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
+    cnstream::CNDataFramePtr frame = data->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag);
     frames.push_back(frame);
     return 0;
   }
@@ -105,7 +105,7 @@ std::vector<cnstream::CNDataFramePtr> GetFrames(const cnstream::ModuleParamSet &
   source_config.maxInputQueueSize = 0;
   source_config.parallelism = 0;
 
-  EXPECT_EQ(0, pipeline.BuildPipeline({source_config, receiver_config}));
+  EXPECT_TRUE(pipeline.BuildPipeline({source_config, receiver_config}));
 
   cnstream::DataSource* source = dynamic_cast<cnstream::DataSource*>(pipeline.GetModule("source"));
   ImageReceiver* receiver = dynamic_cast<ImageReceiver*>(pipeline.GetModule("receiver"));

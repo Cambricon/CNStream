@@ -26,14 +26,10 @@
 #include <thread>
 #include <vector>
 
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
-#else
-#error OpenCV required
 #endif
 
 #include "cnfont.hpp"
@@ -41,16 +37,6 @@
 #include "cnstream_frame_va.hpp"
 
 namespace cnstream {
-
-static std::vector<std::string> StringSplit(const std::string &s, char c) {
-  std::stringstream ss(s);
-  std::string piece;
-  std::vector<std::string> result;
-  while (std::getline(ss, piece, c)) {
-    result.push_back(piece);
-  }
-  return result;
-}
 
 static std::vector<std::string> LoadLabels(const std::string& label_path) {
   std::vector<std::string> labels;
@@ -150,11 +136,11 @@ bool Osd::Open(cnstream::ModuleParamSet paramSet) {
     label_path = paramSet["secondary_label_path"];
     label_path = GetPathRelativeToTheJSONFile(label_path, paramSet);
     secondary_labels_ = LoadLabels(label_path);
-    if (paramSet.find("attr_keys") != paramSet.end()) {
-      std::string attr_key = paramSet["attr_keys"];
-      attr_key.erase(std::remove_if(attr_key.begin(), attr_key.end(), ::isspace), attr_key.end());
-      attr_keys_ = StringSplit(attr_key, ',');
-    }
+  }
+  if (paramSet.find("attr_keys") != paramSet.end()) {
+    std::string attr_key = paramSet["attr_keys"];
+    attr_key.erase(std::remove_if(attr_key.begin(), attr_key.end(), ::isspace), attr_key.end());
+    attr_keys_ = StringSplit(attr_key, ',');
   }
   if (paramSet.find("label_size") != paramSet.end()) {
     std::string label_size = paramSet["label_size"];
@@ -201,20 +187,15 @@ int Osd::Process(std::shared_ptr<CNFrameInfo> data) {
     return -1;
   }
 
-  CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
+  CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
   if (frame->width < 0 || frame->height < 0) {
     LOGE(OSD) << "OSD module processed illegal frame: width or height may < 0.";
     return -1;
   }
-  if (frame->ptr_cpu[0] == nullptr && frame->ptr_mlu[0] == nullptr && frame->cpu_data == nullptr &&
-      frame->mlu_data == nullptr) {
-    LOGE(OSD) << "OSD module processed illegal frame: data ptr point to nullptr.";
-    return -1;
-  }
 
   CNInferObjsPtr objs_holder = nullptr;
-  if (data->datas.find(CNInferObjsPtrKey) != data->datas.end()) {
-    objs_holder = cnstream::GetCNInferObjsPtr(data);
+  if (data->collection.HasValue(kCNInferObjsTag)) {
+    objs_holder = data->collection.Get<CNInferObjsPtr>(kCNInferObjsTag);
   }
 
   if (!logo_.empty()) {

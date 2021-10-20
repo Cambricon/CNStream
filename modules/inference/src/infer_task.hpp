@@ -27,7 +27,7 @@
 #include <string>
 #include <vector>
 
-#include "cnstream_error.hpp"
+#include "exception.hpp"
 
 namespace cnstream {
 

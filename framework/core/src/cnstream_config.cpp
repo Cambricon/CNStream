@@ -39,6 +39,32 @@
 
 namespace cnstream {
 
+static inline
+bool IsProfilerItem(const std::string& item_name) {
+  return kProfilerConfigName == item_name;
+}
+
+static inline
+std::string GetPathDir(const std::string& path) {
+  auto slash_pos = path.rfind("/");
+  return slash_pos == std::string::npos ? "" : path.substr(0, slash_pos) + "/";
+}
+
+bool CNConfigBase::ParseByJSONFile(const std::string& jfile) {
+  std::ifstream ifs(jfile);
+  if (!ifs.is_open()) {
+    LOGE(CORE) << "Config file open failed :" << jfile;
+    return false;
+  }
+  std::string jstr((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  ifs.close();
+  config_root_dir = GetPathDir(jfile);
+  if (!ParseByJSONStr(jstr)) {
+    return false;
+  }
+  return true;
+}
+
 bool ProfilerConfig::ParseByJSONStr(const std::string& jstr) {
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
@@ -78,24 +104,6 @@ bool ProfilerConfig::ParseByJSONStr(const std::string& jstr) {
   return true;
 }
 
-bool ProfilerConfig::ParseByJSONFile(const std::string& jfname) {
-  std::ifstream ifs(jfname);
-
-  if (!ifs.is_open()) {
-    LOGE(CORE) << "File open failed :" << jfname;
-    return false;
-  }
-
-  std::string jstr((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-  ifs.close();
-
-  if (!ParseByJSONStr(jstr)) {
-    return false;
-  }
-
-  return true;
-}
-
 bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
   rapidjson::Document doc;
   if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
@@ -126,11 +134,6 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
       return false;
     }
     this->parallelism = doc["parallelism"].GetUint();
-    if (this->className != "cnstream::DataSource" && this->className != "cnstream::TestDataSource" &&
-        this->className != "cnstream::ModuleIPC" && this->parallelism < 1) {
-      LOGE(CORE) << "parallelism must be larger than 0, when class name is " << this->className;
-      return false;
-    }
   } else {
     this->parallelism = 1;
   }
@@ -158,7 +161,7 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
         LOGE(CORE) << "next_modules must be an array of strings.";
         return false;
       }
-      this->next.push_back(iter->GetString());
+      this->next.insert(iter->GetString());
     }
   } else {
     this->next = {};
@@ -184,123 +187,111 @@ bool CNModuleConfig::ParseByJSONStr(const std::string& jstr) {
       }
       this->parameters.insert(std::make_pair(iter->name.GetString(), value));
     }
+
+    if (this->parameters.end() != this->parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
+      LOGW(CORE) << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set up by "
+                  << "cnstream as the directory where the configuration file is located and passed to the module.";
+    }
+
+    this->parameters[CNS_JSON_DIR_PARAM_NAME] = config_root_dir;
   } else {
     this->parameters = {};
   }
   return true;
 }
 
-bool CNModuleConfig::ParseByJSONFile(const std::string& jfname) {
-  std::ifstream ifs(jfname);
-
-  if (!ifs.is_open()) {
-    LOGE(CORE) << "File open failed :" << jfname;
+bool CNSubgraphConfig::ParseByJSONStr(const std::string& jstr) {
+  rapidjson::Document doc;
+  if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
+    LOGE(CORE) << "Parse subgraph configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
+               << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. JSON:" << jstr;
     return false;
   }
 
-  std::string jstr((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-  ifs.close();
+  /* get members */
+  const auto end = doc.MemberEnd();
 
-  if (!ParseByJSONStr(jstr)) {
+  // config_path
+  if (end == doc.FindMember("config_path")) {
+    LOGE(CORE) << "Subgraph has to have a config_path.";
     return false;
-  }
-
-  /***************************************************
-   * add config file path to custom parameters
-   ***************************************************/
-
-  std::string jf_dir = "";
-  auto slash_pos = jfname.rfind("/");
-  if (slash_pos == std::string::npos) {
-    jf_dir = ".";
   } else {
-    jf_dir = jfname.substr(0, slash_pos);
-  }
-  jf_dir += '/';
-
-  if (this->parameters.end() != this->parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
-    LOGW(CORE) << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
-                 << "up by cnstream as the directory where the configuration file is located and passed to the module.";
+    if (!doc["config_path"].IsString()) {
+      LOGE(CORE) << "config_path must be string type.";
+      return false;
+    }
+    this->config_path = config_root_dir + doc["config_path"].GetString();
   }
 
-  this->parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;
+  // next
+  if (end != doc.FindMember("next_modules")) {
+    if (!doc["next_modules"].IsArray()) {
+      LOGE(CORE) << "next_modules must be array type.";
+      return false;
+    }
+    auto values = doc["next_modules"].GetArray();
+    for (auto iter = values.begin(); iter != values.end(); ++iter) {
+      if (!iter->IsString()) {
+        LOGE(CORE) << "next_modules must be an array of strings.";
+        return false;
+      }
+      this->next.insert(iter->GetString());  // De-duplication
+    }
+  } else {
+    this->next = {};
+  }
+
   return true;
 }
 
-bool ConfigsFromJsonFile(const std::string& config_file,
-                         std::vector<CNModuleConfig>* pmodule_configs,
-                         ProfilerConfig* pprofiler_config) {
-  auto& module_configs = *pmodule_configs;
-  auto& profiler_config = *pprofiler_config;
-
-  std::ifstream ifs(config_file);
-  if (!ifs.is_open()) {
-    LOGE(CORE) << "Failed to open file: " << config_file;
-    return false;
-  }
-
-  std::string jstr((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-  ifs.close();
-
-  /* traversing config items */
-  std::vector<std::string> namelist;
+bool CNGraphConfig::ParseByJSONStr(const std::string& json_str) {
   rapidjson::Document doc;
-  if (doc.Parse<rapidjson::kParseCommentsFlag>(jstr.c_str()).HasParseError()) {
-    LOGE(CORE) << "Parse pipeline configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
+  if (doc.Parse<rapidjson::kParseCommentsFlag>(json_str.c_str()).HasParseError()) {
+    LOGE(CORE) << "Parse graph configuration failed. Error code [" << std::to_string(doc.GetParseError()) << "]"
                << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. ";
     return false;
   }
 
-  for (rapidjson::Document::ConstMemberIterator iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter) {
+  // traversing config items
+  for (rapidjson::Document::ConstMemberIterator iter = doc.MemberBegin();
+      iter != doc.MemberEnd(); ++iter) {
     rapidjson::StringBuffer sbuf;
     rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
     iter->value.Accept(jwriter);
 
     std::string item_name = iter->name.GetString();
-    if (kPROFILER_CONFIG_NAME == item_name) {
-      if (!profiler_config.ParseByJSONStr(std::string(sbuf.GetString()))) {
+    std::string item_value = sbuf.GetString();
+
+    if (IsProfilerItem(item_name)) {
+      // parse if profiler config
+      if (!profiler_config.ParseByJSONStr(item_value)) {
         LOGE(CORE) << "Parse profiler config failed.";
         return false;
       }
-      continue;
-    }
-
-    CNModuleConfig mconf;
-    mconf.name = item_name;
-    if (find(namelist.begin(), namelist.end(), mconf.name) != namelist.end()) {
-      LOGE(CORE) << "Module name should be unique in Json file. Module name : [" << mconf.name + "]"
-                 << " appeared more than one time.";
-      return false;
-    }
-    namelist.push_back(mconf.name);
-
-    if (!mconf.ParseByJSONStr(std::string(sbuf.GetString()))) {
-      LOGE(CORE) << "Parse module config failed. Module name : [" << mconf.name << "]";
-      return false;
-    }
-
-    /***************************************************
-     * add config file path to custom parameters
-     ***************************************************/
-
-    std::string jf_dir = "";
-    auto slash_pos = config_file.rfind("/");
-    if (slash_pos == std::string::npos) {
-      jf_dir = ".";
+    } else if (IsSubgraphItem(item_name)) {
+      // parse if subgraph config
+      CNSubgraphConfig subgraph_config;
+      subgraph_config.name = item_name;
+      if (!subgraph_config.ParseByJSONStr(item_value)) {
+        LOGE(CORE) << "Parse subgraph config failed. Subgraph name : [" + item_name + "].";
+        return false;
+      }
+      // correct the relative path of subgraph configuration file.
+      subgraph_config.config_path = config_root_dir + subgraph_config.config_path;
+      subgraph_configs.push_back(std::move(subgraph_config));
     } else {
-      jf_dir = config_file.substr(0, slash_pos);
-    }
-    jf_dir += '/';
+      // parse module config and insert graph nodes
+      CNModuleConfig mconf;
+      mconf.config_root_dir = config_root_dir;
+      mconf.name = item_name;
+      if (!mconf.ParseByJSONStr(item_value)) {
+        LOGE(CORE) << "Parse module config failed. Module name : [" << mconf.name << "]";
+        return false;
+      }
 
-    if (mconf.parameters.end() != mconf.parameters.find(CNS_JSON_DIR_PARAM_NAME)) {
-      LOGW(CORE)
-          << "Parameter [" << CNS_JSON_DIR_PARAM_NAME << "] does not take effect. It is set "
-          << "up by cnstream as the directory where the configuration file is located and passed to the module.";
+      module_configs.push_back(std::move(mconf));
     }
-
-    mconf.parameters[CNS_JSON_DIR_PARAM_NAME] = jf_dir;
-    module_configs.push_back(mconf);
-  }
+  }  // for json items
   return true;
 }
 

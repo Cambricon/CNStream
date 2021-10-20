@@ -24,39 +24,45 @@
 /**
  * @file cnstream_version.hpp
  *
- * This file contains a declaration of cnstream versions.
+ * This file contains a declaration of CNStream versions.
  */
 
-#define CNSTREAM_MAJOR_VERSION 5
-#define CNSTREAM_MINOR_VERSION 3
+#define CNSTREAM_MAJOR_VERSION 6
+#define CNSTREAM_MINOR_VERSION 1
 #define CNSTREAM_PATCH_VERSION 0
 
 namespace cnstream {
 
+// Group:Framework Function
 /**
- * Get cnstream version string
+ * Gets the CNStream version string.
  *
- * @return Version string formatted as "v%major.%minor.%patch".
+ * @return Returns the version string formatted as "v%major.%minor.%patch".
  *         e.g. "v3.5.1".
  */
 const char* VersionString();
 
+// Group:Framework Function
 /**
- * Get cnstream major version.
+ * Gets the CNStream major version.
  *
- * @return Major version, [0, MAXINT].
+ * @return Returns the major version, [0, MAXINT].
  */
 const int MajorVersion();
+
+// Group:Framework Function
 /**
- * Get cnstream minor version.
+ * Gets the CNStream minor version.
  *
- * @return Minor version, [0, MAXINT].
+ * @return Returns the minor version, [0, MAXINT].
  */
 const int MinorVersion();
+
+// Group:Framework Function
 /**
- * Get cnstream patch version.
+ * Gets the CNStream patch version.
  *
- * @return Patch version, [0, MAXINT].
+ * @return Returns the patch version, [0, MAXINT].
  */
 const int PatchVersion();
 

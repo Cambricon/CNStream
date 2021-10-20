@@ -151,11 +151,11 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
 
   auto auto_set_done = std::make_shared<AutoSetDone>(ret_promise, finfo);
   if (batching_by_obj_) {
-    if (finfo->datas.find(CNInferObjsPtrKey) == finfo->datas.end()) {
+    if (!finfo->collection.HasValue(kCNInferObjsTag)) {
       timeout_helper_.UnlockOperator();
       return card;
     }
-    CNInferObjsPtr objs_holder = cnstream::GetCNInferObjsPtr(finfo);
+    CNInferObjsPtr objs_holder = finfo->collection.Get<CNInferObjsPtr>(kCNInferObjsTag);
     objs_holder->mutex_.lock();
     CNObjsVec objs = objs_holder->objs_;
     objs_holder->mutex_.unlock();
@@ -201,14 +201,14 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
 }
 
 static bool CheckModel(const std::shared_ptr<edk::ModelLoader>& model) {
-  auto shapes = model->InputShapes();
-  if (shapes.size() != 1) {
-    LOGE(INFERENCER) << "Unsupport model with " << shapes.size() << " input.";
+  if (model->InputNum() != 1) {
+    LOGE(INFERENCER) << "Unsupport model with " << model->InputNum() << " input.";
     return false;
   }
 
-  if (shapes[0].c != 4) {
-    LOGE(INFERENCER) << "Use mlu to do preprocessing, only support model with c = 4, but c = " << shapes[0].c;
+  if (model->InputShape(0).C() != 4) {
+    LOGE(INFERENCER) << "Use mlu to do preprocessing, only support model with c = 4, but c = "
+                     << model->InputShape(0).C();
     return false;
   }
   return true;

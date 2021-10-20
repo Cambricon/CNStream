@@ -1,0 +1,20 @@
+{
+  "profiler_config" : {
+    "enable_profiling" : true,
+    "enable_tracing" : false
+  },
+
+  "subgraph:decode" : {
+    "config_path" : "../configs/decode_config.json",
+    "next_modules" : ["subgraph:vehicle_cts_recognize"]
+  },
+
+  "subgraph:vehicle_cts_recognize" : {
+    "config_path" : "../configs/vehicle_cts_mlu270.json",
+    "next_modules" : ["subgraph:sinker"]
+  },
+
+  "subgraph:sinker" : {
+    "config_path" : "../configs/sinker_configs/__SINKER_PLACEHOLDER__"
+  }
+}

@@ -26,8 +26,6 @@
 #include <cxxabi.h>
 #include <unistd.h>
 
-#include "cnstream_logging.hpp"
-
 #include <atomic>
 #include <functional>
 #include <list>
@@ -43,63 +41,80 @@
 #include "cnstream_config.hpp"
 #include "cnstream_eventbus.hpp"
 #include "cnstream_frame.hpp"
+#include "cnstream_logging.hpp"
+#include "private/cnstream_module_pri.hpp"
 #include "util/cnstream_queue.hpp"
 #include "util/cnstream_rwlock.hpp"
 
 namespace cnstream {
+
+class Pipeline;
+class ModuleProfiler;
+struct NodeContext;
+
 /**
- * @brief IModuleObserver virtual base class.
+ * @class IModuleObserver
  *
- * IModuleObserver is an interface class. User need to implement an observer
- * based on this, and register it to one module.
- *
+ * @brief IModuleObserver is an interface class. Users need to implement an observer
+ *        based on this, and register it to one module.
  */
 class IModuleObserver {
  public:
   /**
-   * @brief Notify "data" after processed by this module.
+   * @brief Notifies "data" after being processed by this module.
+   *
+   * @param[in] data The frame that is notified to observer.
+   *
+   * @return No return value.
    */
   virtual void notify(std::shared_ptr<CNFrameInfo> data) = 0;
-  virtual ~IModuleObserver() {}
+  /**
+   * @brief Default destructor. A destructor to destruct module observer.
+   *
+   * @return No return value.
+   */
+  virtual ~IModuleObserver() = default;
 };
 
-class Pipeline;
-class ModuleProfiler;
-
 /**
- * @brief Module virtual base class.
+ * @class Module.
  *
- * Module is the parent class of all modules. A module could have configurable
+ * @brief Module is the parent class of all modules. A module could have configurable
  * number of upstream links and downstream links.
  * Some modules are already constructed with a framework,
- * such as source, inferencer, and so on.
- * You can also design your own modules.
+ * such as source, inferencer, and so on. You can also design your own modules.
  */
 class Module : private NonCopyable {
  public:
   /**
-   * Constructor.
+   * @brief Constructor. A constructor to construct module object.
    *
-   * @param name The name of a module. Modules defined in a pipeline should
-   *             have different names.
+   * @param[in] name The name of a module. Modules defined in a pipeline must have different names.
+   *
+   * @return No return value.
    */
   explicit Module(const std::string &name) : name_(name) {}
+  /**
+   * @brief Destructor. A destructor to destruct module instance.
+   *
+   * @return No return value.
+   */
   virtual ~Module();
   /**
-   * Registers an observer to the module.
+   * @brief Registers an observer to the module.
    *
-   * @param observer An observer you defined.
+   * @param[in] observer An observer you defined.
    *
-   * @return Void.
+   * @return No return value.
    */
   void SetObserver(IModuleObserver *observer) {
     RwLockWriteGuard guard(observer_lock_);
     observer_ = observer;
   }
   /**
-   * Opens resources for a module.
+   * @brief Opens resources for a module.
    *
-   * @param param_set A set of parameters for this module.
+   * @param[in] param_set A set of parameters for this module.
    *
    * @return Returns true if this function has run successfully. Otherwise, returns false.
    *
@@ -110,9 +125,9 @@ class Module : private NonCopyable {
   virtual bool Open(ModuleParamSet param_set) = 0;
 
   /**
-   * Closes resources for a module.
+   * @brief Closes resources for a module.
    *
-   * @return Void.
+   * @return No return value.
    *
    * @note You do not need to call this function by yourself. This function is called
    *       by pipeline automatically when the pipeline is stopped. The pipeline calls the ``Close`` function
@@ -121,9 +136,9 @@ class Module : private NonCopyable {
   virtual void Close() = 0;
 
   /**
-   * Processes data.
+   * @brief Processes data.
    *
-   * @param data The data to be processed by the module.
+   * @param[in] data The data to be processed by the module.
    *
    * @retval 0: The data is processed successfully. The data should be transmitted in the framework then.
    * @retval >0: The data is processed successfully. The data has been handled by this module. The ``hasTransmit_`` must
@@ -134,25 +149,26 @@ class Module : private NonCopyable {
   virtual int Process(std::shared_ptr<CNFrameInfo> data) = 0;
 
   /**
-   * Notify flow-EOS arrives, the module should reset internal status if needed.
+   * @brief Notifies flow-EOS arriving, the module should reset internal status if needed.
    *
-   * Please be noted:
-   *   this function will be invoked when flow-EOS is forwarded by the framework
+   * @param[in] stream_id The stream identification.
+   *
+   * @note This function will be invoked when flow-EOS is forwarded by the framework.
    */
   virtual void OnEos(const std::string &stream_id) {}
 
   /**
-   * Gets the name of this module.
+   * @brief Gets the name of this module.
    *
    * @return Returns the name of this module.
    */
   inline std::string GetName() const { return name_; }
 
   /**
-   * Posts an event to the pipeline.
+   * @brief Posts an event to the pipeline.
    *
-   * @param type The type of an event.
-   * @param msg The event message string.
+   * @param[in] type The type of an event.
+   * @param[in] msg The event message string.
    *
    * @return Returns true if this function has run successfully. Returns false if this
    *         module has not been added to the pipeline.
@@ -160,9 +176,9 @@ class Module : private NonCopyable {
   bool PostEvent(EventType type, const std::string &msg);
 
   /**
-   * Posts an event to the pipeline.
+   * @brief Posts an event to the pipeline.
    *
-   * @param Event with event type, stream_id, message, module name and thread_id.
+   * @param[in] Event with event type, stream_id, message, module name and thread_id.
    *
    * @return Returns true if this function has run successfully. Returns false if this
    *         module has not been added to the pipeline.
@@ -174,7 +190,7 @@ class Module : private NonCopyable {
    *
    * Valid when the module has permission to transmit data by itself.
    *
-   * @param data A pointer to the information of the frame.
+   * @param[in] data A pointer to the information of the frame.
    *
    * @return Returns true if the data has been transmitted successfully. Otherwise, returns false.
    */
@@ -183,62 +199,25 @@ class Module : private NonCopyable {
   /**
    * @brief Checks parameters for a module, including parameter name, type, value, validity, and so on.
    *
-   * @param paramSet Parameters for this module.
+   * @param[in] paramSet Parameters for this module.
    *
    * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
   virtual bool CheckParamSet(const ModuleParamSet &paramSet) const { return true; }
 
+  /**
+   * @brief Gets the pipeline this module belongs to.
+   *
+   * @return Returns the pointer to pipeline instance.
+   */
   Pipeline* GetContainer() const { return container_; }
 
   /**
-   * @brief Gets module profiler
+   * @brief Gets module profiler.
+   *
+   * @return Returns a pointer to the module's profiler.
    */
   ModuleProfiler* GetProfiler();
-
- public:
-  /**
-   * @brief ParamRegister
-   *
-   * Each module registers its own parameters and descriptions.
-   * CNStream Inspect tool uses this class to detect parameters of each module.
-   *
-   */
-  ParamRegister param_register_;
-
-  /* useless for users */
-  size_t GetId();
-
- protected:
-#ifdef UNIT_TEST
-
- public:
-#endif
-
-  friend class Pipeline;
-  friend class CNFrameInfo;
-  /**
-   * Sets a container to this module and identifies which pipeline the module is added to.
-   *
-   * @param container A pipeline pointer to the container of this module.
-   *
-   * @note This function is called automatically by the pipeline after this module
-   *       is added into the pipeline. You do not need to call this function by yourself.
-   */
-  void SetContainer(Pipeline *container);
-
-  /* useless for users */
-  std::vector<size_t> GetParentIds() const { return parent_ids_; }
-
-  /* useless for users, set upstream node id to this module */
-  void SetParentId(size_t id) {
-    parent_ids_.push_back(id);
-    mask_ = 0;
-    for (auto &v : parent_ids_) mask_ |= (uint64_t)1 << v;
-  }
-
-  /* useless for users */
-  uint64_t GetModulesMask() const { return mask_; }
 
   /**
    * @brief Checks if this module has permission to transmit data by itself.
@@ -247,42 +226,58 @@ class Module : private NonCopyable {
    *
    * @see Process
    */
- public:
+
   bool HasTransmit() const { return hasTransmit_.load(); }
 
- protected:
   /**
-   * @brief Processes the data.
+   * Each module registers its own parameters and descriptions.
+   * CNStream Inspect tool uses this class to detect parameters of each module.
+   */
+  ParamRegister param_register_;
+
+
+#ifdef UNIT_TEST
+ public:  // NOLINT
+#else
+ protected:  // NOLINT
+#endif
+
+  friend class Pipeline;
+  friend class CNFrameInfo;
+  /**
+   * @brief Sets a container to this module and identifies which pipeline the module is added to.
    *
-   * This function is called by a pipeline.
+   * @param[in] container A pipeline pointer to the container of this module.
    *
-   * @param data A pointer to the information of the frame.
+   * @note This function is called automatically by the pipeline after this module
+   *       is added into the pipeline. You do not need to call this function by yourself.
+   */
+  void SetContainer(Pipeline *container);
+
+  /**
+   * @brief Processes the data. This function is called by a pipeline.
    *
-   * @return
+   * @param[in] data A pointer to the information of the frame.
+   *
    * @retval 0: The process has been run successfully. The data should be transmitted by framework then.
    * @retval >0: The process has been run successfully. The data has been handled by this module. The ``hasTransmit_``
    * must be set. The Pipeline::ProvideData should be called by Module to transmit data to the next modules in the
    * pipeline.
-   * @retval <0: Pipeline posts an event with the EVENT_ERROR event type and return
-   *             number.
+   * @retval <0: Pipeline posts an event with the EVENT_ERROR event type and return number.
    */
   int DoProcess(std::shared_ptr<CNFrameInfo> data);
 
- protected:
   Pipeline *container_ = nullptr;  ///< The container.
   RwLock container_lock_;
 
   std::string name_;                      ///< The name of the module.
   std::atomic<bool> hasTransmit_{false};  ///< Whether it has permission to transmit data.
 
- private:
-  size_t id_ = INVALID_MODULE_ID;
-  /* supports no more than 64 modules */
-  static std::mutex module_id_lock_;
-  static uint64_t module_id_mask_;
-
-  std::vector<size_t> parent_ids_;
-  uint64_t mask_ = 0;
+#ifdef UNIT_TEST
+ public:  // NOLINT
+#else
+ private:    // NOLINT
+#endif
 
   IModuleObserver *observer_ = nullptr;
   RwLock observer_lock_;
@@ -293,166 +288,28 @@ class Module : private NonCopyable {
     }
   }
   int DoTransmitData(std::shared_ptr<CNFrameInfo> data);
+
+  size_t GetId();
+  size_t id_ = INVALID_MODULE_ID;
+  NodeContext* context_ = nullptr;  // used by pipeline
 };
 
 /**
- * @brief ModuleEx class.
+ * @class ModuleEx
  *
- * Module has permission to transmit data by itself.
+ * @brief ModuleEx is the base class of the modules who have permission to transmit processed data by themselves.
  */
 class ModuleEx : public Module {
  public:
   /**
-   * Constructor.
+   * @brief Constructor. A constructor to construct the module which has permission to transmit processed data by
+   *        itself.
    *
-   * @param name The name of a module. Modules defined in a pipeline should
-   *             have different names.
+   * @param[in] name The name of a module. Modules defined in a pipeline must have different names.
+   *
+   * @return No return value.
    */
   explicit ModuleEx(const std::string &name) : Module(name) { hasTransmit_.store(true); }
-};
-
-/**
- * @brief ModuleCreator, ModuleFactory, and ModuleCreatorWorker:
- *   Implements reflection mechanism to create a module instance dynamically with the ``ModuleClassName`` and
- *    ``moduleName`` parameters.
- *   See ActorFactory&DynamicCreator in https://github.com/Bwar/Nebula (under Apache2.0 license)
- */
-
-/**
- * @brief ModuleFactory
- * Provides functions to create instances with the ``ModuleClassName``and ``moduleName`` parameters.
- */
-class ModuleFactory {
- public:
-  /**
-   * @brief Creates or gets the instance of the ModuleFactory class.
-   *
-   * @return Returns the instance of the ModuleFactory class.
-   */
-  static ModuleFactory *Instance() {
-    if (nullptr == factory_) {
-      factory_ = new (std::nothrow) ModuleFactory();
-      LOGF_IF(CORE, nullptr == factory_) << "ModuleFactory::Instance() new ModuleFactory failed.";
-    }
-    return (factory_);
-  }
-  virtual ~ModuleFactory() {}
-
-  /**
-   * Registers ``ModuleClassName`` and ``CreateFunction``.
-   *
-   * @param strTypeName The module class name.
-   * @param pFunc The ``CreateFunction`` of a Module object that has a parameter ``moduleName``.
-   *
-   * @return Returns true if this function has run successfully.
-   */
-  bool Regist(const std::string &strTypeName, std::function<Module *(const std::string &)> pFunc) {
-    if (nullptr == pFunc) {
-      return (false);
-    }
-    bool ret = map_.insert(std::make_pair(strTypeName, pFunc)).second;
-    return ret;
-  }
-
-  /**
-   * Creates a module instance with ``ModuleClassName`` and ``moduleName``.
-   *
-   * @param strTypeName The module class name.
-   * @param name The ``CreateFunction`` of a Module object that has a parameter ``moduleName``.
-   *
-   * @return Returns the module instance if this function has run successfully. Otherwise, returns nullptr if failed.
-   */
-  Module *Create(const std::string &strTypeName, const std::string &name) {
-    auto iter = map_.find(strTypeName);
-    if (iter == map_.end()) {
-      return (nullptr);
-    } else {
-      return (iter->second(name));
-    }
-  }
-
-  /**
-   * Gets all registered modules.
-   *
-   * @return All registered module class names.
-   */
-  std::vector<std::string> GetRegisted() {
-    std::vector<std::string> registed_modules;
-    for (auto &it : map_) {
-      registed_modules.push_back(it.first);
-    }
-    return registed_modules;
-  }
-
- private:
-  ModuleFactory() {}
-  static ModuleFactory *factory_;
-  std::unordered_map<std::string, std::function<Module *(const std::string &)>> map_;
-};
-
-/**
- * @brief ModuleCreator
- *   A concrete ModuleClass needs to inherit ModuleCreator to enable reflection mechanism.
- *   ModuleCreator provides ``CreateFunction``, and registers ``ModuleClassName`` and ``CreateFunction`` to
- * ModuleFactory().
- */
-template <typename T>
-class ModuleCreator {
- public:
-  struct Register {
-    Register() {
-      char *szDemangleName = nullptr;
-      std::string strTypeName;
-#ifdef __GNUC__
-      szDemangleName = abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr, nullptr);
-#else
-      // in this format?:     szDemangleName =  typeid(T).name();
-      szDemangleName = abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr, nullptr);
-#endif
-      if (nullptr != szDemangleName) {
-        strTypeName = szDemangleName;
-        free(szDemangleName);
-      }
-      ModuleFactory::Instance()->Regist(strTypeName, CreateObject);
-    }
-    inline void do_nothing() const {}
-  };
-  ModuleCreator() { register_.do_nothing(); }
-  virtual ~ModuleCreator() { register_.do_nothing(); }
-  /**
-   * @brief Creates an instance of template (T) with specified instance name.
-   *
-   * This is a template function.
-   *
-   * @param name The name of the instance.
-   *
-   * @return Returns the instance of template (T).
-   */
-  static T *CreateObject(const std::string &name) { return new (std::nothrow) T(name); }
-  static Register register_;
-};
-
-template <typename T>
-typename ModuleCreator<T>::Register ModuleCreator<T>::register_;
-
-/**
- * @brief ModuleCreatorWorker, a dynamic-creator helper.
- */
-class ModuleCreatorWorker {
- public:
-  /**
-   * @brief Creates a module instance with ``ModuleClassName`` and ``moduleName``.
-   *
-   * @param strTypeName The module class name.
-   * @param name The module name.
-   *
-   * @return Returns the module instance if the module instance is created successfully. Returns nullptr if failed.
-   * @see ModuleFactory::Create
-   */
-  Module *Create(const std::string &strTypeName, const std::string &name) {
-    Module *p = ModuleFactory::Instance()->Create(strTypeName, name);
-    return (p);
-  }
 };
 
 }  // namespace cnstream

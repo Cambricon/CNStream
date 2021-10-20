@@ -83,19 +83,19 @@ int main(int argc, char *argv[]) {
   ::gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   if (FLAGS_offline_model.size() == 0) {
-    std::cout << "offline model size is 0";
+    std::cout << "offline model size is 0\n";
     return 0;
   }
   if (FLAGS_function_name.size() == 0) {
-    std::cout << "function name size is 0";
+    std::cout << "function name size is 0\n";
     return 0;
   }
   if (FLAGS_th_num <= 0) {
-    std::cout << "thread number <= 0";
+    std::cout << "thread number <= 0\n";
     return 0;
   }
   if (FLAGS_iterations <= 0) {
-    std::cout << "invoke time per thread <= 0";
+    std::cout << "invoke time per thread <= 0\n";
     return 0;
   }
 

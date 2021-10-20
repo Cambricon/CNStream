@@ -48,9 +48,9 @@ namespace cnstream {
 class RtspHandlerImpl : public IDecodeResult, public SourceRender {
  public:
   explicit RtspHandlerImpl(DataSource *module, const std::string &url_name, RtspHandler *handler,
-                           bool use_ffmpeg, int reconnect)
+                           bool use_ffmpeg, int reconnect, const MaximumVideoResolution& maximum_resolution)
       : SourceRender(handler), module_(module), url_name_(url_name), handler_(handler),
-        use_ffmpeg_(use_ffmpeg), reconnect_(reconnect) {
+        use_ffmpeg_(use_ffmpeg), reconnect_(reconnect), maximum_resolution_(maximum_resolution) {
     stream_id_ = handler_->GetStreamId();
   }
   ~RtspHandlerImpl() {}
@@ -70,6 +70,7 @@ class RtspHandlerImpl : public IDecodeResult, public SourceRender {
   DataSourceParam param_;
   bool use_ffmpeg_ = false;
   int reconnect_ = 0;
+  MaximumVideoResolution maximum_resolution_;
 
  private:
   /**/

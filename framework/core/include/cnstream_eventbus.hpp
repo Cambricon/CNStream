@@ -42,52 +42,85 @@ namespace cnstream {
 
 class Pipeline;
 
-/**
- * @brief Flags to specify the way in which bus watchers handled one event.
+/*!
+ * @enum EventType
+ *
+ * @brief Enumeration variables describing the type of event.
  */
-enum EventHandleFlag {
-  EVENT_HANDLE_NULL,          ///< The event is not handled.
-  EVENT_HANDLE_INTERCEPTION,  ///< The bus watcher is informed, and the event is intercepted.
-  EVENT_HANDLE_SYNCED,        ///< The bus watcher is informed, and then other bus watchers are informed.
-  EVENT_HANDLE_STOP           ///< A poll event is stopped.
+enum class EventType {
+  EVENT_INVALID,      /*!< An invalid event type. */
+  EVENT_ERROR,        /*!< An error event. */
+  EVENT_WARNING,      /*!< A warning event. */
+  EVENT_EOS,          /*!< An EOS event. */
+  EVENT_STOP,         /*!< A stop event. */
+  EVENT_STREAM_ERROR, /*!< A stream error event. */
+  EVENT_TYPE_END      /*!< Reserved for users custom events. */
 };
 
 /**
- * @brief A structure holding the event information.
+ * @enum EventHandleFlag
+ *
+ * @brief Enumeration variables describing the way how bus watchers handle an event.
+ */
+enum class EventHandleFlag {
+  EVENT_HANDLE_NULL,         /*!< The event is not handled. */
+  EVENT_HANDLE_INTERCEPTION, /*!< The event has been handled and other bus watchers needn't to handle it. */
+  EVENT_HANDLE_SYNCED,       /*!< The event has been handled and other bus watchers are going to handle it. */
+  EVENT_HANDLE_STOP          /*!< The event has been handled and bus watchers stop all other events' processing. */
+};
+
+/**
+ * @struct Event
+ *
+ * @brief The Event is a structure describing the event information.
  */
 struct Event {
   EventType type;             ///< The event type.
   std::string stream_id;      ///< The stream that posts this event.
-  std::string message;        ///< Additional event messages.
+  std::string message;        ///< More detailed messages describing the event.
   std::string module_name;    ///< The module that posts this event.
-  std::thread::id thread_id;  ///< The thread id from which the event is posted.
+  std::thread::id thread_id;  ///< The thread ID from which the event is posted.
 };
 
 /**
- * @brief The bus watcher function.
+ * @brief Defines an alias of bus watcher function.
  *
- * @param event The event polled from the event bus.
- * @param Pipeline The module that is watching.
+ * @param[in] event The event is polled from the event bus.
  *
  * @return Returns the flag that specifies how the event is handled.
  */
 using BusWatcher = std::function<EventHandleFlag(const Event &)>;
 
 /**
- * @brief The event bus that transmits events from modules to a pipeline.
+ * @class EventBus
+ *
+ * @brief EventBus is a class that transmits events from modules to a pipeline.
  */
 class EventBus : private NonCopyable {
  public:
   friend class Pipeline;
   /**
+   * @brief Destructor. A destructor to destruct event bus.
+   *
+   * @return No return value.
+   */
+  ~EventBus();
+  /**
    * @brief Starts an event bus thread.
+   *
+   * @return Returns true if start successfully, otherwise false.
    */
   bool Start();
+  /**
+   * @brief Stops an event bus thread.
+   *
+   * @return No return values.
+   */
   void Stop();
   /**
-   * @brief Adds the watcher to the event bus.
+   * @brief Adds a watcher to the event bus.
    *
-   * @param func The bus watcher to be added.
+   * @param[in] func The bus watcher to be added.
    *
    * @return The number of bus watchers that has been added to this event bus.
    */
@@ -96,26 +129,25 @@ class EventBus : private NonCopyable {
   /**
    * @brief Posts an event to a bus.
    *
-   * @param event The event to be posted.
+   * @param[in] event The event to be posted.
    *
    * @return Returns true if this function run successfully. Otherwise, returns false.
    */
   bool PostEvent(Event event);
 
- private:
-#ifdef UNIT_TEST
-
- public:
+#ifndef UNIT_TEST
+ private:  // NOLINT
+#else
   Event PollEventToTest();
 #endif
   EventBus() = default;
 
-  ~EventBus();
-
   /**
-   * @brief Polls an event from a bus [block].
+   * @brief Polls an event from a bus.
    *
-   * @note This function is blocked until an event or a bus is stopped.
+   * @return Returns the event.
+   *
+   * @note This function is blocked until an event availabe or the bus stopped.
    */
   Event PollEvent();
 
@@ -128,6 +160,8 @@ class EventBus : private NonCopyable {
 
   /**
    * @brief Removes all bus watchers.
+   *
+   * @return No return value.
    */
   void ClearAllWatchers();
 
@@ -141,8 +175,7 @@ class EventBus : private NonCopyable {
   void EventLoop();
 
  private:
-
-  std::mutex watcher_mtx_;
+  mutable std::mutex watcher_mtx_;
   ThreadSafeQueue<Event> queue_;
 #ifdef UNIT_TEST
   ThreadSafeQueue<Event> test_eventq_;

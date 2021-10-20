@@ -23,7 +23,7 @@
 #include <string>
 #include <thread>
 
-#define HAVE_LIVE555 1 
+#define HAVE_LIVE555 1
 
 #ifdef HAVE_LIVE555
 
@@ -111,7 +111,7 @@ class ourRTSPClient : public RTSPClient {
     s_rtspTimer.remove(timer_id_);
     timer_id_ = s_rtspTimer.add(std::chrono::milliseconds(livenessTimeoutMs), [&](cnstream::timer_id) {
       *eventLoopWatchVariable = 2;
-      envir() << "Liveness timeout occured, shutdown stream...\n";
+      envir() << "Liveness timeout occurred, shutdown stream...\n";
     });
   }
   cnstream::IRtspCB* cb_ = nullptr;
@@ -156,7 +156,7 @@ class DummySink : public MediaSink, public cnstream::IParserResult {
   unsigned paramset_size = 0;
   bool spropsSent = false;
   uint64_t frameTimeStampBase = 0;
-  bool firstFrame = true;  
+  bool firstFrame = true;
   cnstream::EsParser parser_;
 };
 
@@ -482,32 +482,13 @@ StreamClientState::~StreamClientState() {
 #define DUMMY_SINK_RECEIVE_BUFFER_SIZE (1024 * 1024)
 
 DummySink* DummySink::createNew(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId) {
-  return new DummySink(env, subsession, streamId);
+  return new (std::nothrow) DummySink(env, subsession, streamId);
 }
 
 DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId)
     : MediaSink(env), fSubsession(subsession) {
   fStreamId = strDup(streamId);
   fReceiveBuffer.reset(new u_int8_t[DUMMY_SINK_RECEIVE_BUFFER_SIZE + 4]);
-
-  unsigned int num;
-  SPropRecord* sps = parseSPropParameterSets(fSubsession.fmtp_spropparametersets(), num);
-  paramset_size = 0;
-  for (unsigned int i = 0; i < num; i++) {
-    paramset_size += 4 + sps[i].sPropLength;
-  }
-  paramset.reset(new u_int8_t[paramset_size]);
-  if (paramset) {
-    unsigned char* tmp = paramset.get();
-    for (unsigned int i = 0; i < num; i++) {
-      tmp[0] = 0x00;
-      tmp[1] = 0x00;
-      tmp[2] = 0x00;
-      tmp[3] = 0x01;
-      memcpy(tmp + 4, sps[i].sPropBytes, sps[i].sPropLength);
-      tmp += 4 + sps[i].sPropLength;
-    }
-  }
 
   AVCodecID codec_id;
   if (!strcmp(fSubsession.codecName(), "H264")) {
@@ -516,6 +497,47 @@ DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char co
     codec_id = AV_CODEC_ID_HEVC;
   } else {
     throw std::runtime_error("Unsupported codec type");  // FIXME
+  }
+
+  unsigned num = 1;
+  unsigned records_num[3];
+  SPropRecord* records[3] = {nullptr, nullptr, nullptr};
+  records[0] = parseSPropParameterSets(fSubsession.fmtp_spropparametersets(), records_num[0]);
+  if (records_num[0] == 0 || (records_num[0] == 1 && records[0]->sPropLength == 0)) {
+    num = 3;
+    if (records[0]) delete[] records[0];
+    records[0] = parseSPropParameterSets(fSubsession.fmtp_spropvps(), records_num[0]);
+    records[1] = parseSPropParameterSets(fSubsession.fmtp_spropsps(), records_num[1]);
+    records[2] = parseSPropParameterSets(fSubsession.fmtp_sproppps(), records_num[2]);
+  }
+
+  paramset_size = 0;
+  for (unsigned j = 0; j < num; j++) {
+    SPropRecord* record = records[j];
+    unsigned record_num = records_num[j];
+    for (unsigned i = 0; i < record_num; i++) {
+      if (record[i].sPropLength > 0) paramset_size += 4 + record[i].sPropLength;
+    }
+  }
+  paramset.reset(new u_int8_t[paramset_size]);
+  if (paramset) {
+    unsigned char* tmp = paramset.get();
+    for (unsigned j = 0; j < num; j++) {
+      SPropRecord* record = records[j];
+      unsigned record_num = records_num[j];
+      for (unsigned i = 0; i < record_num; i++) {
+        if (record[i].sPropLength <= 0) continue;
+        tmp[0] = 0x00;
+        tmp[1] = 0x00;
+        tmp[2] = 0x00;
+        tmp[3] = 0x01;
+        memcpy(tmp + 4, record[i].sPropBytes, record[i].sPropLength);
+        tmp += 4 + record[i].sPropLength;
+      }
+    }
+  }
+  for (unsigned j = 0; j < num; j++) {
+    if (records[j]) delete[] records[j];
   }
   parser_.Open(codec_id, this, paramset.get(), paramset_size);
 }
@@ -595,7 +617,9 @@ void DummySink::OnParserFrame(cnstream::VideoEsFrame *frame) {
 }
 
 Boolean DummySink::continuePlaying() {
-  if (fSource == NULL) return False;  // sanity check (should not happen)
+  if (fSource == NULL) {
+    return False;  // sanity check (should not happen)
+  }
 
   // Request the next frame of data from our input source.  "afterGettingFrame()" will get called later, when it
   // arrives:
@@ -621,7 +645,6 @@ class RtspSessionImpl {
     thread_id_ = std::thread(&RtspSessionImpl::TaskRoutine, this);
     return 0;
 #else
-    std::cout << "HAVE_LIVE555 not defined" << std::endl;
     return -1;
 #endif  // HAVE_LIVE555
   }

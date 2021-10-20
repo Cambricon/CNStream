@@ -28,8 +28,8 @@
 #include <memory>
 #include <vector>
 
-#include "cnstream_error.hpp"
 #include "cnstream_frame_va.hpp"
+#include "exception.hpp"
 #include "queuing_server.hpp"
 
 namespace cnstream {
@@ -57,7 +57,7 @@ struct IOResValue {
   void** ptrs = nullptr;
   struct OneData {
     void* ptr = nullptr;
-    edk::Shape shape;
+    edk::ShapeEx shape;
     size_t batch_offset = 0;
     uint32_t batchsize = 0;
     void* Offset(int batch_idx) const {
@@ -145,8 +145,8 @@ class RCOpResource : public InferResource<std::shared_ptr<RCOpValue>> {
   int pad_method_ = 0;
   int core_number_ = 0;
   bool keep_aspect_ratio_ = false;
-  CNDataFormat src_fmt_ = CN_PIXEL_FORMAT_YUV420_NV21;
-  CNDataFormat dst_fmt_ = CN_PIXEL_FORMAT_RGBA32;
+  CNDataFormat src_fmt_ = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
+  CNDataFormat dst_fmt_ = CNDataFormat::CN_PIXEL_FORMAT_RGBA32;
 };  // class ResizeOpResource
 
 }  // namespace cnstream

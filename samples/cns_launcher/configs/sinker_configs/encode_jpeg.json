@@ -1,0 +1,13 @@
+{
+  "encode" : {
+    "class_name" : "cnstream::Encode",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "encoder_type" : "cpu",
+      "input_frame" : "cpu",
+      "file_name" : "output/output.jpeg",
+      "device_id": 0
+    }
+  }
+}

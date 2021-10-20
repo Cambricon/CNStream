@@ -1,0 +1,32 @@
+{
+  "profiler_config" : {
+    "enable_profiling" : true,
+    "enable_tracing" : false
+  },
+
+  "source" : {
+    "class_name" : "cnstream::DataSource",
+    "next_modules" : ["subgraph:image_classification"],
+    "custom_params" : {
+      "reuse_cndec_buf" : "true",
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "output_buf_number" : 16,
+      "device_id" : 0
+    }
+  },
+
+  "subgraph:image_classification" : {
+    "config_path" : "../configs/resnet_classification___PLATFORM_PLACEHOLDER__.json",
+    "next_modules" : ["subgraph:osd_classification_labels"]
+  },
+
+  "subgraph:osd_classification_labels" : {
+    "config_path" : "../configs/osd_configs/osd_synset_words.json",
+    "next_modules" : ["subgraph:sinker"]
+  },
+
+  "subgraph:sinker" : {
+    "config_path" : "../configs/sinker_configs/encode_jpeg.json"
+  }
+}

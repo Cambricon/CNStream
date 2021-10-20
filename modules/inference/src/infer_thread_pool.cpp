@@ -20,14 +20,13 @@
 
 #include "infer_thread_pool.hpp"
 
-#include "cnstream_logging.hpp"
-#include <device/mlu_context.h>
 #include <cassert>
 #include <string>
 #include <vector>
 
-#include "cnstream_error.hpp"
 #include "cnstream_logging.hpp"
+#include "device/mlu_context.h"
+#include "exception.hpp"
 
 namespace cnstream {
 

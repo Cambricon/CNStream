@@ -25,7 +25,9 @@
 #include <mutex>
 #include <string>
 
-#include "cnstream_core.hpp"
+#include "cnstream_module.hpp"
+#include "cnstream_pipeline.hpp"
+#include "cnstream_frame.hpp"
 #include "cnstype.h"
 #include "util.hpp"
 
@@ -34,7 +36,7 @@ class PipelineHandler {
   PipelineHandler() {}
   ~PipelineHandler();
 
-  bool CreatePipeline(const std::string& config_fname, const std::string perf_dir);
+  bool CreatePipeline(const std::string& config_fname);
 
   void SetMsgObserver(cnstream::StreamMsgObserver*);
   void SetDataObserver(cnstream::IModuleObserver*);
@@ -47,8 +49,6 @@ class PipelineHandler {
 
  private:
   std::mutex stop_mtx_;
-  std::string stream_id_;
-  std::string perf_dir_ = "perf_cache";
   cnstream::Pipeline* ppipeline_ = nullptr;
   std::future<void> perf_print_th_ret;
   std::atomic<bool> gstop_perf_print {false};

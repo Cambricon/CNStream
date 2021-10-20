@@ -1,0 +1,34 @@
+{
+  "plate_detector" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["plate_ocr"],
+    "custom_params" : {
+      "model_path" : "../../../data/models/mobilenet_ssd_plate_detection_b4c4_bgra_mlu270.cambricon",
+      "func_name" : "subnet0",
+      "object_infer" : true,
+      "obj_filter_name" : "VehicleFilter",
+      "postproc_name" : "PostprocMSSDPlateDetection",
+      "model_input_pixel_format" : "BGRA32",
+      "threshold" : 0.6,
+      "device_id" : 0
+    }
+  },
+
+  "plate_ocr" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path" : "../../../data/models/lprnet_b4c4_bgra_mlu270.cambricon",
+      "func_name" : "subnet0",
+      "object_infer" : true,
+      "obj_filter_name" : "PlateFilter",
+      "preproc_name" : "PreprocLprnet",
+      "postproc_name" : "PostprocLprnet",
+      "threshold" : 0.8,
+      "device_id" : 0
+    }
+  }
+}

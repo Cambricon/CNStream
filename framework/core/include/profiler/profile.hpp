@@ -25,49 +25,64 @@
 #include <utility>
 #include <vector>
 
+/*!
+ *  @file profile.hpp
+ *
+ *  This file contains the declarations of the StreamProfile, ProcessProfile, ModuleProfile and PipelineProfile struct.
+ */
 namespace cnstream {
 
-// Performance statistics of stream.
+/*!
+ * @struct StreamProfile
+ *
+ * @brief The StreamProfile is a structure describing the performance statistics of streams.
+ */
 struct StreamProfile {
-  std::string stream_name;         ///< stream name.
-  uint64_t counter = 0;            ///< frame counter, it is equal to `completed` plus `dropped`.
-  uint64_t completed = 0;          ///< completed frame counter.
-  int64_t dropped = 0;             ///< dropped frame counter.
-  double latency = 0.0;            ///< average latency. (ms)
-  double maximum_latency = 0.0;    ///< maximum latency. (ms)
-  double minimum_latency = 0.0;    ///< minimum latency. (ms)
-  double fps = 0.0;                ///< fps.
+  std::string stream_name;         /*!< The stream name. */
+  uint64_t counter = 0;            /*!< The frame counter, it is equal to ``completed`` plus ``dropped``. */
+  uint64_t completed = 0;          /*!< The completed frame counter. */
+  int64_t dropped = 0;             /*!< The dropped frame counter. */
+  double latency = 0.0;            /*!< The average latency. (unit:ms) */
+  double maximum_latency = 0.0;    /*!< The maximum latency. (unit:ms) */
+  double minimum_latency = 0.0;    /*!< The minimum latency. (unit:ms) */
+  double fps = 0.0;                /*!< The throughput. */
 
-  /*
-   * StreamProfile constructor.
+  /*!
+   * @brief Constructs a StreamProfile object with default constructor.
+   *
+   * @return No return value.
    */
   StreamProfile() = default;
-  /**
-   * StreamProfile copy constructor.
+  /*!
+   * @brief Constructs a StreamProfile object with the copy of the contents of another object.
    *
-   * @param it which instance copy from.
+   * @param[in] it Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   StreamProfile(const StreamProfile& it) = default;
-  /**
-   * StreamProfile operator =.
+  /*!
+   * @brief Replaces the contents with a copy of the contents of another StreamProfile object.
    *
-   * @param it Which instance copy from.
+   * @param[in] it Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   StreamProfile& operator=(const StreamProfile& it) = default;
-  /**
-   * StreamProfile move constructor.
+  /*!
+   * @brief Constructs a StreamProfile object with the contents of another object using move semantics.
    *
-   * @param it which instance move from.
+   * @param[in] it Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   inline StreamProfile(StreamProfile&& it) {
     *this = std::forward<StreamProfile>(it);
   }
-  /**
-   * StreamProfile operator =.
+  /*!
+   * @brief Replaces the contents with those of another StreamProfile object using move semantics.
    *
-   * @param it Which instance move from.
+   * @param[in] it Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
@@ -84,49 +99,59 @@ struct StreamProfile {
   }
 };  // struct StreamProfile
 
-// Performance statistics of process.
+/*!
+ * @struct ProcessProfile
+ *
+ * @brief The ProcessProfile is a structure describing the performance statistics of process.
+ */
 struct ProcessProfile {
-  std::string process_name;                      ///< process name.
-  uint64_t counter = 0;                          ///< frame counter, it is equal to `completed` plus `dropped`.
-  uint64_t completed = 0;                        ///< completed frame counter.
-  int64_t dropped = 0;                           ///< dropped frame counter.
-  int64_t ongoing = 0;                           ///< number of frame being processed.
-  double latency = 0.0;                          ///< average latency. (ms)
-  double maximum_latency = 0.0;                  ///< maximum latency. (ms)
-  double minimum_latency = 0.0;                  ///< minimum latency. (ms)
-  double fps = 0.0;                              ///< fps.
-  std::vector<StreamProfile> stream_profiles;    ///< stream profiles.
+  std::string process_name;                    /*!< The process name. */
+  uint64_t counter = 0;                        /*!< The frame counter, it is equal to completed plus dropped frames. */
+  uint64_t completed = 0;                      /*!< The completed frame counter. */
+  int64_t dropped = 0;                         /*!< The dropped frame counter. */
+  int64_t ongoing = 0;                         /*!< The number of frame being processed. */
+  double latency = 0.0;                        /*!< The average latency. (unit:ms) */
+  double maximum_latency = 0.0;                /*!< The maximum latency. (unit:ms) */
+  double minimum_latency = 0.0;                /*!< The minimum latency. (unit:ms) */
+  double fps = 0.0;                            /*!< The throughput. */
+  std::vector<StreamProfile> stream_profiles;  /*!< The stream profiles. */
 
-  /*
-   * ProcessProfile constructor.
+  /*!
+   * @brief Constructs a ProcessProfile object with default constructor.
+   *
+   * @return No return value.
    */
   ProcessProfile() = default;
-  /**
-   * ProcessProfile copy constructor.
+  /*!
+   * @brief Constructs a ProcessProfile object with the copy of the contents of another object.
    *
-   * @param it which instance copy from.
+   * @param[in] it Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   ProcessProfile(const ProcessProfile& it) = default;
-  /**
-   * ProcessProfile operator =.
+  /*!
+   * @brief Replaces the contents with a copy of the contents of another ProcessProfile object.
    *
-   * @param it Which instance copy from.
+   * @param[in] it Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   ProcessProfile& operator=(const ProcessProfile& it) = default;
-  /**
-   * ProcessProfile move constructor.
+  /*!
+   * @brief Constructs a ProcessProfile object with the contents of another object using move semantics.
    *
-   * @param it which instance move from.
+   * @param[in] it Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   inline ProcessProfile(ProcessProfile&& it) {
     *this = std::forward<ProcessProfile>(it);
   }
-  /**
-   * ProcessProfile operator =.
+  /*!
+   * @brief Replaces the contents with those of another ProcessProfile object using move semantics.
    *
-   * @param it Which instance move from.
+   * @param[in] it Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
@@ -145,41 +170,51 @@ struct ProcessProfile {
   }
 };  // struct ProcessProfile
 
-// Performance statistics of module.
+/*!
+ * @struct ModuleProfile
+ *
+ * @brief The ModuleProfile is a structure describing the performance statistics of module.
+ */
 struct ModuleProfile {
-  std::string module_name;                         ///< module name.
-  std::vector<ProcessProfile> process_profiles;    ///< process profiles.
+  std::string module_name;                       /*!< The module name. */
+  std::vector<ProcessProfile> process_profiles;  /*!< The process profiles. */
 
-  /*
-   * ModuleProfile constructor.
+  /*!
+   * @brief Constructs a ModuleProfile object with default constructor.
+   *
+   * @return No return value.
    */
   ModuleProfile() = default;
-  /**
-   * ModuleProfile copy constructor.
+  /*!
+   * @brief Constructs a ModuleProfile object with the copy of the contents of another object.
    *
-   * @param it which instance copy from.
+   * @param[in] it Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   ModuleProfile(const ModuleProfile& it) = default;
-  /**
-   * ModuleProfile operator =.
+  /*!
+   * @brief Replaces the contents with a copy of the contents of another ModuleProfile object.
    *
-   * @param it Which instance copy from.
+   * @param[in] it Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   ModuleProfile& operator=(const ModuleProfile& it) = default;
-  /**
-   * ModuleProfile move constructor.
+  /*!
+   * @brief Constructs a ModuleProfile object with the contents of another object using move semantics.
    *
-   * @param it which instance move from.
+   * @param[in] it Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   inline ModuleProfile(ModuleProfile&& it) {
     *this = std::forward<ModuleProfile>(it);
   }
-  /**
-   * ModuleProfile operator =.
+  /*!
+   * @brief Replaces the contents with those of another ModuleProfile object using move semantics.
    *
-   * @param it Which instance move from.
+   * @param[in] it Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
@@ -190,42 +225,52 @@ struct ModuleProfile {
   }
 };  // struct ModuleProfile
 
-// Performance statistics of pipeline.
+/*!
+ * @struct PipelineProfile
+ *
+ * @brief The PipelineProfile is a structure describing the performance statistics of pipeline.
+ */
 struct PipelineProfile {
-  std::string pipeline_name;                       ///< pipeline name.
-  std::vector<ModuleProfile> module_profiles;      ///< module profiles.
-  ProcessProfile overall_profile;                  ///< profile of the whole pipeline.
+  std::string pipeline_name;                   /*!< The pipeline name. */
+  std::vector<ModuleProfile> module_profiles;  /*!< The module profiles. */
+  ProcessProfile overall_profile;              /*!< The profile of the whole pipeline. */
 
-  /*
-   * PipelineProfile constructor.
+  /*!
+   * @brief Constructs a PipelineProfile object with default constructor.
+   *
+   * @return No return value.
    */
   PipelineProfile() = default;
-  /**
-   * PipelineProfile copy constructor.
+  /*!
+   * @brief Constructs a PipelineProfile object with the copy of the contents of another object.
    *
-   * @param it which instance copy from.
+   * @param[in] it Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   PipelineProfile(const PipelineProfile& it) = default;
-  /**
-   * PipelineProfile operator =.
+  /*!
+   * @brief Replaces the contents with a copy of the contents of another PipelineProfile object.
    *
-   * @param it Which instance copy from.
+   * @param[in] it Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */
   PipelineProfile& operator=(const PipelineProfile& it) = default;
-  /**
-   * PipelineProfile move constructor.
+  /*!
+   * @brief Constructs a PipelineProfile object with the contents of another object using move semantics.
    *
-   * @param it which instance move from.
+   * @param[in] it Another object used to initialize an object.
+   *
+   * @return No return value.
    */
   inline PipelineProfile(PipelineProfile&& it) {
     *this = std::forward<PipelineProfile>(it);
   }
-  /**
-   * PipelineProfile operator =.
+  /*!
+   * @brief Replaces the contents with those of another PipelineProfile object using move semantics.
    *
-   * @param it Which instance move from.
+   * @param[in] it Another object used to initialize the current object.
    *
    * @return Returns a lvalue reference to the current instance.
    */

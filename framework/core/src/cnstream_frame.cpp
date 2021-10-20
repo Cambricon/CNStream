@@ -18,28 +18,21 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include "cnstream_frame.hpp"
+
 #include <memory>
 #include <string>
 #include <unordered_map>
 
-#include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
 
 namespace cnstream {
-
-std::mutex CNFrameInfo::stream_count_lock_;
-std::unordered_map<std::string, int> CNFrameInfo::stream_count_map_;
 
 static std::mutex s_eos_lock_;
 static std::unordered_map<std::string, std::atomic<bool>> s_stream_eos_map_;
 
 static std::mutex s_remove_lock_;
 static std::unordered_map<std::string, bool> s_stream_removed_map_;
-
-int CNFrameInfo::flow_depth_ = 0;
-
-void SetFlowDepth(int flow_depth) { CNFrameInfo::flow_depth_ = flow_depth; }
-int GetFlowDepth() { return CNFrameInfo::flow_depth_; }
 
 bool CheckStreamEosReached(const std::string &stream_id, bool sync) {
   if (sync) {
@@ -110,7 +103,7 @@ std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, b
   ptr->stream_id = stream_id;
   ptr->payload = payload;
   if (eos) {
-    ptr->flags |= cnstream::CN_FRAME_FLAG_EOS;
+    ptr->flags |= static_cast<size_t>(cnstream::CNFrameFlag::CN_FRAME_FLAG_EOS);
     if (!ptr->payload) {
       std::lock_guard<std::mutex> guard(s_eos_lock_);
       s_stream_eos_map_[stream_id] = false;
@@ -118,24 +111,10 @@ std::shared_ptr<CNFrameInfo> CNFrameInfo::Create(const std::string& stream_id, b
     return ptr;
   }
 
-  if (flow_depth_ > 0) {
-    std::lock_guard<std::mutex> guard(stream_count_lock_);
-    auto iter = stream_count_map_.find(stream_id);
-    if (iter == stream_count_map_.end()) {
-      stream_count_map_[stream_id] = 1;
-      // LOGI(CORE) << "CNFrameInfo::Create() insert stream_id: " << stream_id;
-    } else {
-      int count = stream_count_map_[stream_id];
-      if (count >= flow_depth_) {
-        return nullptr;
-      }
-      stream_count_map_[stream_id] = count + 1;
-      // LOGI(CORE) << "CNFrameInfo::Create() add count stream_id " << stream_id << ":" << count;
-    }
-  }
   return ptr;
 }
 
+CNS_IGNORE_DEPRECATED_PUSH
 CNFrameInfo::~CNFrameInfo() {
   if (this->IsEos()) {
     if (!this->payload) {
@@ -144,31 +123,17 @@ CNFrameInfo::~CNFrameInfo() {
     }
     return;
   }
-  /*if (frame.ctx.dev_type == DevContext::INVALID) {
-    return;
-  }*/
-  if (flow_depth_ > 0) {
-    std::lock_guard<std::mutex> guard(stream_count_lock_);
-    auto iter = stream_count_map_.find(stream_id);
-    if (iter != stream_count_map_.end()) {
-      int count = iter->second;
-      --count;
-      if (count <= 0) {
-        stream_count_map_.erase(iter);
-        // LOGI(CORE) << "CNFrameInfo::~CNFrameInfo() erase stream_id " << frame.stream_id;
-      } else {
-        iter->second = count;
-        // LOGI(CORE) << "CNFrameInfo::~CNFrameInfo() update stream_id " << frame.stream_id << " : " << count;
-      }
-    } else {
-      LOGE(CORE) << "Invaid stream_id, please check\n";
-    }
-  }
 }
+CNS_IGNORE_DEPRECATED_POP
 
 void CNFrameInfo::SetModulesMask(uint64_t mask) {
   std::lock_guard<std::mutex> lk(mask_lock_);
   modules_mask_ = mask;
+}
+
+uint64_t CNFrameInfo::GetModulesMask() {
+  std::lock_guard<std::mutex> lk(mask_lock_);
+  return modules_mask_;
 }
 
 uint64_t CNFrameInfo::MarkPassed(Module* module) {
@@ -176,10 +141,5 @@ uint64_t CNFrameInfo::MarkPassed(Module* module) {
   modules_mask_ |= (uint64_t)1 << module->GetId();
   return modules_mask_;
 }
-
-// uint64_t CNFrameInfo::GetModulesMask() {
-//   std::lock_guard<std::mutex> lk(mask_lock_);
-//   return modules_mask_;
-// }
 
 }  // namespace cnstream

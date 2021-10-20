@@ -14,7 +14,6 @@
 #define REFRESH_EVENT (SDL_USEREVENT + 1)
 namespace cnstream {
 
-#ifdef HAVE_SDL
 class SdlInitTool {
  public:
   static SdlInitTool* instance() {
@@ -237,6 +236,5 @@ std::string SDLVideoPlayer::CalcFps(const UpdateData& data) {
   }
   return "";
 }
-#endif  // HAVE_SDL
 
 }  // namespace cnstream

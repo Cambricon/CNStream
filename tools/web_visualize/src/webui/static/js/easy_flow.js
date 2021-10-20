@@ -366,7 +366,7 @@ Chart.ready(() => {
 
     let list_html_nodes = '';
     MODULES.forEach(node => {
-        if (node.name != "source" && node.name != "ipc") {
+        if (node.name != "source") {
             list_html_nodes += `<li><button class='btn-add' href='javascript:void(0)'>${node.label}</button></li>`;
         }
     });

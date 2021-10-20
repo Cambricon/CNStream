@@ -6,13 +6,13 @@ include_directories(${PROJECT_SOURCE_DIR}/tools/web_visualize/src/pycnstream_bac
 file(GLOB_RECURSE test_pycnstream_backend_srcs ${PROJECT_SOURCE_DIR}/tools/web_visualize/src/pycnstream_backend/*.cpp)
 list(APPEND test_srcs ${test_pycnstream_backend_srcs})
 
-aux_source_directory(${PROJECT_SOURCE_DIR}/samples/demo/preprocess preprocess_srcs)
+aux_source_directory(${PROJECT_SOURCE_DIR}/samples/common/preprocess preprocess_srcs)
 list(APPEND test_srcs ${preprocess_srcs})
-aux_source_directory(${PROJECT_SOURCE_DIR}/samples/demo/postprocess postprocess_srcs)
+aux_source_directory(${PROJECT_SOURCE_DIR}/samples/common/postprocess postprocess_srcs)
 list(APPEND test_srcs ${postprocess_srcs})
 
-include_directories("${PROJECT_SOURCE_DIR}/samples/demo")
-file(GLOB_RECURSE util_src ${PROJECT_SOURCE_DIR}/samples/demo/util.cpp)
+include_directories("${PROJECT_SOURCE_DIR}/samples/common")
+file(GLOB_RECURSE util_src ${PROJECT_SOURCE_DIR}/samples/common/util.cpp)
 list(APPEND test_srcs ${util_src})
 # pybind11_add_module(web_test SHARED ${test_srcs})
 find_package(PythonLibs REQUIRED)

@@ -21,6 +21,7 @@
 #ifndef __CNSTYPE__H__
 #define __CNSTYPE__H__
 
+#include <opencv2/opencv.hpp>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -28,11 +29,6 @@
 #include <mutex>
 #include <queue>
 #include <thread>
-#ifdef HAVE_OPENCV
-#include <opencv2/opencv.hpp>
-#else
-#error OpenCV required
-#endif
 
 typedef struct {
   bool eos_flag = 0;

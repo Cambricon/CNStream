@@ -32,6 +32,11 @@
 #include "profiler/profile.hpp"
 #include "profiler/trace.hpp"
 
+/*!
+ *  @file pipeline_profiler.hpp
+ *
+ *  This file contains a declaration of the PipelineProfiler class.
+ */
 namespace cnstream {
 
 class Module;
@@ -39,123 +44,134 @@ class ModuleProfiler;
 
 static constexpr char kOVERALL_PROCESS_NAME[] = "OVERALL";
 
-/**
- * PipelineProfiler is responsible for the performance statistics of a pipeline.
- * PipelineProfiler contains multiple ModuleProfilers for multiple modules profiling.
- * 
- * By default, it will perform two processes of profiling for all modules.
- * The two processes are named `kPROCESS_PROFILER_NAME` and `kINPUT_PROFILER_NAME`.
- * The process named `kPROCESS_PROFILER_NAME` is started before Module::Process called 
- * and ended before Module::Transmit called.
- * The process named `kINPUT_PROFILER_NAME` is started when datas go into the 
- * data queue of module and ended when datas start to be processed by module.
- * 
+/*!
+ * @class PipelineProfiler
+ *
+ * @brief PipelineProfiler is responsible for the performance statistics of a pipeline. It contains multiple
+ * cnstream::ModuleProfiler instances to support multiple module profilings.
+ *
+ * By default, it will perform profiling of two processes for all modules. They are named ``kPROCESS_PROFILER_NAME``
+ * and ``kINPUT_PROFILER_NAME``. The start of the first process is before cnstream::Module::Process being called, and
+ * the end is before cnstream::Module::Transmit being called. The time when data is pushed into the data queue of the
+ * module is the start of the second process and the end is when data starts to be processed by the module.
+ *
  * It also does profiling of the data processing process from entering to exiting the pipeline.
- * 
- * The start and end trace events of each process are recorded when the `config.enable_tracing` is true.
- * 
- * This class is thread-safe.
- **/
+ *
+ * The start and end trace events of each process are recorded when the ``config.enable_tracing`` is true.
+ *
+ * @note This class is thread safe.
+ */
 class PipelineProfiler : private NonCopyable {
  public:
-  /**
-   * @brief Constructor of ModuleProfiler.
-   * 
-   * @param config Profiler config.
-   * @param pipeline_name Pipeline name.
-   * @param modules modules in the pipeline named `pipeline_name`.
-   **/
+  /*!
+   * @brief Constructs a PipelineProfiler object.
+   *
+   * @param[in] config The configuration of the profiler.
+   * @param[in] pipeline_name The name of the pipeline.
+   * @param[in] modules All modules of the pipeline named ``pipeline_name``.
+   *
+   * @return No return value.
+   */
   PipelineProfiler(const ProfilerConfig& config,
                    const std::string& pipeline_name,
                    const std::vector<std::shared_ptr<Module>>& modules);
 
-  /**
-   * @brief Gets name of pipeline.
-   **/
+  /*!
+   * @brief Gets the name of the pipeline.
+   *
+   * @return Returns the name of the pipeline.
+   */
   std::string GetName() const;
+
+  /**
+   * @brief Gets profiler configuration.
+   * 
+   * @return Returns profiler configuration.
+   **/
+  ProfilerConfig GetConfig() const;
 
   /**
    * @brief Gets tracer.
    *
-   * @return Returns tracer.
-   **/
+   * @return Returns the tracer of the pipeline.
+   */
   PipelineTracer* GetTracer() const;
 
-  /**
-   * @brief Gets module profiler by module name.
-   * 
-   * @param module_name Name of module.
-   * 
-   * @return Returns module profiler.
-   **/
+  /*!
+   * @brief Gets the module profiler by the name of the module.
+   *
+   * @param[in] module_name The name of the module.
+   *
+   * @return Returns the module profiler.
+   */
   ModuleProfiler* GetModuleProfiler(const std::string& module_name) const;
 
-  /**
-   * @brief Gets profiling results of the whole run time.
-   * 
+  /*!
+   * @brief Gets profiling results of the pipeline during the execution of the program.
+   *
    * @return Returns the profiling results.
-   **/
+   */
   PipelineProfile GetProfile();
 
-  /**
-   * @brief Gets profiling results from `start` to `end`.
-   * 
-   * @param start Start time.
-   * @param end End time.
-   * 
+  /*!
+   * @brief Gets profiling results between the start time and the end time.
+   *
+   * @param[in] start The start time.
+   * @param[in] end The end time.
+   *
    * @return Returns the profiling results.
-   **/
+   */
   PipelineProfile GetProfile(const Time& start, const Time& end);
 
-  /**
-   * @brief Gets profiling results for a specified period time.
-   * 
-   * @param end End time.
-   * @param duration Length of time before `end`.
-   * 
+  /*!
+   * @brief Gets profiling results during a specified period time.
+   *
+   * @param[in] end The end time.
+   * @param[in] duration The duration in milliseconds. The start time is the end time minus duration.
+   *
    * @return Returns the profiling results.
-   **/
+   */
   PipelineProfile GetProfileBefore(const Time& end, const Duration& duration);
 
-  /**
+  /*!
    * @brief Gets profiling results for a specified period time.
-   * 
-   * @param start Start time.
-   * @param duration Length of time after `start`.
-   * 
+   *
+   * @param[in] start The start time.
+   * @param[in] duration The duration in milliseconds. The end time is the start time plus duration.
+   *
    * @return Returns the profiling results.
-   **/
+   */
   PipelineProfile GetProfileAfter(const Time& start, const Duration& duration);
 
-  /**
-   * @brief Record the time when the data enters the pipeline.
-   * 
-   * @param key Unique identifier of a CNFrameInfo instance.
-   * 
-   * @return void.
+  /*!
+   * @brief Records the time when the data enters the pipeline.
    *
-   * @see RecordKey
-   **/
+   * @param[in] key The unique identifier of a CNFrameInfo instance.
+   *
+   * @return No return value.
+   *
+   * @see cnstream::RecordKey
+   */
   void RecordInput(const RecordKey& key);
 
-  /**
-   * @brief Record the time when the data exits the pipeline.
-   * 
-   * @param key Unique identifier of a CNFrameInfo instance.
-   * 
-   * @return void.
+  /*!
+   * @brief Records the time when the data exits the pipeline.
    *
-   * @see RecordKey
-   **/
+   * @param[in] key The unique identifier of a CNFrameInfo instance.
+   *
+   * @return No return value.
+   *
+   * @see cnstream::RecordKey
+   */
   void RecordOutput(const RecordKey& key);
 
-  /**
-   * @brief Tells the profiler to clear datas of stream named by `stream_name`.
-   * 
-   * @param stream_name Stream name. Usually it is comes from `CNFrameInfo::stream_id`.
-   * 
-   * @return void.
-   **/
+  /*!
+   * @brief Clears profiling data of the stream named by ``stream_name``, as the end of the stream is reached.
+   *
+   * @param[in] stream_name The name of the stream, usually the ``CNFrameInfo::stream_id``.
+   *
+   * @return No return value.
+   */
   void OnStreamEos(const std::string& stream_name);
 
  private:
@@ -168,6 +184,10 @@ class PipelineProfiler : private NonCopyable {
 
 inline std::string PipelineProfiler::GetName() const {
   return pipeline_name_;
+}
+
+inline ProfilerConfig PipelineProfiler::GetConfig() const {
+  return config_;
 }
 
 inline PipelineTracer* PipelineProfiler::GetTracer() const {

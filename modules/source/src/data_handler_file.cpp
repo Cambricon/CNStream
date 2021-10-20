@@ -32,18 +32,21 @@
 namespace cnstream {
 
 std::shared_ptr<SourceHandler> FileHandler::Create(DataSource *module, const std::string &stream_id,
-                                                   const std::string &filename, int framerate, bool loop) {
+                                                   const std::string &filename, int framerate, bool loop,
+                                                   const MaximumVideoResolution& maximum_resolution) {
   if (!module || stream_id.empty() || filename.empty()) {
+    LOGE(SOURCE) << "[FileHandler] Create function, invalid paramters.";
     return nullptr;
   }
-  std::shared_ptr<FileHandler> handler(new (std::nothrow) FileHandler(module, stream_id, filename, framerate, loop));
+  std::shared_ptr<FileHandler> handler(new (std::nothrow) FileHandler(module, stream_id, filename, framerate,
+      loop, maximum_resolution));
   return handler;
 }
 
 FileHandler::FileHandler(DataSource *module, const std::string &stream_id, const std::string &filename, int framerate,
-                         bool loop)
+                         bool loop, const MaximumVideoResolution& maximum_resolution)
     : SourceHandler(module, stream_id) {
-  impl_ = new (std::nothrow) FileHandlerImpl(module, filename, framerate, loop, this);
+  impl_ = new (std::nothrow) FileHandlerImpl(module, filename, framerate, loop, maximum_resolution, this);
 }
 
 FileHandler::~FileHandler() {
@@ -204,6 +207,7 @@ void FileHandlerImpl::OnParserInfo(VideoInfo *info) {
   if (decoder_) {
     return;  // for the case:  loop and reset demux only
   }
+  info->maximum_resolution = maximum_resolution_;
   LOGI(SOURCE) << "[" << stream_id_ << "]: "
                << "Got video info.";
   dec_create_failed_ = false;
@@ -221,24 +225,13 @@ void FileHandlerImpl::OnParserInfo(VideoInfo *info) {
     extra.device_id = param_.device_id_;
     extra.input_buf_num = param_.input_buf_number_;
     extra.output_buf_num = param_.output_buf_number_;
-    extra.max_width = 7680;  // FIXME
-    extra.max_height = 4320;  // FIXME
+    extra.max_width = 7680;  // FIXME (for MLU220/MLU270 jpeg decode)
+    extra.max_height = 4320;  // FIXME (for MLU220/MLU270 jpeg decode)
     bool ret = decoder_->Create(info, &extra);
     if (ret != true) {
       LOGE(SOURCE) << "dec_create_failed_";
       dec_create_failed_ = true;
       return;
-    }
-    if (info->extra_data.size()) {
-      VideoEsPacket pkt;
-      pkt.data = info->extra_data.data();
-      pkt.len = info->extra_data.size();
-      pkt.pts = 0;
-      if (!decoder_->Process(&pkt)) {
-        decode_failed_ = true;
-        LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                     << "Decode extra data failed";
-      }
     }
   }
 }
@@ -271,9 +264,15 @@ void FileHandlerImpl::OnParserFrame(VideoEsFrame *frame) {
 
 // IDecodeResult methods
 void FileHandlerImpl::OnDecodeError(DecodeErrorCode error_code) {
-  // FIXME,  handle decode error ...
-  LOGE(SOURCE) << "[" << stream_id_ << "]: "
-               << "FileHandlerImpl::OnDecodeError() called";
+  if (nullptr != module_) {
+    Event e;
+    e.type = EventType::EVENT_STREAM_ERROR;
+    e.module_name = module_->GetName();
+    e.message = "Decode failed.";
+    e.stream_id = stream_id_;
+    e.thread_id = std::this_thread::get_id();
+    module_->PostEvent(e);
+  }
   interrupt_.store(true);
 }
 
@@ -281,14 +280,20 @@ void FileHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
   if (frame_count_++ % param_.interval_ != 0) {
     return;  // discard frames
   }
-  if (!frame) return;
+
+  if (!frame) {
+    LOGW(SOURCE) << "[FileHandlerImpl] OnDecodeFrame function frame is nullptr.";
+    return;
+  }
+
   std::shared_ptr<CNFrameInfo> data = this->CreateFrameInfo();
   if (!data) {
+    LOGW(SOURCE) << "[FileHandlerImpl] OnDecodeFrame function, failed to create FrameInfo.";
     return;
   }
   data->timestamp = frame->pts;  // FIXME
   if (!frame->valid) {
-    data->flags = CN_FRAME_FLAG_INVALID;
+    data->flags = static_cast<size_t>(CNFrameFlag::CN_FRAME_FLAG_INVALID);
     this->SendFrameInfo(data);
     return;
   }

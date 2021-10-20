@@ -32,9 +32,9 @@ PipelineTrace PipelineTracer::GetTrace(const Time& start, const Time& end) const
   for (auto it = buffer_->begin(); it < buffer_end; ++it) {
     const TraceEvent& event = *it;
     if (event.time > start && event.time <= end) {
-      if (event.level == TraceEvent::PIPELINE) {
+      if (event.level == TraceEvent::Level::PIPELINE) {
         trace.process_traces[event.process_name].emplace_back(TraceElem(event));
-      } else if (event.level == TraceEvent::MODULE) {
+      } else if (event.level == TraceEvent::Level::MODULE) {
         trace.module_traces[event.module_name][event.process_name].emplace_back(TraceElem(event));
       }
     }

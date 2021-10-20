@@ -26,12 +26,10 @@
 #include <utility>
 #include <vector>
 
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
 #endif
 
 #include "device/mlu_context.h"
@@ -148,11 +146,11 @@ static std::string GetModelPath() {
   std::string model_path = "";
   switch (core_ver) {
     case edk::CoreVersion::MLU220:
-      model_path = "../../data/models/MLU220/classification/resnet18/resnet18_bs4_c4.cambricon";
+      model_path = "../../data/models/resnet18_b4c4_bgra_mlu220.cambricon";
       break;
     case edk::CoreVersion::MLU270:
     default:
-      model_path = "../../data/models/MLU270/Classification/resnet50/resnet50_offline.cambricon";
+      model_path = "../../data/models/resnet50_b16c16_bgra_mlu270.cambricon";
       break;
   }
   return model_path;
@@ -255,16 +253,15 @@ TEST(Inferencer, ProcessFrame) {
       data->timestamp = 1000;
       frame->width = width;
       frame->height = height;
-      frame->ptr_mlu[0] = planes[0];
-      frame->ptr_mlu[1] = planes[1];
+      void *ptr_mlu[2] = {planes[0], planes[1]};
       frame->stride[0] = frame->stride[1] = width;
       frame->ctx.ddr_channel = g_channel_id;
       frame->ctx.dev_id = g_dev_id;
       frame->ctx.dev_type = DevContext::DevType::MLU;
-      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+      frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
       frame->dst_device_id = g_dev_id;
-      frame->CopyToSyncMem();
-      data->datas[CNDataFramePtrKey] = frame;
+      frame->CopyToSyncMem(ptr_mlu, true);
+      data->collection.Add(kCNDataFrameTag, frame);
       int ret = infer->Process(data);
       EXPECT_EQ(ret, 1);
       // create eos frame for clearing stream idx
@@ -282,16 +279,15 @@ TEST(Inferencer, ProcessFrame) {
       data->timestamp = 1000;
       frame->width = width;
       frame->height = height;
-      frame->ptr_mlu[0] = planes[0];
-      frame->ptr_mlu[1] = planes[1];
+      void *ptr_mlu[2] = {planes[0], planes[1]};
       frame->stride[0] = frame->stride[1] = width;
       frame->ctx.ddr_channel = g_channel_id;
       frame->ctx.dev_id = g_dev_id;
       frame->ctx.dev_type = DevContext::DevType::MLU;
-      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+      frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
       frame->dst_device_id = g_dev_id;
-      frame->CopyToSyncMem();
-      data->datas[CNDataFramePtrKey] = frame;
+      frame->CopyToSyncMem(ptr_mlu, true);
+      data->collection.Add(kCNDataFrameTag, frame);
       int ret = infer->Process(data);
       EXPECT_EQ(ret, 1);
       // create eos frame for clearing stream idx
@@ -310,16 +306,15 @@ TEST(Inferencer, ProcessFrame) {
       data->timestamp = 1000;
       frame->width = width;
       frame->height = height;
-      frame->ptr_mlu[0] = planes[0];
-      frame->ptr_mlu[1] = planes[1];
+      void *ptr_mlu[2] = {planes[0], planes[1]};
       frame->stride[0] = frame->stride[1] = width;
       frame->ctx.ddr_channel = g_channel_id;
       frame->ctx.dev_id = g_dev_id;
       frame->ctx.dev_type = DevContext::DevType::MLU;
-      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+      frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
       frame->dst_device_id = g_dev_id;
-      frame->CopyToSyncMem();
-      data->datas[CNDataFramePtrKey] = frame;
+      frame->CopyToSyncMem(ptr_mlu, true);
+      data->collection.Add(kCNDataFrameTag, frame);
       int ret = infer->Process(data);
       EXPECT_EQ(ret, 1);
       // create eos frame for clearing stream idx
@@ -352,14 +347,15 @@ TEST(Inferencer, ProcessFrame) {
     data->timestamp = 1000;
     frame->width = width;
     frame->height = height;
-    frame->ptr_cpu[0] = frame_data;
-    frame->ptr_cpu[1] = frame_data + nbytes * 2 / 3;
+    void *ptr_cpu[2];
+    ptr_cpu[0] = frame_data;
+    ptr_cpu[1] = frame_data + nbytes * 2 / 3;
     frame->stride[0] = frame->stride[1] = width;
-    frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+    frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
     frame->ctx.dev_type = DevContext::DevType::CPU;
     frame->dst_device_id = g_dev_id;
-    frame->CopyToSyncMem();
-    data->datas[CNDataFramePtrKey] = frame;
+    frame->CopyToSyncMem(ptr_cpu, true);
+    data->collection.Add(kCNDataFrameTag, frame);
 
     int ret = infer->Process(data);
     EXPECT_EQ(ret, 1);
@@ -392,14 +388,13 @@ TEST(Inferencer, ProcessFrame) {
     data->timestamp = 1000;
     frame->width = width;
     frame->height = height;
-    frame->ptr_cpu[0] = frame_data;
-    frame->ptr_cpu[1] = frame_data + nbytes * 2 / 3;
+    void *ptr_cpu[2] = {frame_data, frame_data + nbytes * 2 / 3};
     frame->stride[0] = frame->stride[1] = width;
-    frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+    frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
     frame->ctx.dev_type = DevContext::DevType::CPU;
     frame->dst_device_id = g_dev_id;
-    frame->CopyToSyncMem();
-    data->datas[CNDataFramePtrKey] = frame;
+    frame->CopyToSyncMem(ptr_cpu, true);
+    data->collection.Add(kCNDataFrameTag, frame);
 
     ResetGlobal();
 
@@ -480,19 +475,18 @@ TEST(Inferencer, ProcessObject) {
       data->timestamp = 1000;
       frame->width = width;
       frame->height = height;
-      frame->ptr_mlu[0] = planes[0];
-      frame->ptr_mlu[1] = planes[1];
+      void *ptr_mlu[2] = {planes[0], planes[1]};
       frame->stride[0] = frame->stride[1] = width;
       frame->ctx.ddr_channel = g_channel_id;
       frame->ctx.dev_id = g_dev_id;
       frame->ctx.dev_type = DevContext::DevType::MLU;
-      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+      frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
       frame->dst_device_id = g_dev_id;
-      frame->CopyToSyncMem();
-      data->datas[CNDataFramePtrKey] = frame;
+      frame->CopyToSyncMem(ptr_mlu, true);
       std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
       objs_holder->objs_.push_back(obj);
-      data->datas[cnstream::CNInferObjsPtrKey] = objs_holder;
+      data->collection.Add(kCNDataFrameTag, frame);
+      data->collection.Add(kCNInferObjsTag, objs_holder);
       int ret = infer->Process(data);
       EXPECT_EQ(ret, 1);
       // create eos frame for clearing stream idx
@@ -510,19 +504,18 @@ TEST(Inferencer, ProcessObject) {
       data->timestamp = 1000;
       frame->width = width;
       frame->height = height;
-      frame->ptr_mlu[0] = planes[0];
-      frame->ptr_mlu[1] = planes[1];
+      void *ptr_mlu[2] = {planes[0], planes[1]};
       frame->stride[0] = frame->stride[1] = width;
       frame->ctx.ddr_channel = g_channel_id;
       frame->ctx.dev_id = g_dev_id;
       frame->ctx.dev_type = DevContext::DevType::MLU;
-      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+      frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
       frame->dst_device_id = g_dev_id;
-      frame->CopyToSyncMem();
-      data->datas[CNDataFramePtrKey] = frame;
+      frame->CopyToSyncMem(ptr_mlu, true);
       std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
       objs_holder->objs_.push_back(obj);
-      data->datas[cnstream::CNInferObjsPtrKey] = objs_holder;
+      data->collection.Add(kCNDataFrameTag, frame);
+      data->collection.Add(kCNInferObjsTag, objs_holder);
       int ret = infer->Process(data);
       EXPECT_EQ(ret, 1);
       // create eos frame for clearing stream idx
@@ -542,19 +535,18 @@ TEST(Inferencer, ProcessObject) {
       data->timestamp = 1000;
       frame->width = width;
       frame->height = height;
-      frame->ptr_mlu[0] = planes[0];
-      frame->ptr_mlu[1] = planes[1];
+      void *ptr_mlu[2] = {planes[0], planes[1]};
       frame->stride[0] = frame->stride[1] = width;
       frame->ctx.ddr_channel = g_channel_id;
       frame->ctx.dev_id = g_dev_id;
       frame->ctx.dev_type = DevContext::DevType::MLU;
-      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+      frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
       frame->dst_device_id = g_dev_id;
-      frame->CopyToSyncMem();
-      data->datas[CNDataFramePtrKey] = frame;
+      frame->CopyToSyncMem(ptr_mlu, true);
       std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
       objs_holder->objs_.push_back(obj);
-      data->datas[cnstream::CNInferObjsPtrKey] = objs_holder;
+      data->collection.Add(kCNDataFrameTag, frame);
+      data->collection.Add(kCNInferObjsTag, objs_holder);
       int ret = infer->Process(data);
       EXPECT_EQ(ret, 1);
 
@@ -579,19 +571,18 @@ TEST(Inferencer, ProcessObject) {
       data->timestamp = 1000;
       frame->width = width;
       frame->height = height;
-      frame->ptr_mlu[0] = planes[0];
-      frame->ptr_mlu[1] = planes[1];
+      void *ptr_mlu[2] = {planes[0], planes[1]};
       frame->stride[0] = frame->stride[1] = width;
       frame->ctx.ddr_channel = g_channel_id;
       frame->ctx.dev_id = g_dev_id;
       frame->ctx.dev_type = DevContext::DevType::MLU;
-      frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+      frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
       frame->dst_device_id = g_dev_id;
-      frame->CopyToSyncMem();
-      data->datas[CNDataFramePtrKey] = frame;
+      frame->CopyToSyncMem(ptr_mlu, true);
       std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
       objs_holder->objs_.push_back(obj);
-      data->datas[cnstream::CNInferObjsPtrKey] = objs_holder;
+      data->collection.Add(kCNDataFrameTag, frame);
+      data->collection.Add(kCNInferObjsTag, objs_holder);
       int ret = infer->Process(data);
       EXPECT_EQ(ret, 1);
 
@@ -631,17 +622,17 @@ TEST(Inferencer, ProcessObject) {
     data->timestamp = 1000;
     frame->width = width;
     frame->height = height;
-    frame->ptr_cpu[0] = frame_data;
-    frame->ptr_cpu[1] = frame_data + nbytes * 2 / 3;
+    void *ptr_cpu[2] = {frame_data, frame_data + nbytes * 2 / 3};
+
     frame->stride[0] = frame->stride[1] = width;
-    frame->fmt = CN_PIXEL_FORMAT_YUV420_NV21;
+    frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
     frame->ctx.dev_type = DevContext::DevType::CPU;
     frame->dst_device_id = g_dev_id;
-    frame->CopyToSyncMem();
-    data->datas[CNDataFramePtrKey] = frame;
+    frame->CopyToSyncMem(ptr_cpu, true);
     std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
     objs_holder->objs_.push_back(obj);
-    data->datas[cnstream::CNInferObjsPtrKey] = objs_holder;
+    data->collection.Add(kCNDataFrameTag, frame);
+    data->collection.Add(kCNInferObjsTag, objs_holder);
 
     int ret = infer->Process(data);
     EXPECT_EQ(ret, 1);
@@ -683,20 +674,19 @@ TEST(Inferencer, ProcessPerf) {
 
     auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
     std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+    data->collection.Add(kCNDataFrameTag, frame);
     frame->frame_id = i;
     data->timestamp = 1000;
     frame->width = width;
     frame->height = height;
-    frame->ptr_mlu[0] = planes[0];
-    frame->ptr_mlu[1] = planes[1];
+    void *ptr_mlu[2] = {planes[0], planes[1]};
     frame->stride[0] = frame->stride[1] = width;
     frame->ctx.ddr_channel = g_channel_id;
     frame->ctx.dev_id = g_dev_id;
     frame->ctx.dev_type = DevContext::DevType::MLU;
-    frame->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+    frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
     frame->dst_device_id = g_dev_id;
-    frame->CopyToSyncMem();
-    data->datas[CNDataFramePtrKey] = frame;
+    frame->CopyToSyncMem(ptr_mlu, true);
     int ret = infer->Process(data);
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     EXPECT_EQ(ret, 1);

@@ -93,7 +93,7 @@ class InferencerPrivate {
         model_loader->SetCpuOutputLayout(layout, index);
       }
 
-      bsize_ = model_loader->InputShapes()[0].n;
+      bsize_ = model_loader->InputShape(0).N();
       model_loader_ = model_loader;
     } catch (edk::Exception &e) {
       LOGE(INFERENCER) << "[" << q_ptr_->GetName() << "] init offline model failed. model_path: ["
@@ -257,14 +257,30 @@ int Inferencer::Process(CNFrameInfoPtr data) {
       // discard packets from removed-stream
       return 0;
     }
-    CNDataFramePtr frame = cnstream::GetCNDataFramePtr(data);
-    if (static_cast<uint32_t>(frame->ctx.dev_id) != d_ptr_->params_.device_id &&
-        frame->ctx.dev_type == DevContext::MLU) {
-      frame->CopyToSyncMemOnDevice(d_ptr_->params_.device_id);
-    } else if (frame->ctx.dev_type == DevContext::CPU) {
+    CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
+    if (frame->dst_device_id < 0) {
+      /* CNSyncedMemory data is on CPU */
       for (int i = 0; i < frame->GetPlanes(); i++) {
         frame->data[i]->SetMluDevContext(d_ptr_->params_.device_id, 0);
       }
+      frame->dst_device_id = d_ptr_->params_.device_id;
+    } else if (static_cast<uint32_t>(frame->dst_device_id) != d_ptr_->params_.device_id &&
+               frame->ctx.dev_type == DevContext::DevType::MLU) {
+      /* CNSyncedMemory data is on different MLU from the data this module needed, and SOURCE data is on MLU*/
+      frame->CopyToSyncMemOnDevice(d_ptr_->params_.device_id);
+      frame->dst_device_id = d_ptr_->params_.device_id;
+    } else if (static_cast<uint32_t>(frame->dst_device_id) != d_ptr_->params_.device_id &&
+               frame->ctx.dev_type == DevContext::DevType::CPU) {
+      /* CNSyncedMemory data is on different MLU from the data this module needed, and SOURCE data is on CPU*/
+      void *dst = frame->cpu_data.get();
+      for (int i = 0; i < frame->GetPlanes(); i++) {
+        size_t plane_size = frame->GetPlaneBytes(i);
+        frame->data[i].reset(new CNSyncedMemory(plane_size));
+        frame->data[i]->SetCpuData(dst);
+        dst = reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(dst) + plane_size);
+        frame->data[i]->SetMluDevContext(d_ptr_->params_.device_id, 0);
+      }
+      frame->dst_device_id = d_ptr_->params_.device_id;  // set dst_device_id to param_.device_id
     }
   }
 

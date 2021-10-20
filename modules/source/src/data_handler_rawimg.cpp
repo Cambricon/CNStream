@@ -38,10 +38,10 @@
 
 namespace cnstream {
 
-#ifdef HAVE_OPENCV
 static bool CvtI420ToNV12(const uint8_t *src_I420, uint8_t *dst_nv12, const int width,
     const int height, const int dst_stride) {
   if (!src_I420 || !dst_nv12 || width <= 0 || height <= 0 || dst_stride <= 0) {
+    LOGW(SOURCE) << "CvtI420ToNV12 function, invalid paramters.";
     return false;
   }
 
@@ -81,11 +81,11 @@ static bool CvtI420ToNV12(const uint8_t *src_I420, uint8_t *dst_nv12, const int 
 
   return true;
 }
-#endif
 
 static bool CvtNV21ToNV12(const uint8_t *src_nv21, uint8_t *dst_nv12, const int width,
     const int height, const int stride) {
   if (!src_nv21 || !dst_nv12 || width <= 0 || height <= 0 || stride <= 0) {
+    LOGW(SOURCE) << "CvtNV21ToNV12 function, invalid paramters.";
     return false;
   }
 
@@ -114,6 +114,7 @@ static bool CvtNV21ToNV12(const uint8_t *src_nv21, uint8_t *dst_nv12, const int 
 static bool CvtNV12ToNV12WithStride(const uint8_t *src_nv12, uint8_t *dst_nv12, const int width,
     const int height, const int stride) {
   if (!src_nv12 || !dst_nv12 || width <= 0 || height <= 0 || stride <= 0) {
+    LOGW(SOURCE) << "CvtNV12ToNV12WithStride function, invalid paramters.";
     return false;
   }
 
@@ -137,6 +138,7 @@ static bool CvtNV12ToNV12WithStride(const uint8_t *src_nv12, uint8_t *dst_nv12, 
 
 std::shared_ptr<SourceHandler> RawImgMemHandler::Create(DataSource *module, const std::string &stream_id) {
   if (!module || stream_id.empty()) {
+    LOGW(SOURCE) << "[RawImgMemHandler] create function, invalid paramters.";
     return nullptr;
   }
   std::shared_ptr<RawImgMemHandler> handler(new (std::nothrow) RawImgMemHandler(module, stream_id));
@@ -181,14 +183,12 @@ void RawImgMemHandler::Close() {
   }
 }
 
-#ifdef HAVE_OPENCV
 int RawImgMemHandler::Write(const cv::Mat *mat, const uint64_t pts) {
   if (impl_) {
     return impl_->Write(mat, pts);
   }
   return -1;
 }
-#endif
 
 int RawImgMemHandler::Write(const uint8_t *data, const int size, const uint64_t pts,
     const int w, const int h, const CNDataFormat pixel_fmt) {
@@ -206,7 +206,6 @@ bool RawImgMemHandlerImpl::Open() {
 }
 
 void RawImgMemHandlerImpl::Close() {
-#ifdef HAVE_OPENCV
   if (src_mat_) {
     delete src_mat_;
     src_mat_ = nullptr;
@@ -216,10 +215,8 @@ void RawImgMemHandlerImpl::Close() {
     delete dst_mat_;
     dst_mat_ = nullptr;
   }
-#endif
 }
 
-#ifdef HAVE_OPENCV
 int RawImgMemHandlerImpl::Write(const cv::Mat *mat_data, const uint64_t pts) {
   if (eos_got_.load()) {
     LOGW(SOURCE) << "eos got, can not feed data any more.";
@@ -243,11 +240,14 @@ int RawImgMemHandlerImpl::Write(const cv::Mat *mat_data, const uint64_t pts) {
         module_->GetContainer()->GetProfiler()->RecordInput(record_key);
       }
     }
-    return ProcessImage(mat_data->data, size, width, height, CN_PIXEL_FORMAT_BGR24, pts);
+    if (ProcessImage(mat_data->data, size, width, height, CNDataFormat::CN_PIXEL_FORMAT_BGR24, pts)) {
+      return 0;
+    } else {
+      return -1;
+    }
   }
   return -2;
 }
-#endif
 
 int RawImgMemHandlerImpl::Write(const uint8_t *img_data, const int size, const uint64_t pts,
     const int w, const int h, const CNDataFormat pixel_fmt) {
@@ -269,7 +269,11 @@ int RawImgMemHandlerImpl::Write(const uint8_t *img_data, const int size, const u
         module_->GetContainer()->GetProfiler()->RecordInput(record_key);
       }
     }
-    return ProcessImage(img_data, size, w, h, pixel_fmt, pts);
+    if (ProcessImage(img_data, size, w, h, pixel_fmt, pts)) {
+      return 0;
+    } else {
+      return -1;
+    }
   }
 
   return -2;
@@ -279,14 +283,15 @@ bool RawImgMemHandlerImpl::CheckRawImageParams(const uint8_t *data, const int si
     const int width, const int height, const CNDataFormat pixel_fmt) {
   if (data && size > 0 && width > 0 && height > 0) {
     switch (pixel_fmt) {
-      case CN_PIXEL_FORMAT_BGR24:
-      case CN_PIXEL_FORMAT_RGB24:
+      case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
+      case CNDataFormat::CN_PIXEL_FORMAT_RGB24:
         return size == width * height * 3;
-      case CN_PIXEL_FORMAT_YUV420_NV21:
-      case CN_PIXEL_FORMAT_YUV420_NV12:
+      case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
+      case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
         return size == width * height * 3 / 2;
-      case CN_INVALID:
+      case CNDataFormat::CN_INVALID:
       default:
+        LOGE(SOURCE) << "[RawImgMemHandlerImpl] CheckRawImageParams function, unsupported format.";
         return false;
     }
   }
@@ -296,7 +301,10 @@ bool RawImgMemHandlerImpl::CheckRawImageParams(const uint8_t *data, const int si
 
 bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size, const int width,
       const int height, const CNDataFormat pixel_fmt, const uint64_t pts) {
-  if (!img_data ) return false;
+  if (!img_data) {
+    LOGE(SOURCE) << "[RawImgMemHandlerImpl] ProcessImage function img_data is nullptr.";
+    return false;
+  }
   if (frame_count_++ % param_.interval_ != 0) {
     return true;  // discard frames
   }
@@ -324,31 +332,34 @@ bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size,
 
   // create cnframedata and fill it
   std::shared_ptr<CNFrameInfo> data;
-  while (1) {
+  while (true) {
     data = CreateFrameInfo();
     if (data != nullptr) break;
     std::this_thread::sleep_for(std::chrono::microseconds(5));
   }
   std::shared_ptr<CNDataFrame> dataframe(new (std::nothrow) CNDataFrame());
-  if (!dataframe) return false;
+  if (!dataframe) {
+    LOGE(SOURCE) << "[RawImgMemHandlerImpl] ProcessImage function, failed to create dataframe.";
+    return false;
+  }
 
-  if (param_.output_type_ == OUTPUT_MLU) {
-    dataframe->ctx.dev_type = DevContext::MLU;
+  if (param_.output_type_ == OutputType::OUTPUT_MLU) {
+    dataframe->ctx.dev_type = DevContext::DevType::MLU;
     dataframe->ctx.dev_id = param_.device_id_;
-    dataframe->ctx.ddr_channel = -1;  // FIXME
+    dataframe->ctx.ddr_channel = -1;
   } else {
-    dataframe->ctx.dev_type = DevContext::CPU;
+    dataframe->ctx.dev_type = DevContext::DevType::CPU;
     dataframe->ctx.dev_id = -1;
     dataframe->ctx.ddr_channel = -1;
   }
 
-  dataframe->fmt = CN_PIXEL_FORMAT_YUV420_NV12;
+  dataframe->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
   dataframe->width = width;
   dataframe->height = height;
   dataframe->stride[0] = dst_stride;
   dataframe->stride[1] = dst_stride;
 
-  if (param_.output_type_ == OUTPUT_MLU) {
+  if (param_.output_type_ == OutputType::OUTPUT_MLU) {
     dataframe->mlu_data = cnMluMemAlloc(frame_size, dataframe->ctx.dev_id);
     if (nullptr == dataframe->mlu_data) {
       LOGE(SOURCE) << "[" << stream_id_ << "]: "
@@ -374,7 +385,7 @@ bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size,
       dataframe->data[i]->SetMluData(t);
       t += plane_size;
     }
-  } else if (param_.output_type_ == OUTPUT_CPU) {
+  } else if (param_.output_type_ == OutputType::OUTPUT_CPU) {
     dataframe->cpu_data = sp_data;
     auto t = reinterpret_cast<uint8_t *>(dataframe->cpu_data.get());
     for (int i = 0; i < dataframe->GetPlanes(); ++i) {
@@ -393,15 +404,17 @@ bool RawImgMemHandlerImpl::ProcessImage(const uint8_t *img_data, const int size,
 
   dataframe->frame_id = frame_id_++;
   data->timestamp = pts;
-  data->datas[CNDataFramePtrKey] = dataframe;
+  data->collection.Get<CNDataFramePtr>(kCNDataFrameTag) = dataframe;
   SendFrameInfo(data);
   return true;
 }
 
 bool RawImgMemHandlerImpl::PrepareConvertCtx(const uint8_t* data, const int size,
     const int width, const int height, const CNDataFormat pixel_fmt) {
-  if (!data) return false;
-#ifdef HAVE_OPENCV
+  if (!data) {
+    LOGW(SOURCE) << "[RawImgMemHandlerImpl] PrepareConvertCtx data is nullptr.";
+    return false;
+  }
   if (CNDataFormat::CN_PIXEL_FORMAT_BGR24 == pixel_fmt ||
       CNDataFormat::CN_PIXEL_FORMAT_RGB24 == pixel_fmt) {
     int pad_height = height % 2 ? height + 1 : height;
@@ -425,7 +438,10 @@ bool RawImgMemHandlerImpl::PrepareConvertCtx(const uint8_t* data, const int size
       src_height_ = height;
     }
 
-    if (!src_mat_ || !dst_mat_) return false;
+    if (!src_mat_ || !dst_mat_) {
+      LOGW(SOURCE) << "[RawImgMemHandlerImpl] PrepareConvertCtx, failed to create Mat.";
+      return false;
+    }
 
     if ((width % 2) || (height % 2)) {
       pad_height = height % 2 ? height + 1 : height;
@@ -445,7 +461,6 @@ bool RawImgMemHandlerImpl::PrepareConvertCtx(const uint8_t* data, const int size
 
     return true;
   }
-#endif
   return false;
 }
 
@@ -457,7 +472,6 @@ bool RawImgMemHandlerImpl::CvtColorWithStride(const uint8_t *data, const int siz
   }
 
   switch (pixel_fmt) {
-#ifdef HAVE_OPENCV
     case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
       if (!PrepareConvertCtx(data, size, width, height, pixel_fmt)) return false;
       cv::cvtColor(*src_mat_, *dst_mat_, cv::COLOR_BGR2YUV_I420);
@@ -466,13 +480,6 @@ bool RawImgMemHandlerImpl::CvtColorWithStride(const uint8_t *data, const int siz
       if (!PrepareConvertCtx(data, size, width, height, pixel_fmt)) return false;
       cv::cvtColor(*src_mat_, *dst_mat_, cv::COLOR_RGB2YUV_I420);
       return CvtI420ToNV12(dst_mat_->data, dst_nv12_data, width, height, dst_stride);
-#else
-    case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
-    case CNDataFormat::CN_PIXEL_FORMAT_RGB24:
-      LOGE(SOURCE) <<
-        "opencv is not linked, can not support CN_PIXEL_FORMAT_BGR24 and CN_PIXEL_FORMAT_RGB24 format.";
-      return false;
-#endif
     case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
       return CvtNV21ToNV12(data, dst_nv12_data, width, height, dst_stride);
     case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:

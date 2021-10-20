@@ -33,104 +33,118 @@
 #include "profiler/stream_profiler.hpp"
 #include "profiler/trace.hpp"
 
+/*!
+ *  @file process_profiler.hpp
+ *
+ *  This file contains a declaration of the ProcessProfiler class.
+ */
 namespace cnstream {
 
 class RecordPolicy;
 
-/**
- * A profiler for a process. A process can be a function call or a piece of code.
- * This class is thread-safe.
- **/
+/*!
+ * @class ProcessProfiler
+ *
+ * @brief ProcessProfiler is the profiler for a process. A process can be a function call or a piece of code.
+ *
+ * @note This class is thread safe.
+ */
 class ProcessProfiler : private NonCopyable {
  public:
-  /**
-   * @brief Constructor of ProcessProfiler.
+  /*!
+   * @brief Constructs a ProcessProfiler object.
    *
-   * @param config Profiler config.
-   * @param process_name The name of a process.
-   * @param tracer The tracer.
-   **/
+   * @param[in] config The configuration of the profiler.
+   * @param[in] process_name The name of the process.
+   * @param[in] tracer The tracer for tracing events.
+   *
+   * @return No return value.
+   */
   explicit ProcessProfiler(const ProfilerConfig& config,
                            const std::string& process_name,
                            PipelineTracer* tracer);
-
+  /*!
+   * @brief Destructs a ProcessProfiler object.
+   *
+   * @return No return value.
+   */
   ~ProcessProfiler();
 
-  /**
-   * @brief Set the module name to identify which module this profiler belongs to.
-   *        The module name takes effect when trace level is TraceEvent::MODULE.
-   *        Trace level can be set by SetTraceLevel.
+  /*!
+   * @brief Sets the module name to identify which module this profiler belongs to.
+   *        The module name takes effect when the trace level is TraceEvent::MODULE.
+   *        The trace level can be set by cnstream::ProcessProfiler::SetTraceLevel.
    *
-   * @param module_name The name of module.
-   * 
+   * @param[in] module_name The name of the module.
+   *
    * @return Returns this profiler itself.
-   **/
+   */
   ProcessProfiler& SetModuleName(const std::string& module_name);
 
-  /**
+  /*!
    * @brief Set the trace level for this profiler.
    *        Trace level identifies whether this profiler belongs to a module or a pipeline.
    *
-   * @param level Trace level.
-   * 
-   * @return Returns this profiler itself.
-   * 
-   * @see TraceEvent::Level.
-   **/
+   * @param[in] level Trace level.
+   *
+   * @return Returns the ProcessProfiler object itself.
+   *
+   * @see cnstream::TraceEvent::Level.
+   */
   ProcessProfiler& SetTraceLevel(const TraceEvent::Level& level);
 
-  /**
-   * @brief Records process start.
-   * 
-   * @param key Unique identifier of a CNFrameInfo instance.
-   * 
-   * @return void.
-   * 
-   * @see RecordKey.
-   **/
+  /*!
+   * @brief Records the start of the process.
+   *
+   * @param[in] key The unique identifier of a CNFrameInfo instance.
+   *
+   * @return No return value.
+   *
+   * @see cnstream::RecordKey.
+   */
   void RecordStart(const RecordKey& key);
 
-  /**
-   * @brief Records process end.
-   * 
-   * @param key Unique identifier of a CNFrameInfo instance.
-   * 
-   * @return void.
-   * 
-   * @see RecordKey.
-   **/
+  /*!
+   * @brief Records the end of the process.
+   *
+   * @param[in] key The unique identifier of a CNFrameInfo instance.
+   *
+   * @return No return value.
+   *
+   * @see cnstream::RecordKey.
+   */
   void RecordEnd(const RecordKey& key);
 
-  /**
-   * @brief Gets process name set by constructor.
-   * 
-   * @return The name of process set by constructor.
-   **/
+  /*!
+   * @brief Gets the name of the process.
+   *
+   * @return The name of the process.
+   */
   std::string GetName() const;
 
-  /**
-   * @brief Gets profiling results of the whole run time.
-   * 
+  /*!
+   * @brief Gets profiling results of the process during the execution of the program.
+   *
    * @return Returns the profiling results.
-   **/
+   */
   ProcessProfile GetProfile();
 
-  /**
-   * @brief Gets profiling results according to the trace datas.
-   * 
-   * @param trace Trace datas.
-   * 
+  /*!
+   * @brief Gets profiling results according to the trace data.
+   *
+   * @param[in] trace The trace data of the process.
+   *
    * @return Returns the profiling results.
-   **/
+   */
   ProcessProfile GetProfile(const ProcessTrace& trace) const;
 
-  /**
-   * @brief Tells the profiler to clear datas of stream named by `stream_name`.
-   * 
-   * @param stream_name Stream name. Usually it is comes from `CNFrameInfo::stream_id`.
-   * 
-   * @return void.
-   **/
+  /*!
+   * @brief Clears profiling data of the stream named by ``stream_name``, as the end of the stream is reached.
+   *
+   * @param[in] stream_name The name of the stream, usually the ``CNFrameInfo::stream_id``.
+   *
+   * @return No return value.
+   */
   void OnStreamEos(const std::string& stream_name);
 
  private:
@@ -140,7 +154,7 @@ class ProcessProfiler : private NonCopyable {
   // Records end time, called by RecordEnd(const RecordKey&).
   void RecordEnd(const RecordKey& key, const Time& time);
 
-  // Increases the physical time used by the process named by `process_name`.
+  // Increases the physical time used by the process named by ``process_name``.
   void AddPhysicalTime(const Time& now);
 
   // Statistics latency during profiling.
@@ -149,9 +163,9 @@ class ProcessProfiler : private NonCopyable {
   // Statistics the number of dropped datas during profiling.
   void AddDropped(const std::string& stream_name, uint64_t dropped);
 
-  // Tell this profiler the stream named by `stream_name` is going to be profiled.
-  // Prepares resources that needed by profiler for profiling the stream named by `stream_name`.
-  // Called when the first record of the stream named by `stream_name` arrives.
+  // Tell this profiler the stream named by ``stream_name`` is going to be profiled.
+  // Prepares resources that needed by profiler for profiling the stream named by ``stream_name``.
+  // Called when the first record of the stream named by ``stream_name`` arrives.
   void OnStreamStart(const std::string& stream_name);
 
   // Gets profiling results for streams.
@@ -178,7 +192,7 @@ class ProcessProfiler : private NonCopyable {
   Duration total_latency_        = Duration::zero();
   Duration maximum_latency_      = Duration::zero();
   Duration minimum_latency_      = Duration::max();
-  // Physical time used for the process named by `process_name`.
+  // Physical time used for the process named by ``process_name``.
   Duration total_phy_time_       = Duration::zero();
   std::string module_name_       = "";
   std::string process_name_      = "";

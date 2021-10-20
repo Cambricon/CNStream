@@ -29,14 +29,10 @@
 #include <memory>
 #include <string>
 
-#ifdef HAVE_OPENCV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
-#else
-#error OpenCV required
 #endif
 
 #include "cnstream_frame.hpp"
@@ -44,13 +40,10 @@
 
 namespace cnstream {
 
-/// Pointer for frame info
-using CNFrameInfoPtr = std::shared_ptr<cnstream::CNFrameInfo>;
-
 class SDLVideoPlayer;
 
 /**
- * @brief Displayer is a module for displaying the vedio
+ * @brief Displayer is a module for displaying the video.
  */
 class Displayer : public Module, public ModuleCreator<Displayer> {
  public:

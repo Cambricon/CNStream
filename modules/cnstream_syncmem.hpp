@@ -30,7 +30,6 @@
 #ifndef CNSTREAM_SYNCMEM_HPP_
 #define CNSTREAM_SYNCMEM_HPP_
 
-#include "cnrt.h"
 /**
  * @file cnstream_syncmem.hpp
  *
@@ -39,6 +38,9 @@
 
 #include <cstddef>
 #include <mutex>
+
+#include "cnrt.h"
+#include "cnstream_common.hpp"
 #include "cnstream_logging.hpp"
 
 #define CNS_CNRT_CHECK(__EXPRESSION__)                                                                        \
@@ -62,34 +64,47 @@
 namespace cnstream {
 
 /**
- * @brief Synchronizes memory between CPU and MLU.
+ * @class CNSyncedMemory
+ *
+ * @brief CNSyncedMemory is a class synchronizing memory between CPU and MLU.
  *
  * If the data on MLU is the latest, the data on CPU should be synchronized before processing the data on CPU.
  * Vice versa, if the data on CPU is the latest, the data on MLU should be synchronized before processing
  * the data on MLU.
  *
- * @note CNSyncedMemory::Head() always returns CNSyncedMemory::UNINITIALIZED when memory size is 0.
+ * @note CNSyncedMemory::Head() always returns SyncedHead::UNINITIALIZED when memory size is 0.
  */
 class CNSyncedMemory : private NonCopyable {
  public:
   /**
-   * Constructor.
+   * @brief Constructor to construct synchronized memory object.
    *
-   * @param size The size of the memory.
+   * @param[in] size The size of the memory.
+   *
+   * @return No return value.
    */
   explicit CNSyncedMemory(size_t size);
   /**
-   * Constructor.
+   * @brief Constructor to construct synchronized memory object.
    *
-   * @param size The size of the memory.
-   * @param mlu_dev_id MLU device ID that is incremented from 0.
-   * @param mlu_ddr_chn The MLU DDR channel that is greater than or equal to 0, and is less
+   * @param[in] size The size of the memory.
+   * @param[in] mlu_dev_id MLU device ID that is incremented from 0.
+   * @param[in] mlu_ddr_chn The MLU DDR channel that is greater than or equal to 0, and is less
    *                    than 4. It specifies which piece of DDR channel the memory allocated on.
+   *
+   * @return No return value.
    */
   explicit CNSyncedMemory(size_t size, int mlu_dev_id, int mlu_ddr_chn = -1);
+  /**
+   * @brief Destructor to destruct synchronized memory object.
+   *
+   * @return No return value.
+   */
   ~CNSyncedMemory();
   /**
-   * Gets the CPU data.
+   * @brief Gets the CPU data.
+   *
+   * @param No return value.
    *
    * @return Returns the CPU data pointer.
    *
@@ -97,15 +112,15 @@ class CNSyncedMemory : private NonCopyable {
    */
   const void* GetCpuData();
   /**
-   * Sets the CPU data.
+   * @brief Sets the CPU data.
    *
-   * @param data The data pointer on CPU.
+   * @param[in] data The data pointer on CPU.
    *
    * @return Void.
    */
   void SetCpuData(void* data);
   /**
-   * Gets the MLU data.
+   * @brief Gets the MLU data.
    *
    * @return Returns the MLU data pointer.
    *
@@ -113,66 +128,83 @@ class CNSyncedMemory : private NonCopyable {
    */
   const void* GetMluData();
   /**
-   * Sets the MLU data.
+   * @brief Sets the MLU data.
    *
-   * @param data The data pointer on MLU.
+   * @param[out] data The data pointer on MLU.
+   *
+   * @return No return value.
    */
   void SetMluData(void* data);
   /**
-   * Sets the MLU device context.
+   * @brief Sets the MLU device context.
    *
-   * @param dev_id The MLU device ID that is incremented from 0.
-   * @param ddr_chn The MLU DDR channel ID that is greater than or equal to 0, and less than
-   *                4. It specifies which piece of DDR channel the memory allocated on.
+   * @param[in] dev_id The MLU device ID that is incremented from 0.
+   * @param[in] ddr_chn The MLU DDR channel ID that is greater than or equal to 0, and less than
+   *                4. It specifies which piece of DDR channel the memory is allocated on.
+   *
+   * @return No return value.
    *
    * @note You need to call this API before all getters and setters.
    */
   void SetMluDevContext(int dev_id, int ddr_chn = -1);
   /**
-   * Gets the MLU device ID.
+   * @brief Gets the MLU device ID.
    *
-   * @return Returns the device that the MLU memory allocated on.
+   * @return Returns the ID of the device that the MLU memory is allocated on.
    */
   int GetMluDevId() const;
   /**
-   * Gets the channel ID of the MLU DDR.
+   * @brief Gets the channel ID of the MLU DDR.
    *
-   * @return Returns the DDR channel ID that the MLU memory allocated on.
+   * @return Returns the DDR channel ID that the MLU memory is allocated on.
    */
   int GetMluDdrChnId() const;
   /**
-   * Gets the mutable CPU data.
+   * @brief Gets the mutable CPU data.
    *
    * @return Returns the CPU data pointer.
    */
   void* GetMutableCpuData();
   /**
-   * Gets the mutable MLU data.
+   * @brief Gets the mutable MLU data.
    *
    * @return Returns the MLU data pointer.
    */
   void* GetMutableMluData();
   /**
-   * Head synchronization.
+   * @enum SyncedHead
+   *
+   * @brief An enumerator describing the synchronization status.
    */
-  enum SyncedHead {
+  enum class SyncedHead {
     UNINITIALIZED,  ///< The memory is not allocated.
     HEAD_AT_CPU,    ///< The data is updated to CPU but is not synchronized to MLU yet.
     HEAD_AT_MLU,    ///< The data is updated to MLU but is not synchronized to CPU yet.
     SYNCED          ///< The data is synchronized to both CPU and MLU.
   };
   /**
-   * Gets synchronized head.
+   * @brief Gets synchronization status.
    *
-   * @return Returns synchronized head.
+   * @return Returns synchronization status .
+   *
+   * @see SyncedHead.
    */
   SyncedHead GetHead() const { return head_; }
   /**
-   * Gets data bytes.
+   * @brief Gets data bytes.
    *
    * @return Returns data bytes.
    */
   size_t GetSize() const { return size_; }
+
+#ifndef UNIT_TEST
+ private:  // NOLINT
+#endif
+  /**
+   * Allocates memory by ``CNSyncedMemory`` if a certain condition is true.
+   */
+  bool own_cpu_data_ = false;  ///< Whether CPU data is allocated by ``SyncedMemory``.
+  bool own_mlu_data_ = false;  ///< Whether MLU data is allocated by ``SyncedMemory``.
 
  private:
   /**
@@ -186,22 +218,7 @@ class CNSyncedMemory : private NonCopyable {
 
   void* cpu_ptr_ = nullptr;  ///< CPU data pointer.
   void* mlu_ptr_ = nullptr;  ///< MLU data pointer.
-
-#ifdef UNIT_TEST
-
- public:
-#endif
-  /**
-   * Allocates memory by ``CNSyncedMemory`` if a certain condition is true.
-   */
-  bool own_cpu_data_ = false;  ///< Whether CPU data is allocated by ``SyncedMemory``.
-  bool own_mlu_data_ = false;  ///< Whether MLU data is allocated by ``SyncedMemory``.
-
-#ifdef UNIT_TEST
-
- private:
-#endif
-  SyncedHead head_ = UNINITIALIZED;  ///< Identifies which device data is synchronized on.
+  SyncedHead head_ = SyncedHead::UNINITIALIZED;  ///< Identifies which device data is synchronized on.
   size_t size_ = 0;                  ///< The data size.
 
   int dev_id_ = -1;   ///< Ordinal MLU device ID.

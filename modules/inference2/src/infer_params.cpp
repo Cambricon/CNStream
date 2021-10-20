@@ -18,13 +18,17 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <functional>
+#include <iostream>
 #include <limits>
 #include <set>
+#include <sstream>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "infer_params.hpp"
 #define ASSERT(value) {                                 \
@@ -78,6 +82,23 @@ static bool STR2FLOAT(const std::string &value, float *ret) {
   return true;
 }
 
+static std::vector<float> STR2VECTORFLOAT(const std::string &value) {
+  try {
+    std::vector<float> res;
+    std::istringstream ss(value);
+    std::string tmp;
+    int i = 0;
+    while (ss >> tmp) {
+      res.push_back(stof(tmp));
+      i++;
+    }
+    if (i > 4) return {};
+    return res;
+  } catch (std::exception &e) {
+    return {};
+  }
+}
+
 void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   Infer2ParamDesc param;
   param.name = "model_path";
@@ -92,13 +113,26 @@ void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   ASSERT(RegisterParam(pregister, param));
 
   param.name = "func_name";
-  param.desc_str = "Required. The function name that is defined in the offline model. "
+  param.desc_str = "Optional. The function name that is defined in the offline model. Work only if backend is cnrt. "
                    "It could be found in Cambricon twins file. For most cases, it is \"subnet0\".";
   param.default_value = "subnet0";
   param.type = "string";
   param.parser = [] (const std::string &value, Infer2Param *param_set) -> bool {
-    if (value.empty()) return false;
+    if (infer_server::Predictor::Backend() == "cnrt" && value.empty()) return false;
     param_set->func_name = value;
+    return true;
+  };
+  ASSERT(RegisterParam(pregister, param));
+
+  param.name = "obj_filter_name";
+  param.desc_str =
+      "Optional. The class name for object filter. See cnstream::ObjFilter. "
+      "The class specified by this name must inherited from class cnstream::ObjFilter. "
+      "No object will be filtered when this parameter not set.";
+  param.default_value = "";
+  param.type = "string";
+  param.parser = [](const std::string &value, Infer2Param *param_set) -> bool {
+    param_set->obj_filter_name = value;
     return true;
   };
   ASSERT(RegisterParam(pregister, param));
@@ -116,18 +150,24 @@ void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   ASSERT(RegisterParam(pregister, param));
 
   param.name = "preproc_name";
-  param.desc_str = "Optional. Preprocess name. These values are accepted."
-                   " 1. rcop/RCOP. Preprocessing will be done on MLU by ResizeYuv2Rgb operator\n"
-                   " 2. scaler/SCALER. Preprocessing will be done on SCALER\n"
-                   " 3. The class name of custom preprocessing. The class specified by this"
-                   " name must inherit from class cnstream::VideoPreproc.";
-  param.default_value = "rcop";
+  param.desc_str =
+      "Optional. Preprocess name. These values are accepted.\n"
+      " 1. rcop/RCOP. Preprocessing will be done on MLU by ResizeYuv2Rgb operator\n"
+      " 2. scaler/SCALER. Preprocessing will be done on Scaler\n"
+      " 3. cncv/CNCV. Preprocessing will be done on MLU by CNCV\n"
+      " 4. The class name of custom preprocessing. The class specified by this"
+      " name must inherit from class cnstream::VideoPreproc.";
+  param.default_value = "cncv";
   param.type = "string";
   param.parser = [] (const std::string &value, Infer2Param *param_set) -> bool {
-    if ("SCALER" == value || "scaler" == value) {
+    std::string value_transform = value;
+    std::transform(value_transform.begin(), value_transform.end(), value_transform.begin(), ::toupper);
+    if ("SCALER" == value_transform) {
       param_set->preproc_name = "SCALER";
-    } else if ("rcop" == value || "RCOP" == value) {
+    } else if ("RCOP" == value_transform) {
       param_set->preproc_name = "RCOP";
+    } else if ("CNCV" == value_transform) {
+      param_set->preproc_name = "CNCV";
     } else {
       param_set->preproc_name = value;
     }
@@ -151,7 +191,9 @@ void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   param.default_value = "1";
   param.type = "uint32";
   param.parser = [] (const std::string &value, Infer2Param *param_set) -> bool {
-    return STR2U32(value, &param_set->engine_num);
+    bool ret = STR2U32(value, &param_set->engine_num);
+    if (ret && param_set->engine_num == 0) ret = false;
+    return ret;
   };
   ASSERT(RegisterParam(pregister, param));
 
@@ -171,10 +213,12 @@ void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   param.default_value = "dynamic";
   param.type = "string";
   param.parser = [] (const std::string &value, Infer2Param *param_set) -> bool {
-    if ("static" == value || "STATIC" == value) {
+    std::string value_transform = value;
+    std::transform(value_transform.begin(), value_transform.end(), value_transform.begin(), ::toupper);
+    if ("STATIC" == value_transform) {
       param_set->batch_strategy = InferBatchStrategy::STATIC;
       return true;
-    } else if ("dynamic" == value || "DYNAMIC" == value) {
+    } else if ("DYNAMIC" == value_transform) {
       param_set->batch_strategy = InferBatchStrategy::DYNAMIC;
       return true;
     }
@@ -182,10 +226,19 @@ void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   };
   ASSERT(RegisterParam(pregister, param));
 
+  param.name = "infer_interval";
+  param.desc_str = "Optional. Inferencing one frame every [infer_interval] frames.";
+  param.default_value = "1";
+  param.type = "uint32";
+  param.parser = [](const std::string &value, Infer2Param *param_set) -> bool {
+    return STR2U32(value, &param_set->infer_interval);
+  };
+  ASSERT(RegisterParam(pregister, param));
+
   param.name = "priority";
   param.desc_str = "Optional. The priority of this infer task in infer server.";
   param.default_value = "0";
-  param.type = "uin32";
+  param.type = "uint32";
   param.parser = [] (const std::string &value, Infer2Param *param_set) -> bool {
     return STR2U32(value, &param_set->priority);
   };
@@ -245,6 +298,48 @@ void Infer2ParamManager::RegisterAll(ParamRegister *pregister) {
   param.type = "bool";
   param.parser = [] (const std::string &value, Infer2Param *param_set) -> bool {
     return STR2BOOL(value, &param_set->keep_aspect_ratio);
+  };
+  ASSERT(RegisterParam(pregister, param));
+
+  param.name = "mean";
+  param.desc_str =
+      "Optional. Only when mean_std preproc is used, it is valid."
+      "For getting the mean value of each pixel in input image."
+      "Only a float vector(size 3-4) are accepted.";
+  param.default_value = {};
+  param.type = "float[]";
+  param.parser = [](const std::string &value, Infer2Param *param_set) -> bool {
+    if (value.empty()) return true;
+    param_set->mean_ = STR2VECTORFLOAT(value);
+    if (param_set->mean_.empty()) return false;
+    return true;
+  };
+  ASSERT(RegisterParam(pregister, param));
+
+  param.name = "std";
+  param.desc_str =
+      "Optional. Only when mean_std preproc is used, it is valid."
+      "For getting the std value of each pixel in input image."
+      "Only a float vector(size 3-4) are accepted.";
+  param.default_value = {};
+  param.type = "float[]";
+  param.parser = [](const std::string &value, Infer2Param *param_set) -> bool {
+    if (value.empty()) return true;
+    param_set->std_ = STR2VECTORFLOAT(value);
+    if (param_set->std_.empty()) return false;
+    return true;
+  };
+  ASSERT(RegisterParam(pregister, param));
+
+  param.name = "normalize";
+  param.desc_str =
+      "Optional. Only when mean_std preproc is used, it is valid."
+      "For multiplying 255 in std and mean array."
+      "1/true/TRUE/True/0/false/FALSE/False these values are accepted.";
+  param.default_value = "false";
+  param.type = "bool";
+  param.parser = [](const std::string &value, Infer2Param *param_set) -> bool {
+    return STR2BOOL(value, &param_set->normalize);
   };
   ASSERT(RegisterParam(pregister, param));
 

@@ -30,8 +30,6 @@
 
 namespace cnstream {
 
-using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
-
 class Connector;
 
 /**
@@ -57,9 +55,10 @@ class Conveyor : private NonCopyable {
   uint32_t GetBufferSize();
   uint64_t GetFailTime();
 
- private:
 #ifdef UNIT_TEST
- public:
+ public:  // NOLINT
+#else
+ private:  // NOLINT
 #endif
 
  private:

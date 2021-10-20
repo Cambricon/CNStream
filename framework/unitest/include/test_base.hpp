@@ -22,10 +22,20 @@
 #define MODULES_TEST_INCLUDE_TEST_BASE_HPP_
 
 #include <string>
+#include <utility>
 
 #define PATH_MAX_LENGTH 1024
 
 std::string GetExePath();
 void CheckExePath(const std::string& path);
+
+/**
+ * @brief Creates a temp file.
+ * @return Returns temp file informations.
+ * Return value is a std::pair object, the first value stored temp file fd,
+ * and the second value stored temp file name.
+ * @note close(fd), unlink(filename) must be called when the temp file is uesd up.
+ **/
+std::pair<int, std::string> CreateTempFile(const std::string& filename_prefix);
 
 #endif  // MODULES_TEST_INCLUDE_TEST_BASE_HPP_
