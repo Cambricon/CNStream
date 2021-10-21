@@ -270,17 +270,11 @@ TEST(EncodeModule, ProcessEncodeResample) {
   for (auto &file_name_ext : file_name_ext_vec) {
     for (std::string encoder_type : {"cpu", "mlu"}) {
       params["encoder_type"] = encoder_type;
-      // use image bgr data or origin mlu data
-      for (std::string input_frame : {"cpu", "mlu"}) {
-#ifndef HAVE_CNCV
-        if (input_frame == "mlu" && encoder_type == "mlu") continue;
-#endif
-        params["input_frame"] = input_frame;
-        params["file_name"] = folder_str + "resample_bit_rate_5M_gop50_" + encoder_type + "_encoder_" + input_frame +
-            "_input_" + params.at("dst_width") + "x" + params.at("dst_height") + "." + file_name_ext;
-        std::cout << "---- file name : " << params.at("file_name") << std::endl;
-        TestFunc(params, src_wh_vec, frame_num, "0", true);
-      }
+      params["input_frame"] = "cpu";
+      params["file_name"] = folder_str + "resample_bit_rate_5M_gop50_" + encoder_type + "_encoder_cpu_input" +
+          params.at("dst_width") + "x" + params.at("dst_height") + "." + file_name_ext;
+      std::cout << "---- file name : " << params.at("file_name") << std::endl;
+      TestFunc(params, src_wh_vec, frame_num, "0", true);
     }
   }
 }

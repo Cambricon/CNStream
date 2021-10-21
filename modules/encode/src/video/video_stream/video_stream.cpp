@@ -31,6 +31,7 @@
 #include <queue>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "../rw_mutex.hpp"
@@ -42,8 +43,6 @@
 namespace cnstream {
 
 namespace video {
-
-#define REARRANGE_BY_PTS_INTERVAL 1
 
 #define VS_CNRT_CHECK(__EXPRESSION__)                                                                                \
   do {                                                                                                               \
@@ -109,7 +108,7 @@ class VideoStream {
   struct Timestamp {
     int64_t init = 0;
     int64_t base = 0;
-    int64_t last = -1;
+    int64_t last = INVALID_TIMESTAMP;
     int64_t diff = 0;
     std::atomic<uint64_t> count{0};
   };
@@ -137,6 +136,7 @@ class VideoStream {
   std::mutex canvas_mtx_;
   cv::Mat canvas_;
   ColorFormat canvas_color_ = ColorFormat::BGR;
+  int64_t frame_count_ = 0;
   std::thread rearrange_thread_;
   std::thread resample_thread_;
   std::mutex ts_mtx_;
@@ -151,8 +151,11 @@ class VideoStream {
 };
 
 static const VideoStream::ColorFormat frame_to_buffer_color_map[] = {
-    VideoStream::ColorFormat::YUV_I420, VideoStream::ColorFormat::YUV_NV12, VideoStream::ColorFormat::YUV_NV21,
-    VideoStream::ColorFormat::BGR,      VideoStream::ColorFormat::RGB,
+    VideoStream::ColorFormat::YUV_I420,
+    VideoStream::ColorFormat::YUV_NV12,
+    VideoStream::ColorFormat::YUV_NV21,
+    VideoStream::ColorFormat::BGR,
+    VideoStream::ColorFormat::RGB,
 };
 
 VideoStream::VideoStream(const Param &param) : param_(param) {}
@@ -244,11 +247,8 @@ bool VideoStream::Open() {
   }
 
   state_ = RUNNING;
-  if (tiler_) {
+  if (tiler_ || param_.resample) {
     param_.resample = true;
-    rearrange_thread_ = std::thread(&VideoStream::RearrangeLoop, this);
-    resample_thread_ = std::thread(&VideoStream::ResampleLoop, this);
-  } else if (param_.resample) {
     rearrange_thread_ = std::thread(&VideoStream::RearrangeLoop, this);
     resample_thread_ = std::thread(&VideoStream::ResampleLoop, this);
   }
@@ -312,43 +312,46 @@ bool VideoStream::Update(const cv::Mat &mat, ColorFormat color, int64_t timestam
     LOGW(VideoStream) << "Update(mat) not running";
     return false;
   }
+  bool eos = position & 0x10000;
+  position &= 0xffff;
   // LOGI(VideoStream) << "Update() timestamp=" << timestamp << ", position=" << position;
-  std::unique_lock<std::mutex> lk(ts_mtx_);
-  Timestamp &ts = timestamps_[position];
-  /* rectify pts for loop mode */
-  if (ts.last == INVALID_TIMESTAMP) {
-    if (timestamp == INVALID_TIMESTAMP) {
-      timestamp = ts.count * param_.time_base / param_.frame_rate;
-      ts.init = 0;
-    } else {
-      ts.init = timestamp;
-    }
-    ts.base = 0;
-  } else {
-    if (ts.last > timestamp) {
-      ts.base += (ts.last + ts.diff - timestamp);
-    } else {
-      ts.diff = timestamp - ts.last;
-    }
-  }
-  ts.last = timestamp;
-  timestamp += (ts.base - ts.init);
-  lk.unlock();
-
   if (!param_.resample) {
-    // re-generate timestamp
-    timestamp = ts.count * param_.time_base / param_.frame_rate;
+    // re-generate timestamp to match frame rate
+    timestamp = frame_count_++ * param_.time_base / param_.frame_rate;
     if (!Encode(mat, color, timestamp)) return false;
-    ts.count++;
   } else {
+    std::unique_lock<std::mutex> tslk(ts_mtx_);
+    Timestamp &ts = timestamps_[position];
+    /* rectify pts for loop mode */
+    if (ts.last == INVALID_TIMESTAMP) {
+      if (timestamp == INVALID_TIMESTAMP) {
+        timestamp = ts.count * param_.time_base / param_.frame_rate;
+        ts.init = 0;
+      } else {
+        ts.init = timestamp;
+      }
+      ts.base = 0;
+    } else {
+      if (ts.last > timestamp) {
+        ts.base += (ts.last + ts.diff - timestamp);
+      } else {
+        ts.diff = timestamp - ts.last;
+      }
+    }
+    ts.last = timestamp;
+    timestamp += (ts.base - ts.init);
+    if (eos) timestamps_.erase(position);
+    tslk.unlock();
+
+    // LOGI(VideoStream) << "Update() rectified timestamp=" << timestamp << ", position=" << position;
     std::unique_lock<std::mutex> lk(queue_mtx_);
     if (queue_.size() <= 50 * timestamps_.size()) {
-      queue_.push((FrameInfo){mat, color, timestamp, position});
+      queue_.push((FrameInfo){ mat, color, timestamp, position | (eos ? 0x10000 : 0) });
       lk.unlock();
       queue_cv_.notify_one();
       ts.count++;
     } else {
-      LOGW(VideoStream) << "Update() mat_pts queue is full";
+      LOGW(VideoStream) << "Update() mat_pts queue is full in position: " << position;
       return false;
     }
   }
@@ -361,9 +364,12 @@ bool VideoStream::Update(const Buffer *buffer, int64_t timestamp, int position) 
     LOGW(VideoStream) << "Update(buffer) not running";
     return false;
   }
-  Timestamp &ts = timestamps_[position];
-  timestamp = ts.count * param_.time_base / param_.frame_rate;
-  ts.count++;
+  if (param_.resample) {
+    LOGE(VideoStream) << "Update() not support resample or tiler mode";
+    return false;
+  }
+  // re-generate timestamp to match frame rate
+  timestamp = frame_count_++ * param_.time_base / param_.frame_rate;
   return Encode(buffer, timestamp);
 }
 
@@ -381,7 +387,7 @@ bool VideoStream::Clear(int position) {
     black = cv::Mat(param_.height, param_.width, CV_8UC4);
     memset(black.data, 0, param_.width * param_.height * 4);
   }
-  return Update(black, color, INVALID_TIMESTAMP, position);
+  return Update(black, color, INVALID_TIMESTAMP, position | 0x10000);
 }
 
 void VideoStream::MatToBuffer(const cv::Mat &mat, ColorFormat color, Scaler::Buffer *buffer) {
@@ -585,7 +591,6 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, int timeout_ms
   flk.lock();
   auto ret = encoder_->SendFrame(&frame_, timeout_ms);
   frame_available_ = false;
-  flk.unlock();
   if (ret != VideoEncoder::SUCCESS) {
     LOGE(VideoStream) << "Update() video encoder send frame failed";
     return false;
@@ -594,10 +599,15 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, int timeout_ms
 }
 
 void VideoStream::RearrangeLoop() {
-  auto start = std::chrono::steady_clock::now();
-  int64_t ts = 0, r_ts = 0;
+  int64_t ts = 0;
   bool first = true;
   bool resample_started = false;
+  std::unordered_map<int, std::pair<int64_t, int64_t>> last;
+
+  auto current_tick = [] () -> int64_t {
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+  };
 
   while (state_ == RUNNING) {
     std::unique_lock<std::mutex> lk(queue_mtx_);
@@ -613,21 +623,21 @@ void VideoStream::RearrangeLoop() {
     double r = 1e6 / static_cast<double>(param_.time_base);
     ts = frame.timestamp * r;
     if (first) {
-      r_ts = ts;
-      start = std::chrono::steady_clock::now();
       first = false;
       LOGI(VideoStream) << "RearrangeLoop() start rearrange, queue size=" << queue_.size();
     }
     lk.unlock();
 
-    auto end = std::chrono::steady_clock::now();
-    auto dura = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    int64_t rt = ts - r_ts - dura.count();
+    int position = frame.position & 0xffff;
+    bool eos = frame.position & 0x10000;
+    if (!last.count(position)) last[position] = { ts, current_tick() };
+    auto &t = last[position];
+    if (eos) last.erase(position);
+    int64_t rt = ts - t.first - (current_tick() - t.second);
+    // LOGI(VideoStream) << "RearrangeLoop() ts=" << ts << ", last_ts=" << t.first << ", queue_size=" << queue_.size();
+
     if (rt > 0) std::this_thread::sleep_for(std::chrono::microseconds(rt));
-#if REARRANGE_BY_PTS_INTERVAL
-    r_ts = ts;
-    start = std::chrono::steady_clock::now();
-#endif
+    if (!eos) last[position] = { ts, current_tick() };
 
     if (!tiler_) {
       std::lock_guard<std::mutex> lk(canvas_mtx_);
@@ -642,8 +652,8 @@ void VideoStream::RearrangeLoop() {
       Buffer buffer;
       memset(&buffer, 0, sizeof(Buffer));
       MatToBuffer(frame.mat, frame.color, &buffer);
-      if (!tiler_->Blit(&buffer, frame.position)) {
-        LOGE(VideoStream) << "RearrangeLoop() tiler blit in pos: " << frame.position << " failed";
+      if (!tiler_->Blit(&buffer, position)) {
+        LOGE(VideoStream) << "RearrangeLoop() tiler blit in pos: " << position << " failed";
       }
     }
   }

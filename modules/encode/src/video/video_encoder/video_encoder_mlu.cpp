@@ -283,10 +283,10 @@ int VideoEncoderMlu::Stop() {
     }
   }
 
-  if (packet_buffer_) {
-    delete[] packet_buffer_;
-    packet_buffer_ = nullptr;
-    packet_buffer_size_ = 0;
+  if (stream_buffer_) {
+    delete[] stream_buffer_;
+    stream_buffer_ = nullptr;
+    stream_buffer_size_ = 0;
   }
   if (ps_buffer_) {
     delete[] ps_buffer_;
@@ -532,6 +532,17 @@ int VideoEncoderMlu::SendFrame(const VideoFrame *frame, int timeout_ms) {
   }
 
   u64_t pts = data_index_++ % CNCODEC_PTS_MAX_VALUE;
+  if (frame->data[0] != nullptr) {
+    std::lock_guard<std::mutex> lk(info_mtx_);
+    int64_t frame_pts = frame->pts;
+    if (frame_pts == INVALID_TIMESTAMP) {
+      frame_pts = frame_count_ * param_.time_base / param_.frame_rate;
+    }
+    encoding_info_[pts] = (EncodingInfo){ frame_pts, frame->dts, CurrentTick(), 0 };
+  }
+
+  int ret = cnstream::VideoEncoder::SUCCESS;
+
   if (param_.codec_type == VideoCodecType::JPEG) {
     je_input.pts = pts;
     if (frame->HasEOS()) {
@@ -549,15 +560,14 @@ int VideoEncoderMlu::SendFrame(const VideoFrame *frame, int timeout_ms) {
     memset(&params, 0, sizeof(cnjpegEncParameters));
     params.quality = param_.jpeg_quality;
     params.restartInterval = 0;
-    i32_t ret = cnjpegEncFeedFrame(reinterpret_cast<cnjpegEncoder>(cn_encoder_), &je_input, &params, timeout_ms);
-    if (CNCODEC_TIMEOUT == ret) {
+    i32_t cnret = cnjpegEncFeedFrame(reinterpret_cast<cnjpegEncoder>(cn_encoder_), &je_input, &params, timeout_ms);
+    if (CNCODEC_TIMEOUT == cnret) {
       LOGE(VideoEncoderMlu) << "SendFrame() cnjpegEncFeedFrame timeout";
-      return cnstream::VideoEncoder::ERROR_TIMEOUT;
-    } else if (CNCODEC_SUCCESS != ret) {
+      ret = cnstream::VideoEncoder::ERROR_TIMEOUT;
+    } else if (CNCODEC_SUCCESS != cnret) {
       LOGE(VideoEncoderMlu) << "SendFrame() cnjpegEncFeedFrame failed, ret=" << ret;
-      return cnstream::VideoEncoder::ERROR_FAILED;
+      ret = cnstream::VideoEncoder::ERROR_FAILED;
     }
-    if (je_input.flags & CNJPEGENC_FLAG_EOS) eos_sent_ = true;
   } else {
     ve_input.pts = pts;
     if (frame->HasEOS()) {
@@ -571,28 +581,25 @@ int VideoEncoderMlu::SendFrame(const VideoFrame *frame, int timeout_ms) {
     } else {
       ve_input.flags &= (~CNVIDEOENC_FLAG_EOS);
     }
-    i32_t ret = cnvideoEncFeedFrame(reinterpret_cast<cnvideoEncoder>(cn_encoder_), &ve_input, timeout_ms);
-    if (-CNCODEC_TIMEOUT == ret) {
+    i32_t cnret = cnvideoEncFeedFrame(reinterpret_cast<cnvideoEncoder>(cn_encoder_), &ve_input, timeout_ms);
+    if (-CNCODEC_TIMEOUT == cnret) {
       LOGE(VideoEncoderMlu) << "SendFrame() cnvideoEncFeedFrame timeout";
-      return cnstream::VideoEncoder::ERROR_TIMEOUT;
-    } else if (CNCODEC_SUCCESS != ret) {
+      ret = cnstream::VideoEncoder::ERROR_TIMEOUT;
+    } else if (CNCODEC_SUCCESS != cnret) {
       LOGE(VideoEncoderMlu) << "SendFrame() cnvideoEncFeedFrame failed, ret=" << ret;
-      return cnstream::VideoEncoder::ERROR_FAILED;
+      ret = cnstream::VideoEncoder::ERROR_FAILED;
     }
-    if (ve_input.flags & CNVIDEOENC_FLAG_EOS) eos_sent_ = true;
   }
 
-  if (frame->data[0] != nullptr) {
+  if (ret == cnstream::VideoEncoder::SUCCESS) {
+    if (frame->HasEOS()) eos_sent_ = true;
+    if (frame->data[0] != nullptr) frame_count_++;
+  } else {
     std::lock_guard<std::mutex> lk(info_mtx_);
-    int64_t frame_pts = frame->pts;
-    if (frame_pts == INVALID_TIMESTAMP) {
-      frame_pts = frame_count_ * param_.time_base / param_.frame_rate;
-    }
-    encoding_info_[pts] = (EncodingInfo){frame_pts, frame->dts, CurrentTick(), 0};
-    frame_count_++;
+    if (frame->data[0] != nullptr) encoding_info_.erase(pts);
   }
 
-  return cnstream::VideoEncoder::SUCCESS;
+  return ret;
 }
 
 int VideoEncoderMlu::GetPacket(VideoPacket *packet, PacketInfo *info) {
@@ -651,16 +658,16 @@ void VideoEncoderMlu::ReceivePacket(void *info) {
   if (param_.codec_type == VideoCodecType::JPEG) {
     cnjpegEncOutput *output = reinterpret_cast<cnjpegEncOutput *>(info);
     // LOGI(VideoEncoderMlu) << "ReceiveJPEGPacket size=" << output->streamLength << ", pts=" << output->pts;
-    if (packet_buffer_size_ < output->streamLength) {
-      if (packet_buffer_) delete[] packet_buffer_;
-      packet_buffer_ = new (std::nothrow) uint8_t[output->streamLength];
-      packet_buffer_size_ = output->streamLength;
+    if (stream_buffer_size_ < output->streamLength) {
+      if (stream_buffer_) delete[] stream_buffer_;
+      stream_buffer_ = new (std::nothrow) uint8_t[output->streamLength];
+      stream_buffer_size_ = output->streamLength;
     }
     CALL_CNRT_BY_CONTEXT(
-        cnrtMemcpy(packet_buffer_, reinterpret_cast<void *>(output->streamBuffer.addr + output->dataOffset),
+        cnrtMemcpy(stream_buffer_, reinterpret_cast<void *>(output->streamBuffer.addr + output->dataOffset),
                    output->streamLength, CNRT_MEM_TRANS_DIR_DEV2HOST),
         param_.mlu_device_id, -1);
-    packet.data = packet_buffer_;
+    packet.data = stream_buffer_;
     packet.size = output->streamLength;
     packet.pts = output->pts;
     packet.dts = INVALID_TIMESTAMP;
@@ -683,16 +690,16 @@ void VideoEncoderMlu::ReceivePacket(void *info) {
       // LOGI(VideoEncoderMlu) << "ReceivePacket() Got key frame";
       packet.SetKey();
     }
-    if (packet_buffer_size_ < output->streamLength) {
-      if (output->streamLength) delete[] packet_buffer_;
-      packet_buffer_ = new (std::nothrow) uint8_t[output->streamLength];
-      packet_buffer_size_ = output->streamLength;
+    if (stream_buffer_size_ < output->streamLength) {
+      if (output->streamLength) delete[] stream_buffer_;
+      stream_buffer_ = new (std::nothrow) uint8_t[output->streamLength];
+      stream_buffer_size_ = output->streamLength;
     }
     CALL_CNRT_BY_CONTEXT(
-        cnrtMemcpy(packet_buffer_, reinterpret_cast<void *>(output->streamBuffer.addr + output->dataOffset),
+        cnrtMemcpy(stream_buffer_, reinterpret_cast<void *>(output->streamBuffer.addr + output->dataOffset),
                    output->streamLength, CNRT_MEM_TRANS_DIR_DEV2HOST),
         param_.mlu_device_id, -1);
-    packet.data = packet_buffer_;
+    packet.data = stream_buffer_;
     packet.size = output->streamLength;
     packet.pts = output->pts;
     packet.dts = INVALID_TIMESTAMP;
