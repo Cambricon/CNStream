@@ -95,6 +95,8 @@ int Encode::GetPosition(const std::string &stream_id) {
     if (search != positions_.end()) {
       ret = search->second;
     }
+  } else {
+    ret = 0;
   }
   return ret;
 }
@@ -292,14 +294,23 @@ int Encode::Process(CNFrameInfoPtr data) {
   }
 
   EncoderContext *ctx = GetContext(data);
-  if (!ctx) return -1;
+  if (!ctx) {
+    LOGE(Encoder) << "Process() Get Encoder context failed.";
+    return -1;
+  }
+
+  int position = GetPosition(data->stream_id);
+  if (position < 0) {
+    LOGE(Encoder) << "Process() find stream position failed.";
+    return -1;
+  }
+
 
   auto params = param_helper_->GetParams();
   CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
 
   if (!params.mlu_input_frame) {
-    if (!ctx->stream->Update(frame->ImageBGR(), VideoStream::ColorFormat::BGR, data->timestamp,
-                             GetPosition(data->stream_id))) {
+    if (!ctx->stream->Update(frame->ImageBGR(), VideoStream::ColorFormat::BGR, data->timestamp, position)) {
       LOGE(Encode) << "Process() video stream update failed.";
     }
   } else {
@@ -324,7 +335,7 @@ int Encode::Process(CNFrameInfoPtr data) {
     buffer.color = frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 ? VideoStream::ColorFormat::YUV_NV12
                                                                            : VideoStream::ColorFormat::YUV_NV21;
     buffer.mlu_device_id = frame->dst_device_id;
-    if (!ctx->stream->Update(&buffer, data->timestamp, GetPosition(data->stream_id))) {
+    if (!ctx->stream->Update(&buffer, data->timestamp, position)) {
       LOGE(Encode) << "Process() video stream update failed";
     }
   }

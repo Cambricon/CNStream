@@ -89,6 +89,8 @@ int RtspSink::GetPosition(const std::string &stream_id) {
     if (search != positions_.end()) {
       ret = search->second;
     }
+  } else {
+    ret = 0;
   }
   return ret;
 }
@@ -228,12 +230,20 @@ void RtspSink::Close() {
 int RtspSink::Process(CNFrameInfoPtr data) {
   RtspSinkContext *ctx = GetContext(data);
   auto params = param_helper_->GetParams();
-  if (!ctx) return -1;
+  if (!ctx) {
+    LOGE(RtspSink) << "Get RtspSink context failed.";
+    return -1;
+  }
+  int position = GetPosition(data->stream_id);
+  if (position < 0) {
+    LOGE(RtmpSink) << "Process() find stream position failed.";
+    return -1;
+  }
+
   CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
 
   if (!params.mlu_input_frame) {
-    if (!ctx->stream->Update(frame->ImageBGR(), VideoStream::ColorFormat::BGR, data->timestamp,
-                             GetPosition(data->stream_id))) {
+    if (!ctx->stream->Update(frame->ImageBGR(), VideoStream::ColorFormat::BGR, data->timestamp, position)) {
       LOGE(RtspSink) << "Process() video stream update failed";
     }
   } else {
@@ -258,7 +268,7 @@ int RtspSink::Process(CNFrameInfoPtr data) {
     buffer.color = frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 ? VideoStream::ColorFormat::YUV_NV12
                                                                            : VideoStream::ColorFormat::YUV_NV21;
     buffer.mlu_device_id = frame->dst_device_id;
-    if (!ctx->stream->Update(&buffer, data->timestamp, GetPosition(data->stream_id))) {
+    if (!ctx->stream->Update(&buffer, data->timestamp, position)) {
       LOGE(RtspSink) << "Process() video stream update failed";
     }
   }

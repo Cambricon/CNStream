@@ -77,8 +77,8 @@ class VideoEncoderMlu : public VideoEncoderBase {
   std::atomic<bool> eos_sent_{false};
   std::atomic<bool> eos_got_{false};
   std::atomic<bool> error_{false};
-  uint8_t *packet_buffer_ = nullptr;
-  uint32_t packet_buffer_size_ = 0;
+  uint8_t *stream_buffer_ = nullptr;
+  uint32_t stream_buffer_size_ = 0;
   uint8_t *ps_buffer_ = nullptr;
   uint32_t ps_size_ = 0;
   int64_t frame_count_ = 0;
