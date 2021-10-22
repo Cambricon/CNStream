@@ -122,10 +122,18 @@ class InferencerPrivate {
           LOGE(INFERENCER) << "Can not find ObjPreproc implemention by name: " << params.preproc_name;
           return false;
         }
+        if (!obj_preproc_->Init(params.custom_preproc_params)) {
+          LOGE(INFERENCER) << "Preprocessor init failed.";
+          return false;
+        }
       } else {
         preproc_ = std::shared_ptr<Preproc>(Preproc::Create(params.preproc_name));
         if (!preproc_) {
           LOGE(INFERENCER) << "Can not find Preproc implemention by name: " << params.preproc_name;
+          return false;
+        }
+        if (!preproc_->Init(params.custom_preproc_params)) {
+          LOGE(INFERENCER) << "Preprocessor init failed.";
           return false;
         }
       }

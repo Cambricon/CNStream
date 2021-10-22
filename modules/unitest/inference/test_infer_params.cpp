@@ -22,6 +22,7 @@
 
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "infer_params.hpp"
@@ -71,7 +72,8 @@ bool InferParamsEQ(const InferParams &p1, const InferParams &p2) {
          p1.postproc_name == p2.postproc_name &&
          p1.obj_filter_name == p2.obj_filter_name &&
          p1.dump_resized_image_dir == p2.dump_resized_image_dir &&
-         p1.model_input_pixel_format == p2.model_input_pixel_format;
+         p1.model_input_pixel_format == p2.model_input_pixel_format &&
+         p1.custom_preproc_params == p2.custom_preproc_params;
 }
 
 TEST(Inferencer, infer_param_manager) {
@@ -94,7 +96,8 @@ TEST(Inferencer, infer_param_manager) {
     "postproc_name",
     "obj_filter_name",
     "dump_resized_image_dir",
-    "model_input_pixel_format"
+    "model_input_pixel_format",
+    "custom_preproc_params"
   };
 
   for (const auto &it : infer_param_list)
@@ -117,6 +120,8 @@ TEST(Inferencer, infer_param_manager) {
   expect_ret.obj_filter_name = "filter_name";
   expect_ret.dump_resized_image_dir = "dir";
   expect_ret.model_input_pixel_format = CNDataFormat::CN_PIXEL_FORMAT_BGRA32;
+  expect_ret.custom_preproc_params = {
+    std::make_pair(std::string("param"), std::string("value"))};
 
   ModuleParamSet raw_params;
   raw_params["device_id"] = std::to_string(expect_ret.device_id);
@@ -134,6 +139,7 @@ TEST(Inferencer, infer_param_manager) {
   raw_params["obj_filter_name"] = expect_ret.obj_filter_name;
   raw_params["dump_resized_image_dir"] = expect_ret.dump_resized_image_dir;
   raw_params["model_input_pixel_format"] = "BGRA32";
+  raw_params["custom_preproc_params"] = "{\"param\" : \"value\"}";
 
   {
     InferParams ret;
@@ -229,6 +235,16 @@ TEST(Inferencer, infer_param_manager) {
     raw_params["device_id"] = std::to_string(1ULL << 33);
     EXPECT_FALSE(manager.ParseBy(raw_params, &ret));
   }
+}
+
+TEST(Inferencer, custom_preproc_params_parse) {
+  InferParamManager manager;
+  ParamRegister param_register;
+  manager.RegisterAll(&param_register);
+  ModuleParamSet raw_params;
+  raw_params["custom_preproc_params"] = "{wrong_json_format,}";
+  InferParams ret;
+  EXPECT_FALSE(manager.ParseBy(raw_params, &ret));
 }
 
 }  // namespace cnstream
