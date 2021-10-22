@@ -20,6 +20,9 @@
 
 #include "infer_params.hpp"
 
+#include <rapidjson/document.h>
+#include <rapidjson/rapidjson.h>
+
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -295,6 +298,33 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
       LOGE(INFERENCER) << "[pad_method] set failed. the string value is " << value;
       return false;
     }
+    return true;
+  };
+  ASSERT(RegisterParam(pregister, param));
+
+  param.name = "custom_preproc_params";
+  param.desc_str =
+      "Optional. Custom preprocessing parameters. After the inferencer module creates an instance of "
+      "the preprocessing class specified by preproc_name, the Init function of the specified "
+      "preprocessing class will be called, and these parameters will be passed to Init. See Preproc::Init "
+      "for detail.";
+  param.default_value = "";
+  param.type = "json string";
+  param.parser = [](const std::string &value, InferParams *param_set) -> bool {
+    if (value.empty()) {
+      param_set->custom_preproc_params.clear();
+      return true;
+    }
+    rapidjson::Document doc;
+    if (doc.Parse<rapidjson::kParseCommentsFlag>(value.c_str()).HasParseError()) {
+      LOGE(CORE) << "Parse custom preprocessing parameters configuration failed. "
+                    "Error code [" << std::to_string(doc.GetParseError()) << "]"
+                 << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. JSON:" << value;
+      return false;
+    }
+    param_set->custom_preproc_params.clear();
+    for (auto iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter)
+      param_set->custom_preproc_params[iter->name.GetString()] = iter->value.GetString();
     return true;
   };
   ASSERT(RegisterParam(pregister, param));

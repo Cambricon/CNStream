@@ -29,6 +29,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -60,6 +61,14 @@ class Preproc : virtual public ReflexObjectEx<Preproc> {
    * @return Returns the pointer to preprocess object.
    */
   static Preproc* Create(const std::string& proc_name);
+  /**
+   * @brief Initializes preprocessing parameters.
+   *
+   * @param[in] params The preprocessing parameters.
+   *
+   * @return Returns ture for success, otherwise returns false.
+   **/
+  virtual bool Init(const std::unordered_map<std::string, std::string> &params) { return true; }
 
   /**
    * @brief Executes preprocess on neural network inputs.
@@ -95,6 +104,14 @@ class ObjPreproc : virtual public ReflexObjectEx<ObjPreproc> {
    * @return Returns the pointer to preprocess object.
    */
   static ObjPreproc* Create(const std::string& proc_name);
+  /**
+   * @brief Initializes preprocessing parameters.
+   *
+   * @param[in] params The preprocessing parameters.
+   *
+   * @return Returns ture for success, otherwise returns false.
+   **/
+  virtual bool Init(const std::unordered_map<std::string, std::string> &params) { return true; }
 
   /**
    * @brief Executes preprocess on neural network inputs.
