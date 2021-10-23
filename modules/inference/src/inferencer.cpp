@@ -146,11 +146,19 @@ class InferencerPrivate {
           LOGE(INFERENCER) << "Can not find ObjPostproc implemention by name: " << params.postproc_name;
           return false;
         }
+        if (!obj_postproc_->Init(params.custom_postproc_params)) {
+          LOGE(INFERENCER) << "Postprocessor init failed.";
+          return false;
+        }
         obj_postproc_->SetThreshold(params.threshold);
       } else {
         postproc_ = std::shared_ptr<Postproc>(Postproc::Create(params.postproc_name));
         if (!postproc_) {
           LOGE(INFERENCER) << "Can not find Postproc implemention by name: " << params.postproc_name;
+          return false;
+        }
+        if (!postproc_->Init(params.custom_postproc_params)) {
+          LOGE(INFERENCER) << "Postprocessor init failed.";
           return false;
         }
         postproc_->SetThreshold(params.threshold);

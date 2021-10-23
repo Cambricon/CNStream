@@ -73,7 +73,8 @@ bool InferParamsEQ(const InferParams &p1, const InferParams &p2) {
          p1.obj_filter_name == p2.obj_filter_name &&
          p1.dump_resized_image_dir == p2.dump_resized_image_dir &&
          p1.model_input_pixel_format == p2.model_input_pixel_format &&
-         p1.custom_preproc_params == p2.custom_preproc_params;
+         p1.custom_preproc_params == p2.custom_preproc_params &&
+         p1.custom_postproc_params == p2.custom_postproc_params;
 }
 
 TEST(Inferencer, infer_param_manager) {
@@ -97,7 +98,8 @@ TEST(Inferencer, infer_param_manager) {
     "obj_filter_name",
     "dump_resized_image_dir",
     "model_input_pixel_format",
-    "custom_preproc_params"
+    "custom_preproc_params",
+    "custom_postproc_params"
   };
 
   for (const auto &it : infer_param_list)
@@ -122,6 +124,8 @@ TEST(Inferencer, infer_param_manager) {
   expect_ret.model_input_pixel_format = CNDataFormat::CN_PIXEL_FORMAT_BGRA32;
   expect_ret.custom_preproc_params = {
     std::make_pair(std::string("param"), std::string("value"))};
+  expect_ret.custom_postproc_params = {
+    std::make_pair(std::string("param"), std::string("value"))};
 
   ModuleParamSet raw_params;
   raw_params["device_id"] = std::to_string(expect_ret.device_id);
@@ -140,6 +144,7 @@ TEST(Inferencer, infer_param_manager) {
   raw_params["dump_resized_image_dir"] = expect_ret.dump_resized_image_dir;
   raw_params["model_input_pixel_format"] = "BGRA32";
   raw_params["custom_preproc_params"] = "{\"param\" : \"value\"}";
+  raw_params["custom_postproc_params"] = "{\"param\" : \"value\"}";
 
   {
     InferParams ret;
@@ -243,6 +248,16 @@ TEST(Inferencer, custom_preproc_params_parse) {
   manager.RegisterAll(&param_register);
   ModuleParamSet raw_params;
   raw_params["custom_preproc_params"] = "{wrong_json_format,}";
+  InferParams ret;
+  EXPECT_FALSE(manager.ParseBy(raw_params, &ret));
+}
+
+TEST(Inferencer, custom_postproc_params_parse) {
+  InferParamManager manager;
+  ParamRegister param_register;
+  manager.RegisterAll(&param_register);
+  ModuleParamSet raw_params;
+  raw_params["custom_postproc_params"] = "{wrong_json_format,}";
   InferParams ret;
   EXPECT_FALSE(manager.ParseBy(raw_params, &ret));
 }

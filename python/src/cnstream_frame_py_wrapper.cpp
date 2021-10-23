@@ -18,6 +18,7 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include <pybind11/embed.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -44,9 +45,15 @@ void CNFrameInfoWrapper(const py::module &m) {
       .def("is_eos", &CNFrameInfo::IsEos)
       .def("is_removed", &CNFrameInfo::IsRemoved)
       .def("is_invalid", &CNFrameInfo::IsInvalid)
-      .def("get_py_collection", [](std::shared_ptr<CNFrameInfo> frame) {
-          frame->collection.AddIfNotExists("py_collection", py::dict());
-          return frame->collection.Get<py::dict>("py_collection");
+      .def("get_py_collection", [] (std::shared_ptr<CNFrameInfo> frame) -> py::dict {
+          frame->collection.AddIfNotExists("py_collection", std::shared_ptr<py::dict>(new py::dict(), [] (py::dict* t) {
+            // py::dict destruct in c++ thread without gil resource
+            // this is important to get gil when delete a py::dict.
+            py::gil_scoped_acquire gil;
+            delete t;
+          }));
+          auto collection = *(frame->collection.Get<std::shared_ptr<py::dict>>("py_collection"));
+          return collection;
       })
       .def_readwrite("stream_id", &CNFrameInfo::stream_id)
       .def_readwrite("timestamp", &CNFrameInfo::timestamp);

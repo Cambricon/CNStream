@@ -6,9 +6,11 @@
     "custom_params" : {
       "model_path" : "../../../data/models/yolov5_4c4b_rgb_270.cambricon",
       "func_name" : "subnet0",
-      "preproc_name" : "CNCV",
+      // Uncomment the following 2 lines to use cncv
+      //"preproc_name" : "CNCV",
+      //"normalize" : true,
+      "preproc_name" : "VideoPreprocYolov5",
       "postproc_name" : "VideoPostprocYolov5",
-      "normalize" : true,
       "keep_aspect_ratio" : "true",
       "model_input_pixel_format" : "RGB24",
       "batching_timeout" : 100,

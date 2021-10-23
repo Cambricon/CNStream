@@ -29,6 +29,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -61,6 +62,14 @@ class Postproc : virtual public ReflexObjectEx<Postproc> {
    * @return The pointer to postprocess object.
    */
   static Postproc* Create(const std::string& proc_name);
+  /**
+   * @brief Initializes postprocessing parameters.
+   *
+   * @param[in] params The postprocessing parameters.
+   *
+   * @return Returns ture for success, otherwise returns false.
+   **/
+  virtual bool Init(const std::unordered_map<std::string, std::string> &params) { return true; }
   /**
    * @brief Sets threshold.
    *
@@ -127,6 +136,14 @@ class ObjPostproc : virtual public ReflexObjectEx<ObjPostproc> {
    * @return The pointer to postprocess object.
    */
   static ObjPostproc* Create(const std::string& proc_name);
+  /**
+   * @brief Initializes postprocessing parameters.
+   *
+   * @param[in] params The postprocessing parameters.
+   *
+   * @return Returns ture for success, otherwise returns false.
+   **/
+  virtual bool Init(const std::unordered_map<std::string, std::string> &params) { return true; }
   /**
    * @brief Sets threshold.
    *

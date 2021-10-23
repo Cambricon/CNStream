@@ -109,6 +109,14 @@ def print_performance(pipeline):
 
 
 def main():
+    model_file = os.path.join(os.path.abspath(os.path.dirname(__file__)), "../../data/models/yolov3_b4c4_argb_mlu270.cambricon")
+    if not os.path.exists(model_file):
+        os.makedirs(os.path.dirname(model_file),exist_ok=True)
+        import urllib.request
+        url_str = "http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon"
+        print(f'Downloading {url_str} ...')
+        urllib.request.urlretrieve(url_str, model_file)
+
     global g_source_lock, g_perf_print_lock, g_perf_print_stop
     # Build a pipeline
     pipeline = Pipeline("my_pipeline")
