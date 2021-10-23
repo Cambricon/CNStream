@@ -34,6 +34,7 @@ void PipelineWrapper(py::module &);
 void DataHandlerWrapper(const py::module &);
 void PerfPrintWrapper(py::module &);
 void PreprocWrapper(const py::module &);
+void PostprocWrapper(const py::module &m);
 
 PYBIND11_MODULE(cnstream, m) {
   m.doc() = "cnstream python api";
@@ -47,6 +48,7 @@ PYBIND11_MODULE(cnstream, m) {
   DataHandlerWrapper(m);
   PerfPrintWrapper(m);
   PreprocWrapper(m);
+  PostprocWrapper(m);
 }
 
 }  // namespace cnstream

@@ -28,12 +28,10 @@ class CMakeExtension(Extension):
         Extension.__init__(self, name, sources=[])
         self.sourcedir = os.path.abspath(sourcedir)
 
-
 class CMakeBuild(build_ext):
     def build_extension(self, ext):
         # self.parallel = 4
         extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
-
         # required for auto-detection & inclusion of auxiliary "native" libs
         if not extdir.endswith(os.path.sep):
             extdir += os.path.sep
@@ -46,8 +44,6 @@ class CMakeBuild(build_ext):
         cmake_generator = os.environ.get("CMAKE_GENERATOR", "")
 
         # Set Python_EXECUTABLE instead if you use PYBIND11_FINDPYTHON
-        # EXAMPLE_VERSION_INFO shows you how to pass a value into the C++ code
-        # from Python.
         cmake_args = [
             "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={}".format(extdir),
             "-DPYTHON_EXECUTABLE={}".format(sys.executable),
@@ -59,11 +55,6 @@ class CMakeBuild(build_ext):
         # (needed e.g. to build for ARM OSx on conda-forge)
         if "CMAKE_ARGS" in os.environ:
             cmake_args += [item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
-
-        # In this example, we pass in the version to C++. You might not need to.
-        cmake_args += [
-            "-DEXAMPLE_VERSION_INFO={}".format(self.distribution.get_version())
-        ]
 
         if self.compiler.compiler_type != "msvc":
             # Using Ninja-build since it a) is available as a wheel and b)
@@ -134,9 +125,12 @@ setup(
     name="cnstream",
     version="6.1.0",
     author="Cambricon",
+    url='https://gitee.com/SolutionSDK/CNStream',
     author_email="@cambricon.com",
-    description="CNStream based on pybind11 and CMake",
+    license='APACHE 2.0',
+    description="CNStream based on pybind11",
     long_description="",
+    python_requires='>=3.5',
     ext_modules=[CMakeExtension("cnstream")],
     cmdclass={"build_ext": CMakeBuild},
     zip_safe=False,

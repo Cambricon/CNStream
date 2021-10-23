@@ -22,6 +22,8 @@
 
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include <algorithm>
 #include <array>
@@ -31,6 +33,7 @@
 #include <limits>
 #include <set>
 #include <string>
+
 #define ASSERT(value)                           \
   {                                             \
     bool __attribute__((unused)) ret = (value); \
@@ -305,9 +308,9 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
   param.name = "custom_preproc_params";
   param.desc_str =
       "Optional. Custom preprocessing parameters. After the inferencer module creates an instance of "
-      "the preprocessing class specified by preproc_name, the Init function of the specified "
+      "the preprocessing class specified by preproc_name or obj_preproc_name, the Init function of the specified "
       "preprocessing class will be called, and these parameters will be passed to Init. See Preproc::Init "
-      "for detail.";
+      "and ObjPreproc::Init for detail.";
   param.default_value = "";
   param.type = "json string";
   param.parser = [](const std::string &value, InferParams *param_set) -> bool {
@@ -323,8 +326,55 @@ void InferParamManager::RegisterAll(ParamRegister *pregister) {
       return false;
     }
     param_set->custom_preproc_params.clear();
-    for (auto iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter)
+    for (auto iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter) {
+      std::string value;
+      if (!iter->value.IsString()) {
+        rapidjson::StringBuffer sbuf;
+        rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
+        iter->value.Accept(jwriter);
+        value = sbuf.GetString();
+      } else {
+        value = iter->value.GetString();
+      }
       param_set->custom_preproc_params[iter->name.GetString()] = iter->value.GetString();
+    }
+    return true;
+  };
+  ASSERT(RegisterParam(pregister, param));
+
+  param.name = "custom_postproc_params";
+  param.desc_str =
+      "Optional. Custom postprocessing parameters. After the inferencer module creates an instance of "
+      "the postprocessing class specified by postproc_name or obj_postproc_name, the Init function of the specified "
+      "postprocessing class will be called, and these parameters will be passed to Init. See Postproc::Init "
+      "and ObjPostproc::Initfor detail.";
+  param.default_value = "";
+  param.type = "json string";
+  param.parser = [](const std::string &value, InferParams *param_set) -> bool {
+    if (value.empty()) {
+      param_set->custom_postproc_params.clear();
+      return true;
+    }
+    rapidjson::Document doc;
+    if (doc.Parse<rapidjson::kParseCommentsFlag>(value.c_str()).HasParseError()) {
+      LOGE(CORE) << "Parse custom postprocessing parameters configuration failed. "
+                    "Error code [" << std::to_string(doc.GetParseError()) << "]"
+                 << " Offset [" << std::to_string(doc.GetErrorOffset()) << "]. JSON:" << value;
+      return false;
+    }
+    param_set->custom_postproc_params.clear();
+    for (auto iter = doc.MemberBegin(); iter != doc.MemberEnd(); ++iter) {
+      std::string value;
+      if (!iter->value.IsString()) {
+        rapidjson::StringBuffer sbuf;
+        rapidjson::Writer<rapidjson::StringBuffer> jwriter(sbuf);
+        iter->value.Accept(jwriter);
+        value = sbuf.GetString();
+      } else {
+        value = iter->value.GetString();
+      }
+      param_set->custom_postproc_params[iter->name.GetString()] = value;
+    }
     return true;
   };
   ASSERT(RegisterParam(pregister, param));

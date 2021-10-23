@@ -93,7 +93,7 @@ bool PyPreproc::Init(const std::unordered_map<std::string, std::string> &params)
     tparams.erase("pyclass_name");
     return py::cast<bool>(pyinit_(tparams));
   } catch (std::runtime_error e) {
-    LOGE(PyModule) << "pyclass_name : [" << pyclass_name_iter->second << "]. " << e.what();
+    LOGE(PyPreproc) << "pyclass_name : [" << pyclass_name_iter->second << "]. " << e.what();
     return false;
   }
 
@@ -109,6 +109,7 @@ int PyPreproc::Execute(const std::vector<float*> &net_inputs,
     input_shapes.emplace_back(model->InputShape(i).Vectorize());
   std::vector<std::vector<float>> results;
   try {
+    py::gil_scoped_acquire gil;
     results = py::cast<std::vector<std::vector<float>>>(pyexecute_(input_shapes, finfo));
   } catch (std::runtime_error e) {
     LOGF(PyPreproc) << "[" << pyclass_name_ << "] Call execute failed : " << e.what();
