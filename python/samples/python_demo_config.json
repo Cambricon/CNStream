@@ -46,7 +46,7 @@
     "max_input_queue_size" : 20,
     "custom_params" : {
       "encoder_type" : "mlu",
-      "port" : 9554,
+      "port" : 8554,
       "device_id" : 0
     }
   }

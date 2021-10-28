@@ -19,6 +19,7 @@ find_package(Neuware)
 include_directories(${NEUWARE_INCLUDE_DIR})
 
 # ---[ pybind11
+set(PYBIND11_PYTHON_VERSION 3.5)
 add_subdirectory(${CNSTREAM_ROOT_DIR}/3rdparty/pybind11 ${CMAKE_CURRENT_BINARY_DIR}/pybind11)
 
 # ---[ rapidjson

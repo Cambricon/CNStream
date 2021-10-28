@@ -3,6 +3,7 @@ sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../lib")
 from cnstream import *
 import time
 import threading
+import cv2
 
 g_source_lock = threading.Lock()
 g_perf_print_lock = threading.Lock()
@@ -107,6 +108,13 @@ def print_performance(pipeline):
             print_pipeline_performance(pipeline, 2000)
         g_perf_print_lock.release()
 
+def receive_processed_frame(frame):
+  cn_data = frame.get_cn_data_frame()
+  frame_id = cn_data.frame_id
+  stream_id = frame.stream_id
+  print("receive the frame {} from {}".format(frame_id, stream_id))
+  if cn_data.has_bgr_image():
+    cv2.imwrite(stream_id + '_frame_{}'.format(frame_id) +'.jpg', cn_data.image_bgr())
 
 def main():
     model_file = os.path.join(os.path.abspath(os.path.dirname(__file__)), "../../data/models/yolov3_b4c4_argb_mlu270.cambricon")
@@ -114,13 +122,17 @@ def main():
         os.makedirs(os.path.dirname(model_file),exist_ok=True)
         import urllib.request
         url_str = "http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon"
-        print(f'Downloading {url_str} ...')
+        print('Downloading {} ...'.format(url_str))
         urllib.request.urlretrieve(url_str, model_file)
 
     global g_source_lock, g_perf_print_lock, g_perf_print_stop
     # Build a pipeline
     pipeline = Pipeline("my_pipeline")
     pipeline.build_pipeline_by_json_file('python_demo_config.json')
+
+
+    # Set frame done callback
+    pipeline.register_frame_done_callback(receive_processed_frame)
 
     # Get pipeline's source module
     source_module_name = 'source'
@@ -130,8 +142,10 @@ def main():
     obs = CustomObserver(pipeline, source)
     pipeline.stream_msg_observer = obs
 
+
     # Start the pipeline
     if not pipeline.start():
+        print("Start pipeline failed.")
         return
 
     # Start a thread to print pipeline performance
@@ -142,7 +156,7 @@ def main():
     mp4_path = "../../data/videos/cars.mp4"
     stream_num = 4
     for i in range(stream_num):
-        stream_id = "stream_id_{}".format(i)
+        stream_id = "stream_{}".format(i)
         file_handler = FileHandler(source, stream_id, mp4_path, -1)
         g_source_lock.acquire()
         if source.add_source(file_handler) != 0:
