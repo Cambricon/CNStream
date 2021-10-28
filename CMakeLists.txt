@@ -42,6 +42,7 @@ endif()
 if(build_test_coverage)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage")
 endif()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,-rpath=.")
 if(build_tests)
   # ---[ gtest
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/googletest)
