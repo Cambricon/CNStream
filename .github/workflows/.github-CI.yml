@@ -7,14 +7,14 @@ on:
 
 jobs:
   job_lintgit_check:
-    runs-on: self-hosted
+    runs-on: cnstream-video
     steps:
     - uses: actions/checkout@v2
     - name: Run lintgit
       run: ./tools/lintgit origin/master $PWD
        
   unit_test:
-    runs-on: self-hosted
+    runs-on: cnstream-video
     steps:
     - uses: actions/checkout@v2
       with:
