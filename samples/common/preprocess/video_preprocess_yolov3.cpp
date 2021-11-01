@@ -119,8 +119,6 @@ class VideoPreprocYolov3 : public cnstream::VideoPreproc {
     if (src_h != dst_h || src_w != dst_w) {
       cv::Mat pad_img(dst_h, dst_w, dst_cvt_color_img.type(), cv::Scalar(128, 128, 128));
       const float scaling_factors = std::min(1.0 * dst_w / src_w, 1.0 * dst_h / src_h);
-      LOGF_IF(DEMO, scaling_factors <= 0);
-      LOGF_IF(DEMO, scaling_factors > 1);
       cv::Mat resized_img(src_h * scaling_factors, src_w * scaling_factors, dst_cvt_color_img.type());
       cv::resize(dst_cvt_color_img, resized_img, cv::Size(resized_img.cols, resized_img.rows));
       cv::Rect roi;

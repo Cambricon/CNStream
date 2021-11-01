@@ -64,6 +64,10 @@ have_modules_target(${CNSTREAM_ROOT_DIR})
 have_modules_contrib_target(${CNSTREAM_ROOT_DIR})
 
 pybind11_add_module(cnstream SHARED ${cnstream_pyapi_srcs} ${preprocess_srcs} ${postprocess_srcs} ${sample_common_srcs})
+find_package(PythonLibs REQUIRED)
+include_directories(${PYTHON_INCLUDE_DIR})
+# message(${PYTHON_INCLUDE_DIR})
+# message(${PYTHON_LIBRARY})
 
 if(HAVE_FRAMEWORK_TARGET)
   add_dependencies(cnstream cnstream_core)

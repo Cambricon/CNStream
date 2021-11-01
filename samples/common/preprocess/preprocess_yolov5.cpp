@@ -53,8 +53,6 @@ class PreprocYolov5 : public cnstream::Preproc {
     if (height != dst_h || width != dst_w) {
       cv::Mat dst(dst_h, dst_w, CV_8UC3, cv::Scalar(0, 0, 0));
       const float scaling_factors = std::min(1.0 * dst_w / width, 1.0 * dst_h / height);
-      LOGF_IF(DEMO, scaling_factors <= 0);
-      LOGF_IF(DEMO, scaling_factors > 1);
       cv::Mat resized(height * scaling_factors, width * scaling_factors, CV_8UC3);
       cv::resize(img, resized, cv::Size(resized.cols, resized.rows));
       cv::Rect roi;

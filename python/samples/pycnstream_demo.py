@@ -108,6 +108,17 @@ def print_performance(pipeline):
             print_pipeline_performance(pipeline, 2000)
         g_perf_print_lock.release()
 
+class OneModuleObserver(ModuleObserver):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def notify(self, frame: 'probe data from one node'):
+      cn_data = frame.get_cn_data_frame()
+      frame_id = cn_data.frame_id
+      stream_id = frame.stream_id
+      print("receive the frame {} from {}".format(frame_id, stream_id))
+
+
 def receive_processed_frame(frame):
   cn_data = frame.get_cn_data_frame()
   frame_id = cn_data.frame_id
@@ -133,6 +144,11 @@ def main():
 
     # Set frame done callback
     pipeline.register_frame_done_callback(receive_processed_frame)
+
+    # Probe one module's output in the pipeline, it's just for debugging
+    # infer_module_observer = OneModuleObserver()
+    # infer = pipeline.get_module('detector')
+    # infer.set_module_observer(infer_module_observer)
 
     # Get pipeline's source module
     source_module_name = 'source'
