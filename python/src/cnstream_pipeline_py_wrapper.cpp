@@ -68,6 +68,11 @@ void PipelineWrapper(py::module &m) {  // NOLINT
              return dynamic_cast<SourceModule *>(pipeline->GetModule(module_name));
            },
            py::return_value_policy::reference)
+      .def("get_module",
+           [](Pipeline *pipeline, const std::string &module_name) {
+             return dynamic_cast<Module *>(pipeline->GetModule(module_name));
+           },
+           py::return_value_policy::reference)
       .def("get_module_config", &Pipeline::GetModuleConfig)
       .def("is_profiling_enabled", &Pipeline::IsProfilingEnabled)
       .def("is_tracing_enabled", &Pipeline::IsTracingEnabled)

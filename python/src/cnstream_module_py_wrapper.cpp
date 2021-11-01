@@ -81,6 +81,13 @@ class Pybind11ModuleEx : public Pybind11Module {
   explicit Pybind11ModuleEx(const std::string &name) : Pybind11Module(name) { hasTransmit_.store(true); }
 };  // class Pybind11ModuleEx
 
+class Pybind11IModuleObserverV : public IModuleObserver {
+ public:
+  void notify(std::shared_ptr<CNFrameInfo> frame) override {
+    PYBIND11_OVERRIDE_PURE(void, IModuleObserver, notify, frame);
+  }
+};  // class Pybind11IModuleObserverV
+
 }  // namespace detail
 
 PyModule::PyModule(const std::string& name) : ModuleEx(name) {
@@ -194,6 +201,11 @@ void ModuleWrapper(py::module &m) {  // NOLINT
   py::class_<detail::Pybind11ModuleEx, detail::Pybind11Module,
       detail::Pybind11ModuleV<detail::Pybind11ModuleEx>>(m, "ModuleEx")
       .def(py::init<const std::string&>());
+  py::class_<IModuleObserver, detail::Pybind11IModuleObserverV>(m, "ModuleObserver")
+      .def(py::init<>())
+      .def("notify", &IModuleObserver::notify);
+  py::class_<Module>(m, "CModule")
+      .def("set_module_observer", &Module::SetObserver);
 }
 
 }  // namespace cnstream
