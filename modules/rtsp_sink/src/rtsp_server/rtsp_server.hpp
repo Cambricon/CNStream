@@ -37,7 +37,7 @@ class RtspServer {
     MPEG4,
   };
 
-  using GetPacket = std::function<int(uint8_t *, int, double *)>;
+  using GetPacket = std::function<int(uint8_t *, int, double *, int *)>;
 
   struct Param {
     int port = 8554;

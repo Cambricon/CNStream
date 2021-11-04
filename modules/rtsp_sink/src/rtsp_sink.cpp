@@ -99,6 +99,9 @@ RtspSinkContext *RtspSink::CreateContext(CNFrameInfoPtr data, const std::string 
   CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
   auto params = param_helper_->GetParams();
   RtspSinkContext *ctx = new RtspSinkContext;
+
+  int time_base = 90000;
+
   VideoStream::Param sparam;
   sparam.width = params.width > 0 ? params.width : frame->width;
   sparam.height = params.height > 0 ? params.height : frame->height;
@@ -106,7 +109,7 @@ RtspSinkContext *RtspSink::CreateContext(CNFrameInfoPtr data, const std::string 
   sparam.tile_rows = params.tile_rows;
   sparam.resample = params.resample;
   sparam.frame_rate = params.frame_rate;
-  sparam.time_base = 90000;
+  sparam.time_base = time_base;
   sparam.bit_rate = params.bit_rate;
   sparam.gop_size = params.gop_size;
   VideoPixelFormat pixel_format =
@@ -122,9 +125,10 @@ RtspSinkContext *RtspSink::CreateContext(CNFrameInfoPtr data, const std::string 
     return nullptr;
   }
 
-  auto get_packet = [](VideoStream *stream, uint32_t time_base, uint8_t *data, int size, double *timestamp) {
+  auto get_packet = [time_base](VideoStream *stream, uint8_t *data, int size, double *timestamp, int *buffer_percent) {
     if (!stream) return -1;
     VideoPacket packet, *pkt;
+    VideoStream::PacketInfo info;
     memset(&packet, 0, sizeof(VideoPacket));
     if (size < 0) {  // skip packet
       pkt = nullptr;
@@ -136,8 +140,11 @@ RtspSinkContext *RtspSink::CreateContext(CNFrameInfoPtr data, const std::string 
       packet.size = size;
       pkt = &packet;
     }
-    int ret = stream->GetPacket(pkt);
-    if (ret > 0 && pkt && timestamp) *timestamp = static_cast<double>(pkt->pts) / time_base;
+    int ret = stream->GetPacket(pkt, &info);
+    if (ret > 0) {
+      if (pkt && timestamp) *timestamp = static_cast<double>(pkt->pts) / time_base;
+      if (buffer_percent) *buffer_percent = info.buffer_size * 100 / info.buffer_capacity;
+    }
     return ret;
   };
 
@@ -149,8 +156,8 @@ RtspSinkContext *RtspSink::CreateContext(CNFrameInfoPtr data, const std::string 
   rparam.height = sparam.height;
   rparam.bit_rate = sparam.bit_rate;
   rparam.codec_type = sparam.codec_type == VideoCodecType::H264 ? RtspServer::H264 : RtspServer::H265;
-  rparam.get_packet = std::bind(get_packet, ctx->stream.get(), sparam.time_base, std::placeholders::_1,
-                                std::placeholders::_2, std::placeholders::_3);
+  rparam.get_packet = std::bind(get_packet, ctx->stream.get(), std::placeholders::_1, std::placeholders::_2,
+                                std::placeholders::_3, std::placeholders::_4);
   ctx->server.reset(new RtspServer(rparam));
   if (!ctx->server) {
     LOGE(RtspSink) << "CreateContext() create rtsp server failed";

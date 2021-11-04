@@ -108,16 +108,34 @@ int VideoEncoderBase::GetPacket(VideoPacket *packet, PacketInfo *info) {
       ret = truncated_size_;
       truncated_size_ = 0;
       memset(&truncated_info_, 0, sizeof(PacketInfo));
+      if (info) {
+        memset(info, 0, sizeof(PacketInfo));
+        info->buffer_size = output_buffer_->Size();
+        info->buffer_capacity = output_buffer_->Capacity();
+      }
+
     } else {
       output_buffer_->Read(nullptr, sizeof(VideoPacket) + vpacket.size);
       ret = vpacket.size;
-      PacketInfo pi;
-      GetPacketInfo(vpacket.pts, &pi);
+      if (info) {
+        GetPacketInfo(vpacket.pts, info);
+        info->buffer_size = output_buffer_->Size();
+        info->buffer_capacity = output_buffer_->Capacity();
+      } else {
+        PacketInfo pi;
+        GetPacketInfo(packet->pts, &pi);
+      }
+
       lk.unlock();
       output_cv_.notify_one();
     }
   } else if (!packet->data) {
     /* get packet size */
+    if (info) {
+      memset(info, 0, sizeof(PacketInfo));
+      info->buffer_size = output_buffer_->Size();
+      info->buffer_capacity = output_buffer_->Capacity();
+    }
     if (truncated_size_ > 0) {
       packet->size = truncated_size_;
       packet->pts = truncated_packet_.pts;
@@ -137,7 +155,11 @@ int VideoEncoderBase::GetPacket(VideoPacket *packet, PacketInfo *info) {
       packet->pts = truncated_packet_.pts;
       packet->dts = truncated_packet_.dts;
       packet->flags = truncated_packet_.flags;
-      if (info) memcpy(info, &truncated_info_, sizeof(PacketInfo));
+      if (info) {
+        memcpy(info, &truncated_info_, sizeof(PacketInfo));
+        info->buffer_size = output_buffer_->Size();
+        info->buffer_capacity = output_buffer_->Capacity();
+      }
       if (packet->size < truncated_size_) {
         memcpy(packet->data, truncated_packet_.data + truncated_packet_.size - truncated_size_, packet->size);
         truncated_size_ -= packet->size;
@@ -168,7 +190,11 @@ int VideoEncoderBase::GetPacket(VideoPacket *packet, PacketInfo *info) {
       truncated_size_ = vpacket.size - packet->size;
       ret = packet->size;
       GetPacketInfo(packet->pts, &truncated_info_);
-      if (info) memcpy(info, &truncated_info_, sizeof(PacketInfo));
+      if (info) {
+        memcpy(info, &truncated_info_, sizeof(PacketInfo));
+        info->buffer_size = output_buffer_->Size();
+        info->buffer_capacity = output_buffer_->Capacity();
+      }
       lk.unlock();
       output_cv_.notify_one();
     } else {
@@ -180,6 +206,8 @@ int VideoEncoderBase::GetPacket(VideoPacket *packet, PacketInfo *info) {
       ret = output_buffer_->Read(packet->data, packet->size);
       if (info) {
         GetPacketInfo(packet->pts, info);
+        info->buffer_size = output_buffer_->Size();
+        info->buffer_capacity = output_buffer_->Capacity();
       } else {
         PacketInfo pi;
         GetPacketInfo(packet->pts, &pi);
