@@ -102,17 +102,20 @@ void RtspFramedSource::doGetNextFrame() { deliverFrame(); }
 
 void RtspFramedSource::deliverFrame() {
   int frameSize;
+  int bufferPercent = 0;
 
   if (!isCurrentlyAwaitingData()) {
-    /* we're not ready for the data yet, just drop data.. */
-    do {
-      frameSize = fServer->param_.get_packet(nullptr, -1, nullptr);
-      // LOGI(RtspFramedSource) << "deliverFrame() dropped " << frameSize << " bytes.";
-    } while (frameSize > 0);
+    /* we're not ready for the data yet, just wait buffer fill to 80% full and then drop the beginning data. */
+    while (1) {
+      fServer->param_.get_packet(nullptr, 0, nullptr, &bufferPercent);
+      if (bufferPercent < 80) break;
+      frameSize = fServer->param_.get_packet(nullptr, -1, nullptr, nullptr);
+      // LOGI(RtspFramedSource) << "deliverFrame() dropped " << frameSize << " bytes, for buffer is >= 80% full.";
+    }
     return;
   }
 
-  frameSize = fServer->param_.get_packet(nullptr, 0, nullptr);
+  frameSize = fServer->param_.get_packet(nullptr, 0, nullptr, nullptr);
   if (frameSize > 0) {
     /* This should never happen, but check anyway.. */
     if (static_cast<unsigned>(frameSize) > fMaxSize) {
@@ -125,7 +128,7 @@ void RtspFramedSource::deliverFrame() {
     }
 
     double timestamp;
-    fFrameSize = fServer->param_.get_packet(fTo, fMaxSize, &timestamp);
+    fFrameSize = fServer->param_.get_packet(fTo, fMaxSize, &timestamp, nullptr);
     if (fFrameSize <= 0) {
       fFrameSize = 0;
       fNumTruncatedBytes = 0;

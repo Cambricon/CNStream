@@ -56,6 +56,8 @@ class VideoEncoder {
   struct PacketInfo {
     int64_t start_tick;
     int64_t end_tick;
+    size_t buffer_size;
+    size_t buffer_capacity;
   };
 
   enum Event {

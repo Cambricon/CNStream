@@ -66,7 +66,7 @@ bool TestRtspServer(const std::string &file) {
   RtspServer::Param param;
   RtspServer *rtsp_server = nullptr;
 
-  auto get_packet = [&](uint8_t *data, int size, double *timestamp) -> int {
+  auto get_packet = [&](uint8_t *data, int size, double *timestamp, int *buffer_percent) -> int {
     int ret = -1;
     AVPacket packet;
     std::unique_lock<std::mutex> lk(mtx);
@@ -81,7 +81,10 @@ bool TestRtspServer(const std::string &file) {
       if (size < packet.size) return -1;
       buffer->Read(reinterpret_cast<uint8_t *>(&packet), sizeof(packet));
       ret = buffer->Read(data, packet.size);
-      if (ret > 0 && timestamp) *timestamp = static_cast<double>(packet.pts) / 1000;
+      if (ret > 0) {
+        if (timestamp) *timestamp = static_cast<double>(packet.pts) / 1000;
+        if (buffer_percent) *buffer_percent = buffer->Size() * 100 / buffer->Capacity();
+      }
     }
     return ret;
   };
