@@ -37,7 +37,7 @@ typedef struct EncodeParam {
   int dst_width = 0;                 // Target width, preferred size same with input
   int dst_height = 0;                // Target height, preferred size same with input
   double frame_rate = 0;             // Target fps
-  int bit_rate = 0x400000;           // Target bit rate, default is 1Mbps
+  int bit_rate = 4000000;           // Target bit rate, default is 1Mbps
   int gop_size = 10;                 // Target gop, default is 30
   int tile_cols = 0;                 // Grids in horizontally of video tiling, only support cpu input
   int tile_rows = 0;                 // Grids in vertically of video tiling, only support cpu input
@@ -63,16 +63,16 @@ EncoderContext *Encode::GetContext(CNFrameInfoPtr data) {
       ctx = contexts_.begin()->second;
     } else {
       ctx = CreateContext(data, "0");
-      if (!ctx) return nullptr;
     }
-    if (positions_.find(data->stream_id) == positions_.end()) {
-      int pos = positions_.size();
-      if (pos >= params.tile_cols * params.tile_rows) {
-        LOGE(Encode) << "GetContext() input video stream count over " << params.tile_cols << " * " << params.tile_rows
-                     << " = " << params.tile_cols * params.tile_rows;
+    if (!ctx) return nullptr;
+    if (!tile_streams_.count(data->stream_id)) {
+      if (tile_streams_.size() < static_cast<size_t>(params.tile_cols * params.tile_rows)) {
+        tile_streams_.emplace(data->stream_id);
+      } else {
+        LOGE(Encoder) << "GetContext() input video stream count over " <<
+            params.tile_cols << " * " << params.tile_rows << " = " << params.tile_cols * params.tile_rows;
         return nullptr;
       }
-      positions_[data->stream_id] = pos;
     }
   } else {
     auto search = contexts_.find(data->stream_id);
@@ -80,26 +80,11 @@ EncoderContext *Encode::GetContext(CNFrameInfoPtr data) {
       ctx = search->second;
     } else {
       ctx = CreateContext(data, data->stream_id);
-      if (!ctx) return nullptr;
     }
   }
   return ctx;
 }
 
-int Encode::GetPosition(const std::string &stream_id) {
-  int ret = -1;
-  auto params = param_helper_->GetParams();
-  std::lock_guard<std::mutex> lk(ctx_lock_);
-  if (params.tile_cols > 1 || params.tile_rows > 1) {
-    auto search = positions_.find(stream_id);
-    if (search != positions_.end()) {
-      ret = search->second;
-    }
-  } else {
-    ret = 0;
-  }
-  return ret;
-}
 
 EncoderContext *Encode::CreateContext(CNFrameInfoPtr data, const std::string &stream_id) {
   if (data->IsEos()) {
@@ -107,7 +92,6 @@ EncoderContext *Encode::CreateContext(CNFrameInfoPtr data, const std::string &st
     return nullptr;
   }
   CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
-
   bool with_container = false;
   VideoCodecType codec_type = VideoCodecType::H264;
   auto params = param_helper_->GetParams();
@@ -183,7 +167,7 @@ EncoderContext *Encode::CreateContext(CNFrameInfoPtr data, const std::string &st
       memset(&packet, 0, sizeof(VideoPacket));
       int ret = ctx->stream->GetPacket(&packet);
       if (ret < 0) {
-        LOGE(Encode) << "CreateContext() stream get packet size failed, ret=" << ret;
+        LOGE(Encode) << "EventCallback() stream get packet size failed, ret=" << ret;
         return;
       }
       if (ctx->buffer_size < ret) {
@@ -194,30 +178,30 @@ EncoderContext *Encode::CreateContext(CNFrameInfoPtr data, const std::string &st
       packet.size = ctx->buffer_size;
       ret = ctx->stream->GetPacket(&packet);
       if (ret <= 0) {
-        LOGE(Encode) << "CreateContext() stream get packet failed, ret=" << ret;
+        LOGE(Encode) << "EventCallback() stream get packet failed, ret=" << ret;
         return;
       }
       if (with_container) {
         ret = ctx->sink->Write(&packet);
         if (ret != VideoSink::SUCCESS) {
-          LOGE(Encode) << "CreateContext() sink write failed, ret=" << ret;
+          LOGE(Encode) << "EventCallback() sink write failed, ret=" << ret;
           return;
         }
       } else if (codec_type == VideoCodecType::JPEG) {
-        std::string jpeg_file = file_name + "_" + stream_id + "_" + std::to_string(ctx->frame_count++) + "." + ext_name;
-        std::ofstream file(jpeg_file);
+        auto jpeg_file_name = file_name + "_" + stream_id + "_" + std::to_string(ctx->frame_count++) + "." + ext_name;
+        std::ofstream file(jpeg_file_name);
         if (!file.good()) {
-          LOGE(Encoder) << "CreateContext() open " << jpeg_file << " failed";
+          LOGE(Encode) << "EventCallback() open " << jpeg_file_name << " failed";
         } else {
           file.write(reinterpret_cast<char *>(packet.data), packet.size);
         }
         file.close();
       } else {
         if (!ctx->file.is_open()) {
-          std::string video_file = file_name + "_" + stream_id + "." + ext_name;
-          ctx->file.open(video_file);
+          auto video_file_name = file_name + "_" + stream_id + "." + ext_name;
+          ctx->file.open(video_file_name);
           if (!ctx->file.good()) {
-            LOGE(Encoder) << "CreateContext() open " << video_file << " failed";
+            LOGE(Encode) << "EventCallback() open " << video_file_name << " failed";
             return;
           }
         }
@@ -299,18 +283,11 @@ int Encode::Process(CNFrameInfoPtr data) {
     return -1;
   }
 
-  int position = GetPosition(data->stream_id);
-  if (position < 0) {
-    LOGE(Encoder) << "Process() find stream position failed.";
-    return -1;
-  }
-
-
   auto params = param_helper_->GetParams();
   CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
 
   if (!params.mlu_input_frame) {
-    if (!ctx->stream->Update(frame->ImageBGR(), VideoStream::ColorFormat::BGR, data->timestamp, position)) {
+    if (!ctx->stream->Update(frame->ImageBGR(), VideoStream::ColorFormat::BGR, data->timestamp, data->stream_id)) {
       LOGE(Encode) << "Process() video stream update failed.";
     }
   } else {
@@ -335,10 +312,11 @@ int Encode::Process(CNFrameInfoPtr data) {
     buffer.color = frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 ? VideoStream::ColorFormat::YUV_NV12
                                                                            : VideoStream::ColorFormat::YUV_NV21;
     buffer.mlu_device_id = frame->dst_device_id;
-    if (!ctx->stream->Update(&buffer, data->timestamp, position)) {
+    if (!ctx->stream->Update(&buffer, data->timestamp, data->stream_id)) {
       LOGE(Encode) << "Process() video stream update failed";
     }
   }
+
   return 0;
 }
 
@@ -400,31 +378,20 @@ void Encode::OnEos(const std::string &stream_id) {
   if (params.tile_cols > 1 || params.tile_rows > 1) {
     if (contexts_.empty()) return;
     EncoderContext *ctx = contexts_.begin()->second;
-    auto search = positions_.find(stream_id);
-    if (search != positions_.end()) {
-      int pos = search->second;
-      positions_.erase(search);
-      LOGI(Encode) << "OnEos() stream " << stream_id << " stopped in position " << pos;
-      // move ahead the grids behind erased grid
-      for (auto it = positions_.begin(); it != positions_.end(); ++it) {
-        if (it->second > pos) {
-          it->second--;
-        }
+    // clear last grid
+    if (ctx->stream) ctx->stream->Clear(stream_id);
+    tile_streams_.erase(stream_id);
+    if (tile_streams_.empty()) {
+      LOGI(Encoder) << "OnEos() all streams stopped";
+      EncoderContext *ctx = contexts_.begin()->second;
+      if (ctx) {
+        if (ctx->stream) ctx->stream->Close();
+        if (ctx->sink) ctx->sink->Stop();
+        ctx->buffer_size = 0;
+        ctx->file.close();
+        delete ctx;
       }
-      // clear last grid
-      if (ctx->stream && !positions_.empty()) ctx->stream->Clear(positions_.size() - 1);
-      if (positions_.empty()) {
-        LOGI(Encode) << "OnEos() all streams stopped";
-        EncoderContext *ctx = contexts_.begin()->second;
-        if (ctx) {
-          if (ctx->stream) ctx->stream->Close();
-          if (ctx->sink) ctx->sink->Stop();
-          ctx->buffer_size = 0;
-          ctx->file.close();
-          delete ctx;
-        }
-        contexts_.clear();
-      }
+      contexts_.clear();
     }
   } else {
     auto search = contexts_.find(stream_id);
