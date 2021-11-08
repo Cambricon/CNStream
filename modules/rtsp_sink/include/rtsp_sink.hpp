@@ -23,6 +23,7 @@
 
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <unordered_map>
 
@@ -86,14 +87,13 @@ class RtspSink : public Module, public ModuleCreator<RtspSink> {
 
  private:
   RtspSinkContext * GetContext(CNFrameInfoPtr data);
-  int GetPosition(const std::string &stream_id);
   RtspSinkContext * CreateContext(CNFrameInfoPtr data, const std::string &stream_id);
 
+  ModuleParamsHelper<RtspSinkParam>* param_helper_ = nullptr;
   int stream_index_ = 0;
   std::mutex ctx_lock_;
-  std::unordered_map<std::string, int> positions_;
   std::unordered_map<std::string, RtspSinkContext *> contexts_;
-  ModuleParamsHelper<RtspSinkParam>* param_helper_ = nullptr;
+  std::set<std::string> tile_streams_;
 };  // class RtspSink
 
 }  // namespace cnstream

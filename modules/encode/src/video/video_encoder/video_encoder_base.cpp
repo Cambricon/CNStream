@@ -123,7 +123,7 @@ int VideoEncoderBase::GetPacket(VideoPacket *packet, PacketInfo *info) {
         info->buffer_capacity = output_buffer_->Capacity();
       } else {
         PacketInfo pi;
-        GetPacketInfo(packet->pts, &pi);
+        GetPacketInfo(vpacket.pts, &pi);
       }
 
       lk.unlock();

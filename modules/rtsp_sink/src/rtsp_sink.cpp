@@ -60,14 +60,15 @@ RtspSinkContext *RtspSink::GetContext(CNFrameInfoPtr data) {
     } else {
       ctx = CreateContext(data, "0");
     }
-    if (positions_.find(data->stream_id) == positions_.end()) {
-      int pos = positions_.size();
-      if (pos >= params.tile_cols * params.tile_rows) {
-        LOGE(RtspSink) << "GetContext() input video stream count over " << params.tile_cols << " * " << params.tile_rows
-                       << " = " << params.tile_cols * params.tile_rows;
+    if (!ctx) return nullptr;
+    if (!tile_streams_.count(data->stream_id)) {
+      if (tile_streams_.size() < static_cast<size_t>(params.tile_cols * params.tile_rows)) {
+        tile_streams_.emplace(data->stream_id);
+      } else {
+        LOGE(RtspSink) << "GetContext() input video stream count over " <<
+            params.tile_cols << " * " << params.tile_rows << " = " << params.tile_cols * params.tile_rows;
         return nullptr;
       }
-      positions_[data->stream_id] = pos;
     }
   } else {
     auto search = contexts_.find(data->stream_id);
@@ -80,27 +81,14 @@ RtspSinkContext *RtspSink::GetContext(CNFrameInfoPtr data) {
   return ctx;
 }
 
-int RtspSink::GetPosition(const std::string &stream_id) {
-  int ret = -1;
-  auto params = param_helper_->GetParams();
-  std::lock_guard<std::mutex> lk(ctx_lock_);
-  if (params.tile_cols > 1 || params.tile_rows > 1) {
-    auto search = positions_.find(stream_id);
-    if (search != positions_.end()) {
-      ret = search->second;
-    }
-  } else {
-    ret = 0;
-  }
-  return ret;
-}
+RtspSinkContext * RtspSink::CreateContext(CNFrameInfoPtr data, const std::string &stream_id) {
+  if (data->IsEos()) return nullptr;
 
-RtspSinkContext *RtspSink::CreateContext(CNFrameInfoPtr data, const std::string &stream_id) {
   CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
   auto params = param_helper_->GetParams();
   RtspSinkContext *ctx = new RtspSinkContext;
 
-  int time_base = 90000;
+  constexpr int time_base = 90000;
 
   VideoStream::Param sparam;
   sparam.width = params.width > 0 ? params.width : frame->width;
@@ -178,7 +166,7 @@ RtspSinkContext *RtspSink::CreateContext(CNFrameInfoPtr data, const std::string 
       LOGI(RtspSink) << "CreateContext() EVENT_EOS";
       server->OnEvent(RtspServer::Event::EVENT_EOS);
     } else if (event == VideoStream::Event::EVENT_ERROR) {
-      LOGE(RtspSink) << "CreateContext() EVENT_ERROR";
+      LOGE(RtspSink) << "EventCallback() EVENT_ERROR";
     }
   };
 
@@ -238,19 +226,14 @@ int RtspSink::Process(CNFrameInfoPtr data) {
   RtspSinkContext *ctx = GetContext(data);
   auto params = param_helper_->GetParams();
   if (!ctx) {
-    LOGE(RtspSink) << "Get RtspSink context failed.";
-    return -1;
-  }
-  int position = GetPosition(data->stream_id);
-  if (position < 0) {
-    LOGE(RtmpSink) << "Process() find stream position failed.";
+    LOGE(RtspSink) << "Get RtspSink Context Failed.";
     return -1;
   }
 
   CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
 
   if (!params.mlu_input_frame) {
-    if (!ctx->stream->Update(frame->ImageBGR(), VideoStream::ColorFormat::BGR, data->timestamp, position)) {
+    if (!ctx->stream->Update(frame->ImageBGR(), VideoStream::ColorFormat::BGR, data->timestamp, data->stream_id)) {
       LOGE(RtspSink) << "Process() video stream update failed";
     }
   } else {
@@ -275,7 +258,7 @@ int RtspSink::Process(CNFrameInfoPtr data) {
     buffer.color = frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 ? VideoStream::ColorFormat::YUV_NV12
                                                                            : VideoStream::ColorFormat::YUV_NV21;
     buffer.mlu_device_id = frame->dst_device_id;
-    if (!ctx->stream->Update(&buffer, data->timestamp, position)) {
+    if (!ctx->stream->Update(&buffer, data->timestamp, data->stream_id)) {
       LOGE(RtspSink) << "Process() video stream update failed";
     }
   }
@@ -344,29 +327,18 @@ void RtspSink::OnEos(const std::string &stream_id) {
   if (params.tile_cols > 1 || params.tile_rows > 1) {
     if (contexts_.empty()) return;
     RtspSinkContext *ctx = contexts_.begin()->second;
-    auto search = positions_.find(stream_id);
-    if (search != positions_.end()) {
-      int pos = search->second;
-      positions_.erase(search);
-      LOGI(RtspSink) << "OnEos() stream " << stream_id << " stopped in position " << pos;
-      // move ahead the grids behind erased grid
-      for (auto it = positions_.begin(); it != positions_.end(); ++it) {
-        if (it->second > pos) {
-          it->second--;
-        }
+    // clear last grid
+    if (ctx->stream) ctx->stream->Clear(stream_id);
+    tile_streams_.erase(stream_id);
+    if (tile_streams_.empty()) {
+      LOGI(RtspSink) << "OnEos() all streams stopped";
+      RtspSinkContext *ctx = contexts_.begin()->second;
+      if (ctx) {
+        if (ctx->stream) ctx->stream->Close();
+        if (ctx->server) ctx->server->Stop();
+        delete ctx;
       }
-      // clear last grid
-      if (ctx->stream && !positions_.empty()) ctx->stream->Clear(positions_.size() - 1);
-      if (positions_.empty()) {
-        LOGI(RtspSink) << "OnEos() all streams stopped";
-        RtspSinkContext *ctx = contexts_.begin()->second;
-        if (ctx) {
-          if (ctx->stream) ctx->stream->Close();
-          if (ctx->server) ctx->server->Stop();
-          delete ctx;
-        }
-        contexts_.clear();
-      }
+      contexts_.clear();
     }
   } else {
     auto search = contexts_.find(stream_id);

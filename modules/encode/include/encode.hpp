@@ -23,6 +23,7 @@
 
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <unordered_map>
 
@@ -85,14 +86,12 @@ class Encode : public Module, public ModuleCreator<Encode> {
 
  private:
   EncoderContext * GetContext(CNFrameInfoPtr data);
-  int GetPosition(const std::string &stream_id);
   EncoderContext * CreateContext(CNFrameInfoPtr data, const std::string &stream_id);
 
-  int stream_index_ = 0;
-  std::mutex ctx_lock_;
-  std::unordered_map<std::string, int> positions_;
-  std::unordered_map<std::string, EncoderContext *> contexts_;
   ModuleParamsHelper<EncodeParam>* param_helper_ = nullptr;
+  std::mutex ctx_lock_;
+  std::unordered_map<std::string, EncoderContext *> contexts_;
+  std::set<std::string> tile_streams_;
 };  // class Encode
 
 }  // namespace cnstream

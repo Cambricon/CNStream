@@ -21,11 +21,13 @@
 #ifndef __VIDEO_STREAM_HPP__
 #define __VIDEO_STREAM_HPP__
 
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #if (CV_MAJOR_VERSION >= 3)
-#include "opencv2/imgcodecs/imgcodecs.hpp"
+#include <opencv2/imgcodecs/imgcodecs.hpp>
 #endif
+
+#include <string>
 
 #include "tiler/tiler.hpp"
 #include "../video_encoder/video_encoder.hpp"
@@ -73,9 +75,9 @@ class VideoStream {
 
   bool Open();
   bool Close(bool wait_finish = false);
-  bool Update(const cv::Mat &mat, ColorFormat color, int64_t timestamp, int position = -1);
-  bool Update(const Buffer *buffer, int64_t timestamp, int position = -1);
-  bool Clear(int position);
+  bool Update(const cv::Mat &mat, ColorFormat color, int64_t timestamp, const std::string &stream_id);
+  bool Update(const Buffer *buffer, int64_t timestamp, const std::string &stream_id);
+  bool Clear(const std::string &stream_id);
 
   void SetEventCallback(EventCallback func);
   int RequestFrameBuffer(VideoFrame *frame);

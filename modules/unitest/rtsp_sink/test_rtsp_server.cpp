@@ -82,7 +82,7 @@ bool TestRtspServer(const std::string &file) {
       buffer->Read(reinterpret_cast<uint8_t *>(&packet), sizeof(packet));
       ret = buffer->Read(data, packet.size);
       if (ret > 0) {
-        if (timestamp) *timestamp = static_cast<double>(packet.pts) / 1000;
+        if (timestamp) *timestamp = packet.pts / 1000.0;
         if (buffer_percent) *buffer_percent = buffer->Size() * 100 / buffer->Capacity();
       }
     }
