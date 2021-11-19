@@ -707,7 +707,7 @@ void VideoStream::RenderLoop() {
 void VideoStream::ResampleLoop() {
   int64_t delay_us = 0;
   auto start = std::chrono::steady_clock::now();
-  int64_t timestamp = INVALID_TIMESTAMP, pts;
+  int64_t timestamp = INVALID_TIMESTAMP, pts = INVALID_TIMESTAMP;
   int64_t index = 0;
 
   while (state_ == RUNNING) {
