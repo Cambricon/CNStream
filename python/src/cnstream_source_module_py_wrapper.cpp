@@ -80,13 +80,14 @@ void SourceModuleWrapper(const py::module &m) {
            [](SourceModule* source, std::shared_ptr<SourceHandler> handler, bool force) {
              return source->RemoveSource(handler, force);
            },
-           py::arg("handler"), py::arg("force") = false)
+           py::arg("handler"), py::arg("force") = false, py::call_guard<py::gil_scoped_release>())
       .def("remove_source",
            [](SourceModule* source, const std::string& stream_id, bool force) {
              return source->RemoveSource(stream_id, force);
            },
-           py::arg("stream_id"), py::arg("force") = false)
-      .def("remove_sources", &SourceModule::RemoveSources, py::arg("force") = false);
+           py::arg("stream_id"), py::arg("force") = false, py::call_guard<py::gil_scoped_release>())
+      .def("remove_sources", &SourceModule::RemoveSources, py::arg("force") = false,
+          py::call_guard<py::gil_scoped_release>());
 
   py::class_<SourceHandler, std::shared_ptr<SourceHandler>, detail::PySourceHandler>(m, "SourceHandler")
       .def(py::init<SourceModule*, const std::string&>())

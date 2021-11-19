@@ -9,6 +9,8 @@ g_source_lock = threading.Lock()
 g_perf_print_lock = threading.Lock()
 g_perf_print_stop = False
 
+cur_file_dir = os.path.split(os.path.realpath(__file__))[0]
+
 class CustomObserver(StreamMsgObserver):
     def __init__(self, pipeline, source):
         StreamMsgObserver.__init__(self)
@@ -35,14 +37,14 @@ class CustomObserver(StreamMsgObserver):
         elif msg.type == StreamMsgType.stream_err_msg:
             print("pipeline[{}] stream[{}] gets stream error".format(self.pipeline.get_name(), msg.stream_id))
             if msg.stream_id in self.stream_set:
-                self.source.remove_source(msg.stream_id)
+                self.source.remove_source(msg.stream_id, True)
                 self.stream_set.remove(msg.stream_id)
             if len(self.stream_set) == 0:
                 print("pipeline[{}] received all EOS".format(self.pipeline.get_name()))
                 self.stop = True
         elif msg.type == StreamMsgType.error_msg:
             print("pipeline[{}] gets error".format(self.pipeline.get_name()))
-            self.source.remove_sources()
+            self.source.remove_sources(True)
             self.stream_set.clear()
             self.stop = True
         elif msg.type == StreamMsgType.frame_err_msg:
@@ -120,14 +122,21 @@ class OneModuleObserver(ModuleObserver):
 
 
 def receive_processed_frame(frame):
-  cn_data = frame.get_cn_data_frame()
-  frame_id = cn_data.frame_id
-  stream_id = frame.stream_id
-  print("receive the frame {} from {}".format(frame_id, stream_id))
-  if cn_data.has_bgr_image():
-    cv2.imwrite(stream_id + '_frame_{}'.format(frame_id) +'.jpg', cn_data.image_bgr())
+    cn_data = frame.get_cn_data_frame()
+    frame_id = cn_data.frame_id
+    stream_id = frame.stream_id
+    print("receive the frame {} from {}".format(frame_id, stream_id))
+    if cn_data.has_bgr_image():
+        cv2.imwrite('{}/output/{}_frame_{}.jpg'.format(cur_file_dir, stream_id, frame_id), cn_data.image_bgr())
+    objs = frame.get_cn_infer_objects().objs
+    print("objects number: ", len(objs))
+    for obj in objs:
+        print("obj: id: {} score: {:.4f}  bbox: {:.4f}, {:.4f}, {:.4f}, {:.4f}".format(
+            obj.id, obj.score, obj.bbox.x, obj.bbox.y, obj.bbox.w, obj.bbox.h))
 
 def main():
+    if not os.path.exists(cur_file_dir + "/output"):
+        os.mkdir(cur_file_dir + "/output")
     model_file = os.path.join(os.path.abspath(os.path.dirname(__file__)), "../../data/models/yolov3_b4c4_argb_mlu270.cambricon")
     if not os.path.exists(model_file):
         os.makedirs(os.path.dirname(model_file),exist_ok=True)
