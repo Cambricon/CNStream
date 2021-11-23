@@ -2,7 +2,7 @@
   "rtsp_sink" : {
     "class_name" : "cnstream::RtspSink",
     "parallelism" : 1,
-    "max_input_queue_size" : 20,
+    "max_input_queue_size" : 10,
     "custom_params" : {
       "encoder_type" : "mlu",
       "port" : 9554,

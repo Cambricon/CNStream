@@ -30,21 +30,6 @@
 
 namespace cnstream {
 
-typedef struct EncodeParam {
-  int device_id = 0;                 // mlu device id, -1 :disable mlu
-  bool mlu_input_frame = false;      // The input frame. true: source data , false: ImageBGR()
-  bool mlu_encoder = true;           // whether use mlu encoding, default is true
-  int dst_width = 0;                 // Target width, preferred size same with input
-  int dst_height = 0;                // Target height, preferred size same with input
-  double frame_rate = 0;             // Target fps
-  int bit_rate = 4000000;           // Target bit rate, default is 1Mbps
-  int gop_size = 10;                 // Target gop, default is 30
-  int tile_cols = 0;                 // Grids in horizontally of video tiling, only support cpu input
-  int tile_rows = 0;                 // Grids in vertically of video tiling, only support cpu input
-  bool resample = false;             // Resample frame with canvas, only support cpu input
-  std::string file_name = "";        // File name to encode to
-} EncodeParam;
-
 struct EncoderContext {
   std::unique_ptr<VideoStream> stream = nullptr;
   std::unique_ptr<VideoSink> sink = nullptr;
@@ -69,7 +54,7 @@ EncoderContext *Encode::GetContext(CNFrameInfoPtr data) {
       if (tile_streams_.size() < static_cast<size_t>(params.tile_cols * params.tile_rows)) {
         tile_streams_.emplace(data->stream_id);
       } else {
-        LOGE(Encoder) << "GetContext() input video stream count over " <<
+        LOGE(Encode) << "GetContext() input video stream count over " <<
             params.tile_cols << " * " << params.tile_rows << " = " << params.tile_cols * params.tile_rows;
         return nullptr;
       }
@@ -228,21 +213,17 @@ EncoderContext *Encode::CreateContext(CNFrameInfoPtr data, const std::string &st
 }
 
 Encode::~Encode() {
-  if (param_helper_) {
-    delete param_helper_;
-    param_helper_ = nullptr;
-  }
   Close();
 }
 
 bool Encode::Open(ModuleParamSet paramSet) {
   if (!param_helper_->ParseParams(paramSet)) {
-    LOGE(ENCODE) << "[" << GetName() << "] parse parameters failed.";
+    LOGE(Encode) << "[" << GetName() << "] parse parameters failed.";
     return false;
   }
   auto params = param_helper_->GetParams();
   if (params.mlu_encoder && params.device_id < 0) {
-    LOGE(ENCODE) << "Open() device_id is required to be greater than 0, if mlu encoding is used";
+    LOGE(Encode) << "Open() device_id is required to be greater than 0, if mlu encoding is used";
     return false;
   }
   if (params.mlu_input_frame && (params.tile_cols > 1 || params.tile_rows > 1)) {
@@ -322,7 +303,7 @@ int Encode::Process(CNFrameInfoPtr data) {
 
 Encode::Encode(const std::string &name) : Module(name) {
   param_register_.SetModuleDesc("Encode is a module to encode videos or images.");
-  param_helper_ = new ModuleParamsHelper<EncodeParam>(name);
+  param_helper_.reset(new (std::nothrow)ModuleParamsHelper<EncodeParam>(name));
   auto input_encoder_type_parser = [](const ModuleParamSet &param_set, const std::string &param_name,
                                       const std::string &value, void *result) -> bool {
     if (value == "cpu") {
@@ -382,7 +363,7 @@ void Encode::OnEos(const std::string &stream_id) {
     if (ctx->stream) ctx->stream->Clear(stream_id);
     tile_streams_.erase(stream_id);
     if (tile_streams_.empty()) {
-      LOGI(Encoder) << "OnEos() all streams stopped";
+      LOGI(Encode) << "OnEos() all streams stopped";
       EncoderContext *ctx = contexts_.begin()->second;
       if (ctx) {
         if (ctx->stream) ctx->stream->Close();

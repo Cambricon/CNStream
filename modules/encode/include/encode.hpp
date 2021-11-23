@@ -39,7 +39,21 @@ namespace cnstream {
 using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 
 struct EncoderContext;
-struct EncodeParam;
+
+struct EncodeParam {
+  int device_id = 0;                 // mlu device id, -1 :disable mlu
+  bool mlu_input_frame = false;      // The input frame. true: source data , false: ImageBGR()
+  bool mlu_encoder = true;           // whether use mlu encoding, default is true
+  int dst_width = 0;                 // Target width, preferred size same with input
+  int dst_height = 0;                // Target height, preferred size same with input
+  double frame_rate = 0;             // Target fps
+  int bit_rate = 4000000;           // Target bit rate, default is 1Mbps
+  int gop_size = 10;                 // Target gop, default is 10
+  int tile_cols = 0;                 // Grids in horizontally of video tiling, only support cpu input
+  int tile_rows = 0;                 // Grids in vertically of video tiling, only support cpu input
+  bool resample = false;             // Resample frame with canvas, only support cpu input
+  std::string file_name = "";        // File name to encode to
+};
 
 /**
  * @brief Encode is a module to encode video stream to file with/without container.
@@ -88,7 +102,7 @@ class Encode : public Module, public ModuleCreator<Encode> {
   EncoderContext * GetContext(CNFrameInfoPtr data);
   EncoderContext * CreateContext(CNFrameInfoPtr data, const std::string &stream_id);
 
-  ModuleParamsHelper<EncodeParam>* param_helper_ = nullptr;
+  std::unique_ptr<ModuleParamsHelper<EncodeParam>> param_helper_ = nullptr;
   std::mutex ctx_lock_;
   std::unordered_map<std::string, EncoderContext *> contexts_;
   std::set<std::string> tile_streams_;
