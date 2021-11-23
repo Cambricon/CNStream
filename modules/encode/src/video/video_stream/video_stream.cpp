@@ -144,7 +144,7 @@ class VideoStream {
   std::atomic<int> state_{IDLE};
   std::atomic<bool> start_resample_{false};
   std::mutex queue_mtx_;
-  const int QUEUE_SIZE_PER_STREAM = 15;
+  const int QUEUE_SIZE_PER_STREAM = 5;
   std::condition_variable q_pop_cv_;
   std::condition_variable q_push_cv_;
   FrameInfoQueue queue_;
@@ -221,7 +221,7 @@ bool VideoStream::Open() {
 
   if (param_.tile_cols > 1 || param_.tile_rows > 1) {
     ColorFormat color = frame_to_buffer_color_map[param_.pixel_format];
-    tiler_.reset(new (std::nothrow) Tiler(param_.tile_cols, param_.tile_rows, color, param_.width, param_.height));
+    tiler_.reset(new (std::nothrow) Tiler(param_.tile_rows, param_.tile_cols, color, param_.width, param_.height));
     if (!tiler_) {
       LOGE(VideoStream) << "Open() create tiler failed";
       state_ = IDLE;
@@ -313,7 +313,7 @@ bool VideoStream::Close(bool wait_finish) {
 
   encoder_->SetEventCallback(nullptr);
   encoder_->Stop();
-  encoder_.release();
+  encoder_.reset();
   tiler_.release();
   canvas_.release();
   slk.Lock();
@@ -652,7 +652,7 @@ void VideoStream::RenderLoop() {
 
   while (state_ == RUNNING) {
     std::unique_lock<std::mutex> qlk(queue_mtx_);
-    size_t buffer_count = 10 * std::max(1UL, streams_.size());
+    size_t buffer_count = 3 * std::max(1UL, streams_.size());
     q_pop_cv_.wait(qlk, [&] () {
         return (state_ != RUNNING || (first && queue_.size() >= buffer_count) || (!first && !queue_.empty()));
       });
