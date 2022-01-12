@@ -24,7 +24,7 @@
 #include <future>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include "cnstream_frame.hpp"
@@ -93,7 +93,7 @@ class TestModule : public Module, public ModuleCreator<TestModule> {
   bool Open(ModuleParamSet params) override {return true;}
   void Close() override {}
   int Process(CNFrameInfoPtr data) override {
-    thread_local std::unordered_map<std::string, int64_t> frame_id_map;
+    thread_local std::map<std::string, int64_t> frame_id_map;
     data->collection.Add(GetName() + "_TS", Clock::now());
     // check frame order
     if (frame_id_map.end() == frame_id_map.find(data->stream_id)) {

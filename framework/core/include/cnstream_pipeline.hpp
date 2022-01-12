@@ -35,7 +35,7 @@
 #include <set>
 #include <string>
 #include <thread>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -308,6 +308,7 @@ class Pipeline : private NonCopyable {
 
   /**
    * @brief Registers a callback to be called after the frame process is done.
+   *        The callback will be invalid when Pipeline::Stop is called.
    *
    * @param[in] callback The call back function.
    *
@@ -336,8 +337,10 @@ class Pipeline : private NonCopyable {
   EventHandleFlag DefaultBusWatch(const Event& event);
   void UpdateByStreamMsg(const StreamMsg& msg);
   void StreamMsgHandleFunc();
+  std::vector<std::string> GetSortedModuleNames();
 
   std::unique_ptr<CNGraph<NodeContext>> graph_;
+  std::vector<std::string> sorted_module_names_;
 
   std::string name_;
   std::atomic<bool> running_{false};

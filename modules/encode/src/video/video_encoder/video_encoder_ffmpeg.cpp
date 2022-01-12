@@ -18,12 +18,18 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#include "video_encoder_ffmpeg.hpp"
+
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
+#include <list>
+#include <mutex>
+#include <queue>
+#include <thread>
+#include <unordered_map>
 
 #include "cnstream_logging.hpp"
-
-#include "video_encoder_ffmpeg.hpp"
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -41,6 +47,40 @@ static const char *ct_str[] = {"H264", "H265", "MPEG4", "JPEG"};
 
 #define VERSION_LAVC_ALLOC_PACKET AV_VERSION_INT(57, 20, 102)
 
+struct EncodingInfo {
+  int64_t pts, dts;
+  int64_t start_tick, end_tick;
+  void *user_data;
+};
+
+struct VideoEncoderFFmpegPrivate {
+  std::thread thread;
+  std::mutex input_mtx;
+  std::condition_variable data_cv;
+  std::condition_variable free_cv;
+  std::queue<AVFrame *> data_q;
+  std::queue<AVFrame *> free_q;
+  std::list<AVFrame *> list;
+  std::mutex info_mtx;
+  std::unordered_map<int64_t, EncodingInfo> encoding_info;
+  std::atomic<bool> eos_got{false};
+  std::atomic<bool> eos_sent{false};
+  std::atomic<bool> encoding{false};
+  int64_t frame_count = 0;
+  int64_t packet_count = 0;
+  int64_t data_index = 0;
+  uint32_t input_alignment = 32;
+
+  ::AVPixelFormat pixel_format = AV_PIX_FMT_YUV420P;
+  ::AVCodecID codec_id = AV_CODEC_ID_H264;
+  AVCodecContext *codec_ctx = nullptr;
+  AVCodec *codec = nullptr;
+  AVDictionary *opts = nullptr;
+  AVFrame *frame = nullptr;
+  AVPacket *packet = nullptr;
+  SwsContext *sws_ctx = nullptr;
+};
+
 static inline int64_t CurrentTick() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -50,9 +90,13 @@ VideoEncoderFFmpeg::VideoEncoderFFmpeg(const Param &param) : VideoEncoderBase(pa
   LOGI(VideoEncoderFFmpeg) << "VideoEncoderFFmpeg(" << param.width << "x" << param.height << ", " <<
       pf_str[param_.pixel_format] << ", " << ct_str[param_.codec_type] << ")";
   avcodec_register_all();
+  priv_.reset(new (std::nothrow) VideoEncoderFFmpegPrivate);
 }
 
-VideoEncoderFFmpeg::~VideoEncoderFFmpeg() { Stop(); }
+VideoEncoderFFmpeg::~VideoEncoderFFmpeg() {
+  Stop();
+  priv_.reset();
+}
 
 int VideoEncoderFFmpeg::Start() {
   WriteLockGuard slk(state_mtx_);
@@ -69,6 +113,9 @@ int VideoEncoderFFmpeg::Start() {
     LOGW(VideoEncoderFFmpeg) << "Start() input buffer count must no fewer than 3";
     param_.input_buffer_count = 3;
   }
+
+  param_.width = param_.width % 2 ? param_.width - 1 : param_.width;
+  param_.height = param_.height % 2 ? param_.height - 1 : param_.height;
   param_.frame_rate = param_.frame_rate > 0 ? param_.frame_rate : 30;
   param_.frame_rate = param_.frame_rate < 120 ? param_.frame_rate : 120;
   param_.time_base = param_.time_base > 0 ? param_.time_base : 1000;
@@ -77,13 +124,13 @@ int VideoEncoderFFmpeg::Start() {
 
   switch (param_.pixel_format) {
     case VideoPixelFormat::I420:
-      pixel_format_ = AV_PIX_FMT_YUV420P;
+      priv_->pixel_format = AV_PIX_FMT_YUV420P;
       break;
     case VideoPixelFormat::NV12:
-      pixel_format_ = AV_PIX_FMT_NV12;
+      priv_->pixel_format = AV_PIX_FMT_NV12;
       break;
     case VideoPixelFormat::NV21:
-      pixel_format_ = AV_PIX_FMT_NV21;
+      priv_->pixel_format = AV_PIX_FMT_NV21;
       break;
     default:
       LOGE(VideoEncoderFFmpeg) << "Start() unsupported pixel format: " << pf_str[param_.pixel_format];
@@ -93,16 +140,20 @@ int VideoEncoderFFmpeg::Start() {
   switch (param_.codec_type) {
     case VideoCodecType::AUTO:
     case VideoCodecType::H264:
-      codec_id_ = AV_CODEC_ID_H264; codec_name = "libx264";
+      priv_->codec_id = AV_CODEC_ID_H264;
+      codec_name = "libx264";
       break;
     case VideoCodecType::H265:
-      codec_id_ = AV_CODEC_ID_HEVC; codec_name = "libx265";
+      priv_->codec_id = AV_CODEC_ID_HEVC;
+      codec_name = "libx265";
       break;
     case VideoCodecType::MPEG4:
-      codec_id_ = AV_CODEC_ID_MPEG4; codec_name = "mpeg4";
+      priv_->codec_id = AV_CODEC_ID_MPEG4;
+      codec_name = "mpeg4";
       break;
     case VideoCodecType::JPEG:
-      codec_id_ = AV_CODEC_ID_MJPEG; codec_name = "mjpeg";
+      priv_->codec_id = AV_CODEC_ID_MJPEG;
+      codec_name = "mjpeg";
       break;
     default:
       LOGE(VideoEncoderFFmpeg) << "Start() unsupported codec type: " << ct_str[param_.codec_type];
@@ -111,43 +162,43 @@ int VideoEncoderFFmpeg::Start() {
   }
 
 #ifndef SPECIFIC_CODEC
-  codec_ = avcodec_find_encoder(codec_id_);
-  codec_name = codec_->name;
+  priv_->codec = avcodec_find_encoder(priv_->codec_id);
+  codec_name = priv_->codec->name;
   LOGI(VideoEncoderFFmpeg) << "Start() avcodec_find_encoder: " << codec_name;
 #else
-  codec_ = avcodec_find_encoder_by_name(codec_name);
+  priv_->codec = avcodec_find_encoder_by_name(codec_name);
 #endif
-  if (!codec_) {
+  if (!priv_->codec) {
     LOGE(VideoEncoderFFmpeg) << "Start() avcodec_find_encoder \"" << codec_name << "\" failed";
     Destroy();
     state_ = IDLE;
     return cnstream::VideoEncoder::ERROR_FAILED;
   }
 
-  codec_ctx_ = avcodec_alloc_context3(codec_);
-  codec_ctx_->codec_id = codec_id_;
-  codec_ctx_->width = param_.width;
-  codec_ctx_->height = param_.height;
-  codec_ctx_->framerate = av_d2q(param_.frame_rate, 60000);
-  codec_ctx_->time_base.num = codec_ctx_->framerate.den;
-  codec_ctx_->time_base.den = codec_ctx_->framerate.num;
-  codec_ctx_->bit_rate = param_.bit_rate;
-  codec_ctx_->gop_size = param_.gop_size;
-  codec_ctx_->pix_fmt = codec_id_ == AV_CODEC_ID_MJPEG ? AV_PIX_FMT_YUVJ420P : AV_PIX_FMT_YUV420P;
-  codec_ctx_->max_b_frames = codec_id_ == AV_CODEC_ID_MJPEG ? 0 : 1;
+  priv_->codec_ctx = avcodec_alloc_context3(priv_->codec);
+  priv_->codec_ctx->codec_id = priv_->codec_id;
+  priv_->codec_ctx->width = param_.width;
+  priv_->codec_ctx->height = param_.height;
+  priv_->codec_ctx->framerate = av_d2q(param_.frame_rate, 60000);
+  priv_->codec_ctx->time_base.num = priv_->codec_ctx->framerate.den;
+  priv_->codec_ctx->time_base.den = priv_->codec_ctx->framerate.num;
+  priv_->codec_ctx->bit_rate = param_.bit_rate;
+  priv_->codec_ctx->gop_size = param_.gop_size;
+  priv_->codec_ctx->pix_fmt = priv_->codec_id == AV_CODEC_ID_MJPEG ? AV_PIX_FMT_YUVJ420P : AV_PIX_FMT_YUV420P;
+  priv_->codec_ctx->max_b_frames = priv_->codec_id == AV_CODEC_ID_MJPEG ? 0 : 1;
 
-  if (!strcmp(codec_->name, "libx264") || !strcmp(codec_->name, "libx265")) {
-    av_dict_set(&opts_, "preset", "superfast", 0);
-    av_dict_set(&opts_, "tune", "zerolatency", 0);
-    if (codec_id_ == AV_CODEC_ID_H264) {
-      av_dict_set(&opts_, "profile", "high", 0);
-      av_dict_set(&opts_, "level", "5.1", 0);
+  if (!strcmp(priv_->codec->name, "libx264") || !strcmp(priv_->codec->name, "libx265")) {
+    av_dict_set(&priv_->opts, "preset", "superfast", 0);
+    av_dict_set(&priv_->opts, "tune", "zerolatency", 0);
+    if (priv_->codec_id == AV_CODEC_ID_H264) {
+      av_dict_set(&priv_->opts, "profile", "high", 0);
+      av_dict_set(&priv_->opts, "level", "5.1", 0);
     } else {
-      av_dict_set(&opts_, "level-idc", "5.1", 0);
-      av_dict_set(&opts_, "high-tier", "true", 0);
+      av_dict_set(&priv_->opts, "level-idc", "5.1", 0);
+      av_dict_set(&priv_->opts, "high-tier", "true", 0);
     }
   }
-  ret = avcodec_open2(codec_ctx_, codec_, &opts_);
+  ret = avcodec_open2(priv_->codec_ctx, priv_->codec, &priv_->opts);
   if (ret < 0) {
     LOGE(VideoEncoderFFmpeg) << "Start() avcodec_open2 failed, ret=" << ret;
     Destroy();
@@ -155,23 +206,23 @@ int VideoEncoderFFmpeg::Start() {
     return cnstream::VideoEncoder::ERROR_FAILED;
   }
 
-  if (pixel_format_ != codec_ctx_->pix_fmt &&
-      !(pixel_format_ == AV_PIX_FMT_YUV420P && codec_ctx_->pix_fmt == AV_PIX_FMT_YUVJ420P)) {
-    frame_ = av_frame_alloc();
-    frame_->width = codec_ctx_->width;
-    frame_->height = codec_ctx_->height;
-    frame_->format = codec_ctx_->pix_fmt;
-    ret = av_frame_get_buffer(frame_, input_alignment_);
+  if (priv_->pixel_format != priv_->codec_ctx->pix_fmt &&
+      !(priv_->pixel_format == AV_PIX_FMT_YUV420P && priv_->codec_ctx->pix_fmt == AV_PIX_FMT_YUVJ420P)) {
+    priv_->frame = av_frame_alloc();
+    priv_->frame->width = priv_->codec_ctx->width;
+    priv_->frame->height = priv_->codec_ctx->height;
+    priv_->frame->format = priv_->codec_ctx->pix_fmt;
+    ret = av_frame_get_buffer(priv_->frame, priv_->input_alignment);
     if (ret < 0) {
       LOGE(VideoEncoderFFmpeg) << "Start() av_frame_get_buffer failed, ret=" << ret;
       Destroy();
       state_ = IDLE;
       return cnstream::VideoEncoder::ERROR_FAILED;
     }
-    sws_ctx_ = sws_getContext(frame_->width, frame_->height, pixel_format_,
-                              frame_->width, frame_->height, static_cast<AVPixelFormat>(frame_->format),
-                              SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
-    if (!sws_ctx_) {
+    priv_->sws_ctx = sws_getContext(priv_->frame->width, priv_->frame->height, priv_->pixel_format, priv_->frame->width,
+                                    priv_->frame->height, static_cast<AVPixelFormat>(priv_->frame->format),
+                                    SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
+    if (!priv_->sws_ctx) {
       LOGE(VideoEncoderFFmpeg) << "Start() sws_getContext failed";
       Destroy();
       state_ = IDLE;
@@ -179,14 +230,14 @@ int VideoEncoderFFmpeg::Start() {
     }
   }
 #if LIBAVCODEC_VERSION_INT < VERSION_LAVC_ALLOC_PACKET
-    packet_ = reinterpret_cast<AVPacket *>(av_mallocz(sizeof(AVPacket)));
+  priv_->packet = reinterpret_cast<AVPacket *>(av_mallocz(sizeof(AVPacket)));
 #else
-    packet_ = av_packet_alloc();
+  priv_->packet = av_packet_alloc();
 #endif
-  av_init_packet(packet_);
+  av_init_packet(priv_->packet);
 
   state_ = RUNNING;
-  thread_ = std::thread(&VideoEncoderFFmpeg::Loop, this);
+  priv_->thread = std::thread(&VideoEncoderFFmpeg::Loop, this);
   return cnstream::VideoEncoder::SUCCESS;
 }
 
@@ -196,38 +247,38 @@ int VideoEncoderFFmpeg::Stop() {
     // LOGW(VideoEncoderFFmpeg) << "Stop() state != RUNNING";
     return cnstream::VideoEncoder::ERROR_STATE;
   }
-  std::unique_lock<std::mutex> lk(input_mtx_);
+  std::unique_lock<std::mutex> lk(priv_->input_mtx);
   state_ = STOPPING;
   lk.unlock();
   slk.Unlock();
 
-  free_cv_.notify_all();
-  data_cv_.notify_all();
-  if (thread_.joinable()) thread_.join();
+  priv_->free_cv.notify_all();
+  priv_->data_cv.notify_all();
+  if (priv_->thread.joinable()) priv_->thread.join();
 
   slk.Lock();
   lk.lock();
   AVFrame *frame;
-  while (!data_q_.empty()) {
-    frame = data_q_.front();
+  while (!priv_->data_q.empty()) {
+    frame = priv_->data_q.front();
     av_frame_free(&frame);
-    data_q_.pop();
+    priv_->data_q.pop();
   }
-  while (!free_q_.empty()) {
-    frame = free_q_.front();
+  while (!priv_->free_q.empty()) {
+    frame = priv_->free_q.front();
     av_frame_free(&frame);
-    free_q_.pop();
+    priv_->free_q.pop();
   }
-  if (!list_.empty()) {
-    LOGW(VideoEncoderFFmpeg) << "Stop() " << list_.size() << " frame buffers still outside";
-    for (auto &frame : list_) {
+  if (!priv_->list.empty()) {
+    LOGW(VideoEncoderFFmpeg) << "Stop() " << priv_->list.size() << " frame buffers still outside";
+    for (auto &frame : priv_->list) {
       av_frame_free(&frame);
     }
-    list_.clear();
+    priv_->list.clear();
   }
 
   Destroy();
-  eos_got_ = eos_sent_ = false;
+  priv_->eos_got = priv_->eos_sent = false;
   state_ = IDLE;
   return cnstream::VideoEncoder::SUCCESS;
 }
@@ -238,41 +289,41 @@ int VideoEncoderFFmpeg::RequestFrameBuffer(VideoFrame *frame, int timeout_ms) {
     LOGW(VideoEncoderFFmpeg) << "RequestFrameBuffer() not running";
     return cnstream::VideoEncoder::ERROR_STATE;
   }
-  if (eos_got_) {
+  if (priv_->eos_got) {
     LOGE(VideoEncoderFFmpeg) << "RequestFrameBuffer() EOS got already";
     return cnstream::VideoEncoder::ERROR_FAILED;
   }
   if (!frame) return cnstream::VideoEncoder::ERROR_PARAMETERS;
 
   AVFrame *avframe = nullptr;
-  std::unique_lock<std::mutex> lk(input_mtx_);
-  if (!free_q_.empty()) {
-    avframe = free_q_.front();
-    free_q_.pop();
+  std::unique_lock<std::mutex> lk(priv_->input_mtx);
+  if (!priv_->free_q.empty()) {
+    avframe = priv_->free_q.front();
+    priv_->free_q.pop();
   } else {
-    uint32_t buffer_count = data_q_.size() + (encoding_ ? 1 : 0);
+    uint32_t buffer_count = priv_->data_q.size() + (priv_->encoding ? 1 : 0);
     if (buffer_count >= param_.input_buffer_count) {
       if (timeout_ms == 0) {
         return cnstream::VideoEncoder::ERROR_FAILED;
       } else if (timeout_ms < 0) {
-        free_cv_.wait(lk, [this] () { return (state_ != RUNNING || !free_q_.empty()); });
+        priv_->free_cv.wait(lk, [this]() { return (state_ != RUNNING || !priv_->free_q.empty()); });
       } else {
-        if (false == free_cv_.wait_for(lk, std::chrono::milliseconds(timeout_ms),
-            [this] () { return (state_ != RUNNING || !free_q_.empty()); })) {
+        if (false == priv_->free_cv.wait_for(lk, std::chrono::milliseconds(timeout_ms),
+                                             [this]() { return (state_ != RUNNING || !priv_->free_q.empty()); })) {
           LOGW(VideoEncoderFFmpeg) << "RequestFrameBuffer() wait for " << timeout_ms << " ms timeout";
           return cnstream::VideoEncoder::ERROR_TIMEOUT;
         }
       }
       if (state_ != RUNNING) return cnstream::VideoEncoder::ERROR_STATE;
-      avframe = free_q_.front();
-      free_q_.pop();
+      avframe = priv_->free_q.front();
+      priv_->free_q.pop();
       // LOGI(VideoEncoderFFmpeg) << "RequestFrameBuffer() use allocated frame";
     } else {
       avframe = av_frame_alloc();
       avframe->width = param_.width;
       avframe->height = param_.height;
-      avframe->format = pixel_format_;
-      int ret = av_frame_get_buffer(avframe, input_alignment_);
+      avframe->format = priv_->pixel_format;
+      int ret = av_frame_get_buffer(avframe, priv_->input_alignment);
       if (ret < 0) {
         LOGE(VideoEncoderFFmpeg) << "RequestFrameBuffer() av_frame_get_buffer failed, ret=" << ret;
         av_frame_free(&avframe);
@@ -294,7 +345,7 @@ int VideoEncoderFFmpeg::RequestFrameBuffer(VideoFrame *frame, int timeout_ms) {
   }
   frame->pixel_format = param_.pixel_format;
 
-  list_.push_back(avframe);
+  priv_->list.push_back(avframe);
   return cnstream::VideoEncoder::SUCCESS;
 }
 
@@ -304,20 +355,20 @@ int VideoEncoderFFmpeg::SendFrame(const VideoFrame *frame, int timeout_ms) {
     LOGW(VideoEncoderFFmpeg) << "SendFrame() not running";
     return cnstream::VideoEncoder::ERROR_STATE;
   }
-  if (eos_got_) {
+  if (priv_->eos_got) {
     LOGE(VideoEncoderFFmpeg) << "SendFrame() EOS got already";
     return cnstream::VideoEncoder::ERROR_FAILED;
   }
   if (!frame) return cnstream::VideoEncoder::ERROR_PARAMETERS;
 
   AVFrame *avframe = nullptr;
-  std::unique_lock<std::mutex> lk(input_mtx_);
+  std::unique_lock<std::mutex> lk(priv_->input_mtx);
   if (frame->HasEOS()) {
     LOGI(VideoEncoderFFmpeg) << "SendFrame() Send EOS";
-    eos_got_ = true;
+    priv_->eos_got = true;
     if (!frame->data[0]) {
       lk.unlock();
-      data_cv_.notify_one();
+      priv_->data_cv.notify_one();
       return cnstream::VideoEncoder::SUCCESS;
     }
   } else if (!frame->data[0]) {
@@ -325,47 +376,47 @@ int VideoEncoderFFmpeg::SendFrame(const VideoFrame *frame, int timeout_ms) {
     return cnstream::VideoEncoder::ERROR_PARAMETERS;
   }
 
-  if (!list_.empty()) {
-    auto av_frame = std::find_if(list_.begin(), list_.end(),
-        [frame, this] (const AVFrame *f) {
+  if (!priv_->list.empty()) {
+    auto av_frame =
+        std::find_if(priv_->list.begin(), priv_->list.end(), [frame, this](const AVFrame *f) {
           return ((param_.pixel_format == VideoPixelFormat::I420 && frame->data[0] == f->data[0] &&
                    frame->data[1] == f->data[1] && frame->data[2] == f->data[2]) ||
                  ((param_.pixel_format == VideoPixelFormat::NV12 || param_.pixel_format == VideoPixelFormat::NV21) &&
                    frame->data[0] == f->data[0] && frame->data[1] == f->data[1]));
         });
-    if (av_frame != list_.end()) {
+    if (av_frame != priv_->list.end()) {
       avframe = *av_frame;
-      list_.erase(av_frame);
+      priv_->list.erase(av_frame);
     }
   }
   if (!avframe) {
-    if (!free_q_.empty()) {
-      avframe = free_q_.front();
-      free_q_.pop();
+    if (!priv_->free_q.empty()) {
+      avframe = priv_->free_q.front();
+      priv_->free_q.pop();
     } else {
-      uint32_t total_buffer_count = data_q_.size() + (encoding_ ? 1 : 0);
+      uint32_t total_buffer_count = priv_->data_q.size() + (priv_->encoding ? 1 : 0);
       if (total_buffer_count >= param_.input_buffer_count) {
         if (timeout_ms == 0) {
           return cnstream::VideoEncoder::ERROR_FAILED;
         } else if (timeout_ms < 0) {
-          free_cv_.wait(lk, [this] () { return (state_ != RUNNING || !free_q_.empty()); });
+          priv_->free_cv.wait(lk, [this]() { return (state_ != RUNNING || !priv_->free_q.empty()); });
         } else {
-          if (false == free_cv_.wait_for(lk, std::chrono::milliseconds(timeout_ms),
-              [this] () { return (state_ != RUNNING || !free_q_.empty()); })) {
+          if (false == priv_->free_cv.wait_for(lk, std::chrono::milliseconds(timeout_ms),
+                                               [this]() { return (state_ != RUNNING || !priv_->free_q.empty()); })) {
             LOGW(VideoEncoderFFmpeg) << "SendFrame() wait for " << timeout_ms << " ms timeout";
             return cnstream::VideoEncoder::ERROR_TIMEOUT;
           }
         }
         if (state_ != RUNNING) return cnstream::VideoEncoder::ERROR_STATE;
-        avframe = free_q_.front();
-        free_q_.pop();
+        avframe = priv_->free_q.front();
+        priv_->free_q.pop();
         // LOGI(VideoEncoderFFmpeg) << "SendFrame() use allocated frame";
       } else {
         avframe = av_frame_alloc();
         avframe->width = frame->width;
         avframe->height = frame->height;
-        avframe->format = pixel_format_;
-        int ret = av_frame_get_buffer(avframe, input_alignment_);
+        avframe->format = priv_->pixel_format;
+        int ret = av_frame_get_buffer(avframe, priv_->input_alignment);
         if (ret < 0) {
           LOGE(VideoEncoderFFmpeg) << "SendFrame() av_frame_get_buffer failed, ret=" << ret;
           av_frame_free(&avframe);
@@ -378,17 +429,19 @@ int VideoEncoderFFmpeg::SendFrame(const VideoFrame *frame, int timeout_ms) {
     const uint8_t *data[4] = { frame->data[0], frame->data[1], frame->data[2], nullptr };
     const int linesizes[4] = { static_cast<int>(frame->stride[0]), static_cast<int>(frame->stride[1]),
                                static_cast<int>(frame->stride[2]), 0 };
-    av_image_copy(avframe->data, avframe->linesize, data, linesizes, pixel_format_, avframe->width, avframe->height);
+    av_image_copy(avframe->data, avframe->linesize, data, linesizes, priv_->pixel_format, avframe->width,
+                  avframe->height);
   }
 
   avframe->pts = (frame->pts == INVALID_TIMESTAMP ? AV_NOPTS_VALUE : frame->pts);
   avframe->pkt_pts = avframe->pts;
   avframe->pkt_dts = (frame->dts == INVALID_TIMESTAMP ? AV_NOPTS_VALUE : frame->dts);
-  data_q_.push(avframe);
+  avframe->opaque = frame->user_data;
+  priv_->data_q.push(avframe);
   lk.unlock();
-  data_cv_.notify_one();
+  priv_->data_cv.notify_one();
 
-  // LOGI(VideoEncoderFFmpeg) << "SendFrame() pts=" << frame->pts << ", dts=" << frame->dts ;
+  LOGT(VideoEncoderFFmpeg) << "SendFrame() pts=" << frame->pts << ", dts=" << frame->dts;
   return cnstream::VideoEncoder::SUCCESS;
 }
 
@@ -402,42 +455,42 @@ int VideoEncoderFFmpeg::GetPacket(VideoPacket *packet, PacketInfo *info) {
   return VideoEncoderBase::GetPacket(packet, info);
 }
 
-bool VideoEncoderFFmpeg::GetPacketInfo(int64_t pts, PacketInfo *info) {
+bool VideoEncoderFFmpeg::GetPacketInfo(int64_t index, PacketInfo *info) {
   if (!info) return false;
 
-  std::lock_guard<std::mutex> lk(info_mtx_);
-  for (auto info_it = encoding_info_.begin(); info_it != encoding_info_.end(); ++info_it) {
-    if (info_it->second.pts == pts) {
-      info->start_tick = info_it->second.start_tick;
-      info->end_tick   = info_it->second.end_tick;
-      encoding_info_.erase(info_it);
-      return true;
-    }
+  std::lock_guard<std::mutex> lk(priv_->info_mtx);
+  if (priv_->encoding_info.count(index) == 0) {
+    LOGE(VideoEncoderFFmpeg) << "GetPacketInfo() find index: " << index << " failed";
+    return false;
   }
-  return false;
+  auto &enc_info = priv_->encoding_info[index];
+  info->start_tick = enc_info.start_tick;
+  info->end_tick = enc_info.end_tick;
+  priv_->encoding_info.erase(index);
+  return true;
 }
 
 void VideoEncoderFFmpeg::Destroy() {
-  if (codec_ctx_) {
-    avcodec_close(codec_ctx_);
-    codec_ctx_ = nullptr;
+  if (priv_->codec_ctx) {
+    avcodec_close(priv_->codec_ctx);
+    priv_->codec_ctx = nullptr;
   }
-  if (opts_) {
-    av_dict_free(&opts_);
-    opts_ = nullptr;
+  if (priv_->opts) {
+    av_dict_free(&priv_->opts);
+    priv_->opts = nullptr;
   }
-  if (sws_ctx_) {
-    sws_freeContext(sws_ctx_);
-    sws_ctx_ = nullptr;
+  if (priv_->sws_ctx) {
+    sws_freeContext(priv_->sws_ctx);
+    priv_->sws_ctx = nullptr;
   }
-  if (frame_) {
-    av_frame_free(&frame_);
-    frame_ = nullptr;
+  if (priv_->frame) {
+    av_frame_free(&priv_->frame);
+    priv_->frame = nullptr;
   }
-  if (packet_) {
-    av_packet_unref(packet_);
-    av_free(packet_);
-    packet_ = nullptr;
+  if (priv_->packet) {
+    av_packet_unref(priv_->packet);
+    av_free(priv_->packet);
+    priv_->packet = nullptr;
   }
 }
 
@@ -446,102 +499,125 @@ void VideoEncoderFFmpeg::Loop() {
   AVFrame *frame = nullptr;
 
   while (state_ == RUNNING) {
-    std::unique_lock<std::mutex> lk(input_mtx_);
-    data_cv_.wait(lk, [this] () { return (state_ != RUNNING || !data_q_.empty() || (eos_got_ && !eos_sent_)); });
+    std::unique_lock<std::mutex> lk(priv_->input_mtx);
+    priv_->data_cv.wait(
+        lk, [this]() { return (state_ != RUNNING || !priv_->data_q.empty() || (priv_->eos_got && !priv_->eos_sent)); });
     if (state_ != RUNNING) break;
 
-    if (!data_q_.empty()) {
-      frame = data_q_.front();
-      data_q_.pop();
-      encoding_ = true;
+    if (!priv_->data_q.empty()) {
+      frame = priv_->data_q.front();
+      priv_->data_q.pop();
+      priv_->encoding = true;
       lk.unlock();
       // Color convertion
-      if (sws_ctx_) {
-        ret = sws_scale(sws_ctx_, frame->data, frame->linesize, 0, frame->height, frame_->data, frame_->linesize);
+      if (priv_->sws_ctx) {
+        ret = sws_scale(priv_->sws_ctx, frame->data, frame->linesize, 0, frame->height, priv_->frame->data,
+                        priv_->frame->linesize);
         if (ret < 0) {
           LOGE(VideoEncoderFFmpeg) << "Loop() sws_scale failed, ret=" << ret;
-          lk.lock(); free_q_.push(frame); encoding_ = false; lk.unlock();
-          free_cv_.notify_one();
+          lk.lock();
+          priv_->free_q.push(frame);
+          priv_->encoding = false;
+          lk.unlock();
+          priv_->free_cv.notify_one();
           continue;
         }
-        frame_->pts = frame->pts;
-        frame_->pkt_pts = frame->pkt_pts;
-        frame_->pkt_dts = frame->pkt_dts;
-        lk.lock(); free_q_.push(frame); encoding_ = false; lk.unlock();
-        free_cv_.notify_one();
-        frame = frame_;
+        priv_->frame->pts = frame->pts;
+        priv_->frame->pkt_pts = frame->pkt_pts;
+        priv_->frame->pkt_dts = frame->pkt_dts;
+        lk.lock();
+        priv_->free_q.push(frame);
+        priv_->encoding = false;
+        lk.unlock();
+        priv_->free_cv.notify_one();
+        frame = priv_->frame;
       }
-      // LOGI(VideoEncoderFFmpeg) << "Loop() frame pts=" << frame->pts;
     } else {
-      if (eos_sent_) break;
+      if (priv_->eos_sent) break;
       frame = nullptr;
       lk.unlock();
     }
 
     if (frame) {
-      std::lock_guard<std::mutex> lk(info_mtx_);
+      std::lock_guard<std::mutex> lk(priv_->info_mtx);
       if (frame->pts == AV_NOPTS_VALUE) {
-        frame->pts = frame_count_ * param_.time_base / param_.frame_rate;
+        frame->pts = priv_->frame_count * param_.time_base / param_.frame_rate;
         frame->pkt_pts = frame->pts;
       }
-      encoding_info_[data_index_] = (EncodingInfo){ frame->pkt_pts, frame->pkt_dts, CurrentTick(), 0 };
-      frame->pts = data_index_++;
+
+      priv_->encoding_info[priv_->data_index].pts = frame->pkt_pts;
+      priv_->encoding_info[priv_->data_index].dts = frame->pkt_dts;
+      priv_->encoding_info[priv_->data_index].start_tick = CurrentTick();
+      priv_->encoding_info[priv_->data_index].end_tick = 0;
+      priv_->encoding_info[priv_->data_index].user_data = frame->opaque;
+
+      frame->pts = priv_->data_index++;
       frame->pkt_pts = frame->pts;
-      frame_count_++;
+      priv_->frame_count++;
     }
 
     do {
       int got_packet = 0;
-      ret = avcodec_encode_video2(codec_ctx_, packet_, frame, &got_packet);
+      ret = avcodec_encode_video2(priv_->codec_ctx, priv_->packet, frame, &got_packet);
       if (ret < 0) {
         LOGE(VideoEncoderFFmpeg) << "Loop() avcodec_encode_video2 failed, ret=" << ret;
         break;
       }
-      if (!sws_ctx_ && frame != nullptr) {
-        lk.lock(); free_q_.push(frame); encoding_ = false; lk.unlock();
-        free_cv_.notify_one();
+      if (!priv_->sws_ctx && frame != nullptr) {
+        lk.lock();
+        priv_->free_q.push(frame);
+        priv_->encoding = false;
+        lk.unlock();
+        priv_->free_cv.notify_one();
       }
-      if (!ret && got_packet && packet_->size) {
+      void *user_data = nullptr;
+      if (!ret && got_packet && priv_->packet->size) {
         // find out packet and update encoding info
-        std::unique_lock<std::mutex> ilk(info_mtx_);
-        int64_t index = packet_->pts;
-        auto info_it = encoding_info_.find(index);
-        if (info_it != encoding_info_.end()) {
-          info_it->second.end_tick = CurrentTick();
-          packet_->pts = info_it->second.pts;
-          if (info_it->second.dts == AV_NOPTS_VALUE) {
-            packet_->dts = (packet_count_ - 2) * param_.time_base / param_.frame_rate;
+        std::unique_lock<std::mutex> lk(priv_->info_mtx);
+        int64_t index = priv_->packet->pts;
+        auto info = priv_->encoding_info.find(index);
+        if (info != priv_->encoding_info.end()) {
+          info->second.end_tick = CurrentTick();
+          priv_->packet->pts = info->second.pts;
+          if (info->second.dts == AV_NOPTS_VALUE) {
+            priv_->packet->dts = (priv_->packet_count - 2) * param_.time_base / param_.frame_rate;
           } else {
-            packet_->dts = info_it->second.dts;
+            priv_->packet->dts = info->second.dts;
           }
+          user_data = info->second.user_data;
         } else {
-          LOGW(VideoEncoderFFmpeg) << "Loop() restore encoding info failed, index=" << index;
+          LOGE(VideoEncoderFFmpeg) << "Loop() restore encoding info failed, index=" << index;
+          return;
         }
-        ilk.unlock();
-        // LOGI(VideoEncoderFFmpeg) << "Loop() got packet: size=" << packet_->size <<
-        //     ", pts=" << packet_->pts << ", dts=" << packet_->dts <<
-        //     ((packet_->flags & AV_PKT_FLAG_KEY) ? " [K]" : "");
+        lk.unlock();
+        LOGT(VideoEncoderFFmpeg) << "Loop() got packet: size=" << priv_->packet->size << ", pts=" << priv_->packet->pts
+                                 << ", dts=" << priv_->packet->dts << ", user_data=" << user_data
+                                 << ((priv_->packet->flags & AV_PKT_FLAG_KEY) ? " [K]" : "");
         VideoPacket packet;
         memset(&packet, 0, sizeof(VideoPacket));
-        packet.data = packet_->data;
-        packet.size = packet_->size;
-        packet.pts = packet_->pts;
-        packet.dts = packet_->dts;
-        if (packet_->flags & AV_PKT_FLAG_KEY) packet.SetKey();
-        PushBuffer(&packet);
-        packet_count_++;
-        av_packet_unref(packet_);
-        std::lock_guard<std::mutex> lk(cb_mtx_);
+        packet.data = priv_->packet->data;
+        packet.size = priv_->packet->size;
+        packet.pts = priv_->packet->pts;
+        packet.dts = priv_->packet->dts;
+        packet.user_data = user_data;
+        if (priv_->packet->flags & AV_PKT_FLAG_KEY) packet.SetKey();
+        IndexedVideoPacket vpacket;
+        vpacket.packet = packet;
+        vpacket.index = index;
+        PushBuffer(&vpacket);
+        priv_->packet_count++;
+        av_packet_unref(priv_->packet);
+        std::lock_guard<std::mutex> cblk(cb_mtx_);
         if (event_callback_) event_callback_(cnstream::VideoEncoder::EVENT_DATA);
       }
-      std::unique_lock<std::mutex> lk(input_mtx_);
-      if (!data_q_.empty() || !eos_got_) {
+      std::unique_lock<std::mutex> lk(priv_->input_mtx);
+      if (!priv_->data_q.empty() || !priv_->eos_got) {
         break;
       } else if (ret != 0 || !got_packet) {
-        if (eos_sent_) break;
-        eos_sent_ = true;
+        if (priv_->eos_sent) break;
+        priv_->eos_sent = true;
         lk.unlock();
-        std::lock_guard<std::mutex> lk(cb_mtx_);
+        std::lock_guard<std::mutex> cblk(cb_mtx_);
         LOGI(VideoEncoderFFmpeg) << "Loop() Callback(EVENT_EOS)";
         if (event_callback_) event_callback_(cnstream::VideoEncoder::EVENT_EOS);
         break;

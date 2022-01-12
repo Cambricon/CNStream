@@ -24,11 +24,13 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "cnis/contrib/video_helper.h"
 #include "cnis/infer_server.h"
 #include "cnis/processor.h"
 #include "cnstream_frame_va.hpp"
+#include "frame_filter.hpp"
 #include "obj_filter.hpp"
 #include "video_postproc.hpp"
 #include "video_preproc.hpp"
@@ -80,11 +82,14 @@ struct Infer2Param {
   std::string model_path = "";
   std::string preproc_name = "";
   std::string postproc_name = "";
+  std::string frame_filter_name = "";
   std::string obj_filter_name = "";
   bool normalize = false;
   bool object_infer = false;
   float threshold = 0.f;
   uint32_t infer_interval = 0;
+  std::unordered_map<std::string, std::string> custom_preproc_params;
+  std::unordered_map<std::string, std::string> custom_postproc_params;
 };  // struct Infer2Param
 
 class Inferencer2;
@@ -92,11 +97,12 @@ class InferHandler {
  public:
   explicit InferHandler(Inferencer2* module, const Infer2Param& infer_params,
                         std::shared_ptr<VideoPostproc> post_processor, std::shared_ptr<VideoPreproc> pre_processor,
-                        std::shared_ptr<ObjFilter> obj_filter)
+                        std::shared_ptr<FrameFilter> frame_filter, std::shared_ptr<ObjFilter> obj_filter)
       : module_(module),
         params_(infer_params),
         postprocessor_(post_processor),
         preprocessor_(pre_processor),
+        frame_filter_(frame_filter),
         obj_filter_(obj_filter) {}
 
   virtual ~InferHandler() {}
@@ -114,6 +120,7 @@ class InferHandler {
   Infer2Param params_;
   std::shared_ptr<VideoPostproc> postprocessor_ = nullptr;
   std::shared_ptr<VideoPreproc> preprocessor_ = nullptr;
+  std::shared_ptr<FrameFilter> frame_filter_ = nullptr;
   std::shared_ptr<ObjFilter> obj_filter_ = nullptr;
 };
 

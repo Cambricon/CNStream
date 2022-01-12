@@ -22,17 +22,17 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 #include "cnstream_module.hpp"
 
 namespace cnstream {
 
 static std::mutex s_eos_lock_;
-static std::unordered_map<std::string, std::atomic<bool>> s_stream_eos_map_;
+static std::map<std::string, std::atomic<bool>> s_stream_eos_map_;
 
 static std::mutex s_remove_lock_;
-static std::unordered_map<std::string, bool> s_stream_removed_map_;
+static std::map<std::string, bool> s_stream_removed_map_;
 
 bool CheckStreamEosReached(const std::string &stream_id, bool sync) {
   if (sync) {

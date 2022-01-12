@@ -29,7 +29,7 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -68,7 +68,7 @@ class Preproc : virtual public ReflexObjectEx<Preproc> {
    *
    * @return Returns ture for success, otherwise returns false.
    **/
-  virtual bool Init(const std::unordered_map<std::string, std::string> &params) { return true; }
+  virtual bool Init(const std::map<std::string, std::string> &params) { return true; }
 
   /**
    * @brief Executes preprocess on neural network inputs.
@@ -111,7 +111,7 @@ class ObjPreproc : virtual public ReflexObjectEx<ObjPreproc> {
    *
    * @return Returns ture for success, otherwise returns false.
    **/
-  virtual bool Init(const std::unordered_map<std::string, std::string> &params) { return true; }
+  virtual bool Init(const std::map<std::string, std::string> &params) { return true; }
 
   /**
    * @brief Executes preprocess on neural network inputs.

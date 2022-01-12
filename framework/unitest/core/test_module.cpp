@@ -25,7 +25,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include "cnstream_module.hpp"

@@ -18,80 +18,50 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef __VIDEO_ENCODER_MLU_HPP__
-#define __VIDEO_ENCODER_MLU_HPP__
+#ifndef __VIDEO_ENCODER_MLU200_HPP__
+#define __VIDEO_ENCODER_MLU200_HPP__
 
-#include <atomic>
-#include <condition_variable>
-#include <list>
-#include <mutex>
-#include <unordered_map>
+#include <memory>
 
-#include "cn_codec_common.h"
-#include "cn_jpeg_enc.h"
-#include "cn_video_enc.h"
 #include "video_encoder_base.hpp"
 
 namespace cnstream {
 
 namespace video {
 
-class VideoEncoderMlu : public VideoEncoderBase {
+struct VideoEncoderMlu200Private;
+
+class VideoEncoderMlu200 : public VideoEncoderBase {
  public:
   using Param = cnstream::VideoEncoder::Param;
   using EventCallback = cnstream::VideoEncoder::EventCallback;
   using PacketInfo = cnstream::VideoEncoder::PacketInfo;
 
-  explicit VideoEncoderMlu(const Param &param);
-  ~VideoEncoderMlu();
+  explicit VideoEncoderMlu200(const Param &param);
+  ~VideoEncoderMlu200();
 
   int Start() override;
   int Stop() override;
 
-  /* timeout_ms: <0: wait infinitely; 0: poll; >0: timeout in millisceonds */
+  /* timeout_ms: <0: wait infinitely; 0: poll; >0: timeout in milliseconds */
   int RequestFrameBuffer(VideoFrame *frame, int timeout_ms = -1) override;
   int SendFrame(const VideoFrame *frame, int timeout_ms = -1) override;
   int GetPacket(VideoPacket *packet, PacketInfo *info = nullptr) override;
 
-  int EventHandler(cncodecCbEventType event, void *info);
+  i32_t EventHandlerCallback(int event, void *data);
+  i32_t EventHandler(int event, void *data);
 
  private:
-  struct EncodingInfo {
-    int64_t pts, dts;
-    int64_t start_tick, end_tick;
-  };
-
-  void ReceivePacket(void *info);
+  bool GetPacketInfo(int64_t index, PacketInfo *info) override;
+  void ReceivePacket(void *data);
   void ReceiveEOS();
-  i32_t ErrorHandler(cncodecCbEventType event);
-  bool GetPacketInfo(int64_t pts, PacketInfo *info) override;
+  i32_t ErrorHandler(int event);
 
-  std::mutex list_mtx_;
-  std::list<cnjpegEncInput> ji_list_;
-  std::list<cnvideoEncInput> vi_list_;
-  std::condition_variable list_cv_;
-  std::mutex info_mtx_;
-  std::unordered_map<int64_t, EncodingInfo> encoding_info_;
-  std::mutex eos_mtx_;
-  std::condition_variable eos_cv_;
-  std::atomic<bool> eos_sent_{false};
-  std::atomic<bool> eos_got_{false};
-  std::atomic<bool> error_{false};
-  uint8_t *stream_buffer_ = nullptr;
-  uint32_t stream_buffer_size_ = 0;
-  uint8_t *ps_buffer_ = nullptr;
-  uint32_t ps_size_ = 0;
-  int64_t frame_count_ = 0;
-  int64_t packet_count_ = 0;
-  int64_t data_index_ = 0;
-
-  cnvideoEncCreateInfo ve_param_;
-  cnjpegEncCreateInfo je_param_;
-  void *cn_encoder_ = nullptr;
-};  // VideoEncoderMlu
+  std::unique_ptr<VideoEncoderMlu200Private> priv_;
+};  // VideoEncoderMlu200
 
 }  // namespace video
 
 }  // namespace cnstream
 
-#endif  // __VIDEO_ENCODER_MLU_HPP__
+#endif  // __VIDEO_ENCODER_MLU200_HPP__

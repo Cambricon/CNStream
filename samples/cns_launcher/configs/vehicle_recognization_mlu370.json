@@ -1,0 +1,90 @@
+{
+  "profiler_config" : {
+    "enable_profiling" : true,
+    "enable_tracing"   : true
+  },
+
+  "source" : {
+    "class_name" : "cnstream::DataSource",
+    "parallelism" : 0,
+    "next_modules" : ["detector"],
+    "custom_params" : {
+      "reuse_cndec_buf" : "false",
+      "output_type" : "mlu",
+      "decoder_type" : "mlu",
+      "output_buf_number" : 4,
+      "device_id" : 0
+    }
+  },
+
+  "detector" : {
+    "class_name" : "cnstream::Inferencer2",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["classific"],
+    "custom_params" : {
+      "model_path" : "../../../data/models/yolov3_nhwc.model",
+      "postproc_name" : "VideoPostprocYolov3MM",
+      "preproc_name" : "CNCV",
+      "normalize" : true,
+      "threshold" : 0.5,
+      "batching_timeout" : 100,
+      "engine_num" : 1,
+      "keep_aspect_ratio" : true,
+      "model_input_pixel_format" : "RGB24",
+      "device_id" : 0
+    }
+  },
+
+  "classific" : {
+    "class_name" : "cnstream::Inferencer2",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["osd"],
+    "custom_params" : {
+      "model_path" : "../../../data/models/resnet50_nhwc.model",
+      "object_infer" : true,
+      "postproc_name" : "VideoObjPostprocClassification",
+      "preproc_name" : "CNCV",
+      "obj_filter_name" : "VehicleFilter",
+      "normalize" : false,
+      "mean" : "104, 117, 123",
+      "std" : "1, 1, 1",
+      "threshold" : 0.5,
+      "batching_timeout" : 100,
+      "engine_num" : 1,
+      "keep_aspect_ratio" : true,
+      "model_input_pixel_format" : "RGB24",
+      "device_id" : 0
+    }
+  },
+
+  "osd" : {
+   "class_name" : "cnstream::Osd",
+   "parallelism" : 4,
+   "max_input_queue_size" : 20,
+   "next_modules" : ["encode"],
+   "custom_params" : {
+     "label_path" : "../../../data/models/label_map_coco.txt",
+     "secondary_label_path" : "../../../data/models/synset_words.txt",
+     "attr_keys" : "classification"
+   }
+  },
+
+  "encode" : {
+   "class_name" : "cnstream::Encode",
+   "parallelism" : 4,
+   "max_input_queue_size" : 10,
+   "custom_params" : {
+      "dst_width": 1280,
+      "dst_height": 720,
+      "frame_rate" : 25,
+      "bit_rate" : 3000000,
+      "gop_size" : 30,
+      "input_frame" : "cpu",
+      "encoder_type" : "cpu",
+      "file_name" : "./output/output.mp4",
+      "device_id": 0
+   }
+  }
+}

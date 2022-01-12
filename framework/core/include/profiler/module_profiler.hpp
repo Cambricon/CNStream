@@ -23,7 +23,7 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 #include "cnstream_common.hpp"
 #include "cnstream_config.hpp"
@@ -61,7 +61,7 @@ class ModuleProfiler : private NonCopyable {
    * @param[in] config The configuration of the profiler.
    * @param[in] module_name The name of the module.
    * @param[in] tracer The tracer for tracing events.
-   * 
+   *
    * @return No return value.
    */
   explicit ModuleProfiler(const ProfilerConfig& config,
@@ -94,7 +94,7 @@ class ModuleProfiler : private NonCopyable {
 
   /*!
    * @brief Records the end of a process named ``process_name``.
-   * 
+   *
    * @param[in] process_name The name of the process. It should be registed by ``RegisterProcessName``.
    * @param[in] key The unique identifier of a CNFrameInfo instance.
    *
@@ -146,7 +146,7 @@ class ModuleProfiler : private NonCopyable {
   ProfilerConfig config_;
   std::string module_name_ = "";
   PipelineTracer* tracer_ = nullptr;
-  std::unordered_map<std::string, std::unique_ptr<ProcessProfiler>> process_profilers_;
+  std::map<std::string, std::unique_ptr<ProcessProfiler>> process_profilers_;
 };  // class ModuleProfiler
 
 inline std::string ModuleProfiler::GetName() const {

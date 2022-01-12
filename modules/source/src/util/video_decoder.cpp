@@ -28,7 +28,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
-#include <unordered_map>
+#include <map>
 #include <utility>
 
 #include "cnstream_common.hpp"

@@ -1,5 +1,5 @@
 #/*************************************************************************
-# * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
+# * Copyright (C) [2021] by Cambricon, Inc. All rights reserved
 # *
 # *  Licensed under the Apache License, Version 2.0 (the "License");
 # *  you may not use this file except in compliance with the License.
@@ -18,51 +18,33 @@
 # * THE SOFTWARE.
 # *************************************************************************/
 
-# 1. build image
-# (1) build image without cntoolkit and cnstream: docker build -f Dockerfile.18.04 -t ubuntu18_cnstream:v1 .
-# (2) build image with cntoolkit installed and without cnstream:
-#   a. make sure the toolkit_package is in your current directory
-#   b. docker build -f Dockerfile.18.04 --build-arg toolkit_package=${toolkit_package_name} -t ubuntu18_cnstream:v1 .
-# (3) build image with cntoolkit installed and with cnstream code built:
-#   a. make sure the toolkit_package is in your current directory
-#   b. docker build -f Dockerfile.18.04 --build-arg toolkit_package=${toolkit_package_name} --build-arg with_cnstream_code=yes -t ubuntu18_cnstream:v1 .
-# 2. start container: docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged -v /dev:/dev --net=host --ipc=host --pid=host -v $HOME/.Xauthority -it --name container_name  -v $PWD:/workspace ubuntu_cnstream:v1
+# 1. build image:
+# docker build -f Dockerfile.devel.18.04 -t cnstream:latest .
+# 2. start container: docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -e GDK_SCALE -e GDK_DPI_SCALE --privileged -v /dev:/dev --net=host --ipc=host --pid=host -it --name container_name  -v $PWD:/workspace cnstream:latest
 
 FROM ubuntu:18.04
 
-MAINTAINER <Cambricon, Inc.>
-
-ARG toolkit_package=""
-ARG with_cnstream_code=no
-
 ENV DEBIAN_FRONTEND=noninteractive
-RUN echo -e 'nameserver 114.114.114.114' > /etc/resolv.conf
 
 RUN sed -i "1i deb http://mirrors.aliyun.com/ubuntu/ bionic main restricted universe multiverse\n deb-src http://mirrors.aliyun.com/ubuntu/ bionic main restricted universe multiverse\n deb http://mirrors.aliyun.com/ubuntu/ bionic-security main restricted universe multiverse\n deb-src http://mirrors.aliyun.com/ubuntu/ bionic-security main restricted universe multiverse\n deb http://mirrors.aliyun.com/ubuntu/ bionic-updates main restricted universe multiverse\n deb-src http://mirrors.aliyun.com/ubuntu/ bionic-updates main restricted universe multiverse\n deb http://mirrors.aliyun.com/ubuntu/ bionic-proposed main restricted universe multiverse\n deb-src http://mirrors.aliyun.com/ubuntu/ bionic-proposed main restricted universe multiverse\n deb http://mirrors.aliyun.com/ubuntu/ bionic-backports main restricted universe multiverse\n deb-src http://mirrors.aliyun.com/ubuntu/ bionic-backports main restricted universe multiverse\n" /etc/apt/sources.list && \
     apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends apt-utils \
-            libopencv-dev python2.7  python-dev \
-            libsdl2-dev wget \ 
             git build-essential cmake make vim curl libcurl4-openssl-dev \
+            libopencv-dev \
+            libsdl2-dev \
+            libfreetype6 \
+            ttf-wqy-zenhei \
+            wget \
+            python3-pip \
+            python3-dev \
+            mediainfo \
+            libgflags-dev \
             libgoogle-glog-dev \
-            openssh-server librdkafka-dev \
-            lcov  \ 
+            openssh-server \
+            librdkafka-dev \
+            lcov  \
             ca-certificates \
             net-tools && \
+    pip3 install virtualenv && \
+    ln -sf /usr/bin/python3 /usr/bin/python && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
-COPY . /tmp/
-# install cntoolkit, git clone cnstream from gitee and build
-RUN if [ -n "$toolkit_package" ]; then \
-      dpkg -i /tmp/$toolkit_package && \
-      apt -o Accquire::AllowInsecureRepositories=true update && \
-      apt install -y cndev cndrv cnrt cncodec && \
-      rm -rf /tmp/$toolkit_package; \
-      if [ "$with_cnstream_code" = "yes" ]; then \
-        cd /root && git clone https://gitee.com/SolutionSDK/CNStream.git CNStream && \
-        cd /root/CNStream && mkdir build && cd build &&\
-        cmake .. && make -j4; \
-      fi \
-    fi
-
-WORKDIR /root

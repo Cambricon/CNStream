@@ -46,6 +46,7 @@ class FileHandlerImpl : public IParserResult, public IDecodeResult, public Sourc
   ~FileHandlerImpl() {}
   bool Open();
   void Close();
+  void Stop();
 
  private:
   DataSource *module_ = nullptr;

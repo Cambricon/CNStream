@@ -30,6 +30,7 @@ namespace cnstream {
 class __attribute__((visibility("default"))) PyModule : public ModuleEx, public ModuleCreator<PyModule> {
  public:
   explicit PyModule(const std::string& name);
+  ~PyModule();
   bool CheckParamSet(const ModuleParamSet &params) const override;
   bool Open(ModuleParamSet params) override;
   void Close() override;

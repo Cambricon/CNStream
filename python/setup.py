@@ -123,7 +123,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name="cnstream",
-    version="6.1.0",
+    version="6.2.0",
     author="Cambricon",
     url='https://gitee.com/SolutionSDK/CNStream',
     author_email="@cambricon.com",

@@ -22,9 +22,9 @@
 #define MODULES_UTIL_INCLUDE_OBJ_FILTER_HPP_
 
 /**
- *  \file preproc.hpp
+ *  \file obj_filter.hpp
  *
- *  This file contains a declaration of class Preproc
+ *  This file contains a declaration of class ObjFilter
  */
 
 #include <memory>
@@ -45,13 +45,13 @@ namespace cnstream {
 class ObjFilter : virtual public ReflexObjectEx<ObjFilter> {
  public:
   /**
-   * @brief do nothing
+   * @brief Does nothing.
    */
   virtual ~ObjFilter() {}
   /**
-   * @brief create relative object filter
+   * @brief Creates relative object filter.
    *
-   * @param filter_name obj filter class name
+   * @param filter_name The obj filter class name.
    *
    * @return None
    */
@@ -60,13 +60,12 @@ class ObjFilter : virtual public ReflexObjectEx<ObjFilter> {
   }
 
   /**
-   * @brief Execute preproc on neural network inputs
+   * @brief Filters objects of the frame.
    *
-   * @param finfo: smart pointer of struct to store origin frame data, (object is detected from this frame)
-   * @param obj: object infomations
+   * @param finfo: The smart pointer of struct to store origin frame data, (object is detected from this frame).
+   * @param obj: The object infomations.
    *
-   * @return return true then this object will be processed by inferencer module,
-   *   and return false will be skipped by inferencer module,
+   * @return Returns true if this object is satisfied, otherwise returns false.
    */
   virtual bool Filter(const CNFrameInfoPtr& finfo, const CNInferObjectPtr& pobj) = 0;
 };  // class ObjFilter

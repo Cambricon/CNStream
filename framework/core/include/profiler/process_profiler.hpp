@@ -23,7 +23,7 @@
 
 #include <algorithm>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include "cnstream_common.hpp"
@@ -201,7 +201,7 @@ class ProcessProfiler : private NonCopyable {
   RecordPolicy* record_policy_   = nullptr;
   TraceEvent::Level trace_level_;
   // Stream profilers for each stream.
-  std::unordered_map<std::string, StreamProfiler> stream_profilers_;
+  std::map<std::string, StreamProfiler> stream_profilers_;
 };  // class ProcessProfiler
 
 inline ProcessProfiler& ProcessProfiler::SetModuleName(const std::string& module_name) {

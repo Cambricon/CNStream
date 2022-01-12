@@ -48,13 +48,21 @@ CreateModules() {
   };
   return modules;
 }
+static std::vector<std::string> GetModuleNames(std::vector<std::shared_ptr<Module>> modules) {
+  std::vector<std::string> module_names;
+  module_names.reserve(modules.size());
+  for (auto &it : modules) {
+    module_names.emplace_back(it->GetName());
+  }
+  return module_names;
+}
 
 TEST(CorePipelineProfiler, GetName) {
   ProfilerConfig config;
   config.enable_tracing = true;
   config.enable_profiling = true;
   const std::string pipeline_name = "pipeline";
-  PipelineProfiler profiler(config, pipeline_name, {});
+  PipelineProfiler profiler(config, pipeline_name, {}, {});
   EXPECT_EQ(profiler.GetName(), pipeline_name);
 }
 
@@ -63,7 +71,7 @@ TEST(CorePipelineProfiler, GetTracer) {
   config.enable_tracing = true;
   config.enable_profiling = true;
   const std::string pipeline_name = "pipeline";
-  PipelineProfiler profiler(config, pipeline_name, {});
+  PipelineProfiler profiler(config, pipeline_name, {}, {});
   EXPECT_NE(nullptr, profiler.GetTracer());
 }
 
@@ -75,7 +83,7 @@ TEST(CorePipelineProfiler, GetModuleProfiler) {
   const std::string module_name = "module";
   std::vector<std::shared_ptr<Module>> modules;
   modules.push_back(std::shared_ptr<Module>(new TestModule(module_name)));
-  PipelineProfiler profiler(config, pipeline_name, modules);
+  PipelineProfiler profiler(config, pipeline_name, modules, {module_name});
   EXPECT_NE(nullptr, profiler.GetModuleProfiler(module_name));
 }
 
@@ -84,7 +92,7 @@ TEST(CorePipelineProfiler, GetProfile) {
   config.enable_tracing = true;
   config.enable_profiling = true;
   auto modules = CreateModules();
-  PipelineProfiler profiler(config, "test_pipeline", modules);
+  PipelineProfiler profiler(config, "test_pipeline", modules, GetModuleNames(modules));
   const std::string stream_name = "stream0";
   Time start_time = Clock::now();
   profiler.RecordInput(std::make_pair(stream_name, 0));
@@ -114,7 +122,7 @@ TEST(CorePipelineProfiler, GetProfile_Disable_Tracing) {
   config.enable_tracing = false;
   config.enable_profiling = true;
   auto modules = CreateModules();
-  PipelineProfiler profiler(config, "test_pipeline", modules);
+  PipelineProfiler profiler(config, "test_pipeline", modules, GetModuleNames(modules));
   const std::string stream_name = "stream0";
   profiler.RecordInput(std::make_pair(stream_name, 0));
   profiler.RecordInput(std::make_pair(stream_name, 1));
@@ -130,7 +138,7 @@ TEST(CorePipelineProfiler, RecordInputOutput) {
   config.enable_tracing = true;
   config.enable_profiling = true;
   auto modules = CreateModules();
-  PipelineProfiler profiler(config, "test_pipeline", modules);
+  PipelineProfiler profiler(config, "test_pipeline", modules, GetModuleNames(modules));
   const std::string stream_name = "stream0";
   Time start_time = Clock::now();
   profiler.RecordInput(std::make_pair(stream_name, 0));
@@ -149,7 +157,7 @@ TEST(CorePipelineProfiler, OnStreamEos) {
   config.enable_tracing = true;
   config.enable_profiling = true;
   auto modules = CreateModules();
-  PipelineProfiler profiler(config, "test_pipeline", modules);
+  PipelineProfiler profiler(config, "test_pipeline", modules, GetModuleNames(modules));
   const std::string stream_name = "stream0";
   profiler.RecordInput(std::make_pair(stream_name, 0));
   profiler.RecordOutput(std::make_pair(stream_name, 0));

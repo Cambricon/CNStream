@@ -15,7 +15,7 @@ MODELS_ROOT=${CNSTREAM_ROOT}/data/models
 CONFIGS_ROOT=${SAMPLES_ROOT}/cns_launcher/configs
 
 PrintUsages(){
-    echo "Usages: run.sh mlu220/mlu270"
+    echo "Usages: run.sh mlu220/mlu270/mlu370"
 }
 
 if [ $# -ne 1 ]; then
@@ -29,6 +29,9 @@ if [[ ${1} == "mlu220" ]]; then
 elif [[ ${1} == "mlu270" ]]; then
     MODEL_PATH=${MODELS_ROOT}/resnet50_b16c16_bgra_mlu270.cambricon
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/resnet50_b16c16_bgra_mlu270.cambricon
+elif [[ ${1} == "mlu370" ]]; then
+    MODEL_PATH=${MODELS_ROOT}/resnet50_nhwc.model
+    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/resnet50_nhwc_tfu_0.5_int8_fp16.model
 else
     PrintUsages
     exit 1

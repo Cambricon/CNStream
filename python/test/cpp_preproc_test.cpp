@@ -4,14 +4,14 @@
 #include <memory>
 #include <functional>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include "pypreproc.h"
 
 namespace py = pybind11;
 
-bool TestPyPreproc(const std::unordered_map<std::string, std::string> &params) {
+bool TestPyPreproc(const std::map<std::string, std::string> &params) {
   auto model = std::make_shared<edk::ModelLoader>("data/test_model.cambricon", "subnet0");
   std::vector<float*> inputs;
   for (uint32_t i = 0; i < model->InputNum(); ++i) {

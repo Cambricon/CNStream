@@ -50,7 +50,7 @@ class VideoPreprocCpu : public cnstream::VideoPreproc {
    * @return return true if succeed
    */
   bool Execute(infer_server::ModelIO* model_input, const infer_server::InferData& input_data,
-               const infer_server::ModelInfo& model_info) override;
+               const infer_server::ModelInfo* model_info) override;
 
   DECLARE_REFLEX_OBJECT_EX(VideoPreprocCpu, cnstream::VideoPreproc);
 };  // class VideoPreprocCpu
@@ -58,19 +58,19 @@ class VideoPreprocCpu : public cnstream::VideoPreproc {
 IMPLEMENT_REFLEX_OBJECT_EX(VideoPreprocCpu, cnstream::VideoPreproc)
 
 bool VideoPreprocCpu::Execute(infer_server::ModelIO* model_input, const infer_server::InferData& input_data,
-                              const infer_server::ModelInfo& model_info) {
+                              const infer_server::ModelInfo* model_info) {
   // check model input number and shape
-  uint32_t input_num = model_info.InputNum();
+  uint32_t input_num = model_info->InputNum();
   if (input_num != 1) {
     LOGE(DEMO) << "[VideoPreprocCpu] model input number not supported. It should be 1, but " << input_num;
     return false;
   }
   infer_server::Shape input_shape;
-  input_shape = model_info.InputShape(0);
+  input_shape = model_info->InputShape(0);
   int w_idx = 2;
   int h_idx = 1;
   int c_idx = 3;
-  if (model_info.InputLayout(0).order == infer_server::DimOrder::NCHW) {
+  if (model_info->InputLayout(0).order == infer_server::DimOrder::NCHW) {
     w_idx = 3;
     h_idx = 2;
     c_idx = 1;
@@ -79,10 +79,10 @@ bool VideoPreprocCpu::Execute(infer_server::ModelIO* model_input, const infer_se
     LOGE(DEMO) << "[VideoPreprocCpu] model input shape not supported, `c` should be 4, but " << input_shape[c_idx];
     return false;
   }
-  if (model_info.InputLayout(0).dtype != infer_server::DataType::UINT8 &&
-      model_info.InputLayout(0).dtype != infer_server::DataType::FLOAT32) {
+  if (model_info->InputLayout(0).dtype != infer_server::DataType::UINT8 &&
+      model_info->InputLayout(0).dtype != infer_server::DataType::FLOAT32) {
     std::string dtype_str = "";
-      switch (model_info.InputLayout(0).dtype) {
+      switch (model_info->InputLayout(0).dtype) {
         case infer_server::DataType::FLOAT16: dtype_str = "FLOAT16"; break;
         case infer_server::DataType::INT16: dtype_str = "INT16"; break;
         case infer_server::DataType::INT32: dtype_str = "INT32"; break;
@@ -99,6 +99,7 @@ bool VideoPreprocCpu::Execute(infer_server::ModelIO* model_input, const infer_se
 
   size_t src_w = frame.width;
   size_t src_h = frame.height;
+  size_t src_stride = frame.stride[0];
   uint32_t dst_w = input_shape[w_idx];
   uint32_t dst_h = input_shape[h_idx];
 
@@ -116,7 +117,8 @@ bool VideoPreprocCpu::Execute(infer_server::ModelIO* model_input, const infer_se
 
   // convert color space from src to dst
   cv::Mat dst_cvt_color_img;
-  if (!ConvertColorSpace(src_w, src_h, frame.format, model_input_pixel_format_, img_data, &dst_cvt_color_img)) {
+  if (!ConvertColorSpace(src_w, src_h, src_stride, frame.format, model_input_pixel_format_, img_data,
+                         &dst_cvt_color_img)) {
     LOGW(DEMO) << "[VideoPreprocCpu] Unsupport pixel format. src: " << static_cast<int>(frame.format)
                 << " dst: " << static_cast<int>(model_input_pixel_format_);
     delete[] img_data;
@@ -131,7 +133,7 @@ bool VideoPreprocCpu::Execute(infer_server::ModelIO* model_input, const infer_se
   }
 
   // copy data to model_input buffer
-  if (model_info.InputLayout(0).dtype == infer_server::DataType::FLOAT32) {
+  if (model_info->InputLayout(0).dtype == infer_server::DataType::FLOAT32) {
     // input data type is float32
     if (dst_resized_img.channels() == 4) {
       cv::Mat dst_img(dst_h, dst_w, CV_32FC4, model_input->buffers[0].MutableData());
@@ -165,7 +167,7 @@ class VideoObjPreprocCpu : public cnstream::VideoPreproc {
    * @return return true if succeed
    */
   bool Execute(infer_server::ModelIO* model_input, const infer_server::InferData& input_data,
-               const infer_server::ModelInfo& model_info) override;
+               const infer_server::ModelInfo* model_info) override;
 
   DECLARE_REFLEX_OBJECT_EX(VideoObjPreprocCpu, cnstream::VideoPreproc);
 };  // class VideoObjPreprocCpu
@@ -173,19 +175,19 @@ class VideoObjPreprocCpu : public cnstream::VideoPreproc {
 IMPLEMENT_REFLEX_OBJECT_EX(VideoObjPreprocCpu, cnstream::VideoPreproc)
 
 bool VideoObjPreprocCpu::Execute(infer_server::ModelIO* model_input, const infer_server::InferData& input_data,
-                                 const infer_server::ModelInfo& model_info) {
+                                 const infer_server::ModelInfo* model_info) {
   // check model input number and shape
-  uint32_t input_num = model_info.InputNum();
+  uint32_t input_num = model_info->InputNum();
   if (input_num != 1) {
     LOGE(DEMO) << "[VideoObjPreprocCpu] model input number not supported. It should be 1, but " << input_num;
     return false;
   }
   infer_server::Shape input_shape;
-  input_shape = model_info.InputShape(0);
+  input_shape = model_info->InputShape(0);
   int c_idx = 3;
   int w_idx = 2;
   int h_idx = 1;
-  if (model_info.InputLayout(0).order == infer_server::DimOrder::NCHW) {
+  if (model_info->InputLayout(0).order == infer_server::DimOrder::NCHW) {
     w_idx = 3;
     h_idx = 2;
     c_idx = 1;
@@ -194,10 +196,10 @@ bool VideoObjPreprocCpu::Execute(infer_server::ModelIO* model_input, const infer
     LOGE(DEMO) << "[VideoObjPreprocCpu] model input shape not supported, `c` should be 4, but " << input_shape[c_idx];
     return false;
   }
-  if (model_info.InputLayout(0).dtype != infer_server::DataType::UINT8 &&
-      model_info.InputLayout(0).dtype != infer_server::DataType::FLOAT32) {
+  if (model_info->InputLayout(0).dtype != infer_server::DataType::UINT8 &&
+      model_info->InputLayout(0).dtype != infer_server::DataType::FLOAT32) {
     std::string dtype_str = "";
-      switch (model_info.InputLayout(0).dtype) {
+      switch (model_info->InputLayout(0).dtype) {
         case infer_server::DataType::FLOAT16: dtype_str = "FLOAT16"; break;
         case infer_server::DataType::INT16: dtype_str = "INT16"; break;
         case infer_server::DataType::INT32: dtype_str = "INT32"; break;
@@ -214,6 +216,7 @@ bool VideoObjPreprocCpu::Execute(infer_server::ModelIO* model_input, const infer
 
   size_t src_w = frame.width;
   size_t src_h = frame.height;
+  size_t src_stride = frame.stride[0];
   uint32_t dst_w = input_shape[w_idx];
   uint32_t dst_h = input_shape[h_idx];
 
@@ -231,7 +234,8 @@ bool VideoObjPreprocCpu::Execute(infer_server::ModelIO* model_input, const infer
 
   // convert color space from src to dst
   cv::Mat dst_cvt_color_img;
-  if (!ConvertColorSpace(src_w, src_h, frame.format, model_input_pixel_format_, img_data, &dst_cvt_color_img)) {
+  if (!ConvertColorSpace(src_w, src_h, src_stride, frame.format, model_input_pixel_format_, img_data,
+                         &dst_cvt_color_img)) {
     LOGW(DEMO) << "[VideoObjPreprocCpu] Unsupport pixel format. src: " << static_cast<int>(frame.format)
                 << " dst: " << static_cast<int>(model_input_pixel_format_);
     delete[] img_data;
@@ -250,7 +254,7 @@ bool VideoObjPreprocCpu::Execute(infer_server::ModelIO* model_input, const infer
   }
 
   // copy data to model_input buffer
-  if (model_info.InputLayout(0).dtype == infer_server::DataType::FLOAT32) {
+  if (model_info->InputLayout(0).dtype == infer_server::DataType::FLOAT32) {
     // input data type is float32
     if (dst_obj_resized_img.channels() == 4) {
       cv::Mat dst_img(dst_h, dst_w, CV_32FC4, model_input->buffers[0].MutableData());

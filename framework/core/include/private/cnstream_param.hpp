@@ -32,7 +32,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include "cnstream_config.hpp"
@@ -280,13 +280,13 @@ class ModuleParamsHelper {
    * @return Returns true if parameters have parse successfully. Returns false if parameters
    *         parse failed.
    */
-  bool ParseParams(const std::unordered_map<std::string, std::string>& params) {
+  bool ParseParams(const std::map<std::string, std::string>& params) {
     if (!registered_) {
       LOGE(CORE) << "[ModuleParam] : register failed, ";
       return false;
     }
 
-    std::unordered_map<std::string, std::string> map = params;
+    std::map<std::string, std::string> map = params;
     for (auto& it : params_desc_) {
       if (it.second->optional == PARAM_DEPRECATED) {
         continue;
@@ -353,7 +353,7 @@ bool IRegisterParam(const ModuleParamDesc &param_desc) {
   std::atomic<bool> init_{false};
   std::atomic<bool> registered_{false};
   std::string module_name_;
-  using ParamsDesc = std::unordered_map<std::string, std::shared_ptr<ModuleParamDesc>>;
+  using ParamsDesc = std::map<std::string, std::shared_ptr<ModuleParamDesc>>;
   ParamsDesc params_desc_;
   T params_;
   ParamRegister *param_register_ = nullptr;

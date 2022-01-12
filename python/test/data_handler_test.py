@@ -4,6 +4,7 @@ sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../lib")
 from cnstream import *
 from cnstream_cpptest import *
 import time
+import struct
 import cv2
 
 g_cur_dir = os.path.dirname(os.path.realpath(__file__))
@@ -90,4 +91,30 @@ class TestSourceHandler():
         assert 3 == cpp_test_helper.get_count("stream_id_0")
 
         file_handler.close()
+        data_source.close()
+
+    def test_es_jpeg_mem_handler(self):
+        data_source = DataSource("test_source")
+        params = {"output_type" : "mlu", "device_id" : "0", "decoder_type" : "mlu"}
+        assert data_source.open(params)
+
+        cpp_test_helper = CppDataHanlderTestHelper()
+        cpp_test_helper.set_observer(data_source)
+
+        handler = ESJpegMemHandler(data_source, "stream_id_0", 1280, 720)
+        assert handler.open()
+        assert "stream_id_0" == handler.get_stream_id()
+        assert 0 == data_source.add_source(handler)
+        assert handler == data_source.get_source_handler("stream_id_0")
+
+        file_path = g_cur_dir + "/data/test_img_0.jpg"
+        binfile = open(file_path, 'rb')
+        file_size = os.path.getsize(file_path)
+        data = binfile.read(file_size)
+        rawdata = struct.unpack(file_size * 'B', data)
+        assert 0 == handler.write(rawdata, file_size, 0)
+
+        # test eos
+        assert -1 == handler.write([], 0, 0, True)
+        handler.close()
         data_source.close()

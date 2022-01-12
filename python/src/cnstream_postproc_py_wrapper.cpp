@@ -25,7 +25,7 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -35,11 +35,18 @@ namespace py = pybind11;
 
 namespace cnstream {
 
+PostprocPyObjects::~PostprocPyObjects() {
+  py::gil_scoped_acquire gil;
+  pyexecute.release();
+  pyinit.release();
+  pyinstance.release();
+}
+
 namespace detail {
 
 class Pybind11Postproc {
  public:
-  virtual bool Init(const std::unordered_map<std::string, std::string> &params) {
+  virtual bool Init(const std::map<std::string, std::string> &params) {
     return true;
   }
   virtual void Execute(
@@ -50,7 +57,7 @@ class Pybind11Postproc {
 
 class Pybind11ObjPostproc {
  public:
-  virtual bool Init(const std::unordered_map<std::string, std::string> &params) {
+  virtual bool Init(const std::map<std::string, std::string> &params) {
     return true;
   }
   virtual void Execute(
@@ -62,7 +69,7 @@ class Pybind11ObjPostproc {
 
 class Pybind11PostprocV : public Pybind11Postproc {
  public:
-  bool Init(const std::unordered_map<std::string, std::string> &params) override {
+  bool Init(const std::map<std::string, std::string> &params) override {
     PYBIND11_OVERRIDE(
         bool,
         Pybind11Postproc,
@@ -85,7 +92,7 @@ class Pybind11PostprocV : public Pybind11Postproc {
 
 class Pybind11ObjPostprocV : public Pybind11ObjPostproc {
  public:
-  bool Init(const std::unordered_map<std::string, std::string> &params) override {
+  bool Init(const std::map<std::string, std::string> &params) override {
     PYBIND11_OVERRIDE(
         bool,
         Pybind11ObjPostproc,
@@ -116,7 +123,7 @@ IMPLEMENT_REFLEX_OBJECT_EX(PyObjPostproc, ObjPostproc);
 extern
 std::pair<std::string, std::string> SplitPyModuleAndClass(const std::string &fullname);
 
-bool PostprocPyObjects::Init(const std::unordered_map<std::string, std::string> &params) {
+bool PostprocPyObjects::Init(const std::map<std::string, std::string> &params) {
   auto pyclass_name_iter = params.find("pyclass_name");
   if (pyclass_name_iter == params.end()) {
     LOGE(PostprocPyObjects) << "pyclass_name must be set.";

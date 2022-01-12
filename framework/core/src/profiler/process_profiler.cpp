@@ -22,7 +22,7 @@
 #include <list>
 #include <string>
 #include <vector>
-#include <unordered_map>
+#include <map>
 #include <utility>
 
 #include "profiler/process_profiler.hpp"
@@ -81,11 +81,11 @@ class RecordPolicy {
 
  private:
   // Map of start time records for each stream.
-  std::unordered_map<std::string, StartRecords> start_records_;
+  std::map<std::string, StartRecords> start_records_;
   // Map of skip reference counter, key is stream name, value is a list of skip reference counter.
-  std::unordered_map<std::string, std::list<uint64_t>> skip_refs_;
+  std::map<std::string, std::list<uint64_t>> skip_refs_;
   // MaxDpbSize of stream, key is stream name, value is MaxDpbSize.
-  std::unordered_map<std::string, uint64_t> stream_max_dpb_sizes_;
+  std::map<std::string, uint64_t> stream_max_dpb_sizes_;
   std::mutex max_dpb_size_lk_;
 };  // class RecordPolicy
 

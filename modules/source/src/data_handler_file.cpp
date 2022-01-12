@@ -76,6 +76,12 @@ bool FileHandler::Open() {
   return impl_->Open();
 }
 
+void FileHandler::Stop() {
+  if (impl_) {
+    impl_->Stop();
+  }
+}
+
 void FileHandler::Close() {
   if (impl_) {
     impl_->Close();
@@ -92,12 +98,16 @@ bool FileHandlerImpl::Open() {
   return true;
 }
 
-void FileHandlerImpl::Close() {
+void FileHandlerImpl::Stop() {
   if (running_.load()) {
     running_.store(0);
-    if (thread_.joinable()) {
-      thread_.join();
-    }
+  }
+}
+
+void FileHandlerImpl::Close() {
+  Stop();
+  if (thread_.joinable()) {
+    thread_.join();
   }
 }
 
@@ -143,7 +153,7 @@ void FileHandlerImpl::Loop() {
 bool FileHandlerImpl::PrepareResources(bool demux_only) {
   LOGD(SOURCE) << "[" << stream_id_ << "]: "
                << "Begin preprare resources";
-  int ret = parser_.Open(filename_, this);
+  int ret = parser_.Open(filename_, this, param_.only_key_frame_);
   LOGD(SOURCE) << "[" << stream_id_ << "]: "
                << "Finish preprare resources";
   if (ret < 0 || dec_create_failed_) {

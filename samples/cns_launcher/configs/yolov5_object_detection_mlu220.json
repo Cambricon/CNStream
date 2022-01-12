@@ -4,7 +4,7 @@
     "parallelism" : 2,
     "max_input_queue_size" : 20,
     "custom_params" : {
-      "model_path" : "../../../data/models/yolov5_4c4b_rgb_220.cambricon",
+      "model_path" : "../../../data/models/yolov5_b4c4_rgb_mlu220.cambricon",
       "func_name" : "subnet0",
       // Uncomment the following 2 lines to use cncv
       //"preproc_name" : "CNCV",

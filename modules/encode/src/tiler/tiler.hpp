@@ -36,7 +36,7 @@ class Tiler {
   using Buffer = Scaler::Buffer;
   using Rect = Scaler::Rect;
 
-  explicit Tiler(uint32_t rows, uint32_t cols, ColorFormat color, uint32_t width, uint32_t height, uint32_t stride = 0);
+  explicit Tiler(uint32_t cols, uint32_t rows, ColorFormat color, uint32_t width, uint32_t height, uint32_t stride = 0);
   explicit Tiler(const std::vector<Rect> &grids, ColorFormat color, uint32_t width, uint32_t height,
                  uint32_t stride = 0);
   ~Tiler();
@@ -49,7 +49,7 @@ class Tiler {
   void Init();
   void DumpCanvas();
 
-  uint32_t rows_, cols_;
+  uint32_t cols_, rows_;
   std::vector<Rect> grids_;
   ColorFormat color_;
   uint32_t width_, height_, stride_;

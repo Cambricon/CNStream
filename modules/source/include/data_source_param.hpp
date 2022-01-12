@@ -50,6 +50,7 @@ struct DataSourceParam {
   uint32_t input_buf_number_ = 2;   /*!< Input buffer's number used by MLU codec. */
   uint32_t output_buf_number_ = 3;  /*!< Output buffer's number used by MLU codec. */
   bool apply_stride_align_for_scaler_ = false;  /*!< Whether to set outputs meet the Scaler alignment requirement. */
+  bool only_key_frame_ = false;                   /*!< Whether only to decode key frames. */
 };
 }  // namespace cnstream
 

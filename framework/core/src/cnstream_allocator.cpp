@@ -26,12 +26,14 @@
 
 namespace cnstream {
 
+#if (CNRT_MAJOR_VERSION < 5)
 class CnrtInit {
  public:
   CnrtInit() { cnrtInit(0); }
   ~CnrtInit() { cnrtDestroy(); }
 };
 static CnrtInit cnrt_init_;
+#endif
 
 MluDeviceGuard::MluDeviceGuard(int device_id) : device_id_(device_id) {
   if (device_id < 0) {
@@ -44,12 +46,15 @@ MluDeviceGuard::MluDeviceGuard(int device_id) : device_id_(device_id) {
     } else if (device_id > static_cast<int>(dev_num - 1)) {
       LOGE(CORE) << "The device ID: " << device_id << "must be less than " << dev_num;
     } else {
+  #if (CNRT_MAJOR_VERSION < 5)
       cnrtDev_t dev;
       cnrtGetDeviceHandle(&dev, device_id_);
       cnrtSetCurrentDevice(dev);
+  #else
+      cnrtSetDevice(device_id_);
+  #endif
     }
   }
-  return;
 }
 
 MluDeviceGuard::~MluDeviceGuard() {}

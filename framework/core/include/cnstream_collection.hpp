@@ -24,7 +24,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <utility>
 
 #include "cnstream_common.hpp"
@@ -142,7 +142,7 @@ class Collection : public NonCopyable {
   bool AddIfNotExists(const std::string& tag, std::unique_ptr<cnstream::any>&& value);
 
  private:
-  std::unordered_map<std::string, std::unique_ptr<cnstream::any>> data_;
+  std::map<std::string, std::unique_ptr<cnstream::any>> data_;
   std::mutex data_mtx_;
 };  // class Collection
 

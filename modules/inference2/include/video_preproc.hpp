@@ -29,6 +29,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -62,6 +63,15 @@ class VideoPreproc : virtual public ReflexObjectEx<VideoPreproc> {
   static VideoPreproc* Create(const std::string& proc_name);
 
   /**
+   * @brief Initializes preprocessing parameters.
+   *
+   * @param[in] params The preprocessing parameters.
+   *
+   * @return Returns ture for success, otherwise returns false.
+   **/
+  virtual bool Init(const std::unordered_map<std::string, std::string>& params) { return true; }
+
+  /**
    * @brief Sets model input pixel format.
    *
    * @param[in] fmt The model input pixel format.
@@ -87,7 +97,7 @@ class VideoPreproc : virtual public ReflexObjectEx<VideoPreproc> {
    * @return Returns true if successful, otherwise returns false.
    */
   virtual bool Execute(infer_server::ModelIO* model_input, const infer_server::InferData& input_data,
-                       const infer_server::ModelInfo& model_info) = 0;
+                       const infer_server::ModelInfo* model_info) = 0;
 
  protected:
   infer_server::video::PixelFmt model_input_pixel_format_ = infer_server::video::PixelFmt::RGB24;

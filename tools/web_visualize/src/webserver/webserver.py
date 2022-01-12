@@ -21,17 +21,14 @@
 import os
 import time
 import json
-import signal
 import logging
-import subprocess
+logging.basicConfig(level=logging.INFO)
+from flask import Flask, render_template, request, json, Response
+from webserver import service
+from webserver.service import json_path
+from webserver.service import cnstream_service
 
-from webserver import core
-from webserver.core import json_path
-from webserver.core import app, render_template, Response, request
-
-from sys import path
-path.append("webserver")
-import pycnservice
+app = Flask("CNStream Service", template_folder="./webui/template", static_folder="./webui/static")
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 logging.info('[CNStreamService] webserver path: ' + basedir)
@@ -39,85 +36,71 @@ logging.info('[CNStreamService] webserver path: ' + basedir)
 @app.route("/")
 def home():
   logging.info('[CNStreamService] root page')
-  core.refreshPreview()
   return render_template('index.html', current_time = int(time.time()))
 
 @app.route("/home")
 def homepage():
   logging.info('[CNStreamService] home page')
-  core.refreshPreview()
   return render_template('index.html', current_time = int(time.time()))
 
 @app.route("/design")
 def design():
   logging.info('[CNStreamService] design page')
-  core.refreshPreview()
   return render_template('design.html')
 
 @app.route('/video_feed')
 def video_feed():
-  return Response(core.getPreviewFrame(), mimetype='multipart/x-mixed-replace; boundary=frame')
+  logging.info('[CNStreamService] video feed')
+  return Response(service.getPreviewFrame(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/getPreviewStatus', methods=['GET', 'POST'])
 def getPreviewStatus():
-  return str(core.cnservice.is_running())
+  return str(cnstream_service.is_running())
 
 @app.route('/getDemoResult', methods=['GET', 'POST'])
 def getDemoResult():
-  return Response(core.getDemoConsoleOutput())
+  logging.debug("[CNStreamService] request service log")
+  return Response(service.getDemoConsoleOutput())
 
 @app.route('/getPreview', methods=['GET', 'POST'])
 def getPreview():
+  logging.info('[CNStreamService] render preview')
   return render_template("index.html", current_time = int(time.time()))
 
 @app.route("/runDemo", methods=['POST'])
 def runDemo():
-  logging.info('[CNStreamService] start run pipeline')
+  logging.info('[CNStreamService] start Demo')
   if request.method == 'POST':
     input_filename = request.form.get('filename')
     config_json = request.form.get('json')
     mode = request.form.get('mode')
-    input_filename = core.getSourceUrl(input_filename)
+    input_filename = service.getSourceUrl(input_filename)
     config_json = json_path + config_json
     if mode == "status":
-      if core.run_demo_subprocess == 0 or core.run_demo_subprocess.poll() is not None:
-        core.process(input_filename, config_json)
-      else:
-        return "Run demo failed"
+      logging.warning("The 'status' mode is deprecated")
     elif mode == "preview":
-      if core.cnservice.is_running():
+      if cnstream_service.is_running():
         return "Demo is running"
-      preview_info = pycnservice.CNServiceInfo()
-      preview_info.fps = core.render_fps
-      preview_info.register_data = True
-      preview_info.dst_width = core.preview_video_size[0]
-      preview_info.dst_height = core.preview_video_size[1]
-      preview_info.cache_size = 100
-      core.cnservice.init_service(preview_info)
-      if core.cnservice.start(input_filename, config_json):
-        logging.info('[CNStreamService] preview start stream: ' + input_filename)
+      if cnstream_service.Start(input_filename, config_json):
+        logging.info('Start stream: ' + input_filename)
       else:
-        core.cnservice.stop()
-        logging.info('[CNStreamService] preview stop !!!!!!')
+        logging.error('Failed to start stream {}'.format(input_filename))
+        cnstream_service.Stop()
         return "Run demo failed"
+    logging.info('[CNStreamService] start Demo done')
     return "Run demo succeed"
 
 @app.route("/stopDemo", methods=['POST'])
 def stopDemo():
-  logging.info('[CNStreamService] stop pipeline')
+  logging.info('[CNStreamService] stop Demo')
   if request.method == 'POST':
     mode = request.form.get('mode')
     if mode == "status":
-      logging.info('[CNStreamService] stop run pipeline status mode')
-      if core.run_demo_subprocess == 0 or core.run_demo_subprocess.poll() is not None:
-        return "Demo is not running"
-      else:
-        core.run_demo_subprocess.send_signal(signal.SIGINT)
-        return "Stop demo succeed"
+      logging.warning("The 'status' mode is deprecated")
     elif mode == "preview":
       logging.info('[CNStreamService] stop run pipeline preview mode')
-      if core.cnservice.is_running():
-        core.cnservice.stop()
+      if service.cnstream_service.is_running():
+        service.cnstream_service.Stop()
         return "Stop demo succeed"
       else:
         return "Demo is not running"
@@ -129,15 +112,17 @@ def saveFile():
   data_type = request.form.get('type')
   ret = "Upload Failed"
   if (upload_file):
-    print("receive file : ", upload_file.filename)
+    logging.info("receive file : {}".format(upload_file.filename))
     if data_type == "media":
-      dst_dir = core.data_path + "/user/"
+      dst_dir = service.data_path + service.user_media + "/"
+    elif data_type == "json":
+      dst_dir = service.upload_json_path
     else:
-      dst_dir = core.upload_json_path
+      dst_dir = service.upload_json_path
     path_is_exist = os.path.exists(dst_dir)
     if not path_is_exist:
       os.makedirs(dst_dir)
-      print("create path ", dst_dir)
+      logging.info("create path " + dst_dir)
     if os.path.exists(dst_dir + upload_file.filename):
       os.remove(dst_dir + upload_file.filename)
     upload_file.save(dst_dir + upload_file.filename)
@@ -145,17 +130,13 @@ def saveFile():
 
   return ret
 
-@app.route("/checkJson", methods=['POST'])
-def checkJson():
-  path_is_exist = os.path.exists(core.upload_json_path)
+@app.route("/saveJson", methods=['POST'])
+def saveJson():
+  logging.info('save JSON string to {}'.format(service.upload_json_path))
+  path_is_exist = os.path.exists(service.upload_json_path)
   if not path_is_exist:
-    os.makedirs(core.upload_json_path)
-    print("create path ", core.upload_json_path)
-  with open(core.upload_json_path + 'custom_config.json', 'w') as f:
-    json.dump(request.get_json(), f)
-    f.close()
-  result = subprocess.run(["../../bin/cnstream_inspect", "-c", core.upload_json_path + "custom_config.json"],
-                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-  print("Check Json Result: ", str(result.stdout, "utf-8"), str(result.stderr, "utf-8"))
-
-  return str(result.stdout, "utf-8") + "\n" + str(result.stderr, "utf-8")
+    os.makedirs(service.upload_json_path)
+    logging.info("create path {}".format(service.upload_json_path))
+  with open(service.upload_json_path + 'custom_config.json', 'w') as f:
+    json.dump(request.get_json(silent=False), f)
+  return "save file done"

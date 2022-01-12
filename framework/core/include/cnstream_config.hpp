@@ -30,7 +30,7 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -39,10 +39,10 @@
 namespace cnstream {
 
 /*!
- * Defines an alias for std::unordered_map<std::string, std::string>.
+ * Defines an alias for std::map<std::string, std::string>.
  * ModuleParamSet now denotes an unordered map which contains the pairs of parameter name and parameter value.
  */
-using ModuleParamSet = std::unordered_map<std::string, std::string>;
+using ModuleParamSet = std::map<std::string, std::string>;
 
 // Group:Framework Function
 /**
@@ -143,7 +143,7 @@ struct ProfilerConfig : public CNConfigBase {
  */
 struct CNModuleConfig : public CNConfigBase {
   std::string name;  ///< The name of the module.
-  std::unordered_map<std::string, std::string>
+  std::map<std::string, std::string>
       parameters;   ///< The key-value pairs. The pipeline passes this value to the CNModuleConfig::name module.
   int parallelism;  ///< Module parallelism. It is equal to module thread number or the data queue of input data.
   int maxInputQueueSize;          ///< The maximum size of the input data queues.

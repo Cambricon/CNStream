@@ -20,7 +20,7 @@
 #include <bitset>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -36,7 +36,7 @@ namespace cnstream {
 
 /*default */
 static std::mutex stream_idx_lock;
-static std::unordered_map<std::string, uint32_t> stream_idx_map;
+static std::map<std::string, uint32_t> stream_idx_map;
 static std::bitset<MAX_STREAM_NUM> stream_bitset(0);
 
 static uint32_t _GetStreamIndex(const std::string &stream_id) {
@@ -176,6 +176,9 @@ int SourceModule::RemoveSources(bool force) {
   }
   {
     std::unique_lock<std::mutex> lock(mutex_);
+    for (auto &iter : source_map_) {
+      iter.second->Stop();
+    }
     for (auto &iter : source_map_) {
       iter.second->Close();
     }

@@ -33,7 +33,7 @@
 #include <string>
 #include <thread>
 #include <typeinfo>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -45,11 +45,11 @@
 #include "private/cnstream_module_pri.hpp"
 #include "util/cnstream_queue.hpp"
 #include "util/cnstream_rwlock.hpp"
+#include "profiler/module_profiler.hpp"
 
 namespace cnstream {
 
 class Pipeline;
-class ModuleProfiler;
 struct NodeContext;
 
 /**
@@ -140,11 +140,8 @@ class Module : private NonCopyable {
    *
    * @param[in] data The data to be processed by the module.
    *
-   * @retval 0: The data is processed successfully. The data should be transmitted in the framework then.
-   * @retval >0: The data is processed successfully. The data has been handled by this module. The ``hasTransmit_`` must
-   * be set. The Pipeline::ProvideData should be called by Module to transmit data to the next modules in the pipeline.
-   * @retval <0: Pipeline will post an event with the EVENT_ERROR event type and return
-   *             number.
+   * @retval >=0: The data is processed successfully.
+   * @retval <0: Pipeline will post an event with the EVENT_ERROR event type and the return number.
    */
   virtual int Process(std::shared_ptr<CNFrameInfo> data) = 0;
 

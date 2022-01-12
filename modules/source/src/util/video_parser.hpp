@@ -89,7 +89,7 @@ class FFParser {
  public:
   explicit FFParser(const std::string& stream_id);
   ~FFParser();
-  int Open(const std::string &url, IParserResult *result);
+  int Open(const std::string& url, IParserResult* result, bool only_key_frame = false);
   void Close();
   int Parse();
 
@@ -107,7 +107,8 @@ class EsParser {
  public:
   EsParser();
   ~EsParser();
-  int Open(AVCodecID codec_id, IParserResult *result, uint8_t* paramset = nullptr, uint32_t paramset_size = 0);
+  int Open(AVCodecID codec_id, IParserResult* result, uint8_t* paramset = nullptr, uint32_t paramset_size = 0,
+           bool only_key_frame = false);
   void Close();
   int Parse(const VideoEsPacket &pkt);
   int ParseEos();

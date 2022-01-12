@@ -24,7 +24,7 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -34,11 +34,18 @@ namespace py = pybind11;
 
 namespace cnstream {
 
+PyPreproc::~PyPreproc() {
+  py::gil_scoped_acquire gil;
+  pyexecute_.release();
+  pyinit_.release();
+  pyinstance_.release();
+}
+
 namespace detail {
 
 class Pybind11Preproc {
  public:
-  virtual bool Init(const std::unordered_map<std::string, std::string> &params) {
+  virtual bool Init(const std::map<std::string, std::string> &params) {
     return true;
   }
   virtual std::vector<std::vector<float>> Execute(
@@ -48,7 +55,7 @@ class Pybind11Preproc {
 
 class Pybind11PreprocV : public Pybind11Preproc {
  public:
-  bool Init(const std::unordered_map<std::string, std::string> &params) override {
+  bool Init(const std::map<std::string, std::string> &params) override {
     PYBIND11_OVERRIDE(
         bool,
         Pybind11Preproc,
@@ -74,7 +81,7 @@ IMPLEMENT_REFLEX_OBJECT_EX(PyPreproc, Preproc);
 extern
 std::pair<std::string, std::string> SplitPyModuleAndClass(const std::string &fullname);
 
-bool PyPreproc::Init(const std::unordered_map<std::string, std::string> &params) {
+bool PyPreproc::Init(const std::map<std::string, std::string> &params) {
   auto pyclass_name_iter = params.find("pyclass_name");
   if (pyclass_name_iter == params.end()) {
     LOGE(PyPreproc) << "pyclass_name must be set.";

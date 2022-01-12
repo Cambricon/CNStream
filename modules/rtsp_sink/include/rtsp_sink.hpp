@@ -25,7 +25,7 @@
 #include <mutex>
 #include <set>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
@@ -92,7 +92,7 @@ class RtspSink : public Module, public ModuleCreator<RtspSink> {
   ModuleParamsHelper<RtspSinkParam>* param_helper_ = nullptr;
   int stream_index_ = 0;
   std::mutex ctx_lock_;
-  std::unordered_map<std::string, RtspSinkContext *> contexts_;
+  std::map<std::string, RtspSinkContext *> contexts_;
   std::set<std::string> tile_streams_;
 };  // class RtspSink
 

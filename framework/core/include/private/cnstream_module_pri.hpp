@@ -34,7 +34,7 @@
 #include <string>
 #include <thread>
 #include <typeinfo>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -124,7 +124,7 @@ class ModuleFactory {
  private:
   ModuleFactory() {}
   static ModuleFactory *factory_;
-  std::unordered_map<std::string, std::function<Module *(const std::string &)>> map_;
+  std::map<std::string, std::function<Module *(const std::string &)>> map_;
 };
 
 /**
@@ -231,7 +231,7 @@ class IdxManager {
 
  private:
   std::mutex id_lock;
-  std::unordered_map<std::string, uint32_t> stream_idx_map;
+  std::map<std::string, uint32_t> stream_idx_map;
   std::bitset<MAX_STREAM_NUM> stream_bitset;
   uint64_t module_id_mask_ = 0;
 };  // class IdxManager

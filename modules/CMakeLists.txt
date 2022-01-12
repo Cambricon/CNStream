@@ -84,9 +84,9 @@ endif()
 
 # ---[ easydk
 have_easydk_target(${CNSTREAM_ROOT_DIR})
-list(APPEND 3RDPARTY_LIBS easydk cnis)
+list(APPEND 3RDPARTY_LIBS easydk)
 if(HAVE_EASYDK_TARGET)
-  list(APPEND DEPENDENCIES easydk cnis)
+  list(APPEND DEPENDENCIES easydk)
 endif()
 
 # ---[ rapidjson

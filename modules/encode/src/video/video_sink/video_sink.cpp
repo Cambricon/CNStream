@@ -74,7 +74,9 @@ class VideoSink {
 #define VERSION_LAVC_ALLOC_PACKET AV_VERSION_INT(57, 20, 102)
 #define VERSION_LAVF_AVCPAR AV_VERSION_INT(57, 40, 100)
 
-VideoSink::VideoSink(const Param &param) : param_(param) { av_register_all(); }
+VideoSink::VideoSink(const Param &param) : param_(param) {
+  av_register_all();
+}
 
 VideoSink::~VideoSink() { Stop(); }
 

@@ -44,7 +44,7 @@ class VideoPostprocClassification : public cnstream::VideoPostproc {
    * @see VideoObjPostprocClassification::UserProcess
    */
   bool Execute(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
-               const infer_server::ModelInfo& model_info) override;
+               const infer_server::ModelInfo* model_info) override;
 
   DECLARE_REFLEX_OBJECT_EX(VideoPostprocClassification, cnstream::VideoPostproc)
 };  // classd VideoPostprocClassification
@@ -53,14 +53,13 @@ IMPLEMENT_REFLEX_OBJECT_EX(VideoPostprocClassification, cnstream::VideoPostproc)
 
 bool VideoPostprocClassification::Execute(infer_server::InferData* output_data,
                                           const infer_server::ModelIO& model_output,
-                                          const infer_server::ModelInfo& model_info) {
-  LOGF_IF(DEMO, model_info.InputNum() != 1);
-  LOGF_IF(DEMO, model_info.OutputNum() != 1);
-  LOGF_IF(DEMO, model_output.buffers.size() != 1);
-
+                                          const infer_server::ModelInfo* model_info) {
+  LOGF_IF(DEMO, model_info->InputNum() != 1) << "VideoPostprocClassification: model input number is not equal to 1";
+  LOGF_IF(DEMO, model_info->OutputNum() != 1) << "VideoPostprocClassification: model output number is not equal to 1";
+  LOGF_IF(DEMO, model_output.buffers.size() != 1) << "VideoPostprocClassification: model result size is not equal to 1";
   const float* data = reinterpret_cast<const float*>(model_output.buffers[0].Data());
 
-  auto len = model_info.OutputShape(0).DataCount();
+  auto len = model_info->OutputShape(0).DataCount();
   auto score_ptr = data;
 
   float max_score = 0;
@@ -101,7 +100,7 @@ class VideoObjPostprocClassification : public cnstream::VideoPostproc {
    * @see VideoObjPostprocClassification::UserProcess
    */
   bool Execute(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
-               const infer_server::ModelInfo& model_info) override;
+               const infer_server::ModelInfo* model_info) override;
 
   DECLARE_REFLEX_OBJECT_EX(VideoObjPostprocClassification, cnstream::VideoPostproc)
 };  // classd VideoObjPostprocClassification
@@ -110,13 +109,16 @@ IMPLEMENT_REFLEX_OBJECT_EX(VideoObjPostprocClassification, cnstream::VideoPostpr
 
 bool VideoObjPostprocClassification::Execute(infer_server::InferData* output_data,
                                              const infer_server::ModelIO& model_output,
-                                             const infer_server::ModelInfo& model_info) {
-  LOGF_IF(DEMO, model_info.InputNum() != 1);
-  LOGF_IF(DEMO, model_info.OutputNum() != 1);
-  LOGF_IF(DEMO, model_output.buffers.size() != 1);
+                                             const infer_server::ModelInfo* model_info) {
+  LOGF_IF(DEMO, model_info->InputNum() != 1)
+      << "VideoObjPostprocClassification: model input number is not equal to 1";
+  LOGF_IF(DEMO, model_info->OutputNum() != 1)
+      << "VideoObjPostprocClassification: model output number is not equal to 1";
+  LOGF_IF(DEMO, model_output.buffers.size() != 1)
+      << "VideoObjPostprocClassification: model result size is not equal to 1";
 
   const float* data = reinterpret_cast<const float*>(model_output.buffers[0].Data());
-  auto len = model_info.OutputShape(0).DataCount();
+  auto len = model_info->OutputShape(0).DataCount();
   auto score_ptr = data;
 
   float max_score = 0;
