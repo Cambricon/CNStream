@@ -38,7 +38,7 @@ extern uint32_t ScalerGetBufferStrideInBytes(const Buffer *buffer);
 extern uint32_t ScalerGetBufferStrideInPixels(const Buffer *buffer);
 extern void ScalerFillBufferStride(Buffer *buffer);
 
-static bool IsBufferContinues(const Buffer *buffer) {
+static bool IsBufferContinuous(const Buffer *buffer) {
   if (buffer->color <= ColorFormat::YUV_NV21) {
     uint32_t stride_y = buffer->stride[0] < buffer->width ? buffer->width : buffer->stride[0];
     if ((buffer->data[1] - buffer->data[0]) != stride_y * buffer->height) return false;
@@ -106,7 +106,7 @@ static void OpenCVBufferToMat(const Buffer *buffer, cv::Mat *mat, bool copy = fa
 
   uint32_t stride = ScalerGetBufferStrideInPixels(buffer);
   if (buffer->color <= ColorFormat::YUV_NV21) {
-    if (IsBufferContinues(buffer) && !copy) {
+    if (IsBufferContinuous(buffer) && !copy) {
       *mat = cv::Mat(buffer->height * 3 / 2, stride, CV_8UC1, buffer->data[0]);
       mat->cols = buffer->width;
       mat->step = stride;

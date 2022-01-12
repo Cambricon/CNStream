@@ -35,9 +35,9 @@ class PostprocYolov3 : public cnstream::Postproc {
  public:
   int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
               const std::shared_ptr<cnstream::CNFrameInfo>& package) {
-    LOGF_IF(DEMO, model->InputNum() != 1);
-    LOGF_IF(DEMO, model->OutputNum() != 1);
-    LOGF_IF(DEMO, net_outputs.size() != 1);
+    LOGF_IF(DEMO, model->InputNum() != 1) << "PostprocYolov3: model input number is not equal to 1";
+    LOGF_IF(DEMO, model->OutputNum() != 1) << "PostprocYolov3: model output number is not equal to 1";
+    LOGF_IF(DEMO, net_outputs.size() != 1) << "PostprocYolov3: model result size is not equal to 1";
     const auto input_sp = model->InputShape(0);
     const int img_w = package->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag)->width;
     const int img_h = package->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag)->height;

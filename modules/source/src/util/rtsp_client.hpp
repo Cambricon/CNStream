@@ -40,6 +40,7 @@ struct OpenParam {
   int reconnect = 0;
   int livenessTimeoutMs = 2000;
   IRtspCB *cb = nullptr;
+  bool only_key_frame = false;
 };
 
 class RtspSessionImpl;

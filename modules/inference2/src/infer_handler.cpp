@@ -216,6 +216,12 @@ int InferHandlerImpl::Process(CNFrameInfoPtr data, bool with_objs) {
 
   thread_local uint32_t drop_cnt = params_.infer_interval - 1;
   bool drop_data = params_.infer_interval > 0 && drop_cnt++ != params_.infer_interval - 1;
+
+  if (!drop_data && frame_filter_ && !frame_filter_->Filter(data)) {
+    drop_data = true;
+    drop_cnt = 0;
+  }
+
   if (drop_data) {
     // to keep data in sequence, we pass empty package to infer_server, with CNFrameInfo as user data.
     // frame won't be inferred, and CNFrameInfo will be responsed in sequence

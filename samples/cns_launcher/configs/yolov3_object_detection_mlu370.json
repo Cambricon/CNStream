@@ -1,0 +1,19 @@
+{
+  "detector" : {
+    "class_name" : "cnstream::Inferencer2",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path" : "../../../data/models/yolov3_nhwc.model",
+      "postproc_name" : "VideoPostprocYolov3MM",
+      "preproc_name" : "CNCV",
+      "normalize" : true,
+      "threshold" : 0.5,
+      "batching_timeout" : 100,
+      "engine_num" : 1,
+      "keep_aspect_ratio" : true,
+      "model_input_pixel_format" : "RGB24",
+      "device_id" : 0
+    }
+  }
+}

@@ -30,10 +30,14 @@
 
 namespace cnstream {
 
-static std::map<std::string, ClassInfo<ReflexObject>> sg_obj_map;
+static
+std::map<std::string, ClassInfo<ReflexObject>>& GlobalObjMap() {
+  static std::map<std::string, ClassInfo<ReflexObject>> sg_obj_map;
+  return sg_obj_map;
+}
 
 ReflexObject* ReflexObject::CreateObject(const std::string& name) {
-  const auto& obj_map = sg_obj_map;
+  const auto& obj_map = GlobalObjMap();
   auto info_iter = obj_map.find(name);
 
   if (obj_map.end() == info_iter) return nullptr;
@@ -43,7 +47,7 @@ ReflexObject* ReflexObject::CreateObject(const std::string& name) {
 }
 
 bool ReflexObject::Register(const ClassInfo<ReflexObject>& info) {
-  auto& obj_map = sg_obj_map;
+  auto& obj_map = GlobalObjMap();
   if (obj_map.find(info.name()) != obj_map.end()) {
     LOGI(REFLEX_OBJECT) << "Register object named [" << info.name() << "] failed!!!"
               << "Object name has been registered.";
@@ -60,7 +64,7 @@ ReflexObject::~ReflexObject() {}
 
 #ifdef UNIT_TEST
 void ReflexObject::Remove(const std::string& name) {
-  auto& obj_map = sg_obj_map;
+  auto& obj_map = GlobalObjMap();
   auto info_iter = obj_map.find(name);
 
   if (obj_map.end() != info_iter) {

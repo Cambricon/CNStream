@@ -23,7 +23,7 @@
 
 #include <chrono>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -295,10 +295,10 @@ using ProcessTrace = std::vector<TraceElem>;
 
 
 /*!
- * Defines an alias for the std::unordered_map<std::string, ProcessTrace>. ModuleTrace now denotes an unordered map
+ * Defines an alias for the std::map<std::string, ProcessTrace>. ModuleTrace now denotes an unordered map
  * which contains the pairs of the process name and the ProcessTrace object for a module.
  */
-using ModuleTrace = std::unordered_map<std::string, ProcessTrace>;
+using ModuleTrace = std::map<std::string, ProcessTrace>;
 
 /*!
  * @struct PipelineTrace
@@ -306,8 +306,8 @@ using ModuleTrace = std::unordered_map<std::string, ProcessTrace>;
  * @brief The PipelineTrace is a structure describing the trace data of a pipeline.
  */
 struct PipelineTrace {
-  std::unordered_map<std::string, ProcessTrace> process_traces;  /*!< The trace data of processes. */
-  std::unordered_map<std::string, ModuleTrace> module_traces;    /*!< The trace data of modules. */
+  std::map<std::string, ProcessTrace> process_traces;  /*!< The trace data of processes. */
+  std::map<std::string, ModuleTrace> module_traces;    /*!< The trace data of modules. */
   /*!
    * @brief Constructs a PipelineTrace object by using default constructor.
    *

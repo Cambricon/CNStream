@@ -122,6 +122,8 @@ class MsgObserver : cnstream::StreamMsgObserver {
         break;
 
       case cnstream::StreamMsgType::ERROR_MSG:
+        LOGW(DEMO) << "[" << pipeline_->GetName() << "] received error from stream: " << smsg.stream_id
+                   << ", remove sources.";
         if (source) source->RemoveSources(true);
         stream_set_.clear();
         stop_ = true;
@@ -219,7 +221,7 @@ int AddSourceForRtspStream(cnstream::DataSource *source, const std::string &stre
  *        5. Runs the demo of usb camera
  *           cd samples/cns_launcher/object_detection
  *           export LD_LIBRARY_PATH=/usr/local/x264/lib:$LD_LIBRARY_PATH
- *           run.sh [mlu220/mlu270] [encode_jpeg/encode_video/display/rtsp] usb
+ *           run.sh [mlu220/mlu270/mlu370] [encode_jpeg/encode_video/display/rtsp] usb
  *
  *       And the support of other types of USB CAMERA and operate system is not tested.
  *       Above steps may be a reference.

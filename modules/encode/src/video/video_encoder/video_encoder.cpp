@@ -17,21 +17,58 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+#include "video_encoder.hpp"
+
+#include <cnrt.h>
+
+#include <string>
 
 #include "cnstream_logging.hpp"
 
-#include "video_encoder.hpp"
 #include "video_encoder_base.hpp"
-#include "video_encoder_mlu.hpp"
+#include "video_encoder_mlu200.hpp"
+#include "video_encoder_mlu300.hpp"
 #include "video_encoder_ffmpeg.hpp"
 
 namespace cnstream {
 
 VideoEncoder::VideoEncoder(const Param &param) {
   if (param.mlu_device_id >= 0) {
-    encoder_ = new (std::nothrow) cnstream::video::VideoEncoderMlu(param);
+    std::string device_name;
+#if CNRT_MAJOR_VERSION < 5
+    cnrtDeviceInfo_t dev_info;
+    cnrtRet_t ret = cnrtGetDeviceInfo(&dev_info, param.mlu_device_id);
+    if (CNRT_RET_SUCCESS != ret) {
+      LOGE(VideoEncoder) << "VideoEncoder() cnrtGetDeviceInfo failed, ret=" << ret;
+      return;
+    }
+    device_name = std::string(dev_info.device_name);
+#else
+    cnrtDeviceProp_t dev_prop;
+    cnrtRet_t ret = cnrtGetDeviceProperties(&dev_prop, param.mlu_device_id);
+    if (CNRT_RET_SUCCESS != ret) {
+      LOGE(VideoEncoder) << "VideoEncoder() cnrtGetDeviceProperties failed, ret=" << ret;
+      return;
+    }
+    device_name = std::string(dev_prop.name);
+#endif
+    if (std::string::npos != device_name.find("MLU270") || std::string::npos != device_name.find("MLU220")) {
+      encoder_ = new (std::nothrow) cnstream::video::VideoEncoderMlu200(param);
+#ifdef ENABLE_MLU300_CODEC
+    } else if (std::string::npos != device_name.find("MLU3")) {
+      encoder_ = new (std::nothrow) cnstream::video::VideoEncoderMlu300(param);
+#endif
+    } else {
+      LOGE(VideoEncoder) << "VideoEncoder() unsupported MLU device: " << device_name;
+      return;
+    }
   } else {
+#ifdef HAVE_FFMPEG
     encoder_ = new (std::nothrow) cnstream::video::VideoEncoderFFmpeg(param);
+#else
+    LOGE(VideoEncoder) << "VideoEncoder() FFmpeg is not found";
+    return;
+#endif
   }
 }
 

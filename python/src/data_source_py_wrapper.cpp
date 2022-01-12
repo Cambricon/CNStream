@@ -23,6 +23,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "cnstream_source.hpp"
 #include "data_source.hpp"
@@ -125,6 +126,26 @@ void DataHandlerWrapper(const py::module &m) {
         }
         return handler->Write(reinterpret_cast<uint8_t*>(buf.ptr), buf.size, pts, width, height, pixel_fmt);
       }, py::arg().noconvert(), py::arg().noconvert(), py::arg("pixel_fmt") = CNDataFormat::CN_PIXEL_FORMAT_BGR24);
+  py::class_<ESJpegMemHandler, std::shared_ptr<ESJpegMemHandler>, SourceHandler>(m, "ESJpegMemHandler")
+      .def(py::init([](DataSource *module, const std::string &stream_id,
+                       int max_width, int max_height) {
+        auto handler = ESJpegMemHandler::Create(module, stream_id, max_width, max_height);
+        return std::dynamic_pointer_cast<ESJpegMemHandler>(handler);
+      }), py::arg("module"), py::arg("stream_id"),
+      py::arg("max_width") = 7680, py::arg("max_height") = 4320)
+      .def("open", &ESJpegMemHandler::Open)
+      .def("close", &ESJpegMemHandler::Close)
+      .def("write", [](std::shared_ptr<ESJpegMemHandler> handler, std::vector<unsigned char> data,
+          int size, uint64_t pts, bool is_eos) {
+        cnstream::ESPacket pkt;
+        pkt.data = data.data();
+        pkt.size = size;
+        pkt.pts = pts;
+        if (is_eos) {
+          pkt.flags = static_cast<size_t>(cnstream::ESPacket::FLAG::FLAG_EOS);
+        }
+        return handler->Write(&pkt);
+      }, py::arg().noconvert(), py::arg().noconvert(), py::arg().noconvert(), py::arg("is_eos") = false);
 }
 
 }  // namespace cnstream

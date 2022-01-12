@@ -52,6 +52,7 @@ DataSource::DataSource(const std::string &name) : SourceModule(name) {
   param_register_.Register("output_buf_number",
                            "Codec buffer number for storing output data."
                            " Basically, we do not need to set it, as it will be allocated automatically.");
+  param_register_.Register("only_key_frame", "Only decode key frames and other frames are discarded. Default is false");
   param_register_.Register("apply_stride_align_for_scaler",
                            "The output data will align the scaler(hardware on mlu220) requirements."
                            " Recommended for use with scaler on mlu220 platforms.");
@@ -152,6 +153,10 @@ bool DataSource::Open(ModuleParamSet paramSet) {
 
   if (paramSet.find("apply_stride_align_for_scaler") != paramSet.end()) {
     param_.apply_stride_align_for_scaler_ = paramSet["apply_stride_align_for_scaler"] == "true";
+  }
+
+  if (paramSet.find("only_key_frame") != paramSet.end()) {
+    param_.only_key_frame_ = (paramSet["only_key_frame"] == "true");
   }
 
   return true;

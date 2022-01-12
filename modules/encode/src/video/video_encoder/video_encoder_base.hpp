@@ -33,6 +33,11 @@ namespace cnstream {
 
 namespace video {
 
+struct IndexedVideoPacket {
+  VideoPacket packet;
+  int64_t index;
+};
+
 class VideoEncoderBase {
  public:
   using Param = cnstream::VideoEncoder::Param;
@@ -63,8 +68,8 @@ class VideoEncoderBase {
     STOPPING,
   };
 
-  bool PushBuffer(VideoPacket *packet);
-  virtual bool GetPacketInfo(int64_t pts, PacketInfo *info) = 0;
+  bool PushBuffer(IndexedVideoPacket *packet);
+  virtual bool GetPacketInfo(int64_t index, PacketInfo *info) = 0;
 
   Param param_;
   RwMutex state_mtx_;

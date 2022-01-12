@@ -25,7 +25,7 @@
 #include <mutex>
 #include <set>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
@@ -104,7 +104,7 @@ class Encode : public Module, public ModuleCreator<Encode> {
 
   std::unique_ptr<ModuleParamsHelper<EncodeParam>> param_helper_ = nullptr;
   std::mutex ctx_lock_;
-  std::unordered_map<std::string, EncoderContext *> contexts_;
+  std::map<std::string, EncoderContext *> contexts_;
   std::set<std::string> tile_streams_;
 };  // class Encode
 

@@ -29,6 +29,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "cnis/infer_server.h"
@@ -60,6 +61,14 @@ class VideoPostproc : virtual public ReflexObjectEx<VideoPostproc> {
    */
   static VideoPostproc* Create(const std::string& proc_name);
   /**
+   * @brief Initializes postprocessing parameters.
+   *
+   * @param[in] params The postprocessing parameters.
+   *
+   * @return Returns ture for success, otherwise returns false.
+   **/
+  virtual bool Init(const std::unordered_map<std::string, std::string> &params) { return true; }
+  /**
    * @brief Sets threshold.
    *
    * @param[in] threshold The value between 0 and 1.
@@ -85,7 +94,7 @@ class VideoPostproc : virtual public ReflexObjectEx<VideoPostproc> {
    *
    */
   virtual bool Execute(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
-                       const infer_server::ModelInfo& model_info) = 0;
+                       const infer_server::ModelInfo* model_info) = 0;
 
  protected:
   float threshold_ = 0;

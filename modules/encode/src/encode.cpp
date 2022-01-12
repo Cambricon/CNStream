@@ -33,7 +33,7 @@ namespace cnstream {
 struct EncoderContext {
   std::unique_ptr<VideoStream> stream = nullptr;
   std::unique_ptr<VideoSink> sink = nullptr;
-  std::unique_ptr<uint8_t> buffer = nullptr;
+  std::unique_ptr<uint8_t[]> buffer = nullptr;
   int buffer_size = 0;
   std::ofstream file;
   int64_t frame_count = 0;
@@ -193,9 +193,9 @@ EncoderContext *Encode::CreateContext(CNFrameInfoPtr data, const std::string &st
         if (ctx->file.good()) ctx->file.write(reinterpret_cast<char *>(packet.data), packet.size);
       }
     } else if (event == VideoStream::Event::EVENT_EOS) {
-      LOGI(Encode) << "CreateContext() EVENT_EOS";
+      LOGI(Encode) << "EventCallback() EVENT_EOS";
     } else if (event == VideoStream::Event::EVENT_ERROR) {
-      LOGE(Encoder) << "CreateContext() EVENT_ERROR";
+      LOGE(Encode) << "EventCallback() EVENT_ERROR";
       PostEvent(EventType::EVENT_ERROR, "encode receives error event");
     }
   };
@@ -210,6 +210,58 @@ EncoderContext *Encode::CreateContext(CNFrameInfoPtr data, const std::string &st
 
   contexts_[stream_id] = ctx;
   return ctx;
+}
+
+Encode::Encode(const std::string &name) : Module(name) {
+  param_register_.SetModuleDesc("Encode is a module to encode videos or images.");
+  param_helper_.reset(new (std::nothrow) ModuleParamsHelper<EncodeParam>(name));
+  auto input_encoder_type_parser = [](const ModuleParamSet &param_set, const std::string &param_name,
+                                      const std::string &value, void *result) -> bool {
+    if (value == "cpu") {
+      *static_cast<bool *>(result) = false;
+    } else if (value == "mlu") {
+      *static_cast<bool *>(result) = true;
+    } else {
+      LOGE(Encode) << "[ModuleParamParser] [" << param_name << "]: " << value << " failed"
+                    << "\". Choose from \"mlu\", \"cpu\".";
+      return false;
+    }
+    return true;
+  };
+
+  static const std::vector<ModuleParamDesc> regist_param = {
+      {"device_id", "0", "Which MLU device will be used.", PARAM_OPTIONAL, OFFSET(EncodeParam, device_id),
+       ModuleParamParser<int>::Parser, "int"},
+      {"input_frame", "cpu", "Selection for the input frame. It should be 'mlu' or 'cpu." , PARAM_OPTIONAL,
+       OFFSET(EncodeParam, mlu_input_frame), input_encoder_type_parser, "bool"},
+      {"encoder_type", "cpu", "Selection for encoder type. It should be 'mlu' or 'cpu.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, mlu_encoder), input_encoder_type_parser, "bool"},
+      {"dst_width", "0", "Output video width. 0 means dst width is same with source", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, dst_width), ModuleParamParser<int>::Parser, "int"},
+      {"dst_height", "0", "Output video height. 0 means dst height is same with source", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, dst_height), ModuleParamParser<int>::Parser, "int"},
+      {"frame_rate", "30", "Frame rate of video encoding. Higher value means more fluent.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, frame_rate), ModuleParamParser<double>::Parser, "double"},
+      {"bit_rate", "4000000", "Bit rate of video encoding. Higher value means better video quality.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, bit_rate), ModuleParamParser<int>::Parser, "int"},
+      {"gop_size", "10", "Group of pictures. gop_size is the number of frames between two IDR frames.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, gop_size), ModuleParamParser<int>::Parser, "int"},
+      {"view_cols", "1", "Grids in horizontally of video tiling, only support cpu input.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, tile_cols), ModuleParamParser<int>::Parser, "int"},
+      {"view_rows", "1", "Grids in vertically of video tiling, only support cpu input.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, tile_rows), ModuleParamParser<int>::Parser, "int"},
+      {"resample", "false", "Resample frame with canvas, only support cpu input.", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, resample), ModuleParamParser<bool>::Parser, "bool"},
+      {"file_name", "output/output.mp4",
+       "File name and path to store, the final name will be added with stream id or frame count", PARAM_OPTIONAL,
+       OFFSET(EncodeParam, file_name), ModuleParamParser<std::string>::Parser, "string"},
+      {"codec_type", "", "Replaced by file_name's extension name.", PARAM_DEPRECATED},
+      {"output_dir", "", "Replaced by file_name's path.", PARAM_DEPRECATED},
+      {"use_ffmpeg", "", "Always is FFMpeg if doing CPU encoding.", PARAM_DEPRECATED},
+      {"kbit_rate", "", "Replaced by bit_rate", PARAM_DEPRECATED},
+      {"preproc_type", "", "selected automatically.", PARAM_DEPRECATED}};
+
+  param_helper_->Register(regist_param, &param_register_);
 }
 
 Encode::~Encode() {
@@ -260,7 +312,7 @@ int Encode::Process(CNFrameInfoPtr data) {
 
   EncoderContext *ctx = GetContext(data);
   if (!ctx) {
-    LOGE(Encoder) << "Process() Get Encoder context failed.";
+    LOGE(Encode) << "Get Encoder Context Failed.";
     return -1;
   }
 
@@ -299,58 +351,6 @@ int Encode::Process(CNFrameInfoPtr data) {
   }
 
   return 0;
-}
-
-Encode::Encode(const std::string &name) : Module(name) {
-  param_register_.SetModuleDesc("Encode is a module to encode videos or images.");
-  param_helper_.reset(new (std::nothrow)ModuleParamsHelper<EncodeParam>(name));
-  auto input_encoder_type_parser = [](const ModuleParamSet &param_set, const std::string &param_name,
-                                      const std::string &value, void *result) -> bool {
-    if (value == "cpu") {
-      *static_cast<bool *>(result) = false;
-    } else if (value == "mlu") {
-      *static_cast<bool *>(result) = true;
-    } else {
-      LOGE(Encoder) << "[ModuleParamParser] [" << param_name << "]: " << value << " failed"
-                    << "\". Choose from \"mlu\", \"cpu\".";
-      return false;
-    }
-    return true;
-  };
-
-  static const std::vector<ModuleParamDesc> regist_param = {
-      {"device_id", "0", "Which MLU device will be used.", PARAM_OPTIONAL, OFFSET(EncodeParam, device_id),
-       ModuleParamParser<int>::Parser, "int"},
-      {"input_frame", "cpu", "Selection for the input frame. It should be 'mlu' or 'cpu." , PARAM_OPTIONAL,
-       OFFSET(EncodeParam, mlu_input_frame), input_encoder_type_parser, "bool"},
-      {"encoder_type", "cpu", "Selection for encoder type. It should be 'mlu' or 'cpu.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, mlu_encoder), input_encoder_type_parser, "bool"},
-      {"dst_width", "0", "Output video width. 0 means dst width is same with source", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, dst_width), ModuleParamParser<int>::Parser, "int"},
-      {"dst_height", "0", "Output video height. 0 means dst height is same with source", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, dst_height), ModuleParamParser<int>::Parser, "int"},
-      {"frame_rate", "30", "Frame rate of video encoding. Higher value means more fluent.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, frame_rate), ModuleParamParser<double>::Parser, "double"},
-      {"bit_rate", "4000000", "Bit rate of video encoding. Higher value means better video quality.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, bit_rate), ModuleParamParser<int>::Parser, "int"},
-      {"gop_size", "10", "Group of pictures. gop_size is the number of frames between two IDR frames.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, gop_size), ModuleParamParser<int>::Parser, "int"},
-      {"view_cols", "1", "Grids in horizontally of video tiling, only support cpu input.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, tile_cols), ModuleParamParser<int>::Parser, "int"},
-      {"view_rows", "1", "Grids in vertically of video tiling, only support cpu input.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, tile_rows), ModuleParamParser<int>::Parser, "int"},
-      {"resample", "false", "Resample frame with canvas, only support cpu input.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, resample), ModuleParamParser<bool>::Parser, "bool"},
-      {"file_name", "output/output.mp4",
-       "File name and path to store, the final name will be added with stream id or frame count", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, file_name), ModuleParamParser<std::string>::Parser, "string"},
-      {"codec_type", "", "Replaced by file_name's extension name.", PARAM_DEPRECATED},
-      {"output_dir", "", "Replaced by file_name's path.", PARAM_DEPRECATED},
-      {"use_ffmpeg", "", "Always is FFMpeg if doing CPU encoding.", PARAM_DEPRECATED},
-      {"kbit_rate", "", "Replaced by bit_rate", PARAM_DEPRECATED},
-      {"preproc_type", "", "selected automatically.", PARAM_DEPRECATED}};
-
-  param_helper_->Register(regist_param, &param_register_);
 }
 
 void Encode::OnEos(const std::string &stream_id) {

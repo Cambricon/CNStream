@@ -191,9 +191,10 @@ class SimplePipelineRunner : public cnstream::StreamMsgObserver, cnstream::IModu
 int Preprocessor::Execute(const std::vector<float*>& net_inputs,
                           const std::shared_ptr<edk::ModelLoader>& model,
                           const CNFrameInfoSptr& frame_info) {
-  LOGF_IF(SIMPLE_PIPELINE, net_inputs.size() != 1);
+  LOGF_IF(SIMPLE_PIPELINE, net_inputs.size() != 1) << "model input number is not equal to 1";
   auto input_shape = model->InputShape(0);
-  LOGF_IF(SIMPLE_PIPELINE, input_shape.C() != 3 && input_shape.C() != 4);
+  LOGF_IF(SIMPLE_PIPELINE, input_shape.C() != 3 && input_shape.C() != 4)
+      << "model input channel is not equal to 3 or 4";
   auto frame = frame_info->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag);
   // resize
   cv::Mat resized_img = Resize(frame->ImageBGR(), cv::Size(input_shape.W(), input_shape.H()));

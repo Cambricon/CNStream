@@ -37,8 +37,8 @@ class InferHandlerImpl : public InferHandler {
  public:
   explicit InferHandlerImpl(Inferencer2* module, Infer2Param infer_params,
                             std::shared_ptr<VideoPostproc> post_processor, std::shared_ptr<VideoPreproc> pre_processor,
-                            std::shared_ptr<ObjFilter> obj_filter)
-      : InferHandler(module, infer_params, post_processor, pre_processor, obj_filter) {}
+                            std::shared_ptr<FrameFilter> frame_filter, std::shared_ptr<ObjFilter> obj_filter)
+      : InferHandler(module, infer_params, post_processor, pre_processor, frame_filter, obj_filter) {}
 
   virtual ~InferHandlerImpl();
 

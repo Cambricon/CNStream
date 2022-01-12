@@ -110,7 +110,7 @@ bool FeatureExtractor::Init(int engine_num) {
   }
 
   auto postproc_func = [](infer_server::InferData* data, const infer_server::ModelIO& model_output,
-                          const infer_server::ModelInfo& model) {
+                          const infer_server::ModelInfo* model) {
     const float* res = reinterpret_cast<const float*>(model_output.buffers[0].Data());
     std::vector<float> feat;
     feat.insert(feat.end(), res, res + model_output.shapes[0].DataCount());

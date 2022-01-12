@@ -20,40 +20,12 @@ function showJsonConfig() {
         return false;
     }
     var json_str = JSON.stringify(chart.toJson(), null, 4);
-    function showJson(callback) {
-        callback = callback.replace(/[EIW][0-9]+.*:.*:.*:[0-9]+\]/gi, "")
-        let callback_lines = callback.split(/[\n]/)
-        if (callback_lines.includes("Check module config file successfully!")) {
-            $('#json-output').val(json_str);
-        } else {
-            $('#json-output').val("Json config is invalid.\nPlease click 'Check Result' to check.\nAnd modify your configuration.");
-        }
-    }
-    postData("./checkJson", json_str, showJson, function() { console.log("Check Json error"); }, 'application/json; charset=UTF-8');
-    return true;
-}
-
-function showCheckJsonConfigResult() {
-    var json = chart.toJson();
-    if (checkDAG(json) == false) {
-        return false;
-    }
-    var json_str = JSON.stringify(chart.toJson(), null, 4);
-    function showCheckJsonResult(callback) {
-        callback = callback.replace(/[EIW][0-9]+.*:.*:.*:[0-9]+\]/gi, "")
-        let callback_lines = callback.split(/[\n]/)
-        document.getElementById("check-result").innerHTML = "";
-        callback_lines.forEach(v => {
-            document.getElementById("check-result").innerHTML += v + "<br>";
-        });
-    }
-    postData("./checkJson", json_str, showCheckJsonResult, function() { console.log("Check Json error"); }, 'application/json; charset=UTF-8');
+    $('#json-output').val(json_str);
     return true;
 }
 
 function showMessage(index) {
     if (index == 2 && !showJsonConfig()) return false;
-    if (index == 3 && !showCheckJsonConfigResult()) return false;
     var cnodes = document.getElementsByClassName("demo-collapse-item-cnt");
     var otmp = cnodes[current_item].style.opacity;
     cnodes[current_item].style.height = cnodes[index].style.height;
@@ -71,10 +43,6 @@ function showMessage(index) {
 
 function showJson() {
     return showMessage(2);
-}
-
-function showCheckResult() {
-    return showMessage(3);
 }
 
 Chart.ready(() => {
@@ -298,8 +266,6 @@ Chart.ready(() => {
             showMessage(0);
         } else if (current_item == 2) {
             showJson();
-        } else if (current_item == 3) {
-            showCheckResult();
         } else {
             showMessage(current_item);
         }
@@ -340,19 +306,10 @@ Chart.ready(() => {
 
         $(".btn-done").click(() => {
             var json = JSON.stringify(chart.toJson(), null, 4);
-            function genDone(callback) {
-                callback = callback.replace(/[EIW][0-9]+.*:.*:.*:[0-9]+\]/gi, "")
-                let callback_lines = callback.split(/[\n]/)
-                if (callback_lines.includes("Check module config file successfully!")) {
-                    window.sessionStorage.setItem("designedJson", json);
-                    window.location.href="/home";
-                } else {
-                    showMessage(2);
-                    $('#json-output').val("Json config is invalid.\nPlease click 'check' button or 'Check Result' to check.\nAnd modify your configuration.\n\nAnd try again");
-                }
-            }
             if (checkDAG(json) == true) {
-                postData("./checkJson", json, genDone, function() { console.log("Check Json error"); }, 'application/json; charset=UTF-8');
+              postData("./saveJson", json, function() {}, function(){}, 'application/json; charset=UTF-8');
+              window.sessionStorage.setItem("designedJson", json);
+              window.location.href="/home";
             }
         });
     };

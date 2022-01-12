@@ -75,8 +75,9 @@ class VideoStream {
 
   bool Open();
   bool Close(bool wait_finish = false);
-  bool Update(const cv::Mat &mat, ColorFormat color, int64_t timestamp, const std::string &stream_id);
-  bool Update(const Buffer *buffer, int64_t timestamp, const std::string &stream_id);
+  bool Update(const cv::Mat &mat, ColorFormat color, int64_t timestamp, const std::string &stream_id,
+              void *user_data = nullptr);
+  bool Update(const Buffer *buffer, int64_t timestamp, const std::string &stream_id, void *user_data = nullptr);
   bool Clear(const std::string &stream_id);
 
   void SetEventCallback(EventCallback func);

@@ -139,7 +139,7 @@ TEST(Inferencer2, InferHandlerOpen) {
   {  // open sucess, preproc = VideoPreprocCpu
     param.preproc_name = "VideoPreprocCpu";
     std::shared_ptr<InferHandler> infer_handler =
-        std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr);
+        std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
     EXPECT_TRUE(infer_handler->Open());
   }
 
@@ -147,12 +147,12 @@ TEST(Inferencer2, InferHandlerOpen) {
     if (!use_magicmind) {
       param.preproc_name = "RCOP";
       std::shared_ptr<InferHandler> infer_handler =
-          std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr);
+          std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
       EXPECT_TRUE(infer_handler->Open());
     } else {
       param.preproc_name = "CNCV";
       std::shared_ptr<InferHandler> infer_handler =
-          std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr);
+          std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
       EXPECT_TRUE(infer_handler->Open());
     }
   }
@@ -164,12 +164,25 @@ TEST(Inferencer2, InferHandlerOpen) {
       if (core_ver == edk::CoreVersion::MLU220) {
         param.preproc_name = "SCALER";
         std::shared_ptr<InferHandler> infer_handler =
-            std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr);
+            std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
         EXPECT_TRUE(infer_handler->Open());
       }
     }
   }
 }
+
+class HasObjectsFilter : public cnstream::FrameFilter {
+ public:
+  bool Filter(const cnstream::CNFrameInfoPtr& finfo) override {
+    CNInferObjsPtr objs_holder = finfo->collection.Get<CNInferObjsPtr>(kCNInferObjsTag);
+    std::lock_guard<std::mutex> lg(objs_holder->mutex_);
+    return !objs_holder->objs_.empty();
+  }
+
+  DECLARE_REFLEX_OBJECT_EX(HasObjectsFilter, cnstream::FrameFilter)
+};  // classd HasObjectsFilter
+
+IMPLEMENT_REFLEX_OBJECT_EX(HasObjectsFilter, cnstream::FrameFilter)
 
 TEST(Inferencer2, InferHandlerProcess) {
   std::string exe_path = GetExePath();
@@ -179,9 +192,11 @@ TEST(Inferencer2, InferHandlerProcess) {
   Infer2 = infer.get();
   std::string preproc_name = "VideoPreprocCpu";
   std::string postproc_name = "VideoPostprocSsd";
+  std::string frame_filter_name = "HasObjectsFilter";
   std::string obj_filter_name = "VehicleFilter";
   std::shared_ptr<VideoPreproc> pre_processor(VideoPreproc::Create(preproc_name));
   std::shared_ptr<VideoPostproc> post_processor(VideoPostproc::Create(postproc_name));
+  std::shared_ptr<FrameFilter> frame_filter(FrameFilter::Create(frame_filter_name));
   std::shared_ptr<ObjFilter> obj_filter(ObjFilter::Create(obj_filter_name));
   bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
 
@@ -205,7 +220,7 @@ TEST(Inferencer2, InferHandlerProcess) {
   {  // data is eos
     param.preproc_name = "VideoPreprocCpu";
     std::shared_ptr<InferHandler> infer_handler =
-        std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr);
+        std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
     ASSERT_TRUE(infer_handler->Open());
     bool is_eos = true;
     auto data = CreatData(std::to_string(param.device_id), is_eos);
@@ -216,7 +231,7 @@ TEST(Inferencer2, InferHandlerProcess) {
     if (!use_magicmind) {
       param.preproc_name = "RCOP";
       std::shared_ptr<InferHandler> infer_handler =
-          std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr);
+          std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
       ASSERT_TRUE(infer_handler->Open());
       bool is_eos = false;
       auto data = CreatData(std::to_string(param.device_id), is_eos);
@@ -225,7 +240,7 @@ TEST(Inferencer2, InferHandlerProcess) {
     } else {
       param.preproc_name = "CNCV";
       std::shared_ptr<InferHandler> infer_handler =
-          std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr);
+          std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
       ASSERT_TRUE(infer_handler->Open());
       bool is_eos = false;
       auto data = CreatData(std::to_string(param.device_id), is_eos);
@@ -241,7 +256,7 @@ TEST(Inferencer2, InferHandlerProcess) {
       if (core_ver == edk::CoreVersion::MLU220) {
         param.preproc_name = "SCALER";
         std::shared_ptr<InferHandler> infer_handler =
-            std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr);
+            std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
         ASSERT_TRUE(infer_handler->Open());
         bool is_eos = false;
         auto data = CreatData(std::to_string(param.device_id), is_eos);
@@ -254,12 +269,44 @@ TEST(Inferencer2, InferHandlerProcess) {
   {  // preproc name = usertype
     param.preproc_name = "VideoPreprocCpu";
     std::shared_ptr<InferHandler> infer_handler =
-        std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr);
+        std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
     ASSERT_TRUE(infer_handler->Open());
     bool is_eos = false;
     auto data = CreatData(std::to_string(param.device_id), is_eos);
     EXPECT_EQ(infer_handler->Process(data, param.object_infer), 0);
     infer_handler->WaitTaskDone(data->stream_id);
+  }
+
+  {  // frame filter
+    if (use_magicmind) {
+      param.preproc_name = "CNCV";
+    } else {
+      param.preproc_name = "RCOP";
+    }
+    bool is_eos = false;
+    auto data_no_obj = CreatData(std::to_string(param.device_id), is_eos);
+
+    auto data_has_obj = CreatData(std::to_string(param.device_id), is_eos);
+    // make objs
+    cnstream::CNObjsVec objs;
+    std::shared_ptr<cnstream::CNInferObject> object = std::make_shared<cnstream::CNInferObject>();
+    object->id = std::to_string(2);
+    object->bbox.x = 0.2;
+    object->bbox.y = 0.2;
+    object->bbox.w = 0.3;
+    object->bbox.h = 0.3;
+    object->score = 0.8;
+    objs.push_back(object);
+    CNInferObjsPtr objs_holder = data_has_obj->collection.Get<CNInferObjsPtr>(kCNInferObjsTag);
+    objs_holder->objs_.insert(objs_holder->objs_.end(), objs.begin(), objs.end());
+
+    std::shared_ptr<InferHandler> infer_handler =
+        std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, frame_filter, nullptr);
+    ASSERT_TRUE(infer_handler->Open());
+    EXPECT_EQ(infer_handler->Process(data_no_obj, param.object_infer), 0);
+    EXPECT_EQ(infer_handler->Process(data_has_obj, param.object_infer), 0);
+
+    infer_handler->WaitTaskDone(data_no_obj->stream_id);
   }
 
   {  // object_infer = true, for secondary
@@ -286,7 +333,7 @@ TEST(Inferencer2, InferHandlerProcess) {
     objs_holder->objs_.insert(objs_holder->objs_.end(), objs.begin(), objs.end());
 
     std::shared_ptr<InferHandler> infer_handler =
-        std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, obj_filter);
+        std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, obj_filter);
     ASSERT_TRUE(infer_handler->Open());
     EXPECT_EQ(infer_handler->Process(data, param.object_infer), 0);
     infer_handler->WaitTaskDone(data->stream_id);

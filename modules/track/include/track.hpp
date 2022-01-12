@@ -28,7 +28,7 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
@@ -105,7 +105,7 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
  private:
   bool InitFeatureExtractor(const CNFrameInfoPtr &data);
   TrackerContext *GetContext(const CNFrameInfoPtr &data);
-  std::unordered_map<int, TrackerContext *> contexts_;
+  std::map<int, TrackerContext *> contexts_;
   std::shared_ptr<infer_server::ModelInfo> model_ = nullptr;
   std::mutex mutex_;
   std::function<void(const CNFrameInfoPtr, bool)> match_func_;

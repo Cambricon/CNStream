@@ -34,7 +34,7 @@
 #include <stack>
 #include <string>
 #include <tuple>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -59,7 +59,7 @@ class DAGAlgorithm {
    public:
     /**
      * @brief Steps into the next iterator in DFS order.
-     * 
+     *
      * @return Returns the reference of the current iterator.
      */
     DFSIterator& operator++();
@@ -95,7 +95,7 @@ class DAGAlgorithm {
   };  // class DFSIterator
   /**
    * @brief Reserves vertex memory.
-   * 
+   *
    * @param[in] num_vertices The number of vertices.
    */
   void Reserve(size_t num_vertices);
@@ -196,7 +196,7 @@ class CNGraph {
    public:
     /**
      * @brief Steps into the next iterator in DFS order.
-     * 
+     *
      * @return Returns the reference of the current iterator.
      */
     DFSIterator& operator++();
@@ -220,7 +220,7 @@ class CNGraph {
      * @brief Returns the shared pointer of node that the current iterator points to.
      *
      * @param None.
-     * 
+     *
      * @return Returns the shared pointer of node that the current iterator points to.
      */
     std::shared_ptr<CNNode> operator*() const;
@@ -406,6 +406,7 @@ class CNGraph {
    * @brief Gets the end iterator.
    */
   DFSIterator DFSEnd() const;
+  std::vector<std::string> TopoSort() const;
 
  private:
   DFSIterator DFSBeginFrom(const CNNode* node) const;
@@ -424,8 +425,8 @@ class CNGraph {
   void FindHeadsAndTails();
 
  private:
-  std::unordered_map<std::string, ModuleNode> module_node_map_;
-  std::unordered_map<std::string, SubgraphNode> subgraph_node_map_;
+  std::map<std::string, ModuleNode> module_node_map_;
+  std::map<std::string, SubgraphNode> subgraph_node_map_;
   std::vector<std::string> vertex_map_to_node_name_;
   std::vector<std::shared_ptr<CNNode>> heads_, tails_;
   CNGraphConfig config_;
@@ -801,6 +802,28 @@ typename CNGraph<T>::DFSIterator CNGraph<T>::DFSEnd() const {
   DFSIterator iter(this);
   iter.dag_iter_ = dag_algorithm_.DFSEnd();
   return iter;
+}
+
+template<typename T>
+std::vector<std::string> CNGraph<T>::TopoSort() const {
+  std::vector<std::string> results;
+  auto sorted_idx = dag_algorithm_.TopoSort().first;
+  results.reserve(sorted_idx.size());
+  for (auto idx : sorted_idx) {
+    std::string node_name = vertex_map_to_node_name_[idx];
+    if (IsSubgraphItem(node_name)) {
+        auto subgraph = std::get<2>(subgraph_node_map_.find(node_name)->second);
+        if (!subgraph->Empty()) {
+          auto sub_results = subgraph->TopoSort();
+          for (auto & sub_result : sub_results) {
+            results.emplace_back(sub_result);
+          }
+        }
+    } else {
+      results.emplace_back(GetFullName() + "/" + node_name);
+    }
+  }
+  return results;
 }
 
 template<typename T> inline

@@ -62,7 +62,7 @@ function mainWindowImg(src) {
                  x = (dwidth - width) / 2;
                  y = 0;
              }
-        } 
+        }
         cxt.drawImage(img, x, y, width, height);
     }
 };
@@ -265,11 +265,6 @@ $(document).ready(function(){
             window.location.href="/design";
         });
         $(".btn-run").click(() => {
-            if (demo_mode == "status") {
-                showStatus();
-            } else if(demo_mode == "preview") {
-                showConfig();
-            }
             if (!demo_is_running) {
                 runDemo(demo_mode);
             } else {
@@ -307,34 +302,23 @@ $(document).ready(function(){
                 uploadFile();
             }
         });
-        $(".demo-preview").click(() => {
-            if (demo_is_running) {
-                showMsg("Please Stop first!");
-                return;
-            }
-            $(".demo-preview").css("background-color", "rgb(186, 216, 213)");
-            $(".demo-status").css("background-color", "white");
-            $(".preview-container").css("display", "block");
-            $(".demo-json").width("600px");
-            demo_mode = "preview";
-        });
-        $(".demo-status").click(() => {
-            if (demo_is_running) {
-                showMsg("Please Stop first!");
-                return;
-            }
-            $(".demo-preview").css("background-color", "white");
-            $(".demo-status").css("background-color", "rgb(186, 216, 213)");
-            $(".preview-container").css("display", "none");
-            $(".demo-json").width("100%");
-            demo_mode = "status";
-        });
+        // $(".demo-preview").click(() => {
+        //     if (demo_is_running) {
+        //         showMsg("Please Stop first!");
+        //         return;
+        //     }
+        //     $(".demo-preview").css("background-color", "rgb(186, 216, 213)");
+        //     $(".demo-status").css("background-color", "white");
+        //     $(".preview-container").css("display", "block");
+        //     $(".demo-json").width("600px");
+        //     demo_mode = "preview";
+        // });
     };
 
     bindEvent();
 
     var imgExtension = ['jpeg', 'jpg'];
-    var videoExtension = ['mp4', 'h264'];
+    var videoExtension = ['mp4', 'h264', 'h265', 'hevc'];
     function FileIsImage(filename) {
         if ($.inArray(filename.split('.').pop().toLowerCase(), imgExtension) == -1) {
             return false;
@@ -353,27 +337,10 @@ $(document).ready(function(){
         }
         return true;
     }
-    // function handleSourceSelectChange(){
-    //     let select_src = $("#source-selector option:selected").text();
-    //     if (select_src === "cars") {
-    //         select_src = "cars.mp4"
-    //     } else if (select_src === "people") {
-    //         select_src = "1080P.h264"
-    //     }
-    //     ResetDisplay()
-    //     if (FileIsImage(select_src)) {
-    //         $("#demo-source-image").css("display", "block");
-    //         $("#demo-source-image").attr("src", "../static/data/" + select_src);
-    //     } else if (FileIsVideo(select_src)) {
-    //         $("#demo-source-video").css("display", "block");
-    //         $("#demo-source-video").attr("src", "../static/data/" + select_src);
-    //     }
-    // }
-
     function displayJson(json, is_dir) {
         $("#json").css("display", "block");
         if (is_dir) {
-            $.getJSON(json, function (data) {
+            $.getJSON(json, {"random":Math.random()}, function (data) {
                 current_json = JSON.stringify(data, null, 4);
                 $("#json").val(current_json);
             });
@@ -389,11 +356,13 @@ $(document).ready(function(){
     function getJsonFile(selected_demo, selected_demo_text) {
         json = "";
         if (selected_demo === "classification") {
-            json = "resnet50.json";
+            json = "apps/resnet50.json";
         } else if (selected_demo === "detection") {
-            json = "ssd.json";
+            json = "apps/ssd.json";
         } else if (selected_demo === "tracking") {
-            json = "yolov3_track.json";
+            json = "apps/yolov3_track.json";
+        } else if (selected_demo === "yolov3_mlu370") {
+            json = "apps/yolov3_mlu370.json";
         } else {
             json = "/user/" + selected_demo_text;
         }
@@ -437,29 +406,24 @@ $(document).ready(function(){
     }
 
     function getDemoConsole() {
-        var max_timeout_num = 5;
-        var timeout = 0;
         document.getElementById("demo-console-result").innerHTML = "";
         function printConsoleOutput(callback, intervalMethod) {
-            callback.split("!@#$").forEach( data => {
-                if(data == "run demo done") {
-                    demo_is_running = false;
-                    clearInterval(intervalMethod);
-                } else if (data == "") {
-                    timeout += 1;
-                    if (timeout == max_timeout_num) {
-                        demo_is_running = false;
-                        clearInterval(intervalMethod);
-                    }
-                } else {
-                    timeout = 0;
-                    data.split(/[\n]/).forEach(line => {
-                        let is_bottom = scrollIsAtBottom();
-                        document.getElementById("demo-console-result").innerHTML += line + "<br>";
-                        if (is_bottom) updateScroll();
-                    });
-                }
-            });
+          postData("./getPreviewStatus", 0,
+            function (callback) {
+              if (callback == "False") {
+                demo_is_running = false;
+                clearInterval(intervalMethod);
+              }
+            }
+          );
+          if(callback == "") return;
+          callback.split(/[\n]/).forEach(line => {
+            if(line == "") return;
+            let is_bottom = scrollIsAtBottom();
+            document.getElementById("demo-console-result").innerHTML += line + "<br>";
+            if (is_bottom) updateScroll();
+        });
+
         }
         getDataPeriodic("/getDemoResult", printConsoleOutput, 1000);
     }
@@ -485,12 +449,8 @@ $(document).ready(function(){
     }
 
     function getDemoResult(mode) {
-        if (mode == "status") {
-            getDemoConsole();
-        }else if (mode == "preview") {
-            $.get("/getPreview");
-            getPreviewStatus();
-        }
+        $.get("/getPreview");
+        getDemoConsole();
     }
 
     function runDemo(mode) {
@@ -535,31 +495,31 @@ $(document).ready(function(){
             $("<option>").val(option_text).text(file_name).appendTo("#" + selector_group_name);
             selection_id += 1;
         }
-        if (demo_is_running) {
-            $("#" + selector_name).val(current_file).change();
-        } else {
+
+        if (!demo_is_running) {
             $("#" + selector_name).val(option_text).change();
         }
     }
 
     function uploadFile() {
         var file = $("#source-file")[0].files[0];
-        if (file && (FileIsImage(file.name) || FileIsVideo(file.name) || FileIsJson(file.name))) {
-            var formData = new FormData();
+        var formData = new FormData();
+        if (file) {
             formData.append("data", file);
             if (FileIsJson(file.name)) {
                 formData.append("type", "json");
-            } else{
+            } else if (FileIsImage(file.name) || FileIsVideo(file.name)) {
                 formData.append("type", "media");
+            } else {
+                formData.append("type", "other");
             }
             function addFile(callback){
                 showMsg(callback);
-                addSelection(file.name);
+                if (formData.get("type") == "json" || formData.get("type") == "media") {
+                  addSelection(file.name);
+                }
             }
             postData("./uploadFile", formData, addFile, showMsg);
-        } else {
-            let msg = "Upload Failed! Only the following formats are allowed : Image:  [" + imgExtension.join(', ') + "]    Video: [" + videoExtension.join(', ') + "] Json: [json]";
-            showMsg(msg);
         }
     }
 });

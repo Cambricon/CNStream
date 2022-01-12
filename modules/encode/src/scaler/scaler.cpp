@@ -179,7 +179,7 @@ bool Scaler::Process(const Buffer *src, Buffer *dst, const Rect *src_crop, const
       LOGE(Scaler) << "dst memory must be same with src (DEVICE)";
       return false;
     }
-    // do resize & crop & color convert by MLU or hardware scaler
+    // do resize & crop & color convert on MLU
     src_buf = *src;
     dst_buf = *dst;
     ScalerFillBufferStride(&src_buf);

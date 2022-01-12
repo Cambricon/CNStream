@@ -30,7 +30,7 @@
 #include <atomic>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -155,7 +155,7 @@ class SourceModule : public Module {
   }
 
   std::mutex mutex_;
-  std::unordered_map<std::string /*stream_id*/, std::shared_ptr<SourceHandler>> source_map_;
+  std::map<std::string /*stream_id*/, std::shared_ptr<SourceHandler>> source_map_;
 };
 
 /**
@@ -200,6 +200,12 @@ class SourceHandler : private NonCopyable {
    * @return No return value.
    */
   virtual void Close() = 0;
+  /**
+   * @brief Stops a decoder. The Close() function should be called afterwards.
+   *
+   * @return No return value.
+   */
+  virtual void Stop() { }
   /**
    * @brief Gets the stream identification.
    *

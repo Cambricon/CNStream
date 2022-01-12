@@ -47,14 +47,15 @@ class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public Sour
 
   bool Open();
   void Close();
+  void Stop();
 
   int SetDataType(ESMemHandler::DataType data_type) {
     data_type_ = data_type;
     int ret = -1;
     if (data_type_ == ESMemHandler::DataType::H264) {
-      ret = parser_.Open(AV_CODEC_ID_H264, this);
+      ret = parser_.Open(AV_CODEC_ID_H264, this, nullptr, 0, param_.only_key_frame_);
     } else if (data_type_ == ESMemHandler::DataType::H265) {
-      ret = parser_.Open(AV_CODEC_ID_HEVC, this);
+      ret = parser_.Open(AV_CODEC_ID_HEVC, this, nullptr, 0, param_.only_key_frame_);
     } else {
       LOGF(SOURCE) << "Unsupported data type " << static_cast<int>(data_type);
       ret = -1;

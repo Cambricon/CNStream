@@ -35,6 +35,15 @@ namespace py = pybind11;
 
 namespace cnstream {
 
+PyModule::~PyModule() {
+  py::gil_scoped_acquire gil;
+  pyon_eos_.release();
+  pyprocess_.release();
+  pyclose_.release();
+  pyopen_.release();
+  pyinstance_.release();
+}
+
 namespace detail {
 
 template<typename ModuleBase>
@@ -123,6 +132,7 @@ bool PyModule::Open(ModuleParamSet params) {
     return false;
   }
 
+  py::gil_scoped_acquire gil;
   try {
     auto t = SplitPyModuleAndClass(pyclass_name_iter->second);
     std::string pymodule_name = std::move(t.first);
@@ -146,30 +156,33 @@ bool PyModule::Open(ModuleParamSet params) {
 }
 
 void PyModule::Close() {
+  py::gil_scoped_acquire gil;
   try {
     pyclose_();
   } catch (std::runtime_error e) {
     LOGF(PyModule) << GetName() << " call close failed : " << e.what();
   }
-  pyinstance_.release();
 }
 
 int PyModule::Process(std::shared_ptr<CNFrameInfo> data) {
-  py::gil_scoped_acquire gil;
-  if (instance_has_transmit_) {
-    return py::cast<int>(pyprocess_(data));
-  } else {
-    if (data->IsEos()) {
-      pyon_eos_(data->stream_id);
+  {
+    py::gil_scoped_acquire gil;
+    if (instance_has_transmit_) {
+      return py::cast<int>(pyprocess_(data));
     } else {
-      try {
-        int ret = py::cast<int>(pyprocess_(data));
-        if (ret) return ret;
-      } catch (std::runtime_error e) {
-        LOGF(PyModule) << GetName() << " call process failed : " << e.what();
+      if (data->IsEos()) {
+        pyon_eos_(data->stream_id);
+      } else {
+        try {
+          int ret = py::cast<int>(pyprocess_(data));
+          if (ret) return ret;
+        } catch (std::runtime_error e) {
+          LOGF(PyModule) << GetName() << " call process failed : " << e.what();
+        }
       }
     }
   }
+  // do not hold gil before calling TransmitData or a deadlock will occur
   TransmitData(data);
   return 0;
 }
@@ -193,7 +206,7 @@ void ModuleWrapper(py::module &m) {  // NOLINT
           })
       .def("transmit_data", [] (detail::Pybind11Module* module, std::shared_ptr<CNFrameInfo> data) {
             return module->HasTransmit() ? (module->proxy_ ? module->proxy_->TransmitData(data) : false) : false;
-          })
+          }, py::call_guard<py::gil_scoped_release>())
       .def("has_transmit", &Module::HasTransmit)
       .def("get_container", [] (detail::Pybind11Module* module) {
             return module->proxy_ ? module->proxy_->GetContainer() : nullptr;

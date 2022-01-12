@@ -34,8 +34,10 @@ namespace cnstream {
 
 PipelineProfiler::PipelineProfiler(const ProfilerConfig& config,
                                    const std::string& pipeline_name,
-                                   const std::vector<std::shared_ptr<Module>>& modules)
-    : config_(config), pipeline_name_(pipeline_name), tracer_(new PipelineTracer()) {
+                                   const std::vector<std::shared_ptr<Module>>& modules,
+                                   const std::vector<std::string>& sorted_module_names)
+    : config_(config), pipeline_name_(pipeline_name), tracer_(new PipelineTracer()),
+    sorted_module_names_(sorted_module_names) {
   for (const auto& module : modules) {
     auto name = module->GetName();
     module_profilers_.emplace(name, std::unique_ptr<ModuleProfiler>(new ModuleProfiler(config, name, tracer_.get())));
@@ -58,8 +60,11 @@ ModuleProfiler* PipelineProfiler::GetModuleProfiler(const std::string& module_na
 PipelineProfile PipelineProfiler::GetProfile() {
   PipelineProfile profile;
   profile.pipeline_name = GetName();
-  for (auto& it : module_profilers_) {
-    profile.module_profiles.emplace_back(it.second->GetProfile());
+  for (auto& module_name : sorted_module_names_) {
+    auto module_profile = module_profilers_.find(module_name);
+    if (module_profile != module_profilers_.end()) {
+      profile.module_profiles.emplace_back(module_profile->second->GetProfile());
+    }
   }
   profile.overall_profile = overall_profiler_->GetProfile();
   return profile;
@@ -75,10 +80,14 @@ PipelineProfile PipelineProfiler::GetProfile(const Time& start, const Time& end)
 
   PipelineProfile profile;
   profile.pipeline_name = GetName();
-  for (const auto& module_trace : trace.module_traces) {
-    auto module_profiler = module_profilers_.find(module_trace.first);
-    if (module_profiler != module_profilers_.end())
-      profile.module_profiles.emplace_back(module_profiler->second->GetProfile(module_trace.second));
+  for (auto& module_name : sorted_module_names_) {
+    auto module_trace = trace.module_traces.find(module_name);
+    if (trace.module_traces.find(module_name) != trace.module_traces.end()) {
+      auto module_profile = module_profilers_.find(module_name);
+      if (module_profile != module_profilers_.end()) {
+        profile.module_profiles.emplace_back(module_profile->second->GetProfile(module_trace->second));
+      }
+    }
   }
 
   for (const auto& pipeline_process_trace : trace.process_traces) {

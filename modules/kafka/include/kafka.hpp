@@ -24,7 +24,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 #include "cnstream_module.hpp"
 #include "cnstream_frame_va.hpp"
@@ -48,7 +48,7 @@ class Kafka : public cnstream::Module, public cnstream::ModuleCreator<Kafka> {
   KafkaContext *GetContext(CNFrameInfoPtr data);
 
   std::mutex mutex_;
-  std::unordered_map<int, KafkaContext *> contexts_;
+  std::map<int, KafkaContext *> contexts_;
   std::string brokers_;
   std::string handler_name_;
   // the topic_ is prefix of a real topic. eg: if you set topic in json is "cndata",

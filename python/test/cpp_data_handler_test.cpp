@@ -3,7 +3,7 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 #include "cnstream_module.hpp"
 #include "data_source.hpp"
@@ -37,7 +37,7 @@ class TestIModuleObserver : public IModuleObserver {
  private:
   int count_ = 0;
   cnstream::RwLock lock_;
-  std::unordered_map<std::string, int> stream_counts_;
+  std::map<std::string, int> stream_counts_;
 };
 
 class CppDataHanlderTestHelper {

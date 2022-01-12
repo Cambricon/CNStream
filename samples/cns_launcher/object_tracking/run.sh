@@ -15,7 +15,7 @@ MODELS_ROOT=${CNSTREAM_ROOT}/data/models
 CONFIGS_ROOT=${SAMPLES_ROOT}/cns_launcher/configs
 
 PrintUsages(){
-    echo "Usages: run.sh [mlu220/mlu270] [encode_jpeg/encode_video/display/rtsp] [yolov3/yolov5]"
+    echo "Usages: run.sh [mlu220/mlu270/mlu370] [encode_jpeg/encode_video/display/rtsp] [yolov3/yolov5]"
 }
 
 if [ $# -ne 3 ]; then
@@ -34,8 +34,8 @@ if [[ ${1} == "mlu220" ]]; then
         LOCAL_PATH[0]=${MODELS_ROOT}/yolov3_b4c4_argb_mlu220.cambricon
         REMOTE_PATH[0]=http://video.cambricon.com/models/MLU220/yolov3_b4c4_argb_mlu220.cambricon
     else
-        LOCAL_PATH[0]=${MODELS_ROOT}/yolov5_4c4b_rgb_220.cambricon
-        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU220/yolov5/yolov5_4c4b_rgb_220.cambricon
+        LOCAL_PATH[0]=${MODELS_ROOT}/yolov5_b4c4_rgb_mlu220.cambricon
+        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU220/yolov5/yolov5_b4c4_rgb_mlu220.cambricon
     fi
     LOCAL_PATH[1]=${MODELS_ROOT}/feature_extract_for_tracker_b4c4_argb_mlu220.cambricon
     REMOTE_PATH[1]=http://video.cambricon.com/models/MLU220/feature_extract_for_tracker_b4c4_argb_mlu220.cambricon
@@ -44,11 +44,19 @@ elif [[ ${1} == "mlu270" ]]; then
         LOCAL_PATH[0]=${MODELS_ROOT}/yolov3_b4c4_argb_mlu270.cambricon
         REMOTE_PATH[0]=http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon
     else
-        LOCAL_PATH[0]=${MODELS_ROOT}/yolov5_4c4b_rgb_270.cambricon
-        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU270/yolov5/yolov5_4c4b_rgb_270.cambricon
+        LOCAL_PATH[0]=${MODELS_ROOT}/yolov5_b4c4_rgb_mlu270.cambricon
+        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU270/yolov5/yolov5_b4c4_rgb_mlu270.cambricon
     fi
     LOCAL_PATH[1]=${MODELS_ROOT}/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon
     REMOTE_PATH[1]=http://video.cambricon.com/models/MLU270/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon
+elif [[ ${1} == "mlu370" ]]; then
+    if [[ ${3} == "yolov5" ]]; then
+      echo "yolov5 has not been supported yet on MLU370, use yolov3 instead"
+    fi
+    LOCAL_PATH[0]=${MODELS_ROOT}/yolov3_nhwc.model
+    REMOTE_PATH[0]=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.5_int8_fp16.model
+    LOCAL_PATH[1]=${MODELS_ROOT}/feature_extract_nhwc.model
+    REMOTE_PATH[1]=http://video.cambricon.com/models/MLU370/feature_extract_nhwc_tfu_0.5_int8_fp16.model
 else
     PrintUsages
     exit 1

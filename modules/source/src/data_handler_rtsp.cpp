@@ -83,14 +83,13 @@ class IDemuxer {
 
 class FFmpegDemuxer : public rtsp_detail::IDemuxer, public IParserResult {
  public:
-  FFmpegDemuxer(const std::string& stream_id, FrameQueue *queue, const std::string &url)
-    :rtsp_detail::IDemuxer(), queue_(queue), url_name_(url), parser_(stream_id) {
-  }
+  FFmpegDemuxer(const std::string &stream_id, FrameQueue *queue, const std::string &url, bool only_I)
+      : rtsp_detail::IDemuxer(), queue_(queue), url_name_(url), parser_(stream_id), only_key_frame_(only_I) {}
 
   ~FFmpegDemuxer() { }
 
   bool PrepareResources(std::atomic<int> &exit_flag) override {
-    if (parser_.Open(url_name_, this) == 0) {
+    if (parser_.Open(url_name_, this, only_key_frame_) == 0) {
       eos_reached_ = false;
       return true;
     }
@@ -137,13 +136,18 @@ class FFmpegDemuxer : public rtsp_detail::IDemuxer, public IParserResult {
   std::string url_name_;
   FFParser parser_;
   bool eos_reached_ = false;
+  bool only_key_frame_ = false;
 };  // class FFmpegDemuxer
 
 class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
  public:
-  Live555Demuxer(const std::string& stream_id, FrameQueue *queue, const std::string &url, int reconnect)
-    :rtsp_detail::IDemuxer(), stream_id_(stream_id), queue_(queue), url_(url), reconnect_(reconnect) {
-  }
+  Live555Demuxer(const std::string &stream_id, FrameQueue *queue, const std::string &url, int reconnect, bool only_I)
+      : rtsp_detail::IDemuxer(),
+        stream_id_(stream_id),
+        queue_(queue),
+        url_(url),
+        reconnect_(reconnect),
+        only_key_frame_(only_I) {}
 
   virtual ~Live555Demuxer() {}
 
@@ -154,6 +158,7 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
     cnstream::OpenParam param;
     param.url = url_;
     param.reconnect = reconnect_;
+    param.only_key_frame = only_key_frame_;
     param.cb = dynamic_cast<IRtspCB*>(this);
     rtsp_session_.Open(param);
 
@@ -232,6 +237,7 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
   FrameQueue *queue_ = nullptr;
   std::string url_;
   int reconnect_ = 0;
+  bool only_key_frame_ = false;
   RtspSession rtsp_session_;
   std::atomic<bool> connect_done_{false};
   std::atomic<bool> connect_failed_{false};
@@ -317,12 +323,12 @@ void RtspHandlerImpl::Close() {
 
 void RtspHandlerImpl::DemuxLoop() {
   LOGD(SOURCE) << "[" << stream_id_ << "]: "
-                << "Create demuxer...";
+               << "Create demuxer...";
   std::unique_ptr<rtsp_detail::IDemuxer> demuxer;
   if (use_ffmpeg_) {
-    demuxer.reset(new FFmpegDemuxer(stream_id_, queue_, url_name_));
+    demuxer.reset(new FFmpegDemuxer(stream_id_, queue_, url_name_, param_.only_key_frame_));
   } else {
-    demuxer.reset(new Live555Demuxer(stream_id_, queue_, url_name_, reconnect_));
+    demuxer.reset(new Live555Demuxer(stream_id_, queue_, url_name_, reconnect_, param_.only_key_frame_));
   }
   if (!demuxer) {
     LOGE(SOURCE) << "[" << stream_id_ << "]: "
@@ -345,7 +351,7 @@ void RtspHandlerImpl::DemuxLoop() {
   }
 
   LOGI(SOURCE) << "[" << stream_id_ << "]: "
-                << "Wait stream info...";
+               << "Wait stream info...";
 
   do {
     {
@@ -360,7 +366,7 @@ void RtspHandlerImpl::DemuxLoop() {
   stream_info_set_.store(true);
 
   LOGI(SOURCE) << "[" << stream_id_ << "]: "
-                << "Got stream info";
+               << "Got stream info";
 
   while (!demux_exit_flag_) {
     if (demuxer->Process() != true) {

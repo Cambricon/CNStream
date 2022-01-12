@@ -50,19 +50,19 @@ class VideoPreprocYolov3 : public cnstream::VideoPreproc {
    * @return return true if succeed
    */
   bool Execute(infer_server::ModelIO* model_input, const infer_server::InferData& input_data,
-               const infer_server::ModelInfo& model_info) {
+               const infer_server::ModelInfo* model_info) {
     // check model input number and shape
-    uint32_t input_num = model_info.InputNum();
+    uint32_t input_num = model_info->InputNum();
     if (input_num != 1) {
       LOGE(DEMO) << "[VideoPreprocYolov3] model input number not supported. It should be 1, but " << input_num;
       return false;
     }
     infer_server::Shape input_shape;
-    input_shape = model_info.InputShape(0);
+    input_shape = model_info->InputShape(0);
     int c_idx = 3;
     int w_idx = 2;
     int h_idx = 1;
-    if (model_info.InputLayout(0).order == infer_server::DimOrder::NCHW) {
+    if (model_info->InputLayout(0).order == infer_server::DimOrder::NCHW) {
       c_idx = 1;
       w_idx = 3;
       h_idx = 2;
@@ -71,10 +71,10 @@ class VideoPreprocYolov3 : public cnstream::VideoPreproc {
       LOGE(DEMO) << "[VideoPreprocYolov3] model input shape not supported, `c` should be 4, but " << input_shape[c_idx];
       return false;
     }
-    if (model_info.InputLayout(0).dtype != infer_server::DataType::UINT8 &&
-      model_info.InputLayout(0).dtype != infer_server::DataType::FLOAT32) {
+    if (model_info->InputLayout(0).dtype != infer_server::DataType::UINT8 &&
+      model_info->InputLayout(0).dtype != infer_server::DataType::FLOAT32) {
       std::string dtype_str = "";
-        switch (model_info.InputLayout(0).dtype) {
+        switch (model_info->InputLayout(0).dtype) {
           case infer_server::DataType::FLOAT16: dtype_str = "FLOAT16"; break;
           case infer_server::DataType::INT16: dtype_str = "INT16"; break;
           case infer_server::DataType::INT32: dtype_str = "INT32"; break;
@@ -91,6 +91,7 @@ class VideoPreprocYolov3 : public cnstream::VideoPreproc {
 
     size_t src_w = frame.width;
     size_t src_h = frame.height;
+    size_t src_stride = frame.stride[0];
     uint32_t dst_w = input_shape[w_idx];
     uint32_t dst_h = input_shape[h_idx];
 
@@ -108,7 +109,8 @@ class VideoPreprocYolov3 : public cnstream::VideoPreproc {
 
     // convert color space from src to dst
     cv::Mat dst_cvt_color_img;
-    if (!ConvertColorSpace(src_w, src_h, frame.format, model_input_pixel_format_, img_data, &dst_cvt_color_img)) {
+    if (!ConvertColorSpace(src_w, src_h, src_stride, frame.format, model_input_pixel_format_, img_data,
+                           &dst_cvt_color_img)) {
       LOGW(DEMO) << "[VideoPreprocYolov3] Unsupport pixel format. src: " << static_cast<int>(frame.format)
                  << " dst: " << static_cast<int>(model_input_pixel_format_);
       delete[] img_data;
@@ -131,7 +133,7 @@ class VideoPreprocYolov3 : public cnstream::VideoPreproc {
     }
 
     // copy data to model_input buffer
-    if (model_info.InputLayout(0).dtype == infer_server::DataType::FLOAT32) {
+    if (model_info->InputLayout(0).dtype == infer_server::DataType::FLOAT32) {
       // input data type is float32
       if (dst_pad_img.channels() == 4) {
         cv::Mat dst_img(dst_h, dst_w, CV_32FC4, model_input->buffers[0].MutableData());

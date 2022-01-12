@@ -31,15 +31,18 @@
 #include <queue>
 #include <string>
 #include <thread>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
 #include "../rw_mutex.hpp"
-#include "../video_encoder/video_encoder_ffmpeg.hpp"
-#include "../video_encoder/video_encoder_mlu.hpp"
+#include "../video_encoder/video_encoder.hpp"
 #include "cnrt.h"
+#include "private/cnstream_allocator.hpp"
 #include "cnstream_logging.hpp"
+
+#define USE_CNCV
+#undef USE_CNCV
 
 namespace cnstream {
 
@@ -51,6 +54,7 @@ namespace video {
     LOGF_IF(VideoStream, CNRT_RET_SUCCESS != ret) << "Call [" << #__EXPRESSION__ << "] failed, error code: " << ret; \
   } while (0)
 
+#if CNRT_MAJOR_VERSION < 5
 #define CALL_CNRT_BY_CONTEXT(__EXPRESSION__, __DEV_ID__, __DDR_CHN__)          \
   do {                                                                         \
     int dev_id = (__DEV_ID__);                                                 \
@@ -61,6 +65,13 @@ namespace video {
     if (ddr_chn >= 0) VS_CNRT_CHECK(cnrtSetCurrentChannel(ddr_chn));           \
     VS_CNRT_CHECK(__EXPRESSION__);                                             \
   } while (0)
+#else
+#define CALL_CNRT_BY_CONTEXT(__EXPRESSION__, __DEV_ID__, __DDR_CHN__)          \
+  do {                                                                         \
+    VS_CNRT_CHECK(cnrtSetDevice(__DEV_ID__));                                  \
+    VS_CNRT_CHECK(__EXPRESSION__);                                             \
+  } while (0)
+#endif
 
 class VideoStream {
  public:
@@ -72,13 +83,14 @@ class VideoStream {
   using Buffer = cnstream::VideoStream::Buffer;
   using Rect = cnstream::VideoStream::Rect;
 
-  explicit VideoStream(const Param &param);
-  ~VideoStream();
+  explicit VideoStream(const Param &param) : param_(param) {}
+  ~VideoStream() { Close(); }
 
   bool Open();
   bool Close(bool wait_finish = false);
-  bool Update(const cv::Mat &mat, ColorFormat color, int64_t timestamp, const std::string &stream_id);
-  bool Update(const Buffer *buffer, int64_t timestamp, const std::string &stream_id);
+  bool Update(const cv::Mat &mat, ColorFormat color, int64_t timestamp, const std::string &stream_id,
+              void *user_data = nullptr);
+  bool Update(const Buffer *buffer, int64_t timestamp, const std::string &stream_id, void *user_data = nullptr);
   bool Clear(const std::string &stream_id);
 
   void SetEventCallback(EventCallback func) { event_callback_ = func; }
@@ -99,8 +111,15 @@ class VideoStream {
     STOPPING,
   };
 
+  struct FrameInfo {
+    cv::Mat mat;
+    ColorFormat color;
+    int64_t timestamp;
+  };
+
   const size_t TIMESTAMP_WINDOW_SIZE = 8;
-  struct StreamInfo {
+  const size_t QUEUE_SIZE = 20;
+  struct StreamContext {
     int64_t ts_init = 0;
     int64_t ts_base = 0;
     int64_t ts_last = INVALID_TIMESTAMP;
@@ -112,26 +131,19 @@ class VideoStream {
     int64_t render_tick_start = 0;
     int64_t render_tick_last = 0;
     std::atomic<uint64_t> frame_count{0};
+    std::mutex mutex;
+    std::condition_variable full_cv;
+    std::condition_variable empty_cv;
+    std::queue<FrameInfo> queue;
+    std::thread thread;
+    std::atomic<bool> running;
+    int position;
   };
-
-  struct FrameInfo {
-    cv::Mat mat;
-    ColorFormat color;
-    int64_t timestamp;
-    std::string stream_id;
-  };
-
-  class Comparison {
-   public:
-    bool operator()(const FrameInfo &a, const FrameInfo &b) const { return a.timestamp > b.timestamp; }
-  };
-
-  typedef std::priority_queue<FrameInfo, std::vector<FrameInfo>, Comparison> FrameInfoQueue;
 
   void MatToBuffer(const cv::Mat &mat, ColorFormat color, Buffer *buffer);
-  bool Encode(const cv::Mat &mat, ColorFormat color, int64_t timestamp, int timeout_ms = -1);
-  bool Encode(const Buffer *buffer, int64_t timestamp, int timeout_ms = -1);
-  void RenderLoop();
+  bool Encode(const cv::Mat &mat, ColorFormat color, int64_t timestamp, void *user_data = nullptr, int timeout_ms = -1);
+  bool Encode(const Buffer *buffer, int64_t timestamp, void *user_data = nullptr, int timeout_ms = -1);
+  void RenderLoop(const std::string &stream_id);
   void ResampleLoop();
 
   int64_t CurrentTick() {
@@ -143,19 +155,13 @@ class VideoStream {
   RwMutex state_mtx_;
   std::atomic<int> state_{IDLE};
   std::atomic<bool> start_resample_{false};
-  std::mutex queue_mtx_;
-  const int QUEUE_SIZE_PER_STREAM = 5;
-  std::condition_variable q_pop_cv_;
-  std::condition_variable q_push_cv_;
-  FrameInfoQueue queue_;
   std::mutex canvas_mtx_;
   cv::Mat canvas_;
   ColorFormat canvas_color_ = ColorFormat::BGR;
   int64_t frame_count_ = 0;
-  std::thread render_thread_;
   std::thread resample_thread_;
-  std::mutex stream_mtx_;
-  std::unordered_map<std::string, StreamInfo> streams_;
+  std::mutex context_mtx_;
+  std::map<std::string, StreamContext> streams_;
   VideoFrame frame_;
   std::mutex frame_mtx_;
   std::atomic<bool> frame_available_{false};
@@ -166,16 +172,12 @@ class VideoStream {
 };
 
 static const VideoStream::ColorFormat frame_to_buffer_color_map[] = {
-    VideoStream::ColorFormat::YUV_I420,
-    VideoStream::ColorFormat::YUV_NV12,
-    VideoStream::ColorFormat::YUV_NV21,
-    VideoStream::ColorFormat::BGR,
-    VideoStream::ColorFormat::RGB,
+  VideoStream::ColorFormat::YUV_I420,
+  VideoStream::ColorFormat::YUV_NV12,
+  VideoStream::ColorFormat::YUV_NV21,
+  VideoStream::ColorFormat::BGR,
+  VideoStream::ColorFormat::RGB,
 };
-
-VideoStream::VideoStream(const Param &param) : param_(param) {}
-
-VideoStream::~VideoStream() { Close(); }
 
 bool VideoStream::Open() {
   WriteLockGuard slk(state_mtx_);
@@ -221,7 +223,7 @@ bool VideoStream::Open() {
 
   if (param_.tile_cols > 1 || param_.tile_rows > 1) {
     ColorFormat color = frame_to_buffer_color_map[param_.pixel_format];
-    tiler_.reset(new (std::nothrow) Tiler(param_.tile_rows, param_.tile_cols, color, param_.width, param_.height));
+    tiler_.reset(new (std::nothrow) Tiler(param_.tile_cols, param_.tile_rows, color, param_.width, param_.height));
     if (!tiler_) {
       LOGE(VideoStream) << "Open() create tiler failed";
       state_ = IDLE;
@@ -247,6 +249,7 @@ bool VideoStream::Open() {
     state_ = IDLE;
     return false;
   }
+
   auto event_callback = [this](VideoStream::Event event) {
     if (event == VideoStream::Event::EVENT_EOS) {
       // LOGI(VideoStream) << "EventCallback(EVENT_EOS)";
@@ -264,9 +267,9 @@ bool VideoStream::Open() {
   state_ = RUNNING;
   if (tiler_ || param_.resample) {
     param_.resample = true;
-    render_thread_ = std::thread(&VideoStream::RenderLoop, this);
     resample_thread_ = std::thread(&VideoStream::ResampleLoop, this);
   }
+
   return true;
 }
 
@@ -276,15 +279,23 @@ bool VideoStream::Close(bool wait_finish) {
     // LOGW(VideoStream) << "Close() state != RUNNING";
     return false;
   }
-  std::unique_lock<std::mutex> lk(queue_mtx_);
   state_ = STOPPING;
-  lk.unlock();
   slk.Unlock();
 
-  q_pop_cv_.notify_all();
-  if (render_thread_.joinable()) render_thread_.join();
+  std::unique_lock<std::mutex> clk(context_mtx_);
+  for (auto &s : streams_) {
+    auto &stream = s.second;
+    std::unique_lock<std::mutex> lk(stream.mutex);
+    stream.running = false;
+    while (!stream.queue.empty()) stream.queue.pop();
+    lk.unlock();
+    stream.full_cv.notify_all();
+    stream.empty_cv.notify_all();
+    if (stream.thread.joinable()) stream.thread.join();
+  }
+  clk.unlock();
+
   if (resample_thread_.joinable()) resample_thread_.join();
-  while (!queue_.empty()) queue_.pop();
 
   std::unique_lock<std::mutex> flk(frame_mtx_);
   if (frame_available_) {
@@ -314,34 +325,45 @@ bool VideoStream::Close(bool wait_finish) {
   encoder_->SetEventCallback(nullptr);
   encoder_->Stop();
   encoder_.reset();
-  tiler_.release();
+  tiler_.reset();
   canvas_.release();
   slk.Lock();
   state_ = IDLE;
   return true;
 }
 
-bool VideoStream::Update(const cv::Mat &mat, ColorFormat color, int64_t timestamp, const std::string &stream_id) {
+bool VideoStream::Update(const cv::Mat &mat, ColorFormat color, int64_t timestamp, const std::string &stream_id,
+                         void *user_data) {
   ReadLockGuard slk(state_mtx_);
   if (state_ != RUNNING) {
     LOGW(VideoStream) << "Update(mat) not running";
     return false;
   }
-  // LOGI(VideoStream) << "Update() timestamp=" << timestamp << ", stream_id=" << stream_id;
+
+  LOGT(VideoStream) << "Update() timestamp=" << timestamp << ", stream_id=" << stream_id;
+
   if (!param_.resample) {
     // re-generate timestamp to match frame rate
     timestamp = frame_count_++ * param_.time_base / param_.frame_rate;
-    if (!Encode(mat, color, timestamp)) return false;
+    return Encode(mat, color, timestamp, user_data);
   } else {
     if (timestamp != INVALID_TIMESTAMP) {
       timestamp = timestamp * (1e6 / static_cast<float>(param_.time_base));  // change to unit of microseconds
     }
-    std::unique_lock<std::mutex> lk(stream_mtx_);
+    std::unique_lock<std::mutex> clk(context_mtx_);
     if (!streams_.count(stream_id) && streams_.size() >= static_cast<unsigned>(param_.tile_cols * param_.tile_rows)) {
       LOGE(VideoStream) << "Update() stream count over tiler grid number, stream_id: " << stream_id;
       return false;
     }
-    StreamInfo &stream = streams_[stream_id];
+    StreamContext &stream = streams_[stream_id];
+    std::unique_lock<std::mutex> lk(stream.mutex);
+    if (!stream.thread.joinable()) {
+      stream.running = true;
+      stream.position = streams_.size() - 1;
+      stream.thread = std::thread(&VideoStream::RenderLoop, this, stream_id);
+    }
+    clk.unlock();
+
     /* rectify pts for loop mode */
     if (stream.ts_last == INVALID_TIMESTAMP) {
       if (timestamp == INVALID_TIMESTAMP) {
@@ -379,34 +401,33 @@ bool VideoStream::Update(const cv::Mat &mat, ColorFormat color, int64_t timestam
       timestamp = stream.tick_last + interval;
     }
     stream.tick_last = timestamp;
-    lk.unlock();
 
-    // LOGW(VideoStream) << "Update() rectified timestamp=" << timestamp << "("
-    //                   << static_cast<int64_t>(timestamp * param_.time_base / 1e6) << "), stream_id=" << stream_id;
+    LOGT(VideoStream) << "Update() rectified timestamp=" << timestamp << "("
+                      << static_cast<int64_t>(timestamp * param_.time_base / 1e6) << "), stream_id=" << stream_id;
 
-    std::unique_lock<std::mutex> qlk(queue_mtx_);
-    q_push_cv_.wait(qlk, [&] () {
-        return (state_ != RUNNING || queue_.size() < QUEUE_SIZE_PER_STREAM * streams_.size());
-    });
-    if (state_ != RUNNING) return false;
-    queue_.push((FrameInfo){ mat, color, timestamp, stream_id });
-    qlk.unlock();
-    q_pop_cv_.notify_one();
-    lk.lock();
+    stream.full_cv.wait(lk, [&]() { return (!stream.running.load() || stream.queue.size() < QUEUE_SIZE); });
+    if (!stream.running) {
+      LOGW(VideoStream) << "Update() stream cleared";
+      return false;
+    }
+    stream.queue.push((FrameInfo){mat, color, timestamp});
     stream.frame_count++;
     lk.unlock();
+    stream.empty_cv.notify_one();
   }
+
   return true;
 }
 
-bool VideoStream::Update(const Buffer *buffer, int64_t timestamp, const std::string &stream_id) {
+bool VideoStream::Update(const Buffer *buffer, int64_t timestamp, const std::string &stream_id, void *user_data) {
   ReadLockGuard slk(state_mtx_);
   if (state_ != RUNNING) {
     LOGW(VideoStream) << "Update(buffer) not running";
     return false;
   }
-  if (param_.resample) {
-    LOGE(VideoStream) << "Update() not support resample or tiler mode";
+
+  if (param_.resample && buffer->mlu_device_id >= 0) {
+    LOGE(VideoStream) << "Update() not support resample or tiler mode for MLU buffer";
     return false;
   }
   // re-generate timestamp to match frame rate
@@ -415,20 +436,68 @@ bool VideoStream::Update(const Buffer *buffer, int64_t timestamp, const std::str
 }
 
 bool VideoStream::Clear(const std::string &stream_id) {
-  cv::Mat black;
-  ColorFormat color = frame_to_buffer_color_map[param_.pixel_format];
-  if (color <= ColorFormat::YUV_NV21) {
-    black = cv::Mat(param_.height * 3 / 2, param_.width, CV_8UC1);
-    memset(black.data, 0, param_.width * param_.height);
-    memset(black.data + param_.width * param_.height, 0x80, param_.width * param_.height / 2);
-  } else if (color <= ColorFormat::RGB) {
-    black = cv::Mat(param_.height, param_.width, CV_8UC3);
-    memset(black.data, 0, param_.width * param_.height * 3);
-  } else {
-    black = cv::Mat(param_.height, param_.width, CV_8UC4);
-    memset(black.data, 0, param_.width * param_.height * 4);
+  ReadLockGuard slk(state_mtx_);
+  if (state_ != RUNNING) {
+    LOGW(VideoStream) << "Clear() not running";
+    return false;
   }
-  return Update(black, color, INVALID_TIMESTAMP, stream_id);
+
+  if (!tiler_) {
+    LOGE(VideoStream) << "Clear() only support tiler mode";
+    return false;
+  }
+
+  std::unique_lock<std::mutex> clk(context_mtx_);
+  if (!streams_.count(stream_id)) {
+    LOGE(VideoStream) << "Clear() context not exist with stream id: " << stream_id;
+    return false;
+  }
+  StreamContext &stream = streams_[stream_id];
+  std::unique_lock<std::mutex> lk(stream.mutex);
+  clk.unlock();
+  stream.running = false;
+  while (!stream.queue.empty()) stream.queue.pop();
+  lk.unlock();
+  stream.full_cv.notify_all();
+  stream.empty_cv.notify_all();
+  if (stream.thread.joinable()) stream.thread.join();
+
+  int position = stream.position;
+  clk.lock();
+  streams_.erase(stream_id);
+  if (!streams_.empty()) {
+    // move streams position after cleared stream ahead
+    for (auto &s : streams_) {
+      auto &stream = s.second;
+      std::lock_guard<std::mutex> lk(stream.mutex);
+      if (stream.position >= position) stream.position--;
+    }
+    position = streams_.size() - 1;
+    clk.unlock();
+
+    // clear grid in last position
+    cv::Mat black;
+    ColorFormat color = frame_to_buffer_color_map[param_.pixel_format];
+    if (color <= ColorFormat::YUV_NV21) {
+      black = cv::Mat(param_.height * 3 / 2, param_.width, CV_8UC1);
+      memset(black.data, 0, param_.width * param_.height);
+      memset(black.data + param_.width * param_.height, 0x80, param_.width * param_.height / 2);
+    } else if (color <= ColorFormat::RGB) {
+      black = cv::Mat(param_.height, param_.width, CV_8UC3);
+      memset(black.data, 0, param_.width * param_.height * 3);
+    } else {
+      black = cv::Mat(param_.height, param_.width, CV_8UC4);
+      memset(black.data, 0, param_.width * param_.height * 4);
+    }
+    Buffer buffer;
+    memset(&buffer, 0, sizeof(Buffer));
+    MatToBuffer(black, color, &buffer);
+    if (!tiler_->Blit(&buffer, position)) {
+      LOGE(VideoStream) << "Clear() tiler blit black failed";
+    }
+  }
+
+  return true;
 }
 
 void VideoStream::MatToBuffer(const cv::Mat &mat, ColorFormat color, Scaler::Buffer *buffer) {
@@ -453,14 +522,14 @@ void VideoStream::MatToBuffer(const cv::Mat &mat, ColorFormat color, Scaler::Buf
   }
 }
 
-bool VideoStream::Encode(const cv::Mat &mat, ColorFormat color, int64_t timestamp, int timeout_ms) {
+bool VideoStream::Encode(const cv::Mat &mat, ColorFormat color, int64_t timestamp, void *user_data, int timeout_ms) {
   Buffer buffer;
   memset(&buffer, 0, sizeof(Buffer));
   MatToBuffer(mat, color, &buffer);
-  return Encode(&buffer, timestamp, timeout_ms);
+  return Encode(&buffer, timestamp, user_data, timeout_ms);
 }
 
-bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, int timeout_ms) {
+bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, void *user_data, int timeout_ms) {
   if (!buffer) return false;
 
   std::unique_lock<std::mutex> flk(frame_mtx_);
@@ -475,6 +544,7 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, int timeout_ms
   flk.unlock();
 
   std::unique_ptr<uint8_t[]> data = nullptr;
+  std::shared_ptr<void> mlu_data = nullptr;            /*!< A shared pointer to the MLU data. */
   if (buffer->mlu_device_id < 0) {
     Buffer buf, *enc_buf;
     memset(&buf, 0, sizeof(Buffer));
@@ -504,6 +574,33 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, int timeout_ms
           (buffer->color != ColorFormat::YUV_I420 ||
            (buffer->color == ColorFormat::YUV_I420 && buffer->stride[2] == frame_.stride[2]))) {
         enc_buf = const_cast<Buffer *>(buffer);
+#if defined HAVE_CNCV && defined USE_CNCV
+      } else if (buffer->color >= ColorFormat::BGR &&
+                 (buf.color == ColorFormat::YUV_NV12 || buf.color == ColorFormat::YUV_NV21)) {
+        Buffer src_buf;
+        memset(&src_buf, 0, sizeof(Buffer));
+        src_buf.width = buffer->width;
+        src_buf.height = buffer->height;
+        src_buf.color = buffer->color;
+        src_buf.stride[0] = buffer->stride[0];
+        src_buf.mlu_device_id = frame_.GetMluDeviceId();
+        size_t src_size = src_buf.stride[0] * src_buf.height;
+        mlu_data = cnMluMemAlloc(src_size, src_buf.mlu_device_id);
+        CALL_CNRT_BY_CONTEXT(cnrtMemcpy(reinterpret_cast<void *>(mlu_data.get()), buffer->data[0], src_size,
+                                        CNRT_MEM_TRANS_DIR_HOST2DEV),
+                             param_.device_id, -1);
+        src_buf.data[0] = reinterpret_cast<uint8_t *>(mlu_data.get());
+
+        buf.data[0] = frame_.data[0];
+        buf.stride[0] = frame_.stride[0];
+        buf.data[1] = frame_.data[1];
+        buf.stride[1] = frame_.stride[1];
+        buf.mlu_device_id = frame_.GetMluDeviceId();
+        if (!Scaler::Process(&src_buf, &buf)) {
+          LOGE(VideoStream) << "Encode() scaler process 2 (cncv) failed";
+          return false;
+        }
+#endif
       } else {
         data.reset(new uint8_t[(frame_.stride[0] + frame_.stride[1] / 2 + frame_.stride[2] / 2) * frame_.height]);
         buf.data[0] = data.get();
@@ -515,27 +612,34 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, int timeout_ms
           buf.stride[2] = frame_.stride[2];
         }
         if (!Scaler::Process(buffer, &buf, nullptr, nullptr, Scaler::Carrier::LIBYUV)) {
-          LOGE(VideoStream) << "Encode() scaler process 2 failed";
+          LOGE(VideoStream) << "Encode() scaler process 2 (libyuv) failed";
           return false;
         }
         enc_buf = &buf;
       }
 
-      int copy_size;
-      copy_size = frame_.stride[0] * frame_.height;
-      CALL_CNRT_BY_CONTEXT(cnrtMemcpy(reinterpret_cast<void *>(frame_.data[0]), enc_buf->data[0], copy_size,
-                                      CNRT_MEM_TRANS_DIR_HOST2DEV),
-                           param_.device_id, -1);
-      copy_size = frame_.stride[1] * frame_.height / 2;
-      CALL_CNRT_BY_CONTEXT(cnrtMemcpy(reinterpret_cast<void *>(frame_.data[1]), enc_buf->data[1], copy_size,
-                                      CNRT_MEM_TRANS_DIR_HOST2DEV),
-                           param_.device_id, -1);
-      if (enc_buf->color == ColorFormat::YUV_I420) {
-        copy_size = frame_.stride[2] * frame_.height / 2;
-        CALL_CNRT_BY_CONTEXT(cnrtMemcpy(reinterpret_cast<void *>(frame_.data[2]), enc_buf->data[2], copy_size,
+#if defined HAVE_CNCV && defined USE_CNCV
+      if (!(buffer->color >= ColorFormat::BGR &&
+            (buf.color == ColorFormat::YUV_NV12 || buf.color == ColorFormat::YUV_NV21))) {
+#endif
+        int copy_size;
+        copy_size = frame_.stride[0] * frame_.height;
+        CALL_CNRT_BY_CONTEXT(cnrtMemcpy(reinterpret_cast<void *>(frame_.data[0]), enc_buf->data[0], copy_size,
                                         CNRT_MEM_TRANS_DIR_HOST2DEV),
                              param_.device_id, -1);
+        copy_size = frame_.stride[1] * frame_.height / 2;
+        CALL_CNRT_BY_CONTEXT(cnrtMemcpy(reinterpret_cast<void *>(frame_.data[1]), enc_buf->data[1], copy_size,
+                                        CNRT_MEM_TRANS_DIR_HOST2DEV),
+                             param_.device_id, -1);
+        if (enc_buf->color == ColorFormat::YUV_I420) {
+          copy_size = frame_.stride[2] * frame_.height / 2;
+          CALL_CNRT_BY_CONTEXT(cnrtMemcpy(reinterpret_cast<void *>(frame_.data[2]), enc_buf->data[2], copy_size,
+                                          CNRT_MEM_TRANS_DIR_HOST2DEV),
+                               param_.device_id, -1);
+        }
+#if defined HAVE_CNCV && defined USE_CNCV
       }
+#endif
     }
   } else {
     Buffer buf;
@@ -614,8 +718,6 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, int timeout_ms
         return false;
       }
 
-      buf.width = frame_.width;
-      buf.height = frame_.height;
       buf.data[0] = frame_.data[0];
       buf.stride[0] = frame_.stride[0];
       buf.data[1] = frame_.data[1];
@@ -630,6 +732,7 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, int timeout_ms
 
   frame_.pts = timestamp;
   frame_.dts = INVALID_TIMESTAMP;
+  frame_.user_data = user_data;
   flk.lock();
   auto ret = encoder_->SendFrame(&frame_, timeout_ms);
   frame_available_ = false;
@@ -640,65 +743,52 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, int timeout_ms
   return true;
 }
 
-void VideoStream::RenderLoop() {
-  int64_t ts = 0;
+void VideoStream::RenderLoop(const std::string &stream_id) {
+  int64_t start = 0;
   bool first = true;
-  bool resample_started = false;
-  struct RenderStream {
-    int position;
-    int64_t tick_start;
-  };
-  std::unordered_map<std::string, RenderStream> streams;
+  std::unique_lock<std::mutex> clk(context_mtx_);
+  if (!streams_.count(stream_id)) {
+    LOGE(VideoStream) << "RenderLoop() context not exist with stream id: " << stream_id;
+    return;
+  }
+  StreamContext &stream = streams_[stream_id];
+  clk.unlock();
 
-  while (state_ == RUNNING) {
-    std::unique_lock<std::mutex> qlk(queue_mtx_);
-    size_t buffer_count = 3 * std::max(1UL, streams_.size());
-    q_pop_cv_.wait(qlk, [&] () {
-        return (state_ != RUNNING || (first && queue_.size() >= buffer_count) || (!first && !queue_.empty()));
-      });
-    if (state_ != RUNNING) break;
+  while (stream.running) {
+    std::unique_lock<std::mutex> lk(stream.mutex);
+    stream.empty_cv.wait(lk, [&]() {
+      return (!stream.running.load() || (first && stream.queue.size() >= 5) || (!first && !stream.queue.empty()));
+    });
+    if (!stream.running) break;
 
-    if (first && queue_.size() < buffer_count) continue;
-    auto frame = queue_.top();
-    queue_.pop();
-    qlk.unlock();
-    q_push_cv_.notify_one();
+    if (first && stream.queue.size() < 5) continue;
+    auto frame = stream.queue.front();
+    stream.queue.pop();
+    lk.unlock();
+    stream.full_cv.notify_one();
 
     if (first) {
       first = false;
-      LOGI(VideoStream) << "RenderLoop() start render, queue size=" << queue_.size();
-    }
-    ts = frame.timestamp;
-    int position;
-    int64_t tick_start;
-    if (!streams.count(frame.stream_id)) {
-      position = streams.size();
-      tick_start = CurrentTick();
-      streams[frame.stream_id] = { position, tick_start };
-    } else {
-      position = streams[frame.stream_id].position;
-      tick_start = streams[frame.stream_id].tick_start;
+      start = CurrentTick();
+      LOGI(VideoStream) << "RenderLoop() start render for stream id: " << stream_id;
     }
 
-    int64_t rt = ts - (CurrentTick() - tick_start);
-    // LOGI(VideoStream) << "RenderLoop() ts=" << ts << ", queue_size=" << queue_.size() << ", rt=" << rt;
+    int64_t rt = frame.timestamp - (CurrentTick() - start);
+    LOGT(VideoStream) << "RenderLoop() timestamp=" << frame.timestamp << ", queue size=" << stream.queue.size()
+                      << ", rt=" << rt;
     if (rt > 0) std::this_thread::sleep_for(std::chrono::microseconds(rt));
 
     if (!tiler_) {
       std::lock_guard<std::mutex> lk(canvas_mtx_);
-      canvas_.release();
       canvas_ = frame.mat;
       canvas_color_ = frame.color;
-      if (!resample_started) {
-        start_resample_ = true;
-        resample_started = true;
-      }
+      start_resample_ = true;
     } else {
       Buffer buffer;
       memset(&buffer, 0, sizeof(Buffer));
       MatToBuffer(frame.mat, frame.color, &buffer);
-      if (!tiler_->Blit(&buffer, position)) {
-        LOGE(VideoStream) << "RenderLoop() tiler blit in pos: " << position << " failed";
+      if (!tiler_->Blit(&buffer, stream.position)) {
+        LOGE(VideoStream) << "RenderLoop() tiler blit in pos: " << stream.position << " failed";
       }
     }
   }
@@ -731,7 +821,9 @@ void VideoStream::ResampleLoop() {
       timestamp = index * 1e6 / param_.frame_rate;
       pts = index * param_.time_base / param_.frame_rate;
     }
-    // LOGI(VideoStream) << "ResampleLoop() encode pts: " << pts;
+
+    LOGT(VideoStream) << "ResampleLoop() encode pts: " << pts;
+
     if (!tiler_) {
       std::lock_guard<std::mutex> lk(canvas_mtx_);
       Encode(canvas_, canvas_color_, pts);
@@ -748,7 +840,9 @@ void VideoStream::ResampleLoop() {
 
 }  // namespace video
 
-VideoStream::VideoStream(const Param &param) { stream_ = new (std::nothrow) cnstream::video::VideoStream(param); }
+VideoStream::VideoStream(const Param &param) {
+  stream_ = new (std::nothrow) cnstream::video::VideoStream(param);
+}
 
 VideoStream::~VideoStream() {
   if (stream_) {
@@ -781,13 +875,14 @@ bool VideoStream::Close(bool wait_finish) {
   return false;
 }
 
-bool VideoStream::Update(const cv::Mat &mat, ColorFormat color, int64_t timestamp, const std::string &stream_id) {
-  if (stream_) return stream_->Update(mat, color, timestamp, stream_id);
+bool VideoStream::Update(const cv::Mat &mat, ColorFormat color, int64_t timestamp, const std::string &stream_id,
+                         void *user_data) {
+  if (stream_) return stream_->Update(mat, color, timestamp, stream_id, user_data);
   return false;
 }
 
-bool VideoStream::Update(const Buffer *buffer, int64_t timestamp, const std::string &stream_id) {
-  if (stream_) return stream_->Update(buffer, timestamp, stream_id);
+bool VideoStream::Update(const Buffer *buffer, int64_t timestamp, const std::string &stream_id, void *user_data) {
+  if (stream_) return stream_->Update(buffer, timestamp, stream_id, user_data);
   return false;
 }
 

@@ -23,14 +23,15 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 namespace cnstream {
 
 class __attribute__((visibility("default"))) PyPreproc : public Preproc {
  public:
-  bool Init(const std::unordered_map<std::string, std::string> &params) override;
+  ~PyPreproc();
+  bool Init(const std::map<std::string, std::string> &params) override;
   int Execute(const std::vector<float*> &net_inputs, const std::shared_ptr<edk::ModelLoader> &model,
               const cnstream::CNFrameInfoPtr &finfo) override;
 
