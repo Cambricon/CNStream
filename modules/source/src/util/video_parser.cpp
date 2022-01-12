@@ -20,6 +20,7 @@
 
 #include <iostream>
 #include <mutex>
+#include <string>
 #include <vector>
 
 #include "cnstream_logging.hpp"
@@ -82,7 +83,7 @@ class FFParserImpl {
     return false;
   }
 
-  int Open(const std::string &url, IParserResult *result) {
+  int Open(const std::string &url, IParserResult *result, bool only_key_frame = false) {
     std::unique_lock<std::mutex> guard(mutex_);
     if (!result) return -1;
     result_ = result;
@@ -233,6 +234,7 @@ class FFParserImpl {
     first_frame_ = true;
     eos_reached_ = false;
     open_success_ = true;
+    only_key_frame_ = only_key_frame;
     return 0;
   }
 
@@ -308,7 +310,9 @@ class FFParserImpl {
         frame.data = packet_.data;
         frame.len = packet_.size;
         frame.pts = packet_.pts;
-        result_->OnParserFrame(&frame);
+        if (!only_key_frame_ || (only_key_frame_ && (frame.flags & AV_PKT_FLAG_KEY))) {
+          result_->OnParserFrame(&frame);
+        }
       }
       if (bsf_ctx_) {
         av_freep(&packet_.data);
@@ -335,6 +339,7 @@ class FFParserImpl {
   bool eos_reached_ = false;
   bool open_success_ = false;
   std::mutex mutex_;
+  bool only_key_frame_ = false;
 };  // class FFmpegDemuxerImpl  // NOLINT
 
 FFParser::FFParser(const std::string& stream_id) {
@@ -345,9 +350,9 @@ FFParser::~FFParser() {
   if (impl_) delete impl_, impl_ = nullptr;
 }
 
-int FFParser::Open(const std::string &url, IParserResult *result) {
+int FFParser::Open(const std::string &url, IParserResult *result, bool only_key_frame) {
   if (impl_) {
-    return impl_->Open(url, result);
+    return impl_->Open(url, result, only_key_frame);
   }
   return -1;
 }
@@ -370,7 +375,8 @@ class EsParserImpl {
  public:
   EsParserImpl() = default;
   ~EsParserImpl() = default;
-  int Open(AVCodecID codec_id, IParserResult *result, uint8_t* paramset = nullptr, uint32_t paramset_size = 0) {
+  int Open(AVCodecID codec_id, IParserResult *result, uint8_t *paramset = nullptr, uint32_t paramset_size = 0,
+           bool only_key_frame = false) {
     std::unique_lock<std::mutex> guard(mutex_);
     codec_id_ = codec_id;
     result_ = result;
@@ -413,6 +419,7 @@ class EsParserImpl {
     }
     av_init_packet(&packet_);
     open_success_ = true;
+    only_key_frame_ = only_key_frame;
     return 0;
   }
   void Close() {
@@ -449,6 +456,7 @@ class EsParserImpl {
   bool first_time_ = true;
   bool open_success_ = false;
   std::mutex mutex_;
+  bool only_key_frame_ = false;
 };  // class StreamParserImpl
 
 EsParser::EsParser() {
@@ -459,9 +467,10 @@ EsParser::~EsParser() {
   if (impl_) delete impl_;
 }
 
-int EsParser::Open(AVCodecID codec_id, IParserResult *result, uint8_t* paramset, uint32_t paramset_size) {
+int EsParser::Open(AVCodecID codec_id, IParserResult *result, uint8_t *paramset, uint32_t paramset_size,
+                   bool only_key_frame) {
   if (impl_) {
-    return impl_->Open(codec_id, result, paramset, paramset_size);
+    return impl_->Open(codec_id, result, paramset, paramset_size, only_key_frame);
   }
   return -1;
 }
@@ -565,7 +574,10 @@ int EsParserImpl::Parse(const VideoEsPacket &pkt) {
       frame.len = packet_.size;
       frame.pts = packet_.pts;
       frame.flags = packet_.flags;
-      result_->OnParserFrame(&frame);
+
+      if (!only_key_frame_ || (only_key_frame_ && (frame.flags & AV_PKT_FLAG_KEY))) {
+        result_->OnParserFrame(&frame);
+      }
     }
     av_packet_unref(&packet_);
   } while (cur_size > 0);

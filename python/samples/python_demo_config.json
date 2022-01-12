@@ -11,7 +11,7 @@
       "reuse_cndec_buf" : "true",
       "output_type" : "mlu",
       "decoder_type" : "mlu",
-      "output_buf_number" : 32,
+      "output_buf_number" : 16,
       "device_id" : 0
     }
   },

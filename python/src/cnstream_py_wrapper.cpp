@@ -35,6 +35,9 @@ void DataHandlerWrapper(const py::module &);
 void PerfPrintWrapper(py::module &);
 void PreprocWrapper(const py::module &);
 void PostprocWrapper(const py::module &m);
+void VideoPreprocWrapper(const py::module &);
+void VideoPostprocWrapper(const py::module &);
+void ProfileWrapper(const py::module &);
 
 PYBIND11_MODULE(cnstream, m) {
   m.doc() = "cnstream python api";
@@ -49,6 +52,9 @@ PYBIND11_MODULE(cnstream, m) {
   PerfPrintWrapper(m);
   PreprocWrapper(m);
   PostprocWrapper(m);
+  VideoPreprocWrapper(m);
+  VideoPostprocWrapper(m);
+  ProfileWrapper(m);
 }
 
 }  // namespace cnstream

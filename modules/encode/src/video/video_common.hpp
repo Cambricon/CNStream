@@ -58,6 +58,8 @@ struct VideoPacket {
   int64_t pts, dts;
   /// flags for the packet
   uint32_t flags;
+  /// user data
+  void *user_data;
 
   enum Flags {
     /// end of stream
@@ -99,6 +101,8 @@ struct VideoFrame {
   VideoPixelFormat pixel_format;
   /// flags for the frame
   uint32_t flags;
+  /// user data
+  void *user_data;
 
   enum Flags {
     /// end of stream

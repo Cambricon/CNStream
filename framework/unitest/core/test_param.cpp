@@ -20,7 +20,7 @@
 #include <gtest/gtest.h>
 
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include "private/cnstream_param.hpp"
@@ -55,7 +55,7 @@ TEST(CoreParam, RegistParams) {
        ModuleParamParser<std::string>::Parser}};
   EXPECT_TRUE(params_helper.Register(regist_params));
 
-  std::unordered_map<std::string, std::string> params_map;
+  std::map<std::string, std::string> params_map;
   params_map["device_id"] = "1";
   params_map["dump_image"] = "False";
   params_map["height"] = "120";
@@ -132,7 +132,7 @@ TEST(CoreParam, ParamsParser) {
   desc.parser = ModuleParamParser<double>::Parser;
   EXPECT_TRUE(params_helper.Register(desc));
 
-  std::unordered_map<std::string, std::string> params_map;
+  std::map<std::string, std::string> params_map;
   params_map["device_id"] = "1";
   params_map["dump_image"] = "False";
   params_map["height"] = "120";
@@ -162,7 +162,7 @@ TEST(CoreParam, ValidParams) {
       {"padding_type", "middle", "input image padding method", PARAM_OPTIONAL, OFFSET(TestParam, padding_type),
        ModuleParamParser<std::string>::Parser}};
   EXPECT_TRUE(params_helper.Register(regist_params));
-  std::unordered_map<std::string, std::string> params_map;
+  std::map<std::string, std::string> params_map;
   params_map["device_id"] = "1";
   params_map["dump_image"] = "False";
   params_map["height"] = "120";

@@ -84,7 +84,14 @@ void PipelineWrapper(py::module &m) {  // NOLINT
                     py::cpp_function(&Pipeline::GetStreamMsgObserver, py::return_value_policy::reference),
                     py::cpp_function(&Pipeline::SetStreamMsgObserver, py::keep_alive<1, 2>()))
       .def("is_root_node", &Pipeline::IsRootNode)
-      .def("register_frame_done_callback", &Pipeline::RegisterFrameDoneCallBack);
+      .def("register_frame_done_callback", &Pipeline::RegisterFrameDoneCallBack)
+      .def("get_profile", [](Pipeline *pipeline) {
+        return pipeline->GetProfiler()->GetProfile();
+      })
+      .def("get_profile_before", [](Pipeline *pipeline, int time_in_ms) {
+        Duration duration(time_in_ms);
+        return pipeline->GetProfiler()->GetProfileBefore(Clock::now(), duration);
+      });
 }
 
 }  // namespace cnstream

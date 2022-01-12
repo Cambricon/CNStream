@@ -4,14 +4,14 @@
 #include <memory>
 #include <functional>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include "pypostproc.h"
 
 namespace py = pybind11;
 
-bool TestPyPostproc(const std::unordered_map<std::string, std::string> &params) {
+bool TestPyPostproc(const std::map<std::string, std::string> &params) {
   auto model = std::make_shared<edk::ModelLoader>("data/test_model.cambricon", "subnet0");
   std::vector<float*> outputs;
   for (uint32_t i = 0; i < model->OutputNum(); ++i) {
@@ -30,7 +30,7 @@ bool TestPyPostproc(const std::unordered_map<std::string, std::string> &params) 
   return ret;
 }
 
-bool TestPyObjPostproc(const std::unordered_map<std::string, std::string> &params) {
+bool TestPyObjPostproc(const std::map<std::string, std::string> &params) {
   auto model = std::make_shared<edk::ModelLoader>("data/test_model.cambricon", "subnet0");
   std::vector<float*> outputs;
   for (uint32_t i = 0; i < model->OutputNum(); ++i) {

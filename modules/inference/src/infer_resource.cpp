@@ -203,7 +203,7 @@ void RCOpResource::Init(uint32_t dst_w, uint32_t dst_h, CNDataFormat src_fmt,
       std::make_pair(ColorCvt::YUV2ABGR32_NV12, edk::MluResizeConvertOp::ColorMode::YUV2ABGR_NV12)};
 
   LOGF_IF(INFERENCER, cvt_mode_map.find(color_cvt_mode) == cvt_mode_map.end())
-      << "Unsupport color convert mode. src pixel format : " << static_cast<uint64_t>(src_fmt)
+      << "Unsupported color convert mode. src pixel format : " << static_cast<uint64_t>(src_fmt)
       << ", dst pixel format : " << static_cast<uint64_t>(dst_fmt_);
 
   if (Initialized()) {

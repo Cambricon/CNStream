@@ -18,47 +18,57 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <gflags/gflags.h>
+#ifndef MODULES_UTIL_INCLUDE_FRAME_FILTER_HPP_
+#define MODULES_UTIL_INCLUDE_FRAME_FILTER_HPP_
 
-#include <atomic>
-#include <mutex>
-#include <condition_variable>
-#include <iostream>
-#include <list>
+/**
+ *  \file frame_filter.hpp
+ *
+ *  This file contains a declaration of class FrameFilter
+ */
+
 #include <memory>
-#include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
-#if (CV_MAJOR_VERSION >= 3)
-#include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
+#include "reflex_object.h"
 
-#include "data_source.hpp"
-#include "displayer.hpp"
-#include "util.hpp"
-#include "cnstream_logging.hpp"
-
-#include "profiler/pipeline_profiler.hpp"
-#include "profiler/profile.hpp"
-#include "profiler/trace_serialize_helper.hpp"
-#include "gtest/gtest.h"
-#include "pycnservice.hpp"
-#include "pipeline_handler.hpp"
-#include "cnstype.h"
+#include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 
 namespace cnstream {
 
-TEST(TESTWEB, TESTPYCNSERVICE) {
-  std::shared_ptr<PyCNService> cnservice = std::make_shared<PyCNService>();
-  CNServiceInfo service_info = {false, true, 30, 100, 1080, 620};
-  cnservice->InitService(service_info);
-  std::string input_filename = GetExePath() + "../web_visualize/src/webui/static/data/cars.mp4";
-  std::string config_json = GetExePath() + "../web_visualize/src/webui/static/json/resnet50.json";
-  cnservice->Start(input_filename, config_json);
-  cnservice->WaitStop();
-}
+/**
+ * @brief The base class of frame filter.
+ */
+class FrameFilter : virtual public ReflexObjectEx<FrameFilter> {
+ public:
+  /**
+   * @brief Does nothing.
+   */
+  virtual ~FrameFilter() {}
+  /**
+   * @brief Creates relative frame filter.
+   *
+   * @param frame_filter_name The frame filter class name.
+   *
+   * @return None
+   */
+  static FrameFilter* Create(const std::string& frame_filter_name) {
+    return ReflexObjectEx<FrameFilter>::CreateObject(frame_filter_name);
+  }
+
+  /**
+   * @brief Filters frame.
+   *
+   * @param finfo: The smart pointer of struct to store origin frame data.
+   *
+   * @return Returns true if this frame is satisfied, otherwise returns false.
+   */
+  virtual bool Filter(const CNFrameInfoPtr& finfo) = 0;
+};  // class FrameFilter
 
 }  // namespace cnstream
+
+#endif  // ifndef MODULES_UTIL_INCLUDE_FRAME_FILTER_HPP_

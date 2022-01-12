@@ -179,6 +179,12 @@ class FileHandler : public SourceHandler {
    */
   bool Open() override;
   /*!
+   * @brief Stops source handler. The Close() function should be called afterwards.
+   *
+   * @return No return value.
+   */
+  void Stop() override;
+  /*!
    * @brief Closes source handler.
    *
    * @return No return value
@@ -283,6 +289,12 @@ class ESMemHandler : public SourceHandler {
    */
   bool Open() override;
   /*!
+   * @brief Stops source handler. The Close() function should be called afterwards.
+   *
+   * @return No return value.
+   */
+  void Stop() override;
+  /*!
    * @brief Closes source handler.
    *
    * @return No return value.
@@ -349,6 +361,8 @@ class ESMemHandler : public SourceHandler {
 
 #ifdef UNIT_TEST
  public:  // NOLINT
+#else
+ private:  // NOLINT
 #endif
   ESMemHandlerImpl *impl_ = nullptr;
 };  // class ESMemHandler

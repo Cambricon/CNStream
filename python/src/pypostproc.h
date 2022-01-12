@@ -23,24 +23,25 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
 namespace cnstream {
 
 struct __attribute__((visibility("default"))) PostprocPyObjects {
-  bool Init(const std::unordered_map<std::string, std::string> &params);
+  bool Init(const std::map<std::string, std::string> &params);
+  ~PostprocPyObjects();
   std::string pyclass_name;
   pybind11::object pyinstance;
   pybind11::object pyinit;
   pybind11::object pyexecute;
-  std::unordered_map<std::string, std::string> params;
+  std::map<std::string, std::string> params;
 };  // struct PostprocPyObjects
 
 class __attribute__((visibility("default"))) PyPostproc : public Postproc {
  public:
-  bool Init(const std::unordered_map<std::string, std::string> &params) override {
+  bool Init(const std::map<std::string, std::string> &params) override {
     return pyobjs_.Init(params);
   }
   int Execute(const std::vector<float*> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
@@ -55,7 +56,7 @@ class __attribute__((visibility("default"))) PyPostproc : public Postproc {
 
 class __attribute__((visibility("default"))) PyObjPostproc : public ObjPostproc {
  public:
-  bool Init(const std::unordered_map<std::string, std::string> &params) override {
+  bool Init(const std::map<std::string, std::string> &params) override {
     return pyobjs_.Init(params);
   }
   int Execute(const std::vector<float*> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,

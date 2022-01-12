@@ -23,7 +23,7 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include "cnstream_collection.hpp"
@@ -144,7 +144,7 @@ CNS_IGNORE_DEPRECATED_POP
   size_t flags = 0;       /*!< The mask for this frame, ``CNFrameFlag``. */
 
   // user-defined DataFrame，InferResult etc...
-  CNS_DEPRECATED std::unordered_map<int, any> datas; /*!< (Deprecated) Uses CNFrameInfo::collection instead. */
+  CNS_DEPRECATED std::map<int, any> datas; /*!< (Deprecated) Uses CNFrameInfo::collection instead. */
   CNS_DEPRECATED std::mutex datas_lock_;             /*!< (Deprecated) Uses CNFrameInfo::collection instead. */
 
   Collection collection;                                    /*!< Stored structured data.  */

@@ -8,7 +8,7 @@
 
 ##### 功能简介
 
-**web可视化主页功能一览：**   
+**web可视化主页功能一览：**
 <img src="./src/webui/static/data/viz_home.png" width="60%" height="60%">
 
 - web可视化工具主要提供的功能：
@@ -20,9 +20,8 @@
     - “Choose a file”按钮支持上传视频文件
   - 选择好数据和pipeline配置后，支持运行pipeline,通过RUN和STOP按钮控制开始运行和结束：
     - “PREVIEW”tab页下执行RUN/STOP操作，运行pipeline并在网页端渲染pipeline输出的视频（针对自行设计的pipeline配置，需要pipeline的end节点为汇聚节点）
-    - “STATUS”tab页下执行RUN/STOP操作，运行pipeline并在STATUS页打印pipeline的运行状态
 
-**pipeline design页面功能一览：**   
+**pipeline design页面功能一览：**
 <img src="./src/webui/static/data/viz_design.png" width="60%" height="60%">
 
 - web端design pipeline主要提供以下功能：

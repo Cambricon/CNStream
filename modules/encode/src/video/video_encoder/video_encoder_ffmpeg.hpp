@@ -35,16 +35,19 @@ extern "C" {
 
 #include <condition_variable>
 #include <list>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
-#include <unordered_map>
 
 #include "video_encoder_base.hpp"
 
 namespace cnstream {
 
 namespace video {
+
+struct VideoEncoderFFmpegPrivate;
 
 class VideoEncoderFFmpeg : public VideoEncoderBase {
  public:
@@ -64,40 +67,11 @@ class VideoEncoderFFmpeg : public VideoEncoderBase {
   int GetPacket(VideoPacket *packet, PacketInfo *info = nullptr) override;
 
  private:
-  struct EncodingInfo {
-    int64_t pts, dts;
-    int64_t start_tick, end_tick;
-  };
-
-  bool GetPacketInfo(int64_t pts, PacketInfo *info) override;
+  bool GetPacketInfo(int64_t index, PacketInfo *info) override;
   void Loop();
   void Destroy();
 
-  std::thread thread_;
-  std::mutex input_mtx_;
-  std::condition_variable data_cv_;
-  std::condition_variable free_cv_;
-  std::queue<AVFrame *> data_q_;
-  std::queue<AVFrame *> free_q_;
-  std::list<AVFrame *> list_;
-  std::mutex info_mtx_;
-  std::unordered_map<int64_t, EncodingInfo> encoding_info_;
-  std::atomic<bool> eos_got_{false};
-  std::atomic<bool> eos_sent_{false};
-  std::atomic<bool> encoding_{false};
-  int64_t frame_count_ = 0;
-  int64_t packet_count_ = 0;
-  int64_t data_index_ = 0;
-  uint32_t input_alignment_ = 32;
-
-  ::AVPixelFormat pixel_format_ = AV_PIX_FMT_YUV420P;
-  ::AVCodecID codec_id_ = AV_CODEC_ID_H264;
-  AVCodecContext *codec_ctx_ = nullptr;
-  AVCodec *codec_ = nullptr;
-  AVDictionary *opts_ = nullptr;
-  AVFrame *frame_ = nullptr;
-  AVPacket *packet_ = nullptr;
-  SwsContext *sws_ctx_ = nullptr;
+  std::unique_ptr<VideoEncoderFFmpegPrivate> priv_;
 };  // VideoEncoderFFmpeg
 
 }  // namespace video

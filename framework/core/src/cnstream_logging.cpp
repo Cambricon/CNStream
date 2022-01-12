@@ -33,7 +33,7 @@
 #include <vector>
 #include <mutex>
 #include <condition_variable>
-#include <unordered_map>
+#include <map>
 #include <memory>
 #include <algorithm>
 #include <cctype>
@@ -255,7 +255,7 @@ static void WriteToStderr(const char* message, size_t len) {
   fwrite(message, len, 1, stderr);
 }
 
-using CategoryFilterMaps = std::unordered_map<std::string, LogSeverity>;
+using CategoryFilterMaps = std::map<std::string, LogSeverity>;
 
 static std::shared_ptr<CategoryFilterMaps> CreateFilterMaps() {
   std::string filter_str = StringTrim(FLAGS_log_filter);

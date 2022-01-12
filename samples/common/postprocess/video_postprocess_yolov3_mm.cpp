@@ -45,7 +45,7 @@ class VideoPostprocYolov3MM : public cnstream::VideoPostproc {
    * @return return true if succeed
    */
   bool Execute(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
-               const infer_server::ModelInfo& model_info) override;
+               const infer_server::ModelInfo* model_info) override;
 
  private:
   DECLARE_REFLEX_OBJECT_EX(VideoPostprocYolov3MM, cnstream::VideoPostproc);
@@ -54,22 +54,22 @@ class VideoPostprocYolov3MM : public cnstream::VideoPostproc {
 IMPLEMENT_REFLEX_OBJECT_EX(VideoPostprocYolov3MM, cnstream::VideoPostproc);
 
 bool VideoPostprocYolov3MM::Execute(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
-                                    const infer_server::ModelInfo& model_info) {
-  LOGF_IF(DEMO, model_info.InputNum() != 1);
-  LOGF_IF(DEMO, model_info.OutputNum() != 2);
-  LOGF_IF(DEMO, model_output.buffers.size() != 2);
+                                    const infer_server::ModelInfo* model_info) {
+  LOGF_IF(DEMO, model_info->InputNum() != 1) << "VideoPostprocYolov3MM: model input number is not equal to 1";
+  LOGF_IF(DEMO, model_info->OutputNum() != 2) << "VideoPostprocYolov3MM: model output number is not equal to 2";
+  LOGF_IF(DEMO, model_output.buffers.size() != 2) << "VideoPostprocYolov3MM: model result size is not equal to 2";
 
   cnstream::CNFrameInfoPtr frame = output_data->GetUserData<cnstream::CNFrameInfoPtr>();
   cnstream::CNInferObjsPtr objs_holder = frame->collection.Get<cnstream::CNInferObjsPtr>(cnstream::kCNInferObjsTag);
   cnstream::CNObjsVec& objs = objs_holder->objs_;
 
-  const auto input_sp = model_info.InputShape(0);
+  const auto input_sp = model_info->InputShape(0);
   const int img_w = frame->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag)->width;
   const int img_h = frame->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag)->height;
 
   int w_idx = 2;
   int h_idx = 1;
-  if (model_info.InputLayout(0).order == infer_server::DimOrder::NCHW) {
+  if (model_info->InputLayout(0).order == infer_server::DimOrder::NCHW) {
     w_idx = 3;
     h_idx = 2;
   }

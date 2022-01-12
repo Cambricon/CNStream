@@ -27,7 +27,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
-#include <unordered_map>
+#include <map>
 #include <utility>
 
 #include "cnstream_common.hpp"
@@ -101,7 +101,7 @@ class Mlu2xxDecoder : public Decoder {
 
   // For m200 vpu-decoder, m200 vpu-codec does not 64bits timestamp, we have to implement it.
   uint32_t pts_key_ = 0;
-  std::unordered_map<uint32_t, uint64_t> vpu_pts_map_;
+  std::map<uint32_t, uint64_t> vpu_pts_map_;
   std::mutex map_lock_;
   uint32_t SetVpuTimestamp(uint64_t pts) {
     std::lock_guard<std::mutex> guard(map_lock_);
@@ -686,7 +686,7 @@ void Mlu2xxDecoder::JpegFrameCallback(cnjpegDecOutput *output) {
     /*
      If JPU decode failed, create a empty FrameInfo which only including
      an Error Flag(or valid information);
-     Now olny support pts
+     Now only support pts
     */
     DecodeFrame cn_frame;
     cn_frame.valid = false;

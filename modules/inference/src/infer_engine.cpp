@@ -202,7 +202,7 @@ InferEngine::ResultWaitingCard InferEngine::FeedData(std::shared_ptr<CNFrameInfo
 
 static bool CheckModel(const std::shared_ptr<edk::ModelLoader>& model) {
   if (model->InputNum() != 1) {
-    LOGE(INFERENCER) << "Unsupport model with " << model->InputNum() << " input.";
+    LOGE(INFERENCER) << "Unsupported model with " << model->InputNum() << " input.";
     return false;
   }
 
@@ -230,7 +230,7 @@ void InferEngine::StageAssemble() {
     batching_done_stages_.push_back(h2d_stage);
   } else {
     // 2. mlu preprocessing
-    LOGF_IF(INFERENCER, CheckModel(model_) != true);
+    LOGF_IF(INFERENCER, CheckModel(model_) != true) << "Check model failed.";
     // rgb0 input.
     if (use_scaler_) {
       // use scaler (MLU220 only)

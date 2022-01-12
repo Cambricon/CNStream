@@ -19,7 +19,7 @@ find_package(Neuware)
 include_directories(${NEUWARE_INCLUDE_DIR})
 
 # ---[ pybind11
-set(PYBIND11_PYTHON_VERSION 3.5)
+set(PYBIND11_PYTHON_VERSION 3)
 add_subdirectory(${CNSTREAM_ROOT_DIR}/3rdparty/pybind11 ${CMAKE_CURRENT_BINARY_DIR}/pybind11)
 
 # ---[ rapidjson
@@ -73,7 +73,7 @@ if(HAVE_FRAMEWORK_TARGET)
   add_dependencies(cnstream cnstream_core)
 endif()
 if(HAVE_EASYDK_TARGET)
-  add_dependencies(cnstream easydk cnis)
+  add_dependencies(cnstream easydk)
 endif()
 if(HAVE_MODULES_TARGET)
   add_dependencies(cnstream cnstream_va)

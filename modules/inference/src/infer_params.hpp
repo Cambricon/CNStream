@@ -24,7 +24,7 @@
 #include <functional>
 #include <set>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 #include "cnstream_config.hpp"
 #include "cnstream_frame_va.hpp"
@@ -51,8 +51,8 @@ struct InferParams {
   std::string dump_resized_image_dir = "";  // debug option, dump images(offline-model's input) before infer.
   bool saving_infer_input = false;
   int pad_method;
-  std::unordered_map<std::string, std::string> custom_preproc_params;
-  std::unordered_map<std::string, std::string> custom_postproc_params;
+  std::map<std::string, std::string> custom_preproc_params;
+  std::map<std::string, std::string> custom_postproc_params;
 };  // struct InferParams
 
 struct InferParamDesc {

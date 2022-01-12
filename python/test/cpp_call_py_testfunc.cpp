@@ -21,6 +21,8 @@ void FrameTestWrapper(const py::module&);
 void DataHanlderWrapper(const py::module&);
 void PreprocTestWrapper(py::module&);
 void PostprocTestWrapper(py::module&);
+void VideoPreprocTestWrapper(py::module&);
+void VideoPostprocTestWrapper(py::module&);
 
 PYBIND11_MODULE(cnstream_cpptest, m) {
   m.def("cpptest_pymodule", &TestPyModule);
@@ -29,4 +31,6 @@ PYBIND11_MODULE(cnstream_cpptest, m) {
   DataHanlderWrapper(m);
   PreprocTestWrapper(m);
   PostprocTestWrapper(m);
+  VideoPreprocTestWrapper(m);
+  VideoPostprocTestWrapper(m);
 }

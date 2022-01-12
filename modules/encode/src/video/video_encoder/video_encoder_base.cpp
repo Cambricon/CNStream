@@ -64,28 +64,22 @@ int VideoEncoderBase::Stop() {
   return cnstream::VideoEncoder::ERROR_STATE;
 }
 
-bool VideoEncoderBase::PushBuffer(VideoPacket *packet) {
+bool VideoEncoderBase::PushBuffer(IndexedVideoPacket *packet) {
   if (state_ != RUNNING || !output_buffer_) return false;
 
-  if (packet == nullptr || packet->data == nullptr || packet->size <= 0) {
-    LOGE(VideoEncoderBase) << "VideoEncoderBase::PushBuffer(): invalid parameters.";
+  if (!packet || !packet->packet.data || packet->packet.size <= 0) {
+    LOGE(VideoEncoderBase) << "PushBuffer() invalid parameters.";
     return false;
   }
 
   std::unique_lock<std::mutex> lk(output_mtx_);
-  size_t push_size = packet->size + sizeof(VideoPacket);
-  if (output_buffer_->Capacity() < push_size) {
-    LOGE(VideoEncoderBase) << "VideoEncoderBase::PushBuffer(): capacity is not enough for one packet."
-                           << " Capacity: " << output_buffer_->Capacity() << " packet size: " << push_size;
-    return false;
-  }
-
+  size_t push_size = packet->packet.size + sizeof(IndexedVideoPacket);
   output_cv_.wait(
       lk, [&] { return (state_ != RUNNING || (output_buffer_->Capacity() - output_buffer_->Size()) >= push_size); });
   if (state_ != RUNNING) return false;
 
-  size_t written_size = output_buffer_->Write(reinterpret_cast<uint8_t *>(packet), sizeof(VideoPacket));
-  written_size += output_buffer_->Write(packet->data, packet->size);
+  size_t written_size = output_buffer_->Write(reinterpret_cast<uint8_t *>(packet), sizeof(IndexedVideoPacket));
+  written_size += output_buffer_->Write(packet->packet.data, packet->packet.size);
 
   return (written_size == push_size);
 }
@@ -95,12 +89,12 @@ int VideoEncoderBase::GetPacket(VideoPacket *packet, PacketInfo *info) {
   if (!output_buffer_) return cnstream::VideoEncoder::ERROR_FAILED;
 
   int ret = -1;
-  VideoPacket vpacket;
+  IndexedVideoPacket vpacket;
 
   std::unique_lock<std::mutex> lk(output_mtx_);
   if (truncated_size_ == 0) {
-    if (output_buffer_->Size() <= sizeof(VideoPacket)) return 0;
-    output_buffer_->Read(reinterpret_cast<uint8_t *>(&vpacket), sizeof(VideoPacket), true);
+    if (output_buffer_->Size() <= sizeof(IndexedVideoPacket)) return 0;
+    output_buffer_->Read(reinterpret_cast<uint8_t *>(&vpacket), sizeof(IndexedVideoPacket), true);
   }
   if (!packet) {
     /* skip packet */
@@ -113,19 +107,17 @@ int VideoEncoderBase::GetPacket(VideoPacket *packet, PacketInfo *info) {
         info->buffer_size = output_buffer_->Size();
         info->buffer_capacity = output_buffer_->Capacity();
       }
-
     } else {
-      output_buffer_->Read(nullptr, sizeof(VideoPacket) + vpacket.size);
-      ret = vpacket.size;
+      output_buffer_->Read(nullptr, sizeof(IndexedVideoPacket) + vpacket.packet.size);
+      ret = vpacket.packet.size;
       if (info) {
-        GetPacketInfo(vpacket.pts, info);
+        GetPacketInfo(vpacket.index, info);
         info->buffer_size = output_buffer_->Size();
         info->buffer_capacity = output_buffer_->Capacity();
       } else {
         PacketInfo pi;
-        GetPacketInfo(vpacket.pts, &pi);
+        GetPacketInfo(vpacket.index, &pi);
       }
-
       lk.unlock();
       output_cv_.notify_one();
     }
@@ -141,13 +133,15 @@ int VideoEncoderBase::GetPacket(VideoPacket *packet, PacketInfo *info) {
       packet->pts = truncated_packet_.pts;
       packet->dts = truncated_packet_.dts;
       packet->flags = truncated_packet_.flags;
+      packet->user_data = truncated_packet_.user_data;
       return truncated_size_;
     } else {
-      packet->size = vpacket.size;
-      packet->pts = vpacket.pts;
-      packet->dts = vpacket.dts;
-      packet->flags = vpacket.flags;
-      return vpacket.size;
+      packet->size = vpacket.packet.size;
+      packet->pts = vpacket.packet.pts;
+      packet->dts = vpacket.packet.dts;
+      packet->flags = vpacket.packet.flags;
+      packet->user_data = vpacket.packet.user_data;
+      return vpacket.packet.size;
     }
   } else {
     /* read out packet data */
@@ -155,6 +149,7 @@ int VideoEncoderBase::GetPacket(VideoPacket *packet, PacketInfo *info) {
       packet->pts = truncated_packet_.pts;
       packet->dts = truncated_packet_.dts;
       packet->flags = truncated_packet_.flags;
+      packet->user_data = truncated_packet_.user_data;
       if (info) {
         memcpy(info, &truncated_info_, sizeof(PacketInfo));
         info->buffer_size = output_buffer_->Size();
@@ -171,25 +166,27 @@ int VideoEncoderBase::GetPacket(VideoPacket *packet, PacketInfo *info) {
         truncated_size_ = 0;
         memset(&truncated_info_, 0, sizeof(PacketInfo));
       }
-    } else if (packet->size < vpacket.size) {
-      output_buffer_->Read(reinterpret_cast<uint8_t *>(&vpacket), sizeof(VideoPacket));
-      if (truncated_buffer_size_ < vpacket.size) {
+    } else if (packet->size < vpacket.packet.size) {
+      output_buffer_->Read(reinterpret_cast<uint8_t *>(&vpacket), sizeof(IndexedVideoPacket));
+      if (truncated_buffer_size_ < vpacket.packet.size) {
         if (truncated_packet_.data) delete[] truncated_packet_.data;
-        truncated_packet_.data = new (std::nothrow) uint8_t[vpacket.size];
-        truncated_buffer_size_ = vpacket.size;
+        truncated_packet_.data = new (std::nothrow) uint8_t[vpacket.packet.size];
+        truncated_buffer_size_ = vpacket.packet.size;
       }
-      truncated_packet_.size = vpacket.size;
-      truncated_packet_.pts = vpacket.pts;
-      truncated_packet_.dts = vpacket.dts;
-      truncated_packet_.flags = vpacket.flags;
-      output_buffer_->Read(truncated_packet_.data, vpacket.size);
+      truncated_packet_.size = vpacket.packet.size;
+      truncated_packet_.pts = vpacket.packet.pts;
+      truncated_packet_.dts = vpacket.packet.dts;
+      truncated_packet_.flags = vpacket.packet.flags;
+      truncated_packet_.user_data = vpacket.packet.user_data;
+      output_buffer_->Read(truncated_packet_.data, vpacket.packet.size);
       packet->pts = truncated_packet_.pts;
       packet->dts = truncated_packet_.dts;
       packet->flags = truncated_packet_.flags;
+      packet->user_data = truncated_packet_.user_data;
       memcpy(packet->data, truncated_packet_.data, packet->size);
-      truncated_size_ = vpacket.size - packet->size;
+      truncated_size_ = vpacket.packet.size - packet->size;
       ret = packet->size;
-      GetPacketInfo(packet->pts, &truncated_info_);
+      GetPacketInfo(vpacket.index, &truncated_info_);
       if (info) {
         memcpy(info, &truncated_info_, sizeof(PacketInfo));
         info->buffer_size = output_buffer_->Size();
@@ -198,19 +195,20 @@ int VideoEncoderBase::GetPacket(VideoPacket *packet, PacketInfo *info) {
       lk.unlock();
       output_cv_.notify_one();
     } else {
-      output_buffer_->Read(reinterpret_cast<uint8_t *>(&vpacket), sizeof(VideoPacket));
-      packet->size = vpacket.size;
-      packet->pts = vpacket.pts;
-      packet->dts = vpacket.dts;
-      packet->flags = vpacket.flags;
+      output_buffer_->Read(reinterpret_cast<uint8_t *>(&vpacket), sizeof(IndexedVideoPacket));
+      packet->size = vpacket.packet.size;
+      packet->pts = vpacket.packet.pts;
+      packet->dts = vpacket.packet.dts;
+      packet->flags = vpacket.packet.flags;
+      packet->user_data = vpacket.packet.user_data;
       ret = output_buffer_->Read(packet->data, packet->size);
       if (info) {
-        GetPacketInfo(packet->pts, info);
+        GetPacketInfo(vpacket.index, info);
         info->buffer_size = output_buffer_->Size();
         info->buffer_capacity = output_buffer_->Capacity();
       } else {
         PacketInfo pi;
-        GetPacketInfo(packet->pts, &pi);
+        GetPacketInfo(vpacket.index, &pi);
       }
       lk.unlock();
       output_cv_.notify_one();

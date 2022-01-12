@@ -66,6 +66,10 @@ bool Inferencer2::Open(ModuleParamSet raw_params) {
       LOGE(INFERENCER2) << "Can not find VideoPreproc implemention by name: " << params.preproc_name;
       return false;
     }
+    if (!pre_processor->Init(params.custom_preproc_params)) {
+      LOGE(INFERENCER2) << "VideoPreprocessor init failed.";
+      return false;
+    }
     pre_processor->SetModelInputPixelFormat(params.model_input_pixel_format);
   }
 
@@ -79,8 +83,20 @@ bool Inferencer2::Open(ModuleParamSet raw_params) {
     LOGE(INFERENCER2) << "Can not find VideoPostproc implemention by name: " << params.postproc_name;
     return false;
   }
+  if (!post_processor->Init(params.custom_postproc_params)) {
+    LOGE(INFERENCER2) << "Postprocessor init failed.";
+    return false;
+  }
   post_processor->SetThreshold(params.threshold);
 
+  std::shared_ptr<FrameFilter> frame_filter = nullptr;
+  if (!params.frame_filter_name.empty()) {
+    frame_filter.reset(FrameFilter::Create(params.frame_filter_name));
+    if (!frame_filter) {
+      LOGE(INFERENCER2) << "Can not find FrameFilter implemention by name: " << params.frame_filter_name;
+      return false;
+    }
+  }
   std::shared_ptr<ObjFilter> obj_filter = nullptr;
   if (!params.obj_filter_name.empty()) {
     obj_filter.reset(ObjFilter::Create(params.obj_filter_name));
@@ -90,7 +106,8 @@ bool Inferencer2::Open(ModuleParamSet raw_params) {
     }
   }
 
-  infer_handler_ = std::make_shared<InferHandlerImpl>(this, infer_params_, post_processor, pre_processor, obj_filter);
+  infer_handler_ =
+      std::make_shared<InferHandlerImpl>(this, infer_params_, post_processor, pre_processor, frame_filter, obj_filter);
   return infer_handler_->Open();
 }
 

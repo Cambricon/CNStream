@@ -35,7 +35,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -273,7 +273,7 @@ CNS_IGNORE_DEPRECATED_POP
   std::string track_id;     ///< The tracking result.
   float score;              ///< The label score.
   CNInferBoundingBox bbox;  ///< The object normalized coordinates.
-  CNS_DEPRECATED std::unordered_map<int, any> datas;  ///< (Deprecated) User-defined structured information.
+  CNS_DEPRECATED std::map<int, any> datas;  ///< (Deprecated) User-defined structured information.
   Collection collection;    ///< User-defined structured information.
 
   /**
@@ -404,9 +404,9 @@ CNS_IGNORE_DEPRECATED_POP
   CNInferFeatures GetFeatures();
 
  private:
-  std::unordered_map<std::string, CNInferAttr> attributes_;
-  std::unordered_map<std::string, std::string> extra_attributes_;
-  std::unordered_map<std::string, CNInferFeature> features_;
+  std::map<std::string, CNInferAttr> attributes_;
+  std::map<std::string, std::string> extra_attributes_;
+  std::map<std::string, CNInferFeature> features_;
   std::mutex attribute_mutex_;
   std::mutex feature_mutex_;
 };
@@ -452,7 +452,7 @@ struct InferData {
  * @brief CNInferData is a structure holding a map between module name and InferData.
  */
 struct CNInferData : public NonCopyable {
-  std::unordered_map<std::string, std::vector<std::shared_ptr<InferData>>> datas_map_;
+  std::map<std::string, std::vector<std::shared_ptr<InferData>>> datas_map_;
   /*!< The map between module name and InferData.*/
   std::mutex mutex_; /*!< Inference data mutex.*/
 };

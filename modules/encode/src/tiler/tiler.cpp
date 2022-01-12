@@ -37,8 +37,8 @@ namespace cnstream {
 static thread_local std::unique_ptr<uint8_t[]> tl_grid_buffer = nullptr;
 static thread_local uint32_t tl_grid_buffer_size = 0;
 
-Tiler::Tiler(uint32_t rows, uint32_t cols, ColorFormat color, uint32_t width, uint32_t height, uint32_t stride)
-    : rows_(rows), cols_(cols), color_(color), width_(width), height_(height), stride_(stride) {
+Tiler::Tiler(uint32_t cols, uint32_t rows, ColorFormat color, uint32_t width, uint32_t height, uint32_t stride)
+    : cols_(cols), rows_(rows), color_(color), width_(width), height_(height), stride_(stride) {
   grids_.clear();
   Init();
 }
@@ -182,8 +182,8 @@ bool Tiler::Blit(const Buffer *buffer, int position) {
   }
   if (tl_grid_buffer_size < grid_buffer_size) {
     // LOG(INFO) << "Tiler::Blit() update grid_buffer_size to " << grid_buffer_size;
-    if (!tl_grid_buffer && ++grid_buffer_count_ >= 64) {
-      LOGE(Tiler) << "Tiler::Blit() only support no more than 64 threads to blit canvas";
+    if (!tl_grid_buffer && ++grid_buffer_count_ >= 128) {
+      LOGE(Tiler) << "Tiler::Blit() only support no more than 128 threads to blit canvas";
       mtx_.unlock();
       return false;
     }

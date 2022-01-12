@@ -102,6 +102,7 @@ class ourRTSPClient : public RTSPClient {
   bool setupOk = false;
   char* eventLoopWatchVariable = nullptr;
   StreamClientState scs;
+  bool only_key_frame = false;
 
   // Use a timer to check liveness
   //
@@ -125,12 +126,13 @@ class ourRTSPClient : public RTSPClient {
 
 class DummySink : public MediaSink, public cnstream::IParserResult {
  public:
-  static DummySink* createNew(UsageEnvironment& env,
-                              MediaSubsession& subsession,   // identifies the kind of data that's being received
-                              char const* streamId = NULL);  // identifies the stream itself (optional)
+  static DummySink* createNew(UsageEnvironment& env,    // NOLINT
+                              MediaSubsession& subsession,  // NOLINT identifies the kind of data that's being received
+                              char const* streamId = NULL,
+                              bool only_I = false);  // identifies the stream itself (optional)
 
  private:
-  DummySink(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId);
+  DummySink(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId, bool only_I);  // NOLINT
   // called only by "createNew()"
   virtual ~DummySink();
 
@@ -157,6 +159,7 @@ class DummySink : public MediaSink, public cnstream::IParserResult {
   bool spropsSent = false;
   uint64_t frameTimeStampBase = 0;
   bool firstFrame = true;
+  bool only_key_frame = false;
   cnstream::EsParser parser_;
 };
 
@@ -289,7 +292,7 @@ void continueAfterSETUP(RTSPClient* rtspClient, int resultCode, char* resultStri
     // (This will prepare the data sink to receive data; the actual flow of data from the client won't start happening
     // until later, after we've sent a RTSP "PLAY" command.)
 
-    scs.subsession->sink = DummySink::createNew(env, *scs.subsession, rtspClient->url());
+    scs.subsession->sink = DummySink::createNew(env, *scs.subsession, rtspClient->url(), client->only_key_frame);
     // perhaps use your own custom "MediaSink" subclass instead
     if (scs.subsession->sink == NULL) {
       env << *rtspClient << "Failed to create a data sink for the \"" << *scs.subsession
@@ -481,12 +484,13 @@ StreamClientState::~StreamClientState() {
 // Define the size of the buffer that we'll use:
 #define DUMMY_SINK_RECEIVE_BUFFER_SIZE (1024 * 1024)
 
-DummySink* DummySink::createNew(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId) {
-  return new (std::nothrow) DummySink(env, subsession, streamId);
+DummySink* DummySink::createNew(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId,
+                                bool only_key_frame) {
+  return new (std::nothrow) DummySink(env, subsession, streamId, only_key_frame);
 }
 
-DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId)
-    : MediaSink(env), fSubsession(subsession) {
+DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId, bool only_I)
+    : MediaSink(env), fSubsession(subsession), only_key_frame(only_I) {
   fStreamId = strDup(streamId);
   fReceiveBuffer.reset(new u_int8_t[DUMMY_SINK_RECEIVE_BUFFER_SIZE + 4]);
 
@@ -539,7 +543,7 @@ DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char co
   for (unsigned j = 0; j < num; j++) {
     if (records[j]) delete[] records[j];
   }
-  parser_.Open(codec_id, this, paramset.get(), paramset_size);
+  parser_.Open(codec_id, this, paramset.get(), paramset_size, only_key_frame);
 }
 
 DummySink::~DummySink() {
@@ -699,12 +703,13 @@ class RtspSessionImpl {
     }
 
     this->eventLoopWatchVariable = 0;
-    ((ourRTSPClient*)rtspClient)->eventLoopWatchVariable = &this->eventLoopWatchVariable;
-    ((ourRTSPClient*)rtspClient)->livenessTimeoutMs = param_.livenessTimeoutMs;
-    ((ourRTSPClient*)rtspClient)->streammingPreferTcp = param_.streammingPreferTcp;
-    ((ourRTSPClient*)rtspClient)->streammingOverTcp = true;
-    ((ourRTSPClient*)rtspClient)->setupOk = false;
-    ((ourRTSPClient*)rtspClient)->cb_ = param_.cb;
+    reinterpret_cast<ourRTSPClient*>(rtspClient)->eventLoopWatchVariable = &this->eventLoopWatchVariable;
+    reinterpret_cast<ourRTSPClient*>(rtspClient)->livenessTimeoutMs = param_.livenessTimeoutMs;
+    reinterpret_cast<ourRTSPClient*>(rtspClient)->streammingPreferTcp = param_.streammingPreferTcp;
+    reinterpret_cast<ourRTSPClient*>(rtspClient)->only_key_frame = param_.only_key_frame;
+    reinterpret_cast<ourRTSPClient*>(rtspClient)->streammingOverTcp = true;
+    reinterpret_cast<ourRTSPClient*>(rtspClient)->setupOk = false;
+    reinterpret_cast<ourRTSPClient*>(rtspClient)->cb_ = param_.cb;
 
     // Next, send a RTSP "DESCRIBE" command, to get a SDP description for the stream.
     // Note that this command - like all RTSP commands - is sent asynchronously; we do not block, waiting for a

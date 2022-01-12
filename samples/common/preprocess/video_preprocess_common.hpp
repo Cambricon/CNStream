@@ -32,7 +32,7 @@
 
 using VideoPixelFmt = infer_server::video::PixelFmt;
 
-bool ConvertColorSpace(size_t width, size_t height, VideoPixelFmt src_fmt, VideoPixelFmt dst_fmt,
+bool ConvertColorSpace(size_t width, size_t height, size_t stride, VideoPixelFmt src_fmt, VideoPixelFmt dst_fmt,
                        uint8_t* src_img_data, cv::Mat* dst_img);
 
 #endif  // ifndef SAMPLES_DEMO_PREPROCESS_VIDEO_PREPROCESS_COMMON_HPP_

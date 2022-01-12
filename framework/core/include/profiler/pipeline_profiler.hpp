@@ -24,7 +24,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <unordered_map>
+#include <map>
 
 #include "cnstream_common.hpp"
 #include "cnstream_config.hpp"
@@ -74,7 +74,8 @@ class PipelineProfiler : private NonCopyable {
    */
   PipelineProfiler(const ProfilerConfig& config,
                    const std::string& pipeline_name,
-                   const std::vector<std::shared_ptr<Module>>& modules);
+                   const std::vector<std::shared_ptr<Module>>& modules,
+                   const std::vector<std::string>& sorted_module_names);
 
   /*!
    * @brief Gets the name of the pipeline.
@@ -85,7 +86,7 @@ class PipelineProfiler : private NonCopyable {
 
   /**
    * @brief Gets profiler configuration.
-   * 
+   *
    * @return Returns profiler configuration.
    **/
   ProfilerConfig GetConfig() const;
@@ -177,9 +178,10 @@ class PipelineProfiler : private NonCopyable {
  private:
   ProfilerConfig config_;
   std::string pipeline_name_;
-  std::unordered_map<std::string, std::unique_ptr<ModuleProfiler>> module_profilers_;
+  std::map<std::string, std::unique_ptr<ModuleProfiler>> module_profilers_;
   std::unique_ptr<ProcessProfiler> overall_profiler_;
   std::unique_ptr<PipelineTracer> tracer_;
+  std::vector<std::string> sorted_module_names_;
 };  // class PipelineProfiler
 
 inline std::string PipelineProfiler::GetName() const {

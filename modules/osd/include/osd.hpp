@@ -28,7 +28,7 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include "opencv2/highgui/highgui.hpp"
@@ -105,7 +105,7 @@ class Osd : public Module, public ModuleCreator<Osd> {
 
  private:
   std::shared_ptr<CnOsd> GetOsdContext();
-  std::unordered_map<std::thread::id, std::shared_ptr<CnOsd>> osd_ctxs_;
+  std::map<std::thread::id, std::shared_ptr<CnOsd>> osd_ctxs_;
   RwLock ctx_lock_;
   std::vector<std::string> labels_;
   std::vector<std::string> secondary_labels_;

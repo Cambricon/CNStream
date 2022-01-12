@@ -71,9 +71,6 @@ class RtspHandlerImpl : public IDecodeResult, public SourceRender {
   bool use_ffmpeg_ = false;
   int reconnect_ = 0;
   MaximumVideoResolution maximum_resolution_;
-
- private:
-  /**/
   std::atomic<int> demux_exit_flag_ {0};
   std::thread demux_thread_;
   std::atomic<int> decode_exit_flag_{0};

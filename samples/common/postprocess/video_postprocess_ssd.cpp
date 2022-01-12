@@ -44,7 +44,7 @@ class VideoPostprocSsd : public cnstream::VideoPostproc {
    * @see VideoPostprocSsd::UserProcess
    */
   bool Execute(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
-               const infer_server::ModelInfo& model_info) override;
+               const infer_server::ModelInfo* model_info) override;
 
   DECLARE_REFLEX_OBJECT_EX(VideoPostprocSsd, cnstream::VideoPostproc)
 };  // class VideoPostprocSsd
@@ -53,10 +53,10 @@ IMPLEMENT_REFLEX_OBJECT_EX(VideoPostprocSsd, cnstream::VideoPostproc)
 
 bool VideoPostprocSsd::Execute(infer_server::InferData* output_data,
                                const infer_server::ModelIO& model_output,
-                               const infer_server::ModelInfo& model_info) {
-  LOGF_IF(DEMO, model_info.InputNum() != 1);
-  LOGF_IF(DEMO, model_info.OutputNum() != 1);
-  LOGF_IF(DEMO, model_output.buffers.size() != 1);
+                               const infer_server::ModelInfo* model_info) {
+  LOGF_IF(DEMO, model_info->InputNum() != 1) << "VideoPostprocSsd: model input number is not equal to 1";
+  LOGF_IF(DEMO, model_info->OutputNum() != 1) << "VideoPostprocSsd: model output number is not equal to 1";
+  LOGF_IF(DEMO, model_output.buffers.size() != 1) << "VideoPostprocSsd: model result size is not equal to 1";
 
   cnstream::CNObjsVec objs;
 

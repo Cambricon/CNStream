@@ -14,7 +14,7 @@ MODELS_ROOT=${CNSTREAM_ROOT}/data/models
 CONFIGS_ROOT=${SAMPLES_ROOT}/cns_launcher/configs
 
 PrintUsages(){
-    echo "Usages: run.sh [mlu220/mlu270] [encode_video/rtsp]"
+    echo "Usages: run.sh [mlu220/mlu270/mlu370] [encode_video/rtsp]"
 }
 
 if [ $# -ne 2 ]; then
@@ -28,6 +28,11 @@ if [[ ${1} == "mlu220" ]]; then
 elif [[ ${1} == "mlu270" ]]; then
     MODEL_PATH=${MODELS_ROOT}/yolov3_b4c4_argb_mlu270.cambricon
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon
+elif [[ ${1} == "mlu370" ]]; then
+    MODEL_PATH=${MODELS_ROOT}/yolov3_nhwc.data
+    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/yolov3_nhwc_0.3_int8_fp16.data
+    GRAPH_PATH=${MODELS_ROOT}/yolov3_nhwc.graph
+    REMOTE_GRAPH_PATH=http://video.cambricon.com/models/MLU370/yolov3_nhwc_0.3_int8_fp16.graph
 else
     PrintUsages
     exit 1

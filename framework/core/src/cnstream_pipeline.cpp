@@ -28,7 +28,7 @@
 #include <queue>
 #include <string>
 #include <thread>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -171,6 +171,10 @@ bool Pipeline::Stop() {
     node->data.module->Close();
   }
 
+  // clear callback function, important! Especially for the case of using the python api,
+  // the callback function will manage the life cycle of a python object.
+  // When a circular reference occurs, GC(python) cannot handle it, resulting in a memory leak.
+  RegisterFrameDoneCallBack(NULL);
   LOGI(CORE) << "Pipeline[" << GetName() << "] " << "Stop";
   return true;
 }
@@ -247,8 +251,16 @@ bool Pipeline::CreateModules() {
     all_modules_mask_ |= 1UL << node_iter->data.module->GetId();
   }
 
-  profiler_.reset(new PipelineProfiler(graph_->GetConfig().profiler_config, GetName(), modules));
+  profiler_.reset(new PipelineProfiler(graph_->GetConfig().profiler_config, GetName(), modules,
+      GetSortedModuleNames()));
   return true;
+}
+
+std::vector<std::string> Pipeline::GetSortedModuleNames() {
+  if (sorted_module_names_.empty()) {
+    sorted_module_names_ = graph_->TopoSort();
+  }
+  return sorted_module_names_;
 }
 
 void Pipeline::GenerateModulesMask() {

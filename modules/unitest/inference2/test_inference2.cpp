@@ -42,7 +42,7 @@ namespace cnstream {
 class FakeVideoPostproc : public cnstream::VideoPostproc {
  public:
   bool Execute(infer_server::InferData* result, const infer_server::ModelIO& output,
-               const infer_server::ModelInfo& model) override {
+               const infer_server::ModelInfo* model) override {
     return true;
   }
 
@@ -55,7 +55,7 @@ IMPLEMENT_REFLEX_OBJECT_EX(FakeVideoPostproc, cnstream::VideoPostproc);
 class FakeVideoPreproc : public cnstream::VideoPreproc {
  public:
   bool Execute(infer_server::ModelIO* model_input, const infer_server::InferData& input_data,
-               const infer_server::ModelInfo& model_info) {
+               const infer_server::ModelInfo* model_info) {
     return true;
   }
 

@@ -4,10 +4,9 @@ from cnstream import *
 import time
 import threading
 import cv2
+import utils
 
 g_source_lock = threading.Lock()
-g_perf_print_lock = threading.Lock()
-g_perf_print_stop = False
 
 cur_file_dir = os.path.split(os.path.realpath(__file__))[0]
 
@@ -83,33 +82,6 @@ class CustomObserver(StreamMsgObserver):
                 stop = False
         self.wakener.release()
 
-class PerfThread (threading.Thread):
-    def __init__(self, pipeline):
-        threading.Thread.__init__(self)
-        self.pipeline = pipeline
-    def run(self):
-        print_performance(self.pipeline)
-
-
-def print_performance(pipeline):
-    global g_perf_print_lock, g_perf_print_stop
-    if pipeline.is_profiling_enabled():
-        last_time = time.time()
-        while True:
-            g_perf_print_lock.acquire()
-            if g_perf_print_stop:
-                break
-            g_perf_print_lock.release()
-            elapsed_time = time.time() - last_time
-            if elapsed_time < 2:
-                time.sleep(2 - elapsed_time)
-            last_time = time.time()
-            # print whole process performance
-            print_pipeline_performance(pipeline)
-            # print real time performance (last 2 seconds)
-            print_pipeline_performance(pipeline, 2000)
-        g_perf_print_lock.release()
-
 class OneModuleObserver(ModuleObserver):
     def __init__(self) -> None:
         super().__init__()
@@ -145,7 +117,7 @@ def main():
         print('Downloading {} ...'.format(url_str))
         urllib.request.urlretrieve(url_str, model_file)
 
-    global g_source_lock, g_perf_print_lock, g_perf_print_stop
+    global g_source_lock
     # Build a pipeline
     pipeline = Pipeline("my_pipeline")
     pipeline.build_pipeline_by_json_file('python_demo_config.json')
@@ -167,15 +139,15 @@ def main():
     obs = CustomObserver(pipeline, source)
     pipeline.stream_msg_observer = obs
 
-
     # Start the pipeline
     if not pipeline.start():
         print("Start pipeline failed.")
         return
 
     # Start a thread to print pipeline performance
-    perf_th = PerfThread(pipeline)
-    perf_th.start()
+    perf_level = 0
+    print_perf_loop = utils.PrintPerformanceLoop(pipeline, perf_level=perf_level)
+    print_perf_loop.start()
 
     # Define an input data handler
     mp4_path = "../../data/videos/cars.mp4"
@@ -192,12 +164,8 @@ def main():
 
     obs.wait_for_stop()
 
-    if pipeline.is_profiling_enabled():
-        g_perf_print_lock.acquire()
-        g_perf_print_stop = True
-        g_perf_print_lock.release()
-        perf_th.join()
-        print_pipeline_performance(pipeline)
+    print_perf_loop.stop()
+    utils.PrintPerformance(pipeline, perf_level=perf_level).print_whole()
 
     print("pipeline[{}] stops".format(pipeline.get_name()))
 

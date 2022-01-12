@@ -22,7 +22,7 @@
 #include <memory>
 #include <string>
 #include <thread>
-#include <unordered_map>
+#include <map>
 
 #include "cnstream_pipeline.hpp"
 #include "profiler/pipeline_profiler.hpp"

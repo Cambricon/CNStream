@@ -29,7 +29,7 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -69,7 +69,7 @@ class Postproc : virtual public ReflexObjectEx<Postproc> {
    *
    * @return Returns ture for success, otherwise returns false.
    **/
-  virtual bool Init(const std::unordered_map<std::string, std::string> &params) { return true; }
+  virtual bool Init(const std::map<std::string, std::string> &params) { return true; }
   /**
    * @brief Sets threshold.
    *
@@ -87,8 +87,8 @@ class Postproc : virtual public ReflexObjectEx<Postproc> {
    *
    * @return Returns 0 if successful, otherwise returns -1.
    *
-   * @note 
-   * - This function is called by the Inferencer module when the parameter `mem_on_mlu_for_postproc` 
+   * @note
+   * - This function is called by the Inferencer module when the parameter `mem_on_mlu_for_postproc`
            is set to false and `obj_infer` is set to false. See the Inferencer parameter description for details.
    */
   virtual int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
@@ -103,7 +103,7 @@ class Postproc : virtual public ReflexObjectEx<Postproc> {
    *
    * @return Returns 0 if successful, otherwise returns -1.
    *
-   * @note 
+   * @note
    *  - This function is called by the Inferencer module when the parameter ``mem_on_mlu_for_postproc``
            is set to true and ``obj_infer`` is set to false.
            See the Inferencer parameter description for details.
@@ -143,7 +143,7 @@ class ObjPostproc : virtual public ReflexObjectEx<ObjPostproc> {
    *
    * @return Returns ture for success, otherwise returns false.
    **/
-  virtual bool Init(const std::unordered_map<std::string, std::string> &params) { return true; }
+  virtual bool Init(const std::map<std::string, std::string> &params) { return true; }
   /**
    * @brief Sets threshold.
    *
@@ -162,7 +162,7 @@ class ObjPostproc : virtual public ReflexObjectEx<ObjPostproc> {
    *
    * @return Returns 0 if successful, otherwise returns -1.
    *
-   * @note 
+   * @note
    * - This function is called by the Inferencer module when the parameter
           ``mem_on_mlu_for_postproc`` is set to false and ``obj_infer`` is set to true.
           See the Inferencer parameter description for details.
@@ -179,7 +179,7 @@ class ObjPostproc : virtual public ReflexObjectEx<ObjPostproc> {
    *
    * @return Returns 0 if successful, otherwise returns -1.
    *
-   * @note 
+   * @note
    * - This function is called by the Inferencer module when the parameter
           ``mem_on_mlu_for_postproc`` is set to true and ``obj_infer`` is set to true.
           See the Inferencer parameter description for details.

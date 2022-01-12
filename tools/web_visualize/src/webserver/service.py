@@ -1,5 +1,5 @@
 ###############################################################################
-# Copyright (C) [2020] by Cambricon, Inc. All rights reserved
+# Copyright (C) [2021] by Cambricon, Inc. All rights reserved
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -22,62 +22,98 @@ import os
 import cv2
 import time
 import queue
-import logging
-import subprocess
-import numpy as np
+import sys
+from webserver.logger import *
+import webserver.perf as perf
 
-from flask import Flask, render_template, request, json, Response
+sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../../../../python/lib")
 
-from sys import path
-path.append("webserver")
-import pycnservice
+from cnstream import *
 
-preview_video_size = (1080, 620)
+preview_video_size = (1080, 720)
 render_fps = 30
 timeouts = 100
 data_path = "./webui/static/data/"
 json_path = "./webui/static/json/"
 upload_json_path = "./webui/static/json/user/"
+user_media = "user_media"
 
-app = Flask("CNStream Service", template_folder="./webui/template", static_folder="./webui/static")
-logging.basicConfig(level=logging.INFO)
-cnservice = pycnservice.PyCNService()
+result_queue = queue.Queue()
 
-run_demo_subprocess = 0
+class CNStreamService:
+  def __init__(self):
+    self.running = False
+    self.pipeline = None
+    self.source_module_name = 'source'
+    self.source = None
+    self.stream_id = 'stream_0'
 
-def refreshPreview():
-  global cnservice
-  if cnservice.is_running():
-    cnservice.stop()
-    time.sleep(2)
+  def receive_processed_frame(self, frame):
+    if self.is_running():
+      result_queue.put(frame)
 
-def render_empty_frame():
-  yield (b'--frame\r\n' + b'Content-Type: image/jpeg\r\n\r\n')
+  def is_running(self):
+    return self.running
+
+  def Start(self, input_file, config_json):
+    self.pipeline = Pipeline("WebPipeline")
+
+    if not self.pipeline.build_pipeline_by_json_file(config_json):
+      logger.error("Build pipeline failed, the JSON configuration is {}".format(config_json))
+
+    self.pipeline.register_frame_done_callback(self.receive_processed_frame)
+
+    self.source = self.pipeline.get_source_module(self.source_module_name)
+
+    if not self.pipeline.start():
+      logger.error("Start pipeline failed.")
+      return False
+    else:
+      logger.info("Start pipeline done.")
+
+    # Start a thread to print pipeline performance
+    self.print_perf_loop = perf.PrintPerformanceLoop(self.pipeline, perf_level=0)
+    self.print_perf_loop.start()
+
+    file_handler = FileHandler(self.source, self.stream_id, input_file, 30)
+    if self.source.add_source(file_handler) != 0:
+      logger.error("Failed to add stream {}".format(input_file))
+      return False
+
+    self.running = True
+    return True
+
+  def Stop(self):
+    self.running = False
+    result_queue.queue.clear()
+    self.source.remove_source(self.stream_id, True)
+    self.pipeline.stop()
+    self.print_perf_loop.stop()
+    logger.info("Pipeline stop done.")
+
+cnstream_service = CNStreamService()
 
 def getPreviewFrame():
-  global cnservice
   render_with_interval = False
-  logging.info("cnservice get one frame")
-  frame_info = pycnservice.CNSFrameInfo()
-  frame_data = np.ndarray([preview_video_size[1], preview_video_size[0], 3], dtype=np.uint8)
+
   background_img = cv2.imread(data_path + "black.jpg")
   ret, encode_img = cv2.imencode('.jpg', background_img)
   background_img_bytes = encode_img.tobytes()
-  timeout_cnt = 0
+
   while True:
-    if cnservice.is_running():
+    if cnstream_service.is_running():
       start = time.time()
-      ret = cnservice.read_one_frame(frame_info, frame_data)
-      if (False == ret):
-        timeout_cnt += 1
-        if timeout_cnt > timeouts:
-          logging.info("read frame timeout, stop")
-          cnservice.stop()
-      elif (True == frame_info.eos_flag):
-        logging.info("read frame eos, stop")
-        cnservice.stop()
+      frame_info = result_queue.get()
+
+      if (True == frame_info.is_eos()):
+        logger.info("read EOS frame.")
+        frame_info = None
+        cnstream_service.Stop()
       else:
-        timeout_cnt = 0
+        cn_data = frame_info.get_cn_data_frame()
+        if not cn_data.has_bgr_image():
+          continue
+        frame_data = cn_data.image_bgr()
         ret, jpg_data = cv2.imencode(".jpg", cv2.resize(frame_data, preview_video_size))
         if ret:
           frame_bytes = jpg_data.tobytes()
@@ -95,31 +131,7 @@ def getPreviewFrame():
       time.sleep(1)
   yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + background_img_bytes + b'Content-Type: image/jpeg\r\n\r\n')
-  del frame_data
 
-demo_console_output_que = queue.Queue()
-def getDemoConsoleOutput():
-  while not demo_console_output_que.empty():
-    yield demo_console_output_que.get()
-
-def process(filename, config_json):
-  global run_demo_subprocess
-  cwd = os.getcwd() + "/"
-  run_demo_subprocess = subprocess.Popen(["../../../samples/bin/cns_launcher", "--data_name=" + cwd + filename,
-      "--data_path=../files.list_video",
-      "--src_frame_rate=30", "--wait_time=0", "--config_fname", config_json,
-      "--log_to_stderr=true"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-  while run_demo_subprocess.poll() is None:
-    output_stdout = run_demo_subprocess.stdout.readline().strip()
-    if output_stdout:
-      print(output_stdout.decode("utf8"))
-      demo_console_output_que.put(output_stdout.decode("utf8") + "\n")
-  output_stderr = run_demo_subprocess.stderr.readlines()
-  for line in output_stderr:
-    line = line.strip()
-    print(line.decode("utf8"))
-  demo_console_output_que.put("!@#$run demo done")
 
 def getSourceUrl(filename):
   global render_fps
@@ -135,6 +147,11 @@ def getSourceUrl(filename):
     elif filename == "objects":
       filename = "objects.mp4"
     else :
-      filename = "user/" + filename
+      filename = user_media + "/" + filename
     filename = data_path + filename
   return filename
+
+
+def getDemoConsoleOutput():
+  while not log_queue.empty():
+    yield log_queue.get().getMessage()+"\n"

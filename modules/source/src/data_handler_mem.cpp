@@ -72,6 +72,12 @@ bool ESMemHandler::Open() {
   return impl_->Open();
 }
 
+void ESMemHandler::Stop() {
+  if (impl_) {
+    impl_->Stop();
+  }
+}
+
 void ESMemHandler::Close() {
   if (impl_) {
     impl_->Close();
@@ -130,12 +136,14 @@ bool ESMemHandlerImpl::Open() {
   return true;
 }
 
+void ESMemHandlerImpl::Stop() {
+  if (running_.load()) running_.store(false);
+}
+
 void ESMemHandlerImpl::Close() {
-  if (running_.load()) {
-    running_.store(false);
-    if (thread_.joinable()) {
-      thread_.join();
-    }
+  Stop();
+  if (thread_.joinable()) {
+    thread_.join();
   }
 
   {
