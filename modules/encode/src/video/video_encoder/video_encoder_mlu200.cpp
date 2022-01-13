@@ -38,6 +38,7 @@
 #include "cn_video_enc.h"
 
 #include "cnstream_logging.hpp"
+
 #include "video_encoder_mlu200.hpp"
 
 namespace cnstream {
@@ -160,6 +161,7 @@ int VideoEncoderMlu200::Start() {
   param_.frame_rate = param_.frame_rate < 120 ? param_.frame_rate : 120;
   param_.time_base = param_.time_base > 0 ? param_.time_base : 1000;
 
+  std::unique_lock<std::mutex> dlk(g_device_mutex);
   if (param_.codec_type == VideoCodecType::JPEG) {
     memset(&priv_->je_param, 0, sizeof(priv_->je_param));
     priv_->je_param.deviceId = param_.mlu_device_id;
@@ -275,20 +277,20 @@ int VideoEncoderMlu200::Start() {
   }
 
   auto event_handler_loop = [](int device_id) {
-    std::unique_lock<std::mutex> hlk(g_device_mutex);
+    std::unique_lock<std::mutex> dlk(g_device_mutex);
     if (g_device_contexts.count(device_id) == 0) {
       LOGE(VideoEncoderMlu) << "EventHandlerLoop() context is not exist for device " << device_id;
       return;
     }
     DeviceContext &ctx = g_device_contexts[device_id];
-    hlk.unlock();
+    dlk.unlock();
 
     while (1) {
       std::unique_lock<std::mutex> lk(ctx.mutex);
       ctx.queue_cv.wait(lk, [&ctx]() { return (ctx.instances.size() < ctx.threads.size() || !ctx.queue.empty()); });
       if (ctx.instances.size() == 0) {
-        lk.unlock(); hlk.lock(); lk.lock();
-        LOGI(VideoEncoderMlu) << "EventHandlerLoop() context for device " << device_id << " destory now!";
+        lk.unlock(); dlk.lock(); lk.lock();
+        LOGI(VideoEncoderMlu) << "EventHandlerLoop() destory context for device " << device_id << " now!";
         while (!ctx.queue.empty()) ctx.queue.pop();
         for (auto &thread : ctx.threads) thread.detach();
         g_device_contexts.erase(device_id);
@@ -296,14 +298,13 @@ int VideoEncoderMlu200::Start() {
       } else if (ctx.instances.size() < ctx.threads.size()) {
         LOGT(VideoEncoderMlu) << "EventHandlerLoop() reduce event handler thread number to " << ctx.instances.size()
                               << " for device " << device_id;
-        for (auto &thread : ctx.threads) {
-          if (thread.get_id() == std::this_thread::get_id()) {
-            thread.detach();
-            ctx.threads.erase(ctx.threads.begin() + std::distance(ctx.threads.data(), &thread));
-            break;
-          }
+        auto thread = std::find_if(ctx.threads.begin(), ctx.threads.end(),
+                                   [](const std::thread &t) { return t.get_id() == std::this_thread::get_id(); });
+        if (thread != ctx.threads.end()) {
+          thread->detach();
+          ctx.threads.erase(thread);
+          break;
         }
-        break;
       }
 
       if (ctx.queue.empty()) continue;
@@ -311,10 +312,13 @@ int VideoEncoderMlu200::Start() {
       EventData event_data = ctx.queue.front();
       ctx.queue.pop();
       if (!event_data.encoder) {
-        LOGE(VideoEncoderMlu) << "EventHandlerLoop() context is invalid for device " << device_id;
+        LOGW(VideoEncoderMlu) << "EventHandlerLoop() instance is invalid";
         continue;
       }
-
+      if (ctx.instances.count(event_data.encoder) == 0) {
+        LOGW(VideoEncoderMlu) << "EventHandlerLoop() instance " << event_data.encoder << " is not exist";
+        continue;
+      }
       InstanceContext &ictx = ctx.instances[event_data.encoder];
       ctx.index_cv.wait(lk, [&]() { return (event_data.index == ictx.process_index); });
       lk.unlock();
@@ -328,18 +332,17 @@ int VideoEncoderMlu200::Start() {
     }
   };
 
-  std::unique_lock<std::mutex> hlk(g_device_mutex);
   DeviceContext &ctx = g_device_contexts[param_.mlu_device_id];
   std::unique_lock<std::mutex> clk(ctx.mutex);
-  if (ctx.instances.size() < THREAD_NUMBER_PER_DEVICE) {
-    ctx.threads.emplace_back(event_handler_loop, param_.mlu_device_id);
-    LOGT(VideoEncoderMlu) << "Start() increase event handler thread number to " << ctx.instances.size()
-                          << " for device " << param_.mlu_device_id;
-  }
   if (ctx.instances.count(this) == 0) {
     InstanceContext ictx;
     ictx.enqueue_index = ictx.process_index = 0;
     ctx.instances.emplace(this, ictx);
+  }
+  if (ctx.instances.size() <= THREAD_NUMBER_PER_DEVICE && ctx.instances.size() > ctx.threads.size()) {
+    ctx.threads.emplace_back(event_handler_loop, param_.mlu_device_id);
+    LOGT(VideoEncoderMlu) << "Start() increase event handler thread number to " << ctx.instances.size()
+                          << " for device " << param_.mlu_device_id;
   }
 
   state_ = RUNNING;
@@ -439,12 +442,16 @@ int VideoEncoderMlu200::Stop() {
   priv_->ps_size = 0;
   priv_->eos_sent = priv_->eos_got = false;
 
-  std::unique_lock<std::mutex> hlk(g_device_mutex);
+  std::unique_lock<std::mutex> dlk(g_device_mutex);
   if (g_device_contexts.count(param_.mlu_device_id) > 0) {
     DeviceContext &ctx = g_device_contexts[param_.mlu_device_id];
-    std::unique_lock<std::mutex> clk(ctx.mutex);
-    ctx.instances.erase(this);
-    clk.unlock();
+    std::unique_lock<std::mutex> lk(ctx.mutex);
+    if (ctx.instances.count(this) > 0) {
+      InstanceContext &ictx = ctx.instances[this];
+      ctx.index_cv.wait(lk, [&]() { return (ictx.enqueue_index == ictx.process_index); });
+      ctx.instances.erase(this);
+    }
+    lk.unlock();
     ctx.queue_cv.notify_all();
     ctx.index_cv.notify_all();
   }
@@ -805,10 +812,26 @@ bool VideoEncoderMlu200::GetPacketInfo(int64_t index, PacketInfo *info) {
 }
 
 i32_t VideoEncoderMlu200::EventHandlerCallback(int event, void *data) {
+  std::lock_guard<std::mutex> dlk(g_device_mutex);
+  if (g_device_contexts.count(param_.mlu_device_id) == 0) {
+    LOGE(VideoEncoderMlu) << "EventHandlerCallback() context is not exist for device " << param_.mlu_device_id;
+    return 0;
+  }
+  DeviceContext &ctx = g_device_contexts[param_.mlu_device_id];
+  std::unique_lock<std::mutex> lk(ctx.mutex);
+  if (ctx.instances.count(this) == 0) {
+    LOGE(VideoEncoderMlu) << "EventHandlerCallback() instance " << this << " is not exist";
+    return 0;
+  }
+  InstanceContext &ictx = ctx.instances[this];
   EventData event_data;
   event_data.event = event;
   event_data.encoder = this;
   if (event == CNCODEC_CB_EVENT_NEW_FRAME) {
+    if (state_ != RUNNING) {
+      LOGW(VideoEncoderMlu) << "EventHandlerCallback() not running";
+      return 0;
+    }
     if (param_.codec_type == VideoCodecType::JPEG) {
       // cnjpegEncOutput *output = reinterpret_cast<cnjpegEncOutput *>(data);
       // cnjpegEncAddReference(reinterpret_cast<cnjpegEncoder>(priv_->cn_encoder), &(output->streamBuffer));
@@ -821,17 +844,7 @@ i32_t VideoEncoderMlu200::EventHandlerCallback(int event, void *data) {
       event_data.data.vout = *output;
     }
   }
-
   // return EventHandler(event, data);
-
-  std::lock_guard<std::mutex> hlk(g_device_mutex);
-  if (g_device_contexts.count(param_.mlu_device_id) == 0) {
-    LOGE(VideoEncoderMlu) << "EventHandlerCallback() context is not exist for device " << param_.mlu_device_id;
-    return 0;
-  }
-  DeviceContext &ctx = g_device_contexts[param_.mlu_device_id];
-  std::unique_lock<std::mutex> lk(ctx.mutex);
-  InstanceContext &ictx = ctx.instances[this];
   event_data.index = ictx.enqueue_index++;
   ctx.queue.push(event_data);
   lk.unlock();

@@ -31,7 +31,6 @@
 
 #include "cnstream_logging.hpp"
 
-
 namespace cnstream {
 
 static thread_local std::unique_ptr<uint8_t[]> tl_grid_buffer = nullptr;
@@ -182,8 +181,8 @@ bool Tiler::Blit(const Buffer *buffer, int position) {
   }
   if (tl_grid_buffer_size < grid_buffer_size) {
     // LOG(INFO) << "Tiler::Blit() update grid_buffer_size to " << grid_buffer_size;
-    if (!tl_grid_buffer && ++grid_buffer_count_ >= 128) {
-      LOGE(Tiler) << "Tiler::Blit() only support no more than 128 threads to blit canvas";
+    if (!tl_grid_buffer && ++grid_buffer_count_ >= static_cast<int>(cols_ * rows_ * 4)) {
+      LOGE(Tiler) << "Tiler::Blit() only support no more than 4 threads per grid to blit canvas";
       mtx_.unlock();
       return false;
     }
