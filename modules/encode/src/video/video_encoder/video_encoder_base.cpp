@@ -18,9 +18,9 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include "cnstream_logging.hpp"
-
 #include "video_encoder_base.hpp"
+
+#include "cnstream_logging.hpp"
 
 namespace cnstream {
 
@@ -28,7 +28,7 @@ namespace video {
 
 VideoEncoderBase::VideoEncoderBase(const Param &param) : param_(param) {
   if (param_.output_buffer_size < 0x80000) {
-    LOGW(VideoEncoderBase) << "VideoEncoderBase::VideoEncoderBase() output buffer size must no fewer than 512K bytes";
+    LOGW(VideoEncoderBase) << "VideoEncoderBase() output buffer size must no fewer than 512K bytes";
     param_.output_buffer_size = 0x80000;
   }
   output_buffer_ = new (std::nothrow) CircularBuffer(param_.output_buffer_size);
