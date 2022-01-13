@@ -536,7 +536,7 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, void *user_dat
   if (!frame_available_) {
     memset(&frame_, 0, sizeof(VideoFrame));
     if (VideoEncoder::SUCCESS != encoder_->RequestFrameBuffer(&frame_, timeout_ms)) {
-      LOGE(VideoStream) << "Update() video encoder request frame buffer failed";
+      LOGE(VideoStream) << "Encode() video encoder request frame buffer failed";
       return false;
     }
     frame_available_ = true;
