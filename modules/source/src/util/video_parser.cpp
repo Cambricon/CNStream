@@ -322,6 +322,8 @@ class FFParserImpl {
     }
   }
 
+  std::string GetStreamID() { return stream_id_; }
+
  private:
   AVFormatContext* fmt_ctx_ = nullptr;
   AVBitStreamFilterContext *bsf_ctx_ = nullptr;
@@ -369,6 +371,8 @@ int FFParser::Parse() {
   }
   return -1;
 }
+
+std::string FFParser::GetStreamID() { return impl_->GetStreamID(); }
 
 // H264/H265 ES Parser implementation
 class EsParserImpl {

@@ -92,6 +92,7 @@ class FFParser {
   int Open(const std::string& url, IParserResult* result, bool only_key_frame = false);
   void Close();
   int Parse();
+  std::string GetStreamID();
 
  private:
   FFParser(const FFParser& ) = delete;

@@ -47,10 +47,17 @@ namespace cnstream {
 
 class RtspHandlerImpl : public IDecodeResult, public SourceRender {
  public:
-  explicit RtspHandlerImpl(DataSource *module, const std::string &url_name, RtspHandler *handler,
-                           bool use_ffmpeg, int reconnect, const MaximumVideoResolution& maximum_resolution)
-      : SourceRender(handler), module_(module), url_name_(url_name), handler_(handler),
-        use_ffmpeg_(use_ffmpeg), reconnect_(reconnect), maximum_resolution_(maximum_resolution) {
+  explicit RtspHandlerImpl(DataSource *module, const std::string &url_name, RtspHandler *handler, bool use_ffmpeg,
+                           int reconnect, const MaximumVideoResolution &maximum_resolution,
+                           std::function<void(ESPacket, std::string)> callback)
+      : SourceRender(handler),
+        module_(module),
+        url_name_(url_name),
+        handler_(handler),
+        use_ffmpeg_(use_ffmpeg),
+        reconnect_(reconnect),
+        maximum_resolution_(maximum_resolution),
+        save_es_packet_(callback) {
     stream_id_ = handler_->GetStreamId();
   }
   ~RtspHandlerImpl() {}
@@ -81,6 +88,7 @@ class RtspHandlerImpl : public IDecodeResult, public SourceRender {
   BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
   void DemuxLoop();
   void DecodeLoop();
+  std::function<void(cnstream::ESPacket, std::string)> save_es_packet_ = nullptr;
 
 #ifdef UNIT_TEST
  public:  // NOLINT

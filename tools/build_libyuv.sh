@@ -26,8 +26,6 @@ fi
 
 if [ ${SRC_TYPE} = 2 ]; then
   tar xf "${CWD}/${PACKAGE_NAME}.tar.gz" -C ${CWD}
-  cd ${CWD}/${PACKAGE_NAME}
-  git apply  ../libyuv-1766.patch
 fi
 
 cd ${CWD}/${PACKAGE_NAME}
