@@ -43,13 +43,14 @@ namespace cnstream {
 
 std::shared_ptr<SourceHandler> RtspHandler::Create(DataSource *module, const std::string &stream_id,
                                                    const std::string &url_name, bool use_ffmpeg, int reconnect,
-                                                   const MaximumVideoResolution& maximum_resolution) {
+                                                   const MaximumVideoResolution &maximum_resolution,
+                                                   std::function<void(ESPacket, std::string)> callback) {
   if (!module || stream_id.empty() || url_name.empty()) {
     LOGE(SOURCE) << "[RtspHandler] Create function, invalid paramters.";
     return nullptr;
   }
-  std::shared_ptr<RtspHandler> handler(new (std::nothrow) RtspHandler(module, stream_id, url_name,
-      use_ffmpeg, reconnect, maximum_resolution));
+  std::shared_ptr<RtspHandler> handler(
+      new (std::nothrow) RtspHandler(module, stream_id, url_name, use_ffmpeg, reconnect, maximum_resolution, callback));
   return handler;
 }
 
@@ -74,7 +75,7 @@ class IDemuxer {
     info_ = info;
     info_set_ = true;
   }
-
+  std::function<void(cnstream::ESPacket, std::string)> save_packet_cb_ = nullptr;
   std::mutex mutex_;
   VideoInfo info_;
   bool info_set_ = false;
@@ -83,8 +84,11 @@ class IDemuxer {
 
 class FFmpegDemuxer : public rtsp_detail::IDemuxer, public IParserResult {
  public:
-  FFmpegDemuxer(const std::string &stream_id, FrameQueue *queue, const std::string &url, bool only_I)
-      : rtsp_detail::IDemuxer(), queue_(queue), url_name_(url), parser_(stream_id), only_key_frame_(only_I) {}
+  FFmpegDemuxer(const std::string &stream_id, FrameQueue *queue, const std::string &url, bool only_I,
+                std::function<void(ESPacket, std::string)> cb = nullptr)
+      : rtsp_detail::IDemuxer(), queue_(queue), url_name_(url), parser_(stream_id), only_key_frame_(only_I) {
+    save_packet_cb_ = cb;
+  }
 
   ~FFmpegDemuxer() { }
 
@@ -129,6 +133,10 @@ class FFmpegDemuxer : public rtsp_detail::IDemuxer, public IParserResult {
     if (queue_) {
       queue_->Push(std::make_shared<EsPacket>(&pkt));
     }
+    // sometimes users want to save the es packet data by themselves.
+    if (save_packet_cb_) {
+      save_packet_cb_(pkt, parser_.GetStreamID());
+    }
   }
 
  private:
@@ -141,13 +149,16 @@ class FFmpegDemuxer : public rtsp_detail::IDemuxer, public IParserResult {
 
 class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
  public:
-  Live555Demuxer(const std::string &stream_id, FrameQueue *queue, const std::string &url, int reconnect, bool only_I)
+  Live555Demuxer(const std::string &stream_id, FrameQueue *queue, const std::string &url, int reconnect, bool only_I,
+                 std::function<void(ESPacket, std::string)> cb = nullptr)
       : rtsp_detail::IDemuxer(),
         stream_id_(stream_id),
         queue_(queue),
         url_(url),
         reconnect_(reconnect),
-        only_key_frame_(only_I) {}
+        only_key_frame_(only_I) {
+    save_packet_cb_ = cb;
+  }
 
   virtual ~Live555Demuxer() {}
 
@@ -228,6 +239,11 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
     if (queue_) {
       queue_->Push(std::make_shared<EsPacket>(&pkt));
     }
+
+    // sometimes users want to save the es packet data by themselves.
+    if (save_packet_cb_) {
+      save_packet_cb_(pkt, stream_id_);
+    }
   }
 
   void OnRtspEvent(int type) override {}
@@ -245,9 +261,11 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
 };  // class Live555Demuxer
 
 RtspHandler::RtspHandler(DataSource *module, const std::string &stream_id, const std::string &url_name, bool use_ffmpeg,
-                         int reconnect, const MaximumVideoResolution& maximum_resolution)
+                         int reconnect, const MaximumVideoResolution &maximum_resolution,
+                         std::function<void(ESPacket, std::string)> callback)
     : SourceHandler(module, stream_id) {
-  impl_ = new (std::nothrow) RtspHandlerImpl(module, url_name, this, use_ffmpeg, reconnect, maximum_resolution);
+  impl_ =
+      new (std::nothrow) RtspHandlerImpl(module, url_name, this, use_ffmpeg, reconnect, maximum_resolution, callback);
 }
 
 RtspHandler::~RtspHandler() {
@@ -326,9 +344,11 @@ void RtspHandlerImpl::DemuxLoop() {
                << "Create demuxer...";
   std::unique_ptr<rtsp_detail::IDemuxer> demuxer;
   if (use_ffmpeg_) {
-    demuxer.reset(new FFmpegDemuxer(stream_id_, queue_, url_name_, param_.only_key_frame_));
+    demuxer.reset(new FFmpegDemuxer(stream_id_, queue_, url_name_, param_.only_key_frame_, save_es_packet_));
   } else {
-    demuxer.reset(new Live555Demuxer(stream_id_, queue_, url_name_, reconnect_, param_.only_key_frame_));
+    auto cb = handler_->GetStreamId();
+    demuxer.reset(
+        new Live555Demuxer(stream_id_, queue_, url_name_, reconnect_, param_.only_key_frame_, save_es_packet_));
   }
   if (!demuxer) {
     LOGE(SOURCE) << "[" << stream_id_ << "]: "

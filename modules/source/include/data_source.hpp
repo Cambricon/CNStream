@@ -223,9 +223,9 @@ class RtspHandler : public SourceHandler {
    * @return Returns source handler if it is created successfully, otherwise returns nullptr.
    */
   static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
-                                               const std::string &url_name, bool use_ffmpeg = false,
-                                               int reconnect = 10,
-                                               const MaximumVideoResolution& maximum_resolution = {});
+                                               const std::string &url_name, bool use_ffmpeg = false, int reconnect = 10,
+                                               const MaximumVideoResolution &maximum_resolution = {},
+                                               std::function<void(ESPacket, std::string)> callback = nullptr);
   /*!
    * @brief The destructor of RtspHandler.
    *
@@ -248,7 +248,8 @@ class RtspHandler : public SourceHandler {
 
  private:
   explicit RtspHandler(DataSource *module, const std::string &stream_id, const std::string &url_name, bool use_ffmpeg,
-                       int reconnect, const MaximumVideoResolution& maximum_resolution);
+                       int reconnect, const MaximumVideoResolution &maximum_resolution,
+                       std::function<void(ESPacket, std::string)> callback);
 
 #ifdef UNIT_TEST
  public:  // NOLINT

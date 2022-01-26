@@ -21,7 +21,7 @@
 # 1. build image:
 # docker build -f Dockerfile.devel.16.04 -t cnstream:latest .
 # 2. start container:
-# docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -e GDK_SCALE -e GDK_DPI_SCALE --privileged -v /dev:/dev --net=host --ipc=host --pid=host -it --name container_name  -v $PWD:/workspace cnstream:latest
+# docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -e GDK_SCALE -e GDK_DPI_SCALE --privileged -v /dev:/dev --net=host --ipc=host --pid=host -it --name container_name cnstream:latest
 
 FROM ubuntu:16.04
 
