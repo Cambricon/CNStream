@@ -55,7 +55,7 @@ typedef struct ModuleParamDesc {
   std::string default_value; /*!< The default value of this parameter. */
   std::string str_desc;      /*!< The description of this parameter. */
   int optional;              /*!< Does the user have to set this parameter. */
-  int offset;                /*!< This Parameter offset relative to structure. */
+  size_t offset;             /*!< This Parameter offset relative to structure. */
   std::function<bool(const ModuleParamSet&, const std::string&, const std::string&, void*)>
       parser;                                                                /*!< How to parse this parameter. */
   std::string type;                                                          /*!< This Parameter`s type . */

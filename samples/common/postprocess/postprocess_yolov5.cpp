@@ -28,8 +28,6 @@
 #include "postproc.hpp"
 #include "cnstream_logging.hpp"
 
-static auto range_0_1 = [](float num) { return std::max(.0f, std::min(1.0f, num)); };
-
 /**
  * @brief Postprocessing for YOLOv5 neural network
  * The input frame of the model should keep aspect ratio.

@@ -66,7 +66,7 @@ static void OpenCVMatToBuffer(const cv::Mat &mat, Buffer *buffer, bool copy = tr
         buffer->data[1] = mat.data + mat.step * buffer->height;
         buffer->stride[1] = mat.step / 2;
         buffer->data[2] = mat.data + mat.step * buffer->height * 5 / 4;
-        buffer->stride[3] = mat.step / 2;
+        buffer->stride[2] = mat.step / 2;
       }
     } else {
       buffer->height = mat.rows;

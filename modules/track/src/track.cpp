@@ -96,15 +96,14 @@ TrackerContext *Tracker::GetContext(const CNFrameInfoPtr &data) {
 }
 
 bool Tracker::Open(ModuleParamSet paramSet) {
-  bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
-  if (use_magicmind) {
+#ifdef CNIS_USE_MAGICMIND
     if (paramSet.find("model_path") != paramSet.end()) {
       model_pattern1_ = paramSet["model_path"];
       model_pattern1_ = GetPathRelativeToTheJSONFile(model_pattern1_, paramSet);
     }
     if (!model_pattern1_.empty())
       model_ = infer_server::InferServer::LoadModel(model_pattern1_);
-  } else {
+#else
     if (paramSet.find("model_path") != paramSet.end()) {
       model_pattern1_ = paramSet["model_path"];
       model_pattern1_ = GetPathRelativeToTheJSONFile(model_pattern1_, paramSet);
@@ -116,7 +115,7 @@ bool Tracker::Open(ModuleParamSet paramSet) {
     }
     if (!model_pattern1_.empty() && !model_pattern2_.empty())
       model_ = infer_server::InferServer::LoadModel(model_pattern1_, model_pattern2_);
-  }
+#endif
 
   if (paramSet.find("max_cosine_distance") != paramSet.end()) {
     max_cosine_distance_ = std::stof(paramSet["max_cosine_distance"]);

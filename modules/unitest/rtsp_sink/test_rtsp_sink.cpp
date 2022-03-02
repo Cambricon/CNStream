@@ -52,10 +52,6 @@ extern "C" {
 
 namespace cnstream {
 static constexpr const char *gname = "rstp_sink";
-static constexpr int g_device_id = 0;
-static constexpr int g_dev_id = 0;
-static constexpr int g_width = 1280;
-static constexpr int g_height = 720;
 
 extern void TestAllCase(ModuleParamSet params, int frame_rate, bool tiler, int line);
 extern bool PullRtspStreamOpencv(int port = 9554);

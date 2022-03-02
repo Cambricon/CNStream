@@ -31,8 +31,6 @@
 #include "cnstream_pipeline.hpp"
 #include "test_base.hpp"
 
-static constexpr char kCNDataFrameTag[] = "CNDataFrame";
-
 namespace cnstream {
 
 class TPTestModule : public Module, public ModuleCreator<TPTestModule> {
