@@ -50,13 +50,15 @@ elif [[ ${1} == "mlu270" ]]; then
     LOCAL_PATH[1]=${MODELS_ROOT}/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon
     REMOTE_PATH[1]=http://video.cambricon.com/models/MLU270/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon
 elif [[ ${1} == "mlu370" ]]; then
-    if [[ ${3} == "yolov5" ]]; then
-      echo "yolov5 has not been supported yet on MLU370, use yolov3 instead"
+    if [[ ${3} == "yolov3" ]]; then
+        LOCAL_PATH[0]=${MODELS_ROOT}/yolov3_nhwc.model
+        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model
+    else
+        LOCAL_PATH[0]=${MODELS_ROOT}/yolov5_nhwc.model
+        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU370/yolov5_nhwc_tfu_0.8.2_uint8_int8_fp16.model
     fi
-    LOCAL_PATH[0]=${MODELS_ROOT}/yolov3_nhwc.model
-    REMOTE_PATH[0]=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.5_int8_fp16.model
     LOCAL_PATH[1]=${MODELS_ROOT}/feature_extract_nhwc.model
-    REMOTE_PATH[1]=http://video.cambricon.com/models/MLU370/feature_extract_nhwc_tfu_0.5_int8_fp16.model
+    REMOTE_PATH[1]=http://video.cambricon.com/models/MLU370/feature_extract_nhwc_tfu_0.8.2_fp32_int8_fp16.model
 else
     PrintUsages
     exit 1

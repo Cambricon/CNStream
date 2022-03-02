@@ -4,8 +4,8 @@
     "parallelism" : 1,
     "max_input_queue_size" : 20,
     "custom_params" : {
-      "model_path" : "../../../data/models/yolov3_nhwc.model",
-      "postproc_name" : "VideoPostprocYolov3MM",
+      "model_path" : "../../../data/models/yolov5_nhwc.model",
+      "postproc_name" : "VideoPostprocYolov5MM",
       "preproc_name" : "CNCV",
       "threshold" : 0.5,
       "batching_timeout" : 100,

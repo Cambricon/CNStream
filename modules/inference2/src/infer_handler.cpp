@@ -111,24 +111,21 @@ bool InferHandlerImpl::LinkInferServer() {
   // create inference2 engine, load model
   infer_server_.reset(new InferEngine(params_.device_id));
   std::shared_ptr<infer_server::ModelInfo> model_info{nullptr};
-  std::string backend = infer_server::Predictor::Backend();
-  if (backend == "cnrt") {
+#ifndef CNIS_USE_MAGICMIND
     if (params_.model_path.empty()) {
       LOGE(INFERENCER2) << "[" << module_->GetName() << "] init offline model failed, "
                       << "no valid model path.";
       return false;
     }
     model_info = infer_server_->LoadModel(params_.model_path, params_.func_name);
-  } else if (backend == "magicmind") {
+#else
     if (params_.model_path.empty()) {
       LOGE(INFERENCER2) << "[" << module_->GetName() << "] init offline model failed, "
                       << "no valid model path.";
       return false;
     }
     model_info = infer_server_->LoadModel(params_.model_path);
-  } else {
-    LOGF(INFERENCER2) << "[" << module_->GetName() << "] backend not supported" << backend;
-  }
+#endif
   if (!model_info) {
     LOGE(INFERENCER2) << "[" << module_->GetName() << "] init offline model failed,"
                       << "create model failed.";

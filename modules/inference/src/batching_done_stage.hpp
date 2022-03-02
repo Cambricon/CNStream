@@ -46,7 +46,7 @@ class MluOutputResource;
 class RCOpResource;
 class InferTask;
 class CNFrameInfo;
-struct CNInferObject;
+class CNInferObject;
 class FrameInfoResource;
 
 struct AutoSetDone {

@@ -83,6 +83,13 @@ struct CNConfigBase {
    * @return Returns true if the JSON string has been parsed successfully. Otherwise, returns false.
    */
   virtual bool ParseByJSONStr(const std::string &jstr) = 0;
+
+  /**
+   * @brief Destructor to destruct config base.
+   *
+   * @return No return value.
+   */
+  virtual ~CNConfigBase() {}
 };  // struct CNConfigBase
 
 /**

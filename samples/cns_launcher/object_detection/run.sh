@@ -44,7 +44,7 @@ elif [[ ${1} == "mlu270" ]]; then
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon
 elif [[ ${1} == "mlu370" ]]; then
     MODEL_PATH=${MODELS_ROOT}/yolov3_nhwc.model
-    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.5_int8_fp16.model
+    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model
 else
     PrintUsages
     exit 1

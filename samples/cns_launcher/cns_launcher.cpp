@@ -535,7 +535,7 @@ int main(int argc, char **argv) {
   }
 
 #ifdef HAVE_DISPLAY
-  auto quit_callback = [&pipeline, &source, &msg_observer]() {
+  auto quit_callback = [&msg_observer]() {
     // stop feed-data threads before remove-sources...
     thread_running.store(false);
     for (unsigned int i = 0; i < gFeedMemFutures.size(); i++) {

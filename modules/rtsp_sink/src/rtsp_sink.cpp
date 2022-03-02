@@ -113,7 +113,7 @@ RtspSinkContext * RtspSink::CreateContext(CNFrameInfoPtr data, const std::string
     return nullptr;
   }
 
-  auto get_packet = [time_base](VideoStream *stream, uint8_t *data, int size, double *timestamp, int *buffer_percent) {
+  auto get_packet = [](VideoStream *stream, uint8_t *data, int size, double *timestamp, int *buffer_percent) {
     if (!stream) return -1;
     VideoPacket packet, *pkt;
     VideoStream::PacketInfo info;

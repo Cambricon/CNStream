@@ -387,7 +387,7 @@ void OpencvDisplayer::OnStart() {
 inline
 void OpencvDisplayer::OnFrame(const CNFrameInfoSptr& frame_info) {
   std::chrono::duration<double, std::milli> dura = std::chrono::steady_clock::now() - last_show_time_;
-  double sleep_time = dura.count() - 1e3 / FLAGS_output_frame_rate;
+  double sleep_time = dura.count() - 1e3 / fr_;
   if (sleep_time > 0) usleep(sleep_time * 1e3);
   auto frame = frame_info->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag);
   cv::imshow("simple pipeline", frame->ImageBGR());

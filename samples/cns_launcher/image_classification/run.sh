@@ -31,7 +31,7 @@ elif [[ ${1} == "mlu270" ]]; then
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/resnet50_b16c16_bgra_mlu270.cambricon
 elif [[ ${1} == "mlu370" ]]; then
     MODEL_PATH=${MODELS_ROOT}/resnet50_nhwc.model
-    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/resnet50_nhwc_tfu_0.5_int8_fp16.model
+    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/resnet50_nhwc_tfu_0.8.2_uint8_int8_fp16.model
 else
     PrintUsages
     exit 1

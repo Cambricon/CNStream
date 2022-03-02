@@ -29,10 +29,8 @@ elif [[ ${1} == "mlu270" ]]; then
     MODEL_PATH=${MODELS_ROOT}/yolov3_b4c4_argb_mlu270.cambricon
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon
 elif [[ ${1} == "mlu370" ]]; then
-    MODEL_PATH=${MODELS_ROOT}/yolov3_nhwc.data
-    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/yolov3_nhwc_0.3_int8_fp16.data
-    GRAPH_PATH=${MODELS_ROOT}/yolov3_nhwc.graph
-    REMOTE_GRAPH_PATH=http://video.cambricon.com/models/MLU370/yolov3_nhwc_0.3_int8_fp16.graph
+    MODEL_PATH=${MODELS_ROOT}/yolov3_nhwc.model
+    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model
 else
     PrintUsages
     exit 1
@@ -54,13 +52,6 @@ if [[ ! -f ${MODEL_PATH} ]]; then
     fi
 fi
 
-if [ -n ${GRAPH_PATH} ] && [ ! -f ${GRAPH_PATH} ]; then
-    wget -O ${GRAPH_PATH} ${REMOTE_GRAPH_PATH}
-    if [ $? -ne 0 ]; then
-        echo "Download ${REMOTE_GRAPH_PATH} to ${GRAPH_PATH} failed."
-        exit 1
-    fi
-fi
 
 if [[ ! -f ${LABEL_PATH} ]]; then
     wget -O ${LABEL_PATH} ${REMOTE_LABEL_PATH}

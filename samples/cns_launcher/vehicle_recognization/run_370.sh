@@ -18,9 +18,9 @@ LABEL_PATH=${MODELS_ROOT}/label_map_coco.txt
 REMOTE_LABEL_PATH=http://video.cambricon.com/models/labels/label_map_coco.txt
 
 MODEL_PATHS[0]=${MODELS_ROOT}/yolov3_nhwc.model
-REMOTE_MODEL_PATHS[0]=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.5_int8_fp16.model
+REMOTE_MODEL_PATHS[0]=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model
 MODEL_PATHS[1]=${MODELS_ROOT}/resnet50_nhwc.model
-REMOTE_MODEL_PATHS[1]=http://video.cambricon.com/models/MLU370/resnet50_nhwc_tfu_0.5_int8_fp16.model
+REMOTE_MODEL_PATHS[1]=http://video.cambricon.com/models/MLU370/resnet50_nhwc_tfu_0.8.2_uint8_int8_fp16.model
 
 for i in $(seq 0 `expr ${#MODEL_PATHS[@]} - 1`)
 do
