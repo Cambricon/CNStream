@@ -62,7 +62,6 @@ void Tiler::Init() {
     buffer_size = stride * height_ * 3;
   }
   for (int i = 0; i < 2; i++) {
-    memset(canvas_buffers_ + i, 0, sizeof(Buffer));
     uint8_t *buffer = new uint8_t[buffer_size];
     memset(buffer, 0, buffer_size);
     if (color_ == ColorFormat::YUV_I420) {
@@ -165,11 +164,13 @@ bool Tiler::Blit(const Buffer *buffer, int position) {
 
   Rect *grid = &grids_[position];
   Buffer grid_buffer;
-  memset(&grid_buffer, 0, sizeof(Buffer));
   grid_buffer.width = grid->w;
   grid_buffer.height = grid->h;
   grid_buffer.color = color_;
   grid_buffer.mlu_device_id = -1;
+  grid_buffer.stride[0] = 0;
+  grid_buffer.stride[1] = 0;
+  grid_buffer.stride[2] = 0;
 
   uint32_t grid_buffer_size;
   if (color_ <= ColorFormat::YUV_NV21) {

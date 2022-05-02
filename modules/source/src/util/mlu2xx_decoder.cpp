@@ -145,7 +145,7 @@ class Mlu2xxDecoder : public Decoder {
     cncodecFrame *frame_;
   };
   std::mutex instance_mutex_;
-  VideoInfo info_;
+  VideoInfo info_{};
   ExtraDecoderInfo extra_;
 };
 
@@ -269,13 +269,11 @@ bool Mlu2xxDecoder::Process(VideoEsPacket *pkt) {
       }
       GetVpuTimestamp(input.pts, nullptr);  // Failed to feeddata, erase record
 
-      if (0 == retry_time) {
-        LOGW(SOURCE) << "[" << stream_id_ << "]: "
-                     << "cnvideoDecFeedData(data) timeout 3 times, prepare abort decoder.";
-        // don't processframe
-        cndec_abort_flag_ = 1;
-        return false;
-      }
+      LOGW(SOURCE) << "[" << stream_id_ << "]: "
+                    << "cnvideoDecFeedData(data) timeout 3 times, prepare abort decoder.";
+      // don't processframe
+      cndec_abort_flag_ = 1;
+      return false;
     }
   }
 
@@ -334,13 +332,11 @@ bool Mlu2xxDecoder::Process(VideoEsPacket *pkt) {
           return true;
         }
       }
-      if (0 == retry_time) {
-        LOGW(SOURCE) << "[" << stream_id_ << "]: "
-                     << "cnjpegDecFeedData(data) timeout 3 times, prepare abort decoder.";
-        // don't processframe
-        cndec_abort_flag_ = 1;
-        return false;
-      }
+      LOGW(SOURCE) << "[" << stream_id_ << "]: "
+                    << "cnjpegDecFeedData(data) timeout 3 times, prepare abort decoder.";
+      // don't processframe
+      cndec_abort_flag_ = 1;
+      return false;
     }
   }
 

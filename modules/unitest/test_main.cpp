@@ -123,12 +123,12 @@ int main(int argc, char **argv) {
   // GetModuleExists(model_name, modulepath_pair);
   GetModuleExists(model_info);
   // fork process and write log to file in child proccess is not supported in log system
-  // cnstream::InitCNStreamLogging(GetExecPath().c_str());
+  // google::InitGoogleLogging(GetExecPath().c_str());
   testing::InitGoogleTest(&argc, argv);
   ::gflags::ParseCommandLineFlags(&argc, &argv, false);
   // FLAGS_alsologtostderr = true;
   testing::AddGlobalTestEnvironment(new TestEnvironment);
   int ret = RUN_ALL_TESTS();
-  // cnstream::ShutdownCNStreamLogging();
+  // google::ShutdownGoogleLogging();
   return ret;
 }

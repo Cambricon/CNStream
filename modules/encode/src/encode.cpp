@@ -335,7 +335,6 @@ int Encode::Process(CNFrameInfoPtr data) {
       return -1;
     }
     VideoStream::Buffer buffer;
-    memset(&buffer, 0, sizeof(VideoStream::Buffer));
     buffer.width = frame->width;
     buffer.height = frame->height;
     buffer.data[0] = static_cast<uint8_t *>(const_cast<void *>(frame->data[0]->GetMluData()));

@@ -162,7 +162,7 @@ class VideoStream {
   std::thread resample_thread_;
   std::mutex context_mtx_;
   std::map<std::string, StreamContext> streams_;
-  VideoFrame frame_;
+  VideoFrame frame_{};
   std::mutex frame_mtx_;
   std::atomic<bool> frame_available_{false};
   EventCallback event_callback_ = nullptr;
@@ -490,7 +490,6 @@ bool VideoStream::Clear(const std::string &stream_id) {
       memset(black.data, 0, param_.width * param_.height * 4);
     }
     Buffer buffer;
-    memset(&buffer, 0, sizeof(Buffer));
     MatToBuffer(black, color, &buffer);
     if (!tiler_->Blit(&buffer, position)) {
       LOGE(VideoStream) << "Clear() tiler blit black failed";
@@ -524,7 +523,6 @@ void VideoStream::MatToBuffer(const cv::Mat &mat, ColorFormat color, Scaler::Buf
 
 bool VideoStream::Encode(const cv::Mat &mat, ColorFormat color, int64_t timestamp, void *user_data, int timeout_ms) {
   Buffer buffer;
-  memset(&buffer, 0, sizeof(Buffer));
   MatToBuffer(mat, color, &buffer);
   return Encode(&buffer, timestamp, user_data, timeout_ms);
 }
@@ -547,7 +545,6 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, void *user_dat
   std::shared_ptr<void> mlu_data = nullptr;            /*!< A shared pointer to the MLU data. */
   if (buffer->mlu_device_id < 0) {
     Buffer buf, *enc_buf;
-    memset(&buf, 0, sizeof(Buffer));
     buf.width = frame_.width;
     buf.height = frame_.height;
     buf.color = frame_to_buffer_color_map[frame_.pixel_format];
@@ -571,8 +568,7 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, void *user_dat
       // CPU Frame && MLU Encoder
       if (buffer->width == frame_.width && buffer->height == frame_.height && buffer->color == buf.color &&
           buffer->stride[0] == frame_.stride[0] && buffer->stride[1] == frame_.stride[1] &&
-          (buffer->color != ColorFormat::YUV_I420 ||
-           (buffer->color == ColorFormat::YUV_I420 && buffer->stride[2] == frame_.stride[2]))) {
+          (buffer->color != ColorFormat::YUV_I420 || buffer->stride[2] == frame_.stride[2])) {
         enc_buf = const_cast<Buffer *>(buffer);
 #if defined HAVE_CNCV && defined USE_CNCV
       } else if (buffer->color >= ColorFormat::BGR &&
@@ -643,7 +639,6 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, void *user_dat
     }
   } else {
     Buffer buf;
-    memset(&buf, 0, sizeof(Buffer));
     buf.width = frame_.width;
     buf.height = frame_.height;
     buf.color = frame_to_buffer_color_map[frame_.pixel_format];
@@ -652,8 +647,7 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, void *user_dat
       // MLU Frame && CPU Encoder
       if (buffer->width == frame_.width && buffer->height == frame_.height && buffer->color == buf.color &&
           buffer->stride[0] == frame_.stride[0] && buffer->stride[1] == frame_.stride[1] &&
-          (buffer->color != ColorFormat::YUV_I420 ||
-           (buffer->color == ColorFormat::YUV_I420 && buffer->stride[2] == frame_.stride[2]))) {
+          (buffer->color != ColorFormat::YUV_I420 || buffer->stride[2] == frame_.stride[2])) {
         buf.data[0] = frame_.data[0];
         buf.stride[0] = frame_.stride[0];
         buf.data[1] = frame_.data[1];
@@ -691,7 +685,6 @@ bool VideoStream::Encode(const Buffer *buffer, int64_t timestamp, void *user_dat
 
       if (data) {
         Buffer dst_buf;
-        memset(&dst_buf, 0, sizeof(Buffer));
         dst_buf.color = buf.color;
         buf.color = buffer->color;
         dst_buf.mlu_device_id = -1;
@@ -785,7 +778,6 @@ void VideoStream::RenderLoop(const std::string &stream_id) {
       start_resample_ = true;
     } else {
       Buffer buffer;
-      memset(&buffer, 0, sizeof(Buffer));
       MatToBuffer(frame.mat, frame.color, &buffer);
       if (!tiler_->Blit(&buffer, stream.position)) {
         LOGE(VideoStream) << "RenderLoop() tiler blit in pos: " << stream.position << " failed";

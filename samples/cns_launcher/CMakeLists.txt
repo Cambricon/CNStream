@@ -66,6 +66,10 @@ endif()
 include(${CNSTREAM_ROOT_DIR}/cmake/FindGFlags.cmake)
 include_directories(${GFLAGS_INCLUDE_DIRS})
 
+# ---[ glog
+include(${CNSTREAM_ROOT_DIR}/cmake/FindGlog.cmake)
+include_directories(${GLOG_INCLUDE_DIRS})
+
 # ---[ modules include dirs
 include_directories(${CNSTREAM_ROOT_DIR}/modules)
 include_directories(${CNSTREAM_ROOT_DIR}/modules/util/include)
@@ -125,7 +129,7 @@ add_sanitizers(cns_launcher)
 if(NOT "${SAMPLES_DEPENDENCIES} " STREQUAL " ")
   add_dependencies(cns_launcher ${SAMPLES_DEPENDENCIES})
 endif()
-target_link_libraries(cns_launcher cnstream_va cnstream_core easydk ${OpenCV_LIBS} ${GFLAGS_LIBRARIES} pthread dl)
+target_link_libraries(cns_launcher cnstream_va cnstream_core easydk ${OpenCV_LIBS} ${GFLAGS_LIBRARIES} ${GLOG_LIBRARIES} pthread dl)
 
 if(HAVE_MODULES_CONTRIB)
   set(CMAKE_EXE_LINKER_FLAGS "-Wl,--no-as-needed")

@@ -35,7 +35,7 @@ namespace video {
 
 struct IndexedVideoPacket {
   VideoPacket packet;
-  int64_t index;
+  int64_t index{-1};
 };
 
 class VideoEncoderBase {
@@ -70,6 +70,8 @@ class VideoEncoderBase {
 
   bool PushBuffer(IndexedVideoPacket *packet);
   virtual bool GetPacketInfo(int64_t index, PacketInfo *info) = 0;
+
+  VideoEncoderBase& operator=(const VideoEncoderBase&) = delete;
 
   Param param_;
   RwMutex state_mtx_;

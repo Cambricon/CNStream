@@ -53,13 +53,11 @@ class RtspHandlerImpl : public IDecodeResult, public SourceRender {
       : SourceRender(handler),
         module_(module),
         url_name_(url_name),
-        handler_(handler),
+        stream_id_(handler->GetStreamId()),
         use_ffmpeg_(use_ffmpeg),
         reconnect_(reconnect),
         maximum_resolution_(maximum_resolution),
-        save_es_packet_(callback) {
-    stream_id_ = handler_->GetStreamId();
-  }
+        save_es_packet_(callback) { }
   ~RtspHandlerImpl() {}
   bool Open();
   void Close();
@@ -72,7 +70,6 @@ class RtspHandlerImpl : public IDecodeResult, public SourceRender {
  private:
   DataSource *module_ = nullptr;
   std::string url_name_;
-  RtspHandler *handler_;
   std::string stream_id_;
   DataSourceParam param_;
   bool use_ffmpeg_ = false;
@@ -84,7 +81,7 @@ class RtspHandlerImpl : public IDecodeResult, public SourceRender {
   std::thread decode_thread_;
   std::atomic<bool> stream_info_set_{false};
   std::mutex mutex_;
-  VideoInfo stream_info_;
+  VideoInfo stream_info_{};
   BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
   void DemuxLoop();
   void DecodeLoop();

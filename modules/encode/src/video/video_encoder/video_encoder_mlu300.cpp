@@ -124,7 +124,7 @@ VideoEncoderMlu300::VideoEncoderMlu300(const VideoEncoder::Param &param) : Video
 }
 
 VideoEncoderMlu300::~VideoEncoderMlu300() {
-  Stop();
+  VideoEncoderMlu300::Stop();
   priv_.reset();
 }
 
@@ -410,6 +410,11 @@ int VideoEncoderMlu300::RequestFrameBuffer(VideoFrame *frame, int timeout_ms) {
 }
 
 int VideoEncoderMlu300::SendFrame(const VideoFrame *frame, int timeout_ms) {
+  if (!frame) {
+    LOGE(VideoEncoderMlu) << "SendFrame() frame is nullptr";
+    return cnstream::VideoEncoder::ERROR_PARAMETERS;
+  }
+
   UniqueReadLock slk(state_mtx_);
   if (state_ != RUNNING && !(state_ >= RUNNING && ((frame->HasEOS() && !frame->data[0]) || priv_->error))) {
     LOGW(VideoEncoderMlu) << "SendFrame() not running";
@@ -419,7 +424,6 @@ int VideoEncoderMlu300::SendFrame(const VideoFrame *frame, int timeout_ms) {
     LOGE(VideoEncoderMlu) << "SendFrame() got EOS already";
     return cnstream::VideoEncoder::ERROR_FAILED;
   }
-  if (!frame) return cnstream::VideoEncoder::ERROR_PARAMETERS;
 
   if (!(frame->HasEOS()) && frame->data[0] != nullptr) LOGT(VideoEncoderMlu) << "SendFrame() pts=" << frame->pts;
 

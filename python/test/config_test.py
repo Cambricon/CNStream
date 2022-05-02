@@ -1,22 +1,44 @@
+# ==============================================================================
+# Copyright (C) [2022] by Cambricon, Inc. All rights reserved
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+# ==============================================================================
+
 import os, sys
 sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../lib")
-from cnstream import *
+import cnstream
 
-class TestConfig:
-    def test_profiler_config(self):
-        str = '{'  \
+class TestConfig(object):
+    @staticmethod
+    def test_profiler_config():
+        json_str = '{'  \
               '  "enable_profiling" : true,'  \
               '  "enable_tracing" : false,'  \
               '  "trace_event_capacity" : 100'  \
               '}'
-        config = ProfilerConfig()
-        assert config.parse_by_json_str(str)
+        config = cnstream.ProfilerConfig()
+        assert config.parse_by_json_str(json_str)
         assert config.enable_profiling
         assert not config.enable_tracing
         assert 100 == config.trace_event_capacity
 
-    def test_module_config(self):
-        str = '{'  \
+    @staticmethod
+    def test_module_config():
+        json_str = '{'  \
               '  "class_name" : "test_class_name",'  \
               '  "max_input_queue_size" : 200,'  \
               '  "parallelism" : 100,'  \
@@ -26,8 +48,8 @@ class TestConfig:
               '     "param2" : "value2"'  \
               '  }'  \
               '}'
-        config = CNModuleConfig()
-        assert config.parse_by_json_str(str)
+        config = cnstream.CNModuleConfig()
+        assert config.parse_by_json_str(json_str)
         assert "test_class_name" == config.class_name
         assert 100 == config.parallelism
         assert 200 == config.max_input_queue_size
@@ -36,19 +58,21 @@ class TestConfig:
         assert "value1" == config.parameters["param1"]
         assert "value2" == config.parameters["param2"]
 
-    def test_subgraph_config(self):
-        str = '{'  \
+    @staticmethod
+    def test_subgraph_config():
+        json_str = '{'  \
               '  "config_path" : "test_config_path",'  \
               '  "next_modules" : ["next1", "next2"]'  \
               '}'
-        config = CNSubgraphConfig()
-        assert config.parse_by_json_str(str)
+        config = cnstream.CNSubgraphConfig()
+        assert config.parse_by_json_str(json_str)
         assert "test_config_path" == config.config_path
         assert "next1" in config.next
         assert "next2" in config.next
 
-    def test_graph_config(self):
-        str = '{'  \
+    @staticmethod
+    def test_graph_config():
+        json_str = '{'  \
               '  "profiler_config" : {'  \
               '    "enable_profiling" : true,'  \
               '    "enable_tracing" : true'  \
@@ -66,8 +90,8 @@ class TestConfig:
               '    "config_path" : "test_config_file"'  \
               '  }'  \
               '}'
-        config = CNGraphConfig()
-        assert config.parse_by_json_str(str)
+        config = cnstream.CNGraphConfig()
+        assert config.parse_by_json_str(json_str)
         assert config.profiler_config.enable_profiling
         assert config.profiler_config.enable_tracing
         assert 1 == len(config.module_configs)
@@ -81,8 +105,8 @@ class TestConfig:
         assert "subgraph:subgraph1" == config.subgraph_configs[0].name
         assert "test_config_file" == config.subgraph_configs[0].config_path
 
-    def test_get_relative_path(self):
+    @staticmethod
+    def test_get_relative_path():
         module_params = {"json_file_dir" : "/home/"}
-        relative_path = get_path_relative_to_config_file("test.data", module_params)
+        relative_path = cnstream.get_path_relative_to_config_file("test.data", module_params)
         assert "/home/test.data" == relative_path
-

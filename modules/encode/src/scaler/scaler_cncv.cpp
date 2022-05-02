@@ -319,10 +319,9 @@ bool CncvRgbxToYuvContext::Process(const Buffer &src, Buffer *dst, const Rect &c
 
 class CncvResizeRgbxToYuvContext : public CncvContext {
  public:
-  CncvResizeRgbxToYuvContext(int dev_id, ColorFormat src_fmt) : CncvContext(dev_id, src_fmt) {
-    rgbx_to_yuv_ctx_ = std::make_shared<CncvRgbxToYuvContext>(dev_id, src_fmt);
-    resize_rgbx_ctx_ = std::make_shared<CncvResizeRgbxContext>(dev_id, src_fmt);
-  }
+  CncvResizeRgbxToYuvContext(int dev_id, ColorFormat src_fmt)
+      : CncvContext(dev_id, src_fmt), rgbx_to_yuv_ctx_(std::make_shared<CncvRgbxToYuvContext>(dev_id, src_fmt)),
+        resize_rgbx_ctx_(std::make_shared<CncvResizeRgbxContext>(dev_id, src_fmt)) { }
   bool Process(const Buffer &src, Buffer *dst, const Rect &crop) override;
   ~CncvResizeRgbxToYuvContext() override {
     if (rgbx_to_yuv_ctx_) {
@@ -346,7 +345,6 @@ bool CncvResizeRgbxToYuvContext::Process(const Buffer &src, Buffer *dst, const R
   mlu_ctx.BindDevice();
   if (src.width != dst->width || src.height != dst->height) {
     Buffer resize_output;
-    memset(&resize_output, 0, sizeof(Buffer));
     resize_output.color = src.color;
     resize_output.width = dst->width;
     resize_output.height = dst->height;

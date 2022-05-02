@@ -64,7 +64,7 @@ class FeatureExtractor {
   std::unique_ptr<infer_server::InferServer> server_{nullptr};
   infer_server::Session_t session_{nullptr};
   std::function<void(const CNFrameInfoPtr, bool)> callback_{nullptr};
-  int device_id_;
+  int device_id_ = -1;
   bool is_initialized_ = false;
 };  // class FeatureExtractor
 

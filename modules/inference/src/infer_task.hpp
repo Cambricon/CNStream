@@ -38,8 +38,7 @@ class InferTask {
  public:
   std::string task_msg = "task";  // for debug.
 
-  explicit InferTask(const std::function<int()>& task_func) {
-    func_ = task_func;
+  explicit InferTask(const std::function<int()>& task_func) : func_(task_func) {
     statem_ = promise_.get_future();
   }
 

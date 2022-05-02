@@ -42,9 +42,7 @@ namespace cnstream {
 class RawImgMemHandlerImpl : public SourceRender {
  public:
   explicit RawImgMemHandlerImpl(DataSource *module, RawImgMemHandler *handler)  // NOLINT
-      : SourceRender(handler), module_(module), handler_(*handler) {
-    stream_id_ = handler_.GetStreamId();
-  }
+      : SourceRender(handler), module_(module), stream_id_(handler->GetStreamId()) {}
 
   ~RawImgMemHandlerImpl() {}
 
@@ -81,7 +79,6 @@ class RawImgMemHandlerImpl : public SourceRender {
 
  private:
   DataSource *module_ = nullptr;
-  RawImgMemHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;
 
@@ -104,7 +101,6 @@ class RawImgMemHandlerImpl : public SourceRender {
 
  private:
   std::atomic<bool> eos_got_{false};
-  uint64_t frame_id_ = 0;
 
   cv::Mat *src_mat_ = nullptr;  // src mat with bgr24 or rgb24 format
   cv::Mat *dst_mat_ = nullptr;  // dst mat with I420 format

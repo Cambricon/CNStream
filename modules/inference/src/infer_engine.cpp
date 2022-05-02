@@ -41,13 +41,13 @@ void InferEngine::ResultWaitingCard::WaitForCall() { promise_->get_future().shar
 
 InferEngine::InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, std::shared_ptr<Preproc> preprocessor,
                          std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, uint32_t batching_timeout,
-                         bool use_scaler, std::string infer_thread_id,
+                         bool use_scaler, const std::string& infer_thread_id,
                          const std::function<void(const std::string& err_msg)>& error_func, bool keep_aspect_ratio,
                          bool batching_by_obj, const std::shared_ptr<ObjPreproc>& obj_preprocessor,
                          const std::shared_ptr<ObjPostproc>& obj_postprocessor,
-                         const std::shared_ptr<ObjFilter>& obj_filter, std::string dump_resized_image_dir,
+                         const std::shared_ptr<ObjFilter>& obj_filter, const std::string& dump_resized_image_dir,
                          CNDataFormat model_input_pixel_format, bool mem_on_mlu_for_postproc, bool saving_infer_input,
-                         std::string module_name, ModuleProfiler* profiler, int pad_method)
+                         const std::string& module_name, ModuleProfiler* profiler, int pad_method)
     : model_(model),
       preprocessor_(preprocessor),
       postprocessor_(postprocessor),

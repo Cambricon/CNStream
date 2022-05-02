@@ -55,7 +55,7 @@ using InferContextSptr = std::shared_ptr<InferContext>;
 class InferencerPrivate {
  public:
   explicit InferencerPrivate(Inferencer* q) : q_ptr_(q) {}
-  InferParams params_;
+  InferParams params_{};
   std::shared_ptr<edk::ModelLoader> model_loader_;
   std::shared_ptr<Preproc> preproc_ = nullptr;
   std::shared_ptr<Postproc> postproc_ = nullptr;

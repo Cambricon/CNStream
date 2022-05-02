@@ -60,8 +60,7 @@ std::pair<int, std::string> CreateTempFile(const std::string& filename_prefix) {
     LOGF(COREUNITEST) << "filename_prefix is too long, must be less than " << 1024 - 7 << std::endl;
   }
   strncpy(filename, filename_prefix.c_str(), filename_prefix.size());
-  strncpy(filename + filename_prefix.size(), "XXXXXX", 6);
-  filename[filename_prefix.size() + 6] = '\0';
+  strncpy(filename + filename_prefix.size(), "XXXXXX", 7);
   int fd = mkstemp(filename);
   LOGF_IF(COREUNITEST, -1 == fd) << "Create temporary file for BuildPipelineByJSONFile test case failed! "
       << strerror(errno);

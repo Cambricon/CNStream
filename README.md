@@ -4,18 +4,18 @@ and essential elements.
 
 CNStream provides the following built-in modules:
 
-- source: Support RTSP, video file,  images and elementary stream in memory （H.264, H.265, and JPEG decoding）.
-- inference: MLU-based inference accelerator for detection and classification.
-- inference2: Based on infer server to run inference, preprocessing and postprocessing.
-- osd (On-screen display): Module for highlighting objects and text overlay.
-- encode: Encode videos or images.
-- display: Display the video on screen.
-- tracker: Multi-object tracking.
-- rtsp_sink：Push RTSP stream to internet.
+- DataSource: Support RTSP, video file,  images and elementary stream in memory （H.264, H.265, and JPEG decoding）.
+- Inferencer: MLU-based inference accelerator for detection and classification.
+- Inferencer2: Based on infer server to run inference, preprocessing and postprocessing.
+- Osd (On-screen display): Module for highlighting objects and text overlay.
+- Encode: Encode videos or images.
+- Displayer: Display the video on screen.
+- Tracker: Multi-object tracking.
+- RtspSink：Push RTSP stream to internet.
 
 ### Getting started ###
 
-  To start using CNStream, please refer to the chapter of ***quick start*** in the document of Cambricon-CNStream-User-Guild-CN.pdf.
+  To start using CNStream, please refer to the chapter of ***quick start*** in the document of [Cambricon-CNStream-User-Guild-CN.pdf](./docs/release_document/latest/Cambricon-CNStream-User-Guide-CN-vlatest.pdf) .
 ## Samples ##
 
 |                        Classification                        |               Object Detection                |

@@ -20,6 +20,9 @@
 
 #include <gflags/gflags.h>
 #include <opencv2/opencv.hpp>
+#if (CV_MAJOR_VERSION >= 4)
+#include <opencv2/videoio/videoio_c.h>
+#endif
 #include <stdio.h>
 
 #include <algorithm>
@@ -515,7 +518,7 @@ void SimplePipelineRunner::Update(const cnstream::StreamMsg& msg) {
 
 int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, false);
-  cnstream::InitCNStreamLogging(nullptr);
+  // google::InitGoogleLogging(nullptr);
   if (!simple_pipeline::InitGlobalValues()) return 1;
 
   simple_pipeline::VisualizerBase* visualizer = nullptr;
@@ -541,6 +544,6 @@ int main(int argc, char** argv) {
   runner.WaitPipelineDone();
   delete visualizer;
 
-  cnstream::ShutdownCNStreamLogging();
+  // google::ShutdownGoogleLogging();
   return 0;
 }

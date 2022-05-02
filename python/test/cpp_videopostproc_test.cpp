@@ -15,8 +15,11 @@ namespace py = pybind11;
 bool TestPyVideoPostproc(const std::unordered_map<std::string, std::string> &params) {
   int device_id = 0;
   auto engine = std::make_shared<infer_server::InferServer>(device_id);
+#ifdef CNIS_USE_MAGICMIND
+  auto model_info = engine->LoadModel("data/test_magicmind.model");
+#else
   auto model_info = engine->LoadModel("data/test_model.cambricon", "subnet0");
-
+#endif
   infer_server::ModelIO model_output;
   for (uint32_t i = 0; i < model_info->OutputNum(); ++i) {
     infer_server::Buffer buffer(model_info->OutputShape(i).DataCount()*sizeof(float));

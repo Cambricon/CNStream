@@ -36,12 +36,12 @@ namespace cnstream {
 
 class ESJpegMemHandlerImpl : public IDecodeResult, public SourceRender {
  public:
-  explicit ESJpegMemHandlerImpl(DataSource *module, ESJpegMemHandler *handler,
-                                int max_width, int max_height)
-    : SourceRender(handler), module_(module), handler_(*handler), max_width_(max_width), max_height_(max_height) {
-      stream_id_ = handler_.GetStreamId();
-  }
-
+  explicit ESJpegMemHandlerImpl(DataSource *module, ESJpegMemHandler *handler, int max_width, int max_height)
+      : SourceRender(handler),
+        module_(module),
+        stream_id_(handler->GetStreamId()),
+        max_width_(max_width),
+        max_height_(max_height) {}
   ~ESJpegMemHandlerImpl() {}
 
   bool Open();
@@ -56,7 +56,6 @@ class ESJpegMemHandlerImpl : public IDecodeResult, public SourceRender {
 
  private:
   DataSource *module_ = nullptr;
-  ESJpegMemHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;
 
@@ -74,6 +73,7 @@ class ESJpegMemHandlerImpl : public IDecodeResult, public SourceRender {
   int max_width_ = 7680;
   int max_height_ = 4320;
 
+  RwLock running_lock_;
   std::atomic<bool> running_{false};
   std::atomic<bool> eos_reached_{false};
 

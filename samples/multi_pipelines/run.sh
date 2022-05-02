@@ -8,11 +8,7 @@
 #*************************************************************************#
 
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
-CNSTREAM_ROOT=${CURRENT_DIR}/../..
-SAMPLES_ROOT=${CNSTREAM_ROOT}/samples
-MODELS_ROOT=${CNSTREAM_ROOT}/data/models
-CONFIGS_ROOT=${SAMPLES_ROOT}/cns_launcher/configs
-
+source ../env.sh
 PrintUsages(){
     echo "Usages: run.sh [mlu220/mlu270/mlu370] [encode_video/rtsp]"
 }
@@ -23,13 +19,13 @@ if [ $# -ne 2 ]; then
 fi
 
 if [[ ${1} == "mlu220" ]]; then
-    MODEL_PATH=${MODELS_ROOT}/yolov3_b4c4_argb_mlu220.cambricon
+    MODEL_PATH=${MODELS_DIR}/yolov3_b4c4_argb_mlu220.cambricon
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU220/yolov3_b4c4_argb_mlu220.cambricon
 elif [[ ${1} == "mlu270" ]]; then
-    MODEL_PATH=${MODELS_ROOT}/yolov3_b4c4_argb_mlu270.cambricon
+    MODEL_PATH=${MODELS_DIR}/yolov3_b4c4_argb_mlu270.cambricon
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon
 elif [[ ${1} == "mlu370" ]]; then
-    MODEL_PATH=${MODELS_ROOT}/yolov3_nhwc.model
+    MODEL_PATH=${MODELS_DIR}/yolov3_nhwc.model
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model
 else
     PrintUsages
@@ -41,7 +37,7 @@ if [[ ${2} != "encode_video" && ${2} != "rtsp" ]]; then
     exit 1
 fi
 
-LABEL_PATH=${MODELS_ROOT}/label_map_coco.txt
+LABEL_PATH=${MODELS_DIR}/label_map_coco.txt
 REMOTE_LABEL_PATH=http://video.cambricon.com/models/labels/label_map_coco.txt
 
 if [[ ! -f ${MODEL_PATH} ]]; then
@@ -61,20 +57,20 @@ if [[ ! -f ${LABEL_PATH} ]]; then
     fi
 fi
 
-FIRST_CONIFG_PATH=${SAMPLES_ROOT}/multi_pipelines/first
-SECOND_CONIFG_PATH=${SAMPLES_ROOT}/multi_pipelines/second
+FIRST_CONIFG_PATH=${SAMPLES_DIR}/multi_pipelines/first
+SECOND_CONIFG_PATH=${SAMPLES_DIR}/multi_pipelines/second
 mkdir -p ${FIRST_CONIFG_PATH}
 mkdir -p ${SECOND_CONIFG_PATH}
 
-cp ${CONFIGS_ROOT}/decode_config.json ${FIRST_CONIFG_PATH}/
-cp ${CONFIGS_ROOT}/yolov3_object_detection_${1}.json ${FIRST_CONIFG_PATH}/
-cp ${CONFIGS_ROOT}/sinker_configs/${2}.json ${FIRST_CONIFG_PATH}/
+cp ${CONFIGS_DIR}/decode_config.json ${FIRST_CONIFG_PATH}/
+cp ${CONFIGS_DIR}/yolov3_object_detection_${1}.json ${FIRST_CONIFG_PATH}/
+cp ${CONFIGS_DIR}/sinker_configs/${2}.json ${FIRST_CONIFG_PATH}/
 
-cp ${CONFIGS_ROOT}/decode_config.json ${SECOND_CONIFG_PATH}/
-sed "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" ${CONFIGS_ROOT}/decode_config.json &>  ${SECOND_CONIFG_PATH}/decode_config.json
-sed "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" ${CONFIGS_ROOT}/yolov3_object_detection_${1}.json &>  ${SECOND_CONIFG_PATH}/yolov3_object_detection_${1}.json
-sed "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" ${CONFIGS_ROOT}/sinker_configs/${2}.json  &>  ${SECOND_CONIFG_PATH}/${2}.json
-#sed -e "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" -e "s/\/output/\/second_ouput/g"  ${CONFIGS_ROOT}/sinker_configs/${2}.json  &>  ${SECOND_CONIFG_PATH}/${2}.json
+cp ${CONFIGS_DIR}/decode_config.json ${SECOND_CONIFG_PATH}/
+sed "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" ${CONFIGS_DIR}/decode_config.json &>  ${SECOND_CONIFG_PATH}/decode_config.json
+sed "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" ${CONFIGS_DIR}/yolov3_object_detection_${1}.json &>  ${SECOND_CONIFG_PATH}/yolov3_object_detection_${1}.json
+sed "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" ${CONFIGS_DIR}/sinker_configs/${2}.json  &>  ${SECOND_CONIFG_PATH}/${2}.json
+#sed -e "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" -e "s/\/output/\/second_ouput/g"  ${CONFIGS_DIR}/sinker_configs/${2}.json  &>  ${SECOND_CONIFG_PATH}/${2}.json
 
 # generate config file with selected sinker and selected platform
 pushd ${CURRENT_DIR}
@@ -85,10 +81,10 @@ pushd ${CURRENT_DIR}
     sed 's/__PLATFORM_PLACEHOLDER__/'"${1}"'/g' config_template.json | sed 's/__SINKER_PLACEHOLDER__/'"${2}"'.json/g' &> ${SECOND_CONIFG_PATH}/second_config.json
 popd
 
-${SAMPLES_ROOT}/generate_file_list.sh
+${SAMPLES_DIR}/generate_file_list.sh
 mkdir -p $CURRENT_DIR/output
-${SAMPLES_ROOT}/bin/multi_pipelines  \
-    --data_path ${SAMPLES_ROOT}/files.list_video \
+${SAMPLES_DIR}/bin/multi_pipelines  \
+    --data_path ${SAMPLES_DIR}/files.list_video \
     --src_frame_rate 25   \
     --config_fname "${FIRST_CONIFG_PATH}/first_config.json" \
     --config_fname1 "${SECOND_CONIFG_PATH}/second_config.json"

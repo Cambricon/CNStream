@@ -1,105 +1,135 @@
+# ==============================================================================
+# Copyright (C) [2022] by Cambricon, Inc. All rights reserved
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+# ==============================================================================
+
 import os, sys
 sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../lib")
-from cnstream import *
+import cnstream
 
 # for test stream msg observer keep alive with pipeline
 smo_del_called = False
 
-class CustomSMO(StreamMsgObserver):
+class CustomSMO(cnstream.StreamMsgObserver):
     def __init__(self):
-        StreamMsgObserver.__init__(self)
+        cnstream.StreamMsgObserver.__init__(self)
 
     def __del__(self):
         global smo_del_called
         smo_del_called = True
 
     def update(self, msg):
+        # Empty, only for testing create and destroy StreamMsgObserver
         pass
 
-def CreateConfigWithSourceModule():
-        config = CNGraphConfig()
+def create_config_with_source_module():
+        config = cnstream.CNGraphConfig()
         config.name = "test_pipeline"
         config.profiler_config.enable_profiling = True
-        mconfig = CNModuleConfig()
+        mconfig = cnstream.CNModuleConfig()
         mconfig.name = "test_module"
         mconfig.class_name = "cnstream::DataSource"
         config.module_configs = [mconfig]
         return config
 
-
-class TestPipeline:
-    def test_name(self):
-        pipeline = Pipeline("test_pipeline")
+class TestPipeline(object):
+    @staticmethod
+    def test_name():
+        pipeline = cnstream.Pipeline("test_pipeline")
         assert "test_pipeline" == pipeline.get_name()
 
-    def test_build_pipeline(self):
-        # TODO: wait for config py api merge
-        pipeline = Pipeline("test_pipeline")
-        config = CreateConfigWithSourceModule()
+    @staticmethod
+    def test_build_pipeline():
+        # TODO(liumingxuan): wait for config py api merge
+        pipeline = cnstream.Pipeline("test_pipeline")
+        config = create_config_with_source_module()
         assert pipeline.build_pipeline(config)
         source_module = pipeline.get_source_module("test_module")
+        assert source_module
 
-    def test_start(self):
-        pipeline = Pipeline("test_pipeline")
+    @staticmethod
+    def test_start():
+        pipeline = cnstream.Pipeline("test_pipeline")
         assert pipeline.start()
         assert pipeline.is_running()
 
-    def test_get_source_module(self):
-        pipeline = Pipeline("test_pipeline")
-        config = CreateConfigWithSourceModule()
+    @staticmethod
+    def test_get_source_module():
+        pipeline = cnstream.Pipeline("test_pipeline")
+        config = create_config_with_source_module()
         assert pipeline.build_pipeline(config)
         assert None != pipeline.get_source_module("test_module")
         assert None == pipeline.get_source_module("test_none")
-        
 
-    def test_get_module_config(self):
-        pipeline = Pipeline("test_pipeline")
-        config = CreateConfigWithSourceModule()
+    @staticmethod
+    def test_get_module_config():
+        pipeline = cnstream.Pipeline("test_pipeline")
+        config = create_config_with_source_module()
         assert pipeline.build_pipeline(config)
         mconfig = pipeline.get_module_config("test_module")
         assert "cnstream::DataSource" == mconfig.class_name
 
-    def test_is_profiling_enabled(self):
-        pipeline = Pipeline("test_pipeline")
-        config = CNGraphConfig()
+    @staticmethod
+    def test_is_profiling_enabled():
+        pipeline = cnstream.Pipeline("test_pipeline")
+        config = cnstream.CNGraphConfig()
         config.profiler_config.enable_profiling = True
         assert pipeline.build_pipeline(config)
         assert pipeline.is_profiling_enabled()
 
-    def test_is_tracing_enabled(self):
-        pipeline = Pipeline("test_pipeline")
-        config = CNGraphConfig()
+    @staticmethod
+    def test_is_tracing_enabled():
+        pipeline = cnstream.Pipeline("test_pipeline")
+        config = cnstream.CNGraphConfig()
         config.profiler_config.enable_tracing = True
         assert pipeline.build_pipeline(config)
         assert pipeline.is_tracing_enabled()
 
-    def test_provide_data(self):
-        pipeline = Pipeline("test_pipeline")
-        config = CreateConfigWithSourceModule()
+    @staticmethod
+    def test_provide_data():
+        pipeline = cnstream.Pipeline("test_pipeline")
+        config = create_config_with_source_module()
         assert pipeline.build_pipeline(config)
         assert pipeline.start()
         source_module = pipeline.get_source_module("test_module")
-        assert pipeline.provide_data(source_module, CNFrameInfo("test_stream"))
+        assert pipeline.provide_data(source_module, cnstream.CNFrameInfo("test_stream"))
         pipeline.stop()
 
-    def test_stream_msg_observer(self):
+    @staticmethod
+    def test_stream_msg_observer():
         smo = CustomSMO()
-        pipeline = Pipeline("test_pipeline")
+        pipeline = cnstream.Pipeline("test_pipeline")
         pipeline.stream_msg_observer = smo
         # test smo keep alive with pipeline
         smo = None
         global smo_del_called
         assert not smo_del_called
-        # TODO: test stream message update
+        # TODO(liumingxuan): test stream message update
 
-    def test_is_root_node(self):
-        pipeline = Pipeline("test_pipeline")
-        config = CreateConfigWithSourceModule()
+    @staticmethod
+    def test_is_root_node():
+        pipeline = cnstream.Pipeline("test_pipeline")
+        config = create_config_with_source_module()
         assert pipeline.build_pipeline(config)
         assert pipeline.is_root_node("test_module")
         assert not pipeline.is_root_node("test_not")
 
-    def test_register_frame_done_cb(self):
-        # TODO: wait for data handler api
+    @staticmethod
+    def test_register_frame_done_cb():
+        # TODO(liumingxuan): wait for data handler api
         pass
-
