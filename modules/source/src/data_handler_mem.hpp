@@ -39,9 +39,8 @@ class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public Sour
  public:
   explicit ESMemHandlerImpl(DataSource *module, const MaximumVideoResolution& maximum_resolution,
     ESMemHandler *handler)  // NOLINT
-    : SourceRender(handler), module_(module), maximum_resolution_(maximum_resolution), handler_(*handler) {
-      stream_id_ = handler_.GetStreamId();
-  }
+    : SourceRender(handler), module_(module), maximum_resolution_(maximum_resolution),
+      stream_id_(handler->GetStreamId()) { }
 
   ~ESMemHandlerImpl() {}
 
@@ -79,14 +78,13 @@ class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public Sour
  private:
   DataSource *module_ = nullptr;
   MaximumVideoResolution maximum_resolution_;
-  ESMemHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;
   ESMemHandler::DataType data_type_ = ESMemHandler::DataType::INVALID;
   bool first_frame_ = true;
 
   std::mutex info_mutex_;
-  VideoInfo info_;
+  VideoInfo info_{};
   std::atomic<bool> info_set_{false};
 
 #ifdef UNIT_TEST
@@ -104,7 +102,6 @@ class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public Sour
   /**/
   std::atomic<bool> running_{false};
   std::thread thread_;
-  bool eos_sent_ = false;
   std::atomic<bool> generate_pts_{false};
   uint64_t fake_pts_ = 0;
 

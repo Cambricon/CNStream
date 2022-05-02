@@ -61,6 +61,7 @@ KafkaContext *Kafka::GetContext(CNFrameInfoPtr data) {
     if (!ctx->handler) {
       LOGE(Kafka) << "Create handler failed";
       delete ctx;
+      return nullptr;
     }
     ctx->handler->brokers_ = brokers_;
     ctx->handler->topic_ = topic;

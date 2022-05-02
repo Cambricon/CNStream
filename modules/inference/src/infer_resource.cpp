@@ -161,7 +161,7 @@ RCOpResource::RCOpResource(std::shared_ptr<edk::ModelLoader> model, uint32_t bat
 
 RCOpResource::~RCOpResource() {
   if (Initialized()) {
-    Destroy();
+    RCOpResource::Destroy();
   }
 }
 

@@ -146,7 +146,9 @@ bool Mlu3xxDecoder::Create(VideoInfo *info, ExtraDecoderInfo *extra) {
   }
   create_info_.stream_buf_size = 4 << 20;  // FIXME
   create_info_.user_context    = this;
-  extra_info_ = *extra;
+  if (extra) {
+    extra_info_ = *extra;
+  }
 
   ResetFlags();
 

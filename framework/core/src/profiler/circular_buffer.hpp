@@ -107,7 +107,8 @@ class CircularBuffer {
 
 template <typename T>
 CircularBuffer<T>::CircularBuffer(size_t capacity, double buffer_margin)
-    : capacity_(capacity),
+    : buffer_margin_(buffer_margin),
+      capacity_(capacity),
       buffer_size_((size_t)capacity * (1 + buffer_margin)),
       buffer_(buffer_size_),
       lap_(buffer_size_),

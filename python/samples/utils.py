@@ -1,8 +1,29 @@
+# ==============================================================================
+# Copyright (C) [2022] by Cambricon, Inc. All rights reserved
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+# ==============================================================================
+
 import threading
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 import time
+import cnstream
 
-class bcolors:
+class bcolors(object):
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKCYAN = '\033[96m'
@@ -13,7 +34,7 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-class PrintPerformance:
+class PrintPerformance(object):
     def __init__(self, pipeline, perf_level=0):
         self.pipeline = pipeline
         self.perf_level = perf_level
@@ -34,8 +55,8 @@ class PrintPerformance:
         if self.perf_level >= 3:
             print("\n------ Stream ------\n")
             for stream_profile in profile.stream_profiles:
-                print("{: <15s} [Counter]: {}, [Completed]: {}, [Dropped]: {}".format("[" + stream_profile.stream_name + "]",
-                       stream_profile.counter, stream_profile.completed, stream_profile.dropped))
+                print("{: <15s} [Counter]: {}, [Completed]: {}, [Dropped]: {}".format("[" + stream_profile.stream_name +
+                    "]", stream_profile.counter, stream_profile.completed, stream_profile.dropped))
                 print("{: <15s} [Latency]: (Avg): {:.4f}ms, (Min): {:.4f}ms, (Max): {:.4f}ms".format("",
                        stream_profile.latency, stream_profile.minimum_latency, stream_profile.maximum_latency))
                 print("{: <15s} [Throughput]: {:.4f}fps".format("", stream_profile.fps))
@@ -47,7 +68,8 @@ class PrintPerformance:
         for module_profile in profile.module_profiles:
           print(bcolors.OKGREEN + "{:-^80s}".format(" Module: [" + module_profile.module_name + "] ") + bcolors.ENDC)
           for process_profile in module_profile.process_profiles:
-            print(bcolors.WARNING + "{:->10s}{}".format("", " Process Name: [" + process_profile.process_name + "]") + bcolors.ENDC)
+            print(bcolors.WARNING + "{:->10s}{}".format("", " Process Name: [" +
+                process_profile.process_name + "]") + bcolors.ENDC)
             self.print_process_perf(process_profile)
         print(bcolors.OKGREEN + "{:-^80s}".format("  Overall  ") + bcolors.ENDC)
         self.print_process_perf(profile.overall_profile)
@@ -63,7 +85,7 @@ class PrintPerformance:
                                      "Last {:d} Seconds".format(duration//1000))
 
 
-class PrintPerformanceLoop():
+class PrintPerformanceLoop(object):
     def __init__(self, pipeline, perf_level=0):
         self.condition = threading.Condition()
         self.stop_flag = False
@@ -72,7 +94,8 @@ class PrintPerformanceLoop():
         self.task = []
 
     def print_perf_loop(self):
-        print_interval = 2  # print every 2 seconds
+        # print every 2 seconds
+        print_interval = 2
         last_time = time.time()
         while True:
             if self.condition.acquire():

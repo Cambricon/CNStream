@@ -24,11 +24,11 @@
 #include "test_base.hpp"
 
 int main(int argc, char **argv) {
-  cnstream::InitCNStreamLogging(GetExePath().c_str());
+  // google::InitGoogleLogging(GetExePath().c_str());
   testing::InitGoogleTest(&argc, argv);
   ::gflags::ParseCommandLineFlags(&argc, &argv, false);
   // FLAGS_alsologtostderr = true;
   int ret = RUN_ALL_TESTS();
-  cnstream::ShutdownCNStreamLogging();
+  // google::ShutdownGoogleLogging();
   return ret;
 }

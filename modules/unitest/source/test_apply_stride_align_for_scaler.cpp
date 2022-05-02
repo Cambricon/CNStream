@@ -29,6 +29,7 @@
 #include "cnstream_module.hpp"
 #include "cnstream_pipeline.hpp"
 #include "data_source.hpp"
+#include "device/mlu_context.h"
 #include "test_base.hpp"
 
 static constexpr const char *gmp4_path = "../../modules/unitest/source/data/img_300x300.mp4";
@@ -154,7 +155,11 @@ TEST(Source_StrideAlign, mlu_decoder_output_cpu) {
 }
 
 TEST(Source_StrideAlign, mlu_decoder_output_mlu) {
-  EXPECT_TRUE(TestFunc("mlu", "mlu"));
+  edk::MluContext context;
+  auto version = context.GetCoreVersion();
+  if (version == edk::CoreVersion::MLU270 || version == edk::CoreVersion::MLU220) {
+    EXPECT_TRUE(TestFunc("mlu", "mlu"));
+  }
 }
 
 TEST(Source_StrideAlign, cpu_decoder_output_cpu) {

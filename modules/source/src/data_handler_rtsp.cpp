@@ -174,7 +174,7 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
     rtsp_session_.Open(param);
 
     while (1) {
-      if (info_set_) {
+      if (rtsp_info_set_) {
         break;
       }
       if (exit_flag) {
@@ -210,7 +210,7 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
   // IRtspCB methods
   void OnRtspInfo(VideoInfo *info) override {
     this->SetInfo(*info);
-    info_set_.store(true);
+    rtsp_info_set_.store(true);
   }
   void OnRtspFrame(VideoEsFrame *frame) override {
     ESPacket pkt;
@@ -257,7 +257,7 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
   RtspSession rtsp_session_;
   std::atomic<bool> connect_done_{false};
   std::atomic<bool> connect_failed_{false};
-  std::atomic<bool> info_set_{false};
+  std::atomic<bool> rtsp_info_set_{false};
 };  // class Live555Demuxer
 
 RtspHandler::RtspHandler(DataSource *module, const std::string &stream_id, const std::string &url_name, bool use_ffmpeg,

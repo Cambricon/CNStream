@@ -310,7 +310,7 @@ class FFParserImpl {
         frame.data = packet_.data;
         frame.len = packet_.size;
         frame.pts = packet_.pts;
-        if (!only_key_frame_ || (only_key_frame_ && (frame.flags & AV_PKT_FLAG_KEY))) {
+        if (!only_key_frame_ || (frame.flags & AV_PKT_FLAG_KEY)) {
           result_->OnParserFrame(&frame);
         }
       }
@@ -579,7 +579,7 @@ int EsParserImpl::Parse(const VideoEsPacket &pkt) {
       frame.pts = packet_.pts;
       frame.flags = packet_.flags;
 
-      if (!only_key_frame_ || (only_key_frame_ && (frame.flags & AV_PKT_FLAG_KEY))) {
+      if (!only_key_frame_ || (frame.flags & AV_PKT_FLAG_KEY)) {
         result_->OnParserFrame(&frame);
       }
     }

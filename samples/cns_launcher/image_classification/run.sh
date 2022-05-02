@@ -9,10 +9,7 @@
 # @notice: other flags see ${SAMPLES_DIR}/bin/cns_launcher --help
 #*************************************************************************#
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
-CNSTREAM_ROOT=${CURRENT_DIR}/../../..
-SAMPLES_ROOT=${CNSTREAM_ROOT}/samples
-MODELS_ROOT=${CNSTREAM_ROOT}/data/models
-CONFIGS_ROOT=${SAMPLES_ROOT}/cns_launcher/configs
+source ../../env.sh
 
 PrintUsages(){
     echo "Usages: run.sh mlu220/mlu270/mlu370"
@@ -24,22 +21,22 @@ if [ $# -ne 1 ]; then
 fi
 
 if [[ ${1} == "mlu220" ]]; then
-    MODEL_PATH=${MODELS_ROOT}/resnet18_b4c4_bgra_mlu220.cambricon
+    MODEL_PATH=${MODELS_DIR}/resnet18_b4c4_bgra_mlu220.cambricon
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU220/resnet18_b4c4_bgra_mlu220.cambricon
 elif [[ ${1} == "mlu270" ]]; then
-    MODEL_PATH=${MODELS_ROOT}/resnet50_b16c16_bgra_mlu270.cambricon
+    MODEL_PATH=${MODELS_DIR}/resnet50_b16c16_bgra_mlu270.cambricon
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/resnet50_b16c16_bgra_mlu270.cambricon
 elif [[ ${1} == "mlu370" ]]; then
-    MODEL_PATH=${MODELS_ROOT}/resnet50_nhwc.model
+    MODEL_PATH=${MODELS_DIR}/resnet50_nhwc.model
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/resnet50_nhwc_tfu_0.8.2_uint8_int8_fp16.model
 else
     PrintUsages
     exit 1
 fi
 
-LABEL_PATH=${MODELS_ROOT}/synset_words.txt
+LABEL_PATH=${MODELS_DIR}/synset_words.txt
 REMOTE_LABEL_PATH=http://video.cambricon.com/models/labels/synset_words.txt
-mkdir -p ${MODELS_ROOT}
+mkdir -p ${MODELS_DIR}
 if [[ ! -f ${MODEL_PATH} ]]; then
     wget -O ${MODEL_PATH} ${REMOTE_MODEL_PATH}
     if [ $? -ne 0 ]; then
@@ -61,10 +58,10 @@ pushd ${CURRENT_DIR}
     sed 's/__PLATFORM_PLACEHOLDER__/'"${1}"'/g' config_template.json &> config.json
 popd
 
-${SAMPLES_ROOT}/generate_file_list.sh
+${SAMPLES_DIR}/generate_file_list.sh
 mkdir -p output
-${SAMPLES_ROOT}/bin/cns_launcher  \
-    --data_path ${SAMPLES_ROOT}/files.list_image \
+${SAMPLES_DIR}/bin/cns_launcher  \
+    --data_path ${SAMPLES_DIR}/files.list_image \
     --src_frame_rate 25   \
     --config_fname ${CURRENT_DIR}/config.json \
-    --log_to_stderr=true
+    --logtostderr=true
