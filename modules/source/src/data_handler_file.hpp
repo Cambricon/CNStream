@@ -41,8 +41,8 @@ class FileHandlerImpl : public IParserResult, public IDecodeResult, public Sourc
   explicit FileHandlerImpl(DataSource *module, const std::string &filename, int framerate, bool loop,
                            const MaximumVideoResolution& maximum_resolution, FileHandler *handler)  // NOLINT
       :SourceRender(handler), module_(module), filename_(filename),
-       framerate_(framerate), loop_(loop), maximum_resolution_(maximum_resolution), handler_(*handler),
-       stream_id_(handler_.GetStreamId()), parser_(stream_id_) {}
+       framerate_(framerate), loop_(loop), maximum_resolution_(maximum_resolution),
+       stream_id_(handler->GetStreamId()), parser_(stream_id_) {}
   ~FileHandlerImpl() {}
   bool Open();
   void Close();
@@ -54,7 +54,6 @@ class FileHandlerImpl : public IParserResult, public IDecodeResult, public Sourc
   int framerate_;
   bool loop_ = false;
   MaximumVideoResolution maximum_resolution_;
-  FileHandler &handler_;
   std::string stream_id_;
   DataSourceParam param_;
 
@@ -80,7 +79,6 @@ class FileHandlerImpl : public IParserResult, public IDecodeResult, public Sourc
   /**/
   std::atomic<int> running_{0};
   std::thread thread_;
-  bool eos_sent_ = false;
 
  private:
   FFParser parser_;

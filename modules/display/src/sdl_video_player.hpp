@@ -7,6 +7,9 @@
 #if (CV_MAJOR_VERSION >= 3)
 #include <opencv2/imgcodecs/imgcodecs.hpp>
 #endif
+#if (CV_MAJOR_VERSION >= 4)
+#include <opencv2/imgproc/imgproc_c.h>
+#endif
 
 #include <functional>
 #include <memory>
@@ -53,7 +56,7 @@ class SDLVideoPlayer {  // BGR
   inline SDL_Renderer *renderer() const { return renderer_; }
   inline SDL_Texture *texture() const { return texture_; }
 
-  inline void SetModuleName(std::string module_name) { module_name_ = module_name; }
+  inline void SetModuleName(const std::string& module_name) { module_name_ = module_name; }
 
  private:
   void Stop();
@@ -66,9 +69,9 @@ class SDLVideoPlayer {  // BGR
   int frame_rate_ = 10;
   int window_w_ = 1920;
   int window_h_ = 1080;
-  int cols_, rows_;
+  int cols_ = 0, rows_ = 0;
   int max_chn_ = 32;
-  int chn_w_, chn_h_;
+  int chn_w_ = 0, chn_h_ = 0;
   bool running_ = false;
   int click_chn_ = -1;
   std::vector<int> flags_;

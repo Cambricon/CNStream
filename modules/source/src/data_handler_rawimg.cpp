@@ -63,7 +63,7 @@ static bool CvtI420ToNV12(const uint8_t *src_I420, uint8_t *dst_nv12, const int 
 
   // memcpy u and v
   int src_u_stride = pad_width / 2;
-  int src_v_stride = pad_width / 2;
+  int src_v_stride = src_u_stride;
   const uint8_t *src_u = src_I420 + pad_width * pad_height;
   const uint8_t *src_v = src_u + pad_width * pad_height / 4;
   uint8_t *dst_uv = dst_nv12 + dst_stride * height;
@@ -228,7 +228,7 @@ int RawImgMemHandlerImpl::Write(const cv::Mat *mat_data, const uint64_t pts) {
     SendFlowEos();
     eos_got_.store(true);
     return 0;
-  } else if (mat_data && mat_data->data && (3 == mat_data->channels())
+  } else if (mat_data->data && (3 == mat_data->channels())
       && (CV_8UC3 == mat_data->type()) && mat_data->isContinuous()) {
     int width = mat_data->cols;
     int height = mat_data->rows;

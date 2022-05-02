@@ -17,10 +17,7 @@
 #*************************************************************************#
 
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
-CNSTREAM_ROOT=${CURRENT_DIR}/../..
-SAMPLES_ROOT=${CNSTREAM_ROOT}/samples
-MODELS_ROOT=${CNSTREAM_ROOT}/data/models
-
+source ../env.sh
 PrintUsages(){
     echo "Usages: run.sh [mlu220/mlu270]"
 }
@@ -31,17 +28,17 @@ if [ $# -ne 1 ]; then
 fi
 
 if [[ ${1} == "mlu220" ]]; then
-    MODEL_PATH=${MODELS_ROOT}/yolov3_b4c4_argb_mlu220.cambricon
+    MODEL_PATH=${MODELS_DIR}/yolov3_b4c4_argb_mlu220.cambricon
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU220/Primary_Detector/YOLOv3/yolov3_4c4b_argb_220_v1.5.0.cambricon
 elif [[ ${1} == "mlu270" ]]; then
-    MODEL_PATH=${MODELS_ROOT}/yolov3_b4c4_argb_mlu270.cambricon
+    MODEL_PATH=${MODELS_DIR}/yolov3_b4c4_argb_mlu270.cambricon
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/yolov3/yolov3_4c4b_argb_270_v1.5.0.cambricon
 else
     PrintUsages
     exit 1
 fi
 
-LABEL_PATH=${MODELS_ROOT}/label_map_coco.txt
+LABEL_PATH=${MODELS_DIR}/label_map_coco.txt
 REMOTE_LABEL_PATH=http://video.cambricon.com/models/MLU270/yolov3/label_map_coco.txt
 
 if [[ ! -f ${MODEL_PATH} ]]; then

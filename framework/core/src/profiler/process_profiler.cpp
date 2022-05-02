@@ -142,7 +142,7 @@ uint64_t RecordPolicy::RemoveThisAndOtherUselessRecords(
       skip_ref_iter = skip_ref_records.erase(skip_ref_iter);
       remove_counter++;
     } else {
-      start_record_iter++;
+      ++start_record_iter;
       skip_ref_iter++;
     }
   }

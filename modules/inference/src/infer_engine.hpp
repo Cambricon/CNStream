@@ -66,14 +66,14 @@ class InferEngine {
   };  // class ResultWaitingCard
   InferEngine(int dev_id, std::shared_ptr<edk::ModelLoader> model, std::shared_ptr<Preproc> preprocessor,
               std::shared_ptr<Postproc> postprocessor, uint32_t batchsize, uint32_t batching_timeout, bool use_scaler,
-              std::string infer_thread_id, const std::function<void(const std::string& err_msg)>& error_func = NULL,
-              bool keep_aspect_ratio = false, bool batching_by_obj = false,
-              const std::shared_ptr<ObjPreproc>& obj_preprocessor = nullptr,
+              const std::string& infer_thread_id,
+              const std::function<void(const std::string& err_msg)>& error_func = NULL, bool keep_aspect_ratio = false,
+              bool batching_by_obj = false, const std::shared_ptr<ObjPreproc>& obj_preprocessor = nullptr,
               const std::shared_ptr<ObjPostproc>& obj_postprocessor = nullptr,
-              const std::shared_ptr<ObjFilter>& obj_filter = nullptr, std::string dump_resized_image_dir = "",
+              const std::shared_ptr<ObjFilter>& obj_filter = nullptr, const std::string& dump_resized_image_dir = "",
               CNDataFormat model_input_pixel_format = CNDataFormat::CN_PIXEL_FORMAT_RGBA32,
-              bool mem_on_mlu_for_postproc = false, bool saving_infer_input = false, std::string module_name = "",
-              ModuleProfiler* profiler = nullptr, int pad_method = 0);
+              bool mem_on_mlu_for_postproc = false, bool saving_infer_input = false,
+              const std::string& module_name = "", ModuleProfiler* profiler = nullptr, int pad_method = 0);
   ~InferEngine();
   ResultWaitingCard FeedData(std::shared_ptr<CNFrameInfo> finfo);
 

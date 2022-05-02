@@ -23,6 +23,9 @@
 
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#if (CV_MAJOR_VERSION >= 4)
+#include <opencv2/imgproc/imgproc_c.h>
+#endif
 
 #include <cstring>
 #include <fstream>
@@ -46,7 +49,7 @@ class CnOsd {
   inline void SetTextScale(float scale)  { text_scale_ = scale; }
   inline void SetTextThickness(float thickness)  { text_thickness_ = thickness; }
   inline void SetBoxThickness(float thickness)  { box_thickness_ = thickness; }
-  inline void SetSecondaryLabels(std::vector<std::string> labels) { secondary_labels_ = labels; }
+  inline void SetSecondaryLabels(const std::vector<std::string>& labels) { secondary_labels_ = labels; }
   inline void SetCnFont(std::shared_ptr<CnFont> cn_font) { cn_font_ = cn_font; }
 
   void DrawLabel(cv::Mat image, const CNInferObjsPtr &objects, std::vector<std::string> attr_keys = {}) const;

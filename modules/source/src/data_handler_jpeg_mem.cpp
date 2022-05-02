@@ -90,6 +90,7 @@ int ESJpegMemHandler::Write(ESPacket *pkt) {
 }
 
 bool ESJpegMemHandlerImpl::Open() {
+  RwLockWriteGuard guard(running_lock_);
   DataSource *source = dynamic_cast<DataSource *>(module_);
   if (nullptr != source) {
     param_ = source->GetSourceParam();
@@ -107,11 +108,12 @@ bool ESJpegMemHandlerImpl::Open() {
 }
 
 void ESJpegMemHandlerImpl::Close() {
-  running_ = false;
+  RwLockWriteGuard guard(running_lock_);
   if (decoder_) {
     decoder_->Destroy();
     decoder_ = nullptr;
   }
+  running_ = false;
 }
 
 int ESJpegMemHandlerImpl::Write(ESPacket *pkt) {
@@ -123,6 +125,7 @@ int ESJpegMemHandlerImpl::Write(ESPacket *pkt) {
 }
 
 bool ESJpegMemHandlerImpl::ProcessImage(ESPacket *in_pkt) {
+  RwLockReadGuard guard(running_lock_);
   if (eos_reached_ || !running_) {
     return false;
   }

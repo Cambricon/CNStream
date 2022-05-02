@@ -204,6 +204,19 @@ TEST(Inferencer2, Open) {
     EXPECT_FALSE(infer->Open(param));
   }
 
+  {  // preproc_name is empty
+    std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
+    ModuleParamSet param;
+    if (use_magicmind) {
+      param["model_path"] = exe_path + GetModelPathMM();
+    } else {
+      param["model_path"] = exe_path + GetModelPath();
+    }
+    param["preproc_name"] = "";
+    param["postproc_name"] = "VideoPostprocSsd";
+    EXPECT_FALSE(infer->Open(param));
+  }
+
   {  // postproc_name is empty
     std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
     ModuleParamSet param;
@@ -215,6 +228,36 @@ TEST(Inferencer2, Open) {
       param["preproc_name"] = "RCOP";
     }
     param["postproc_name"] = "";
+    EXPECT_FALSE(infer->Open(param));
+  }
+
+  {  // frame_filter_name is empty
+    std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
+    ModuleParamSet param;
+    if (use_magicmind) {
+      param["model_path"] = exe_path + GetModelPathMM();
+      param["preproc_name"] = "CNCV";
+    } else {
+      param["model_path"] = exe_path + GetModelPath();
+      param["preproc_name"] = "RCOP";
+    }
+    param["postproc_name"] = "VideoPostprocSsd";
+    param["frame_filter_name"] = "no_such_frame_filter_name";
+    EXPECT_FALSE(infer->Open(param));
+  }
+
+  {  // obj_filter_name is empty
+    std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
+    ModuleParamSet param;
+    if (use_magicmind) {
+      param["model_path"] = exe_path + GetModelPathMM();
+      param["preproc_name"] = "CNCV";
+    } else {
+      param["model_path"] = exe_path + GetModelPath();
+      param["preproc_name"] = "RCOP";
+    }
+    param["postproc_name"] = "VideoPostprocSsd";
+    param["obj_filter_name"] = "no_such_obj_filter_name";
     EXPECT_FALSE(infer->Open(param));
   }
 

@@ -734,7 +734,8 @@ CNGraph<T>::GetNodeByName(const std::string& name) const {
   std::string t = "";
   for (const char& c : name) {
     if ('/' == c) {
-      v.emplace_back(std::move(t));
+      v.emplace_back(t);
+      t = "";
     } else {
       t.push_back(c);
     }

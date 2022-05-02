@@ -184,7 +184,6 @@ static int LibYUVConvertColor(const Buffer *src, Buffer *dst) {
 static int LibYUVProcessI420(const Buffer *src, Buffer *dst) {
   int ret = 0;
   Buffer buffer;
-  memset(&buffer, 0, sizeof(Buffer));
   // convert to argb first
   if (dst->color >= ColorFormat::BGR &&
       (dst->width % 2 == 1 || dst->height % 2 == 1 || dst->width > src->width || dst->height > src->height)) {
@@ -274,7 +273,6 @@ static int LibYUVProcessI420(const Buffer *src, Buffer *dst) {
 static int LibYUVProcessYUVsp(const Buffer *src, Buffer *dst) {
   int ret = 0;
   Buffer buffer;
-  memset(&buffer, 0, sizeof(Buffer));
   // convert to argb first
   if (dst->color >= ColorFormat::BGR &&
       (dst->width % 2 == 1 || dst->height % 2 == 1 || dst->width > src->width || dst->height > src->height)) {
@@ -360,7 +358,6 @@ static int LibYUVProcessYUVsp(const Buffer *src, Buffer *dst) {
 static int LibYUVProcessBGRRGB(const Buffer *src, Buffer *dst) {
   int ret = 0;
   Buffer buffer;
-  memset(&buffer, 0, sizeof(Buffer));
   // convert to argb first
   uint8_t *argb_src_data = nullptr, *argb_dst_data = nullptr, *dst_data = nullptr;
   uint32_t dst_stride;
@@ -374,7 +371,6 @@ static int LibYUVProcessBGRRGB(const Buffer *src, Buffer *dst) {
     ret = LibYUVConvertColor(src, &buffer);
     if (ret != 0) {
       if (argb_src_data) delete[] argb_src_data;
-      if (argb_dst_data) delete[] argb_dst_data;
       return ret;
     }
   } else {

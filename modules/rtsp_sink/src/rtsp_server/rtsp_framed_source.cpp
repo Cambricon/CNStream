@@ -30,9 +30,8 @@ RtspFramedSource* RtspFramedSource::createNew(UsageEnvironment& env, RtspServer*
 }
 
 RtspFramedSource::RtspFramedSource(UsageEnvironment& env, RtspServer* server, Boolean discrete)
-    : FramedSource(env), fServer(server), fDiscrete(discrete) {
-  fEventTriggerId = envir().taskScheduler().createEventTrigger(RtspFramedSource::deliverFrameStub);
-}
+    : FramedSource(env), fServer(server), fDiscrete(discrete),
+      fEventTriggerId(envir().taskScheduler().createEventTrigger(RtspFramedSource::deliverFrameStub)) { }
 
 RtspFramedSource::~RtspFramedSource() {
   if (fEventTriggerId) {

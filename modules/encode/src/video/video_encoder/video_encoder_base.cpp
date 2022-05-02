@@ -67,7 +67,7 @@ int VideoEncoderBase::Stop() {
 bool VideoEncoderBase::PushBuffer(IndexedVideoPacket *packet) {
   if (state_ != RUNNING || !output_buffer_) return false;
 
-  if (!packet || !packet->packet.data || packet->packet.size <= 0) {
+  if (!packet || !packet->packet.data || packet->packet.size == 0) {
     LOGE(VideoEncoderBase) << "PushBuffer() invalid parameters.";
     return false;
   }

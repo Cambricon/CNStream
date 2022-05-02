@@ -75,7 +75,7 @@ static InferVideoPixelFmt VPixelFmtCast(CNDataFormat fmt) {
 }
 
 InferHandlerImpl::~InferHandlerImpl() {
-  Close();
+  InferHandlerImpl::Close();
 }
 
 bool InferHandlerImpl::Open() {

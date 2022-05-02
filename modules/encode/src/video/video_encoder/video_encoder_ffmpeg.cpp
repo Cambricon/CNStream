@@ -94,7 +94,7 @@ VideoEncoderFFmpeg::VideoEncoderFFmpeg(const Param &param) : VideoEncoderBase(pa
 }
 
 VideoEncoderFFmpeg::~VideoEncoderFFmpeg() {
-  Stop();
+  VideoEncoderFFmpeg::Stop();
   priv_.reset();
 }
 

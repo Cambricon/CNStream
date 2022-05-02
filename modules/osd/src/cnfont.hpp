@@ -105,10 +105,10 @@ class CnFont {
   bool is_initialized_ = false;
 
   // Default font output parameters
-  int m_fontType;
+  int m_fontType = 0;
   cv::Scalar m_fontSize;
-  bool m_fontUnderline;
-  float m_fontDiaphaneity;
+  bool m_fontUnderline = false;
+  float m_fontDiaphaneity = 0.f;
 #else
 
  public:

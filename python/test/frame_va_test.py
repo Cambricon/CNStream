@@ -1,26 +1,44 @@
+# ==============================================================================
+# Copyright (C) [2022] by Cambricon, Inc. All rights reserved
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+# ==============================================================================
+
 import os, sys
 sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../lib")
-from cnstream import *
-from cnstream_cpptest import *
-
-# import cv2
+import cnstream
+import cnstream_cpptest
 
 def assert_eq(actual_val, expect_val):
   assert actual_val == expect_val, "Actual value is " + str(actual_val) + ". Expect " + str(expect_val)
 
-class TestFrameVa:
-    def test_dataframe(self):
-      frame = CNFrameInfo("stream_id_0")
+class TestFrameVa(object):
+    @staticmethod
+    def test_dataframe():
+      frame = cnstream.CNFrameInfo("stream_id_0")
       frame_id = 111
       width = 1280
       height = 720
       stride = [1282, 1284]
-      fmt = CNDataFormat.CN_PIXEL_FORMAT_YUV420_NV12
-      dev_type = DevType.MLU
+      fmt = cnstream.CNDataFormat.CN_PIXEL_FORMAT_YUV420_NV12
+      dev_type = cnstream.DevType.MLU
       dev_id = 0
       dst_device_id = 1
-    
-      src_data_frame = CNDataFrame()
+      src_data_frame = cnstream.CNDataFrame()
       src_data_frame.frame_id = frame_id
       src_data_frame.width = width
       src_data_frame.height = height
@@ -29,22 +47,22 @@ class TestFrameVa:
       src_data_frame.ctx.dev_type = dev_type
       src_data_frame.ctx.dev_id = dev_id
       src_data_frame.dst_device_id = dst_device_id
-    
-      set_data_frame(frame, src_data_frame)
-    
+
+      cnstream_cpptest.set_data_frame(frame, src_data_frame)
+
       data_frame = frame.get_cn_data_frame()
       # data
       src_data_y_size = stride[0] * height
       src_data_uv_size = stride[1] * height / 2
-      
+
       assert_eq(data_frame.data(0).get_size(), src_data_y_size)
       assert_eq(data_frame.data(1).get_size(), src_data_uv_size)
-    
+
       assert_eq(data_frame.frame_id, frame_id)
       assert_eq(data_frame.fmt, fmt)
       assert_eq(data_frame.width, width)
       assert_eq(data_frame.height, height)
-    
+
       # stride
       assert_eq(data_frame.stride[0], stride[0])
       assert_eq(data_frame.stride[1], stride[1])
@@ -54,7 +72,7 @@ class TestFrameVa:
       assert_eq(data_frame_tmp.stride[0], modify_stride[0])
       assert_eq(data_frame_tmp.stride[1], modify_stride[1])
       data_frame.stride = stride
-    
+
       assert_eq(data_frame.ctx.dev_type, dev_type)
       assert_eq(data_frame.ctx.dev_id, dev_id)
       assert_eq(data_frame.dst_device_id, dst_device_id)
@@ -62,7 +80,7 @@ class TestFrameVa:
       data_frame.dst_device_id = modify_dst_dev_id
       data_frame_tmp = frame.get_cn_data_frame()
       assert_eq(data_frame_tmp.dst_device_id, modify_dst_dev_id)
-    
+
       # functions
       assert_eq(data_frame.get_planes(), 2)
       assert_eq(data_frame.get_plane_bytes(0), src_data_y_size)
@@ -83,33 +101,33 @@ class TestFrameVa:
       img_res = data_frame.image_bgr()
       assert img.all() == img_res.all()
       # cv2.imwrite("./test_img_res.jpg", img_res)
-    
-    def test_cninfer_objects(self):
-      frame = CNFrameInfo("stream_id_0")
-    
-      set_infer_objs(frame, CNInferObjs())
-    
+
+    @staticmethod
+    def test_cninfer_objects():
+      frame = cnstream.CNFrameInfo("stream_id_0")
+
+      cnstream_cpptest.set_infer_objs(frame, cnstream.CNInferObjs())
+
       objs_holder = frame.get_cn_infer_objects()
       # no object is in objs_holder
       assert_eq(len(objs_holder.objs), 0)
-    
+
       # Add an object to objs_holder
       class_id = "1"
       track_id = "2"
       score = 0.5
-      bbox = CNInferBoundingBox(0.1, 0.2, 0.5, 0.6)
+      bbox = cnstream.CNInferBoundingBox(0.1, 0.2, 0.5, 0.6)
       user_data = "hi cnstream"
-    
-      obj = CNInferObject()
+      obj = cnstream.CNInferObject()
       obj.id = class_id
       obj.track_id = track_id
       obj.score = score
       obj.bbox = bbox
       py_collection = obj.get_py_collection()
       py_collection["user_data"] = user_data
-    
+
       objs_holder.push_back(obj)
-    
+
       # Check the object be added
       assert_eq(len(objs_holder.objs), 1)
       assert_eq(objs_holder.objs[0].id, class_id)
@@ -122,33 +140,32 @@ class TestFrameVa:
       assert_eq(len(objs_holder.objs[0].get_py_collection()), 1)
       assert "user_data" in objs_holder.objs[0].get_py_collection()
       assert_eq(objs_holder.objs[0].get_py_collection()["user_data"], user_data)
-    
+
       # Add an attr to the object
       attr0_id = 0
       attr0_value = 5
       attr0_score = 0.8
-      attr0 = CNInferAttr(attr0_id, attr0_value, attr0_score)
+      attr0 = cnstream.CNInferAttr(attr0_id, attr0_value, attr0_score)
       objs_holder.objs[0].add_attribute("attr0", attr0)
-    
-      attr1 = CNInferAttr(attr0_id, attr0_value, attr0_score)
+      attr1 = cnstream.CNInferAttr(attr0_id, attr0_value, attr0_score)
       attr1.id = 1
       attr1.value = 4
       attr1.score = 0.6
       objs_holder.objs[0].add_attribute("attr1", attr1)
-    
+
       assert_eq(objs_holder.objs[0].get_attribute("attr0").id, attr0_id)
       assert_eq(objs_holder.objs[0].get_attribute("attr0").value, attr0_value)
       assert abs(objs_holder.objs[0].get_attribute("attr0").score - attr0_score) < 0.000001
-    
+
       assert_eq(objs_holder.objs[0].get_attribute("attr1").id, attr1.id)
       assert_eq(objs_holder.objs[0].get_attribute("attr1").value, attr1.value)
       assert_eq(objs_holder.objs[0].get_attribute("attr1").score, attr1.score)
-    
+
       # Add an extra attr to the object
       extra_attr_val = "extra_attribute"
       objs_holder.objs[0].add_extra_attribute("extra0", extra_attr_val)
       assert_eq(objs_holder.objs[0].get_extra_attribute("extra0"), extra_attr_val)
-    
+
       # Add a feature to the object
       feature0 = [0.15, 0.22, 0.37]
       objs_holder.objs[0].add_feature("feat0", feature0)

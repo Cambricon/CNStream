@@ -72,7 +72,7 @@ int TimeoutHelper::Reset(const std::function<void()>& func) {
 void TimeoutHelper::HandleFunc() {
   std::unique_lock<std::mutex> lk(mtx_);
   while (state_ != STATE_EXIT) {
-    cond_.wait(lk, [this]() -> bool { return state_ == STATE_EXIT || state_ != STATE_NO_FUNC; });
+    cond_.wait(lk, [this]() -> bool { return state_ != STATE_NO_FUNC; });
 
     auto wait_time = std::chrono::nanoseconds(static_cast<uint64_t>(timeout_ * 1e6));
     cond_.wait_for(lk, wait_time, [this]() -> bool {

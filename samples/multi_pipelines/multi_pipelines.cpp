@@ -51,7 +51,7 @@ std::atomic<bool> gstop_perf_print{false};
 
 class MsgObserver : cnstream::StreamMsgObserver {
  public:
-  MsgObserver(int stream_cnt, cnstream::Pipeline *pipeline, std::string source_name)
+  MsgObserver(int stream_cnt, cnstream::Pipeline *pipeline, const std::string& source_name)
       : stream_cnt_(stream_cnt), pipeline_(pipeline), source_name_(source_name) {}
 
   void Update(const cnstream::StreamMsg &smsg) override {
@@ -131,7 +131,7 @@ int AddSourceForFile(cnstream::DataSource *source, const std::string &stream_id,
 
 int main(int argc, char **argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, false);
-  cnstream::InitCNStreamLogging(nullptr);
+  // google::InitGoogleLogging(nullptr);
 
   LOGI(APP) << "CNSTREAM VERSION:" << cnstream::VersionString();
 
@@ -259,7 +259,7 @@ int main(int argc, char **argv) {
   a1.wait();
   a2.wait();
 
-  cnstream::ShutdownCNStreamLogging();
+  // google::ShutdownGoogleLogging();
 
   if (pipeline.IsProfilingEnabled()) {
     gstop_perf_print = true;

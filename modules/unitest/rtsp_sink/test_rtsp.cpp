@@ -246,7 +246,7 @@ void Process(std::shared_ptr<Module> ptr, CNPixelFormat pix_fmt, int width, int 
   auto fut = std::async(std::launch::async, PullRtspStreamFFmpeg, port);
   EXPECT_EQ(ret, 0) << line;
 
-  for (int i = 0; i < 30; ++i) {
+  for (int i = 0; i < 50; ++i) {
     data = GenTestData(pix_fmt, width, height, frame_rate, &frame_data);
     ret = ptr->Process(data);
     std::this_thread::sleep_for(std::chrono::milliseconds(1000 / frame_rate));

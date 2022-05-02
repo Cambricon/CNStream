@@ -75,18 +75,9 @@ std::atomic<bool> thread_running{true};
 std::atomic<bool> gstop_perf_print{false};
 std::mutex gmutex_for_add_source;
 
-class UserLogSink : public cnstream::LogSink {
- public:
-  void Send(cnstream::LogSeverity severity, const char *category, const char *filename, int line,
-            const struct ::tm *tm_time, int32_t usecs, const char *message, size_t message_len) override {
-    std::cout << "UserLogSink: " << ToString(severity, category, filename, line, tm_time, usecs, message, message_len)
-              << std::endl;
-  }
-};
-
 class MsgObserver : cnstream::StreamMsgObserver {
  public:
-  MsgObserver(cnstream::Pipeline *pipeline, std::string source_name)
+  MsgObserver(cnstream::Pipeline *pipeline, const std::string& source_name)
       : pipeline_(pipeline), source_name_(source_name) {}
 
   void Update(const cnstream::StreamMsg &smsg) override {
@@ -406,11 +397,7 @@ int AddSourceForFile(cnstream::DataSource *source, const std::string &stream_id,
 
 int main(int argc, char **argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, false);
-  cnstream::InitCNStreamLogging(nullptr);
-#if 0
-  UserLogSink log_listener;
-  cnstream::AddLogSink(&log_listener);
-#endif
+  // google::InitGoogleLogging(argv[0]);
 
   LOGI(DEMO) << "CNSTREAM VERSION:" << cnstream::VersionString();
 
@@ -585,7 +572,7 @@ int main(int argc, char **argv) {
   }
   gFeedMemFutures.clear();
 
-  cnstream::ShutdownCNStreamLogging();
+  // google::ShutdownGoogleLogging();
   if (pipeline.IsProfilingEnabled()) {
     gstop_perf_print = true;
     perf_print_th_ret.get();
