@@ -36,18 +36,18 @@
 #include "video_preprocess_common.hpp"
 
 /**
- * @brief Video standard preprocessing
+ * @brief Video standard preprocessing.
  */
 class VideoPreprocCpu : public cnstream::VideoPreproc {
  public:
   /**
-   * @brief Execute standard preprocessing
+   * @brief Execute standard preprocessing.
    *
-   * @param model_input: the input of neural network. The preproc result should be set to it.
-   * @param input_data: the raw input data. The user could get infer_server::video::VideoFrame object from it.
-   * @param model_info: model information, e.g., input/output number, shape and etc.
+   * @param[out] model_input: The input of network. The preproc result should be set to it.
+   * @param[in] input_data: The raw input data.
+   * @param[in] model_info: The model information, e.g., input/output number, shape and etc.
    *
-   * @return return true if succeed
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
   bool Execute(infer_server::ModelIO* model_input, const infer_server::InferData& input_data,
                const infer_server::ModelInfo* model_info) override;

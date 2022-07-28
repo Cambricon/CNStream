@@ -136,9 +136,8 @@ void CnOsd::DrawLabel(cv::Mat image, const CNInferObjsPtr& objs_holder, std::vec
     }
 
     // Draw Detection window
-    LOGD(OSD) << "Draw Bounding Box: "
-              << "top_left: (" << top_left.x << "," << top_left.y << ") bottom_right:(" << bottom_right.x << ","
-              << bottom_right.y << ")";
+    LOGD(OSD) << "Draw Bounding Box: top_left: (" << top_left.x << "," << top_left.y << ") "
+              << "bottom_right:(" << bottom_right.x << "," << bottom_right.y << ")";
     DrawBox(image, top_left, bottom_right, color);
 
     // Draw Text label + score + track id

@@ -89,6 +89,7 @@ bool PyPreproc::Init(const std::map<std::string, std::string> &params) {
   }
 
   try {
+    py::gil_scoped_acquire gil;
     auto t = SplitPyModuleAndClass(pyclass_name_iter->second);
     std::string pymodule_name = std::move(t.first);
     std::string pyclass_name = std::move(t.second);

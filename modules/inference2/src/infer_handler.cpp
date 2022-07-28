@@ -280,7 +280,7 @@ int InferHandlerImpl::Process(CNFrameInfoPtr data, bool with_objs) {
       box.h = obj->bbox.h;
       auto* tmp = new infer_server::InferData;
       tmp->Set(std::move(tmp_frame));
-      tmp->SetUserData(obj);
+      tmp->SetUserData(std::make_pair(data, obj));
       in->data.emplace_back(tmp);
     }
     if (!infer_server_->Request(session_, std::move(in), data)) {

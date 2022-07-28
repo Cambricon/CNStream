@@ -136,7 +136,7 @@ bool Tracker::Open(ModuleParamSet paramSet) {
 
   if (track_name_ != "FeatureMatch" && track_name_ != "IoUMatch") {
     LOGE(TRACK) << "Unsupported track type: " << track_name_;
-    return -1;
+    return false;
   }
   need_feature_ = (track_name_ == "FeatureMatch");
 

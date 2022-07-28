@@ -85,6 +85,7 @@ std::list<std::string> ReadFileList(const std::string &list) {
     exit(0);
   }
   ifile.close();
+  files.sort();
   return files;
 }
 

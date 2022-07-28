@@ -28,8 +28,7 @@
 #include "cnstream_logging.hpp"
 
 /**
- * @brief Postprocessing for YOLOv3 neural network
- * The input frame of the model should keep aspect ratio.
+ * @brief Postprocessing for YOLOv3 network.
  */
 class PostprocYolov3 : public cnstream::Postproc {
  public:

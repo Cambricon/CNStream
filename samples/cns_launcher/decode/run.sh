@@ -9,7 +9,7 @@
 # @notice: other flags see ${SAMPLES_DIR}/bin/cns_launcher --help
 #*************************************************************************#
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
-source ../../env.sh
+source ${CURRENT_DIR}/../../env.sh
 
 ${SAMPLES_DIR}/generate_file_list.sh
 mkdir -p output

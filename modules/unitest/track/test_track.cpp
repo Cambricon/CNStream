@@ -101,6 +101,19 @@ TEST(Tracker, CheckParamSet) {
 
   param["max_cosine_distance"] = std::to_string(g_max_cosine_distance);
   EXPECT_TRUE(track->CheckParamSet(param));
+
+  param["track_name"] = "no_such_track_name";
+  EXPECT_FALSE(track->CheckParamSet(param));
+
+  param["track_name"] = "FeatureMatch";
+  EXPECT_TRUE(track->CheckParamSet(param));
+  param["engine_num"] = "fake_num";
+  EXPECT_FALSE(track->CheckParamSet(param));
+
+  param["engine_num"] = "1";
+  EXPECT_TRUE(track->CheckParamSet(param));
+  param["no_such_param"] = "no_such_value";
+  EXPECT_TRUE(track->CheckParamSet(param));
 }
 
 TEST(Tracker, OpenClose) {
@@ -123,6 +136,12 @@ TEST(Tracker, OpenClose) {
     param["func_name"] = gfunc_name;
   }
   EXPECT_TRUE(track->Open(param));
+
+  param["max_cosine_distance"] = "0.06";
+  param["engine_num"] = "1";
+  param["device_id"] = "0";
+  param["track_name"] = "no_such_track_name";
+  EXPECT_FALSE(track->Open(param));
   track->Close();
 }
 
@@ -278,6 +297,10 @@ TEST(Tracker, ProcessCpuFeature) {
       EXPECT_FALSE(obj->track_id.empty());
     }
   }
+
+  // Illegal StreamIndex
+  data->SetStreamIndex(128);
+  EXPECT_EQ(track->Process(data), -1);
 }
 
 TEST(Tracker, ProcessFeatureMatchCPU0) {
@@ -474,6 +497,19 @@ TEST(Tracker, ProcessFeatureMatchMLU3) {
       EXPECT_FALSE(obj->track_id.empty());
     }
   }
+}
+
+TEST(Tracker, ProcessCpuIoUMatch) {
+  // create track
+  std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
+  ModuleParamSet param;
+  ASSERT_TRUE(track->Open(param));
+
+  auto data = GenTestImageData();
+  // not async extract feature
+  param["track_name"] = "IoUMatch";
+  ASSERT_TRUE(track->Open(param));
+  EXPECT_EQ(track->Process(data), 0);
 }
 
 }  // namespace cnstream

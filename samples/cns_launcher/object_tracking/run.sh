@@ -9,7 +9,7 @@
 # @notice: other flags see ${SAMPLES_DIR}/bin/cns_launcher --help
 #*************************************************************************#
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
-source ../../env.sh
+source ${CURRENT_DIR}/../../env.sh
 
 PrintUsages(){
     echo "Usages: run.sh [mlu220/mlu270/mlu370] [encode_jpeg/encode_video/display/rtsp] [yolov3/yolov5]"

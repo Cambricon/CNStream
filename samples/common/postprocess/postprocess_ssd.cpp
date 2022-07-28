@@ -40,13 +40,13 @@ using std::vector;
 class PostprocSsd : public cnstream::Postproc {
  public:
   /**
-   * @brief Execute postproc on neural ssd network outputs
+   * @brief Execute postproc on ssd network outputs.
    *
-   * @param net_outputs: neural network outputs
-   * @param model: model information(you can get input shape and output shape from model)
-   * @param package: smart pointer of struct to store processed result
+   * @param[in] net_outputs: The network outputs.
+   * @param[in] model: The model information(you can get input shape and output shape from model).
+   * @param[out] package: The smart pointer of struct to store processed result.
    *
-   * @return return 0 if succeed
+   * @return Returns 0 if this function has run successfully.
    */
   int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
               const cnstream::CNFrameInfoPtr& package) override;

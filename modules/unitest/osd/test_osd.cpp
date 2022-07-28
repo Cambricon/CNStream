@@ -114,7 +114,7 @@ TEST(Osd, Process) {
   std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(11);
-  CNInferBoundingBox bbox = {0.6, 0.4, 0.6, 0.3};
+  CNInferBoundingBox bbox = {0.6, 0.4, 0.6, 1};
   obj->bbox = bbox;
   objs_holder->objs_.push_back(obj);
 

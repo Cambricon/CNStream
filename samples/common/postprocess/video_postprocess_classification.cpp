@@ -28,20 +28,18 @@
 #include "video_postproc.hpp"
 
 /**
- * @brief Video postprocessing for classification neural network
+ * @brief Video postprocessing for classification network.
  */
 class VideoPostprocClassification : public cnstream::VideoPostproc {
  public:
   /**
-   * @brief Execute secondary classification neural networks postprocessing
+   * @brief Execute classification network postprocessing.
    *
-   * @param output_data: postproc result. The result of postprocessing should be set to it.
-   *                     You could set any type of data to this parameter and get it in UserProcess function.
-   * @param model_output: the raw output data from neural network
-   * @param model_info: model information, e.g., input/output number, shape and etc.
+   * @param[out] output_data: The result of postprocessing should be set to it.
+   * @param[in] model_output: The raw network output data.
+   * @param[in] model_info: The model information, e.g., input/output number, shape and etc.
    *
-   * @return return true if succeed
-   * @see VideoObjPostprocClassification::UserProcess
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
   bool Execute(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
                const infer_server::ModelInfo* model_info) override;
@@ -89,15 +87,13 @@ bool VideoPostprocClassification::Execute(infer_server::InferData* output_data,
 class VideoObjPostprocClassification : public cnstream::VideoPostproc {
  public:
   /**
-   * @brief Execute secondary classification neural networks postprocessing
+   * @brief Execute secondary classification network postprocessing
    *
-   * @param output_data: postproc result. The result of postprocessing should be set to it.
-   *                     You could set any type of data to this parameter and get it in UserProcess function.
-   * @param model_output: the raw output data from neural network
-   * @param model_info: model information, e.g., input/output number, shape and etc.
+   * @param[out] output_data: The result of postprocessing should be set to it.
+   * @param[in] model_output: The raw network output data
+   * @param[in] model_info: The model information, e.g., input/output number, shape and etc.
    *
-   * @return return true if succeed
-   * @see VideoObjPostprocClassification::UserProcess
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
   bool Execute(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
                const infer_server::ModelInfo* model_info) override;
@@ -136,7 +132,8 @@ bool VideoObjPostprocClassification::Execute(infer_server::InferData* output_dat
   attr.value = label;
   attr.score = max_score;
 
-  std::shared_ptr<cnstream::CNInferObject> obj = output_data->GetUserData<std::shared_ptr<cnstream::CNInferObject>>();
+  auto user_data = output_data->GetUserData<std::pair<cnstream::CNFrameInfoPtr, cnstream::CNInferObjectPtr>>();
+  cnstream::CNInferObjectPtr obj = user_data.second;
   obj->AddAttribute("classification", attr);
   return true;
 }
