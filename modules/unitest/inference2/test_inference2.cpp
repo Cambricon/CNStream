@@ -94,13 +94,13 @@ static cnstream::CNFrameInfoPtr CreatData(std::string device_id, bool is_eos = f
   data->stream_id = "1";
   std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
   if (mlu_data) {
-    void* frame_data = image.data;
-    void* planes[CN_MAX_PLANES] = {nullptr, nullptr};
+    void *frame_data = image.data;
+    void *planes[CN_MAX_PLANES] = {nullptr, nullptr};
     edk::MluMemoryOp mem_op;
     frame_data = mem_op.AllocMlu(nbytes);
-    planes[0] = frame_data;                                                                       // y plane
-    planes[1] = reinterpret_cast<void*>(reinterpret_cast<int64_t>(frame_data) + width * height);  // uv plane
-    void* ptr_mlu[2] = {planes[0], planes[1]};
+    planes[0] = frame_data;                                                                        // y plane
+    planes[1] = reinterpret_cast<void *>(reinterpret_cast<int64_t>(frame_data) + width * height);  // uv plane
+    void *ptr_mlu[2] = {planes[0], planes[1]};
     frame->ctx.dev_type = DevContext::DevType::MLU;
     frame->ctx.ddr_channel = std::stoi(device_id);
     frame->ctx.dev_id = std::stoi(device_id);
@@ -121,12 +121,14 @@ static cnstream::CNFrameInfoPtr CreatData(std::string device_id, bool is_eos = f
     data->timestamp = 1000;
     frame->width = width;
     frame->height = height;
-    void* ptr_cpu[2] = {image.data, image.data + nbytes * 2 / 3};
+    void *ptr_cpu[2] = {image.data, image.data + nbytes * 2 / 3};
     frame->stride[0] = frame->stride[1] = width;
     frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
     frame->ctx.dev_type = DevContext::DevType::CPU;
     frame->dst_device_id = std::stoi(device_id);
     frame->ctx.dev_id = std::stoi(device_id);
+    frame->cpu_data = cnCpuMemAlloc(nbytes);
+    memcpy(frame->cpu_data.get(), image.data, nbytes);
     frame->CopyToSyncMem(ptr_cpu, true);
 
     std::shared_ptr<CNInferObjs> objs(new (std::nothrow) CNInferObjs());
@@ -293,6 +295,7 @@ TEST(Inferencer2, Process) {
   param["postproc_name"] = "FakeVideoPostproc";
   param["device_id"] = "0";
 
+
   {  // CNFrameInfo empty
     ASSERT_TRUE(infer->Open(param));
     std::shared_ptr<CNFrameInfo> data = nullptr;
@@ -304,6 +307,26 @@ TEST(Inferencer2, Process) {
     std::string device_id = param["device_id"];
     bool is_eos = true;
     auto data = CreatData(device_id, is_eos);
+    EXPECT_EQ(infer->Process(data), 0);
+  }
+
+  {  // CNSyncedMemory data is on different MLU from the data this module needed, and SOURCE data is on MLU
+    if (edk::MluContext::GetDeviceNum() >= 2) {
+      ASSERT_TRUE(infer->Open(param));
+      std::string device_id = "1";
+      bool is_eos = false;
+      bool mlu_data = true;
+      auto data = CreatData(device_id, is_eos, mlu_data);
+      EXPECT_EQ(infer->Process(data), 0);
+    }
+  }
+
+  {  // CNSyncedMemory data is on different MLU from the data this module needed, and SOURCE data is on CPU
+    ASSERT_TRUE(infer->Open(param));
+    std::string device_id = "1";
+    bool is_eos = false;
+    bool mlu_data = false;
+    auto data = CreatData(device_id, is_eos, mlu_data);
     EXPECT_EQ(infer->Process(data), 0);
   }
 

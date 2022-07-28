@@ -9,7 +9,7 @@
 # @notice: other flags see ${SAMPLES_DIR}/bin/cns_launcher --help
 #*************************************************************************#
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
-source ../../env.sh
+source ${CURRENT_DIR}/../../env.sh
 
 LABEL_PATH=${MODELS_DIR}/label_map_coco.txt
 REMOTE_LABEL_PATH=http://video.cambricon.com/models/labels/label_map_coco.txt

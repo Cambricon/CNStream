@@ -96,36 +96,43 @@ void DataHandlerWrapper(const py::module &m) {
       .def("close", &RawImgMemHandler::Close)
       .def("write", [](std::shared_ptr<RawImgMemHandler> handler, const py::array_t<uint8_t>& data_array,
           const uint64_t pts, const CNDataFormat pixel_fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24) {
-        py::buffer_info buf = data_array.request();
-        switch (pixel_fmt) {
-          case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
-          case CNDataFormat::CN_PIXEL_FORMAT_RGB24:
-            if (buf.ndim != 3) {
-              std::cout << "For RGB24/BGR24 data, the dim should be 3, but dim = " << buf.ndim << std::endl;
-              return -1;
-            }
-            break;
-          case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
-          case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
-            if (buf.ndim != 2) {
-              std::cout << "For YUVNV21/12 data, the dim should be 2, but dim = " << buf.ndim << std::endl;
-              return -1;
-            }
-            break;
-          default:
-            std::cout << "Only support pixel format RGB24/BGR24/NV12/NV21" << std::endl;
-            return -1;
-        }
         int width, height;
-        if (buf.ndim == 3) {
-          width = buf.shape[1];
-          height = buf.shape[0];
-        } else {
-          width = buf.shape[1];
-          height = buf.shape[0] * 2 / 3;
+        uint8_t* data;
+        size_t size;
+        {
+          py::gil_scoped_acquire gil;
+          py::buffer_info buf = data_array.request();
+          switch (pixel_fmt) {
+            case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
+            case CNDataFormat::CN_PIXEL_FORMAT_RGB24:
+              if (buf.ndim != 3) {
+                LOGE(SOURCE) << "The dimension number of RGB24 or BGR24 data should be 3, but got " << buf.ndim;
+                return -1;
+              }
+              break;
+            case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
+            case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
+              if (buf.ndim != 2) {
+                LOGE(SOURCE) << "The dimension number of YUV NV12 or NV12 data should be 2, but got" << buf.ndim;
+              }
+              break;
+            default:
+              LOGE(SOURCE) << "Only RGB24, BGR24, YUV NV12 and YUV NV21 pixel formats are supported.";
+              return -1;
+          }
+          if (buf.ndim == 3) {
+            width = buf.shape[1];
+            height = buf.shape[0];
+          } else {
+            width = buf.shape[1];
+            height = buf.shape[0] * 2 / 3;
+          }
+          data = reinterpret_cast<uint8_t*>(buf.ptr);
+          size = buf.size;
         }
-        return handler->Write(reinterpret_cast<uint8_t*>(buf.ptr), buf.size, pts, width, height, pixel_fmt);
-      }, py::arg().noconvert(), py::arg().noconvert(), py::arg("pixel_fmt") = CNDataFormat::CN_PIXEL_FORMAT_BGR24);
+        return handler->Write(data, size, pts, width, height, pixel_fmt);
+      }, py::arg().noconvert(), py::arg().noconvert(), py::arg("pixel_fmt") = CNDataFormat::CN_PIXEL_FORMAT_BGR24,
+      py::call_guard<py::gil_scoped_release>());
   py::class_<ESJpegMemHandler, std::shared_ptr<ESJpegMemHandler>, SourceHandler>(m, "ESJpegMemHandler")
       .def(py::init([](DataSource *module, const std::string &stream_id,
                        int max_width, int max_height) {

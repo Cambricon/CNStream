@@ -29,10 +29,9 @@
 #include "postproc.hpp"
 #include "cnstream_logging.hpp"
 
-/*
- * @brief
- * Postprocessing for model cnstream/data/models/vehicle_cts_b4c4_bgra_mlu270.cambricon
- **/
+/**
+ * @brief Postprocessing for model cnstream/data/models/vehicle_cts_b4c4_bgra_mlu270.cambricon
+ */
 class PostprocVehicleCts : public cnstream::ObjPostproc {
  public:
   int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,

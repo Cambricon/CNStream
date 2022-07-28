@@ -35,20 +35,20 @@
 #include "cnstream_logging.hpp"
 
 /**
- * @brief standard pre process
+ * @brief standard preprocess.
  */
 class PreprocCpu : public cnstream::Preproc {
  public:
   /**
-   * @brief Execute preproc on origin data
+   * @brief Execute preproc on origin data.
    *
-   * @param net_inputs: neural network inputs
-   * @param model: model information(you can get input shape and output shape from model)
-   * @param package: smart pointer of struct to store origin data
+   * @param[out] net_inputs: The network inputs.
+   * @param[in] model: The model information(you can get input shape and output shape from model).
+   * @param[in] package: The smart pointer of struct to store origin data.
    *
-   * @return return 0 if succeed
+   * @return Returns 0 if this function has run successfully.
    *
-   * @attention net_inputs is a pointer to pre-allocated cpu memory
+   * @attention The net_inputs is a pointer to pre-allocated cpu memory.
    */
   int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
               const cnstream::CNFrameInfoPtr& package) override;
@@ -140,7 +140,7 @@ int PreprocCpu::Execute(const std::vector<float*>& net_inputs, const std::shared
 }
 
 /**
- * @brief standard object pre process
+ * @brief standard object preprocess.
  */
 class ObjPreprocCpu : public cnstream::ObjPreproc {
  public:

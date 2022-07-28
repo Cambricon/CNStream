@@ -17,7 +17,7 @@
 #*************************************************************************#
 
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
-source ../env.sh
+source ${CURRENT_DIR}/../env.sh
 PrintUsages(){
     echo "Usages: run.sh [mlu220/mlu270]"
 }

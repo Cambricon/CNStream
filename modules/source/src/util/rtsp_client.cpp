@@ -161,6 +161,7 @@ class DummySink : public MediaSink, public cnstream::IParserResult {
   bool firstFrame = true;
   bool only_key_frame = false;
   cnstream::EsParser parser_;
+  bool is_valid_video_ = false;
 };
 
 // Implementation of the RTSP 'response handlers':
@@ -209,42 +210,29 @@ void setupNextSubsession(RTSPClient* rtspClient) {
   StreamClientState& scs = client->scs;                        // alias
 
   if (!client->setupOk) {
-    if (scs.subsession == NULL) {
-      // find the first video subsession, and only handle one video subsession
-      MediaSubsession *subsession = scs.iter->next();
-      while (subsession != NULL) {
-        const char* mediumName = subsession->mediumName();
-        if (strstr(mediumName, "video") != NULL) {
-          scs.subsession = subsession;
-          break;
-        }
-        subsession = scs.iter->next();
-      }
-      if (scs.subsession == NULL) {
-        env << "Failed to find a video session\n";
-        return;
-      }
-    }
-    if (scs.subsession != NULL) {
-      if (!scs.subsession->initiate()) {
-        env << *rtspClient << "Failed to initiate the \"" << *scs.subsession << "\" subsession: " << env.getResultMsg()
-            << "\n";
-        setupNextSubsession(rtspClient);  // give up on this subsession; go to the next one
-      } else {
-        env << *rtspClient << "Initiated the \"" << *scs.subsession << "\" subsession (";
-        if (scs.subsession->rtcpIsMuxed()) {
-          env << "client port " << scs.subsession->clientPortNum();
-        } else {
-          env << "client ports " << scs.subsession->clientPortNum() << "-" << scs.subsession->clientPortNum() + 1;
-        }
-        env << ")\n";
+    scs.iter->reset();
+  }
 
-        // Continue setting up this subsession, by sending a RTSP "SETUP" command:
-        Boolean streamUsingTCP = (client->streammingPreferTcp && client->streammingOverTcp);
-        rtspClient->sendSetupCommand(*scs.subsession, continueAfterSETUP, False, streamUsingTCP, false);
+  scs.subsession = scs.iter->next();
+  if (scs.subsession != NULL) {
+    if (!scs.subsession->initiate()) {
+      env << *rtspClient << "Failed to initiate the \"" << *scs.subsession << "\" subsession: " << env.getResultMsg()
+          << "\n";
+      setupNextSubsession(rtspClient);  // give up on this subsession; go to the next one
+    } else {
+      env << *rtspClient << "Initiated the \"" << *scs.subsession << "\" subsession (";
+      if (scs.subsession->rtcpIsMuxed()) {
+        env << "client port " << scs.subsession->clientPortNum();
+      } else {
+        env << "client ports " << scs.subsession->clientPortNum() << "-" << scs.subsession->clientPortNum()+1;
       }
-      return;
+      env << ")\n";
+
+      // Continue setting up this subsession, by sending a RTSP "SETUP" command:
+      Boolean streamUsingTCP = (client->streammingPreferTcp && client->streammingOverTcp);
+      rtspClient->sendSetupCommand(*scs.subsession, continueAfterSETUP, False, streamUsingTCP, false);
     }
+    return;
   }
 
   // We've finished setting up all of the subsessions.  Now, send a RTSP "PLAY" command to start the streaming:
@@ -267,15 +255,16 @@ void continueAfterSETUP(RTSPClient* rtspClient, int resultCode, char* resultStri
     if (resultCode != 0) {
       env << "Failed to set up the \"" << client->scs.subsession->mediumName()
           << "\" subsession: " << resultString << "\n";
-      if (!client->setupOk) {
-        if (client->streammingPreferTcp && client->streammingOverTcp) {
-          env << "Failed to set up streaming over TCP, try UDP\n";
-          client->streammingOverTcp = false;
-          break;
-        } else {
-          env << "Failed to set up streaming over UDP\n";
-          break;
-        }
+      client->setupOk = false;
+      if (client->streammingPreferTcp && client->streammingOverTcp) {
+        env << "Failed to set up streaming over TCP, try UDP\n";
+        client->streammingOverTcp = false;
+        break;
+      } else {
+        env << "Failed to set up streaming over UDP, shutdown\n";
+        shutdownStream(rtspClient);
+        delete[] resultString;
+        return;
       }
     }
     if (!client->setupOk) client->setupOk = true;
@@ -494,14 +483,22 @@ DummySink::DummySink(UsageEnvironment& env, MediaSubsession& subsession, char co
   fStreamId = strDup(streamId);
   fReceiveBuffer.reset(new u_int8_t[DUMMY_SINK_RECEIVE_BUFFER_SIZE + 4]);
 
+  const char* mediumName = fSubsession.mediumName();
+  if (strstr(mediumName, "video") == NULL) {
+    LOGW(SOURCE) << "Only video is supported";
+    return;
+  }
   AVCodecID codec_id;
   if (!strcmp(fSubsession.codecName(), "H264")) {
     codec_id = AV_CODEC_ID_H264;
   } else if (!strcmp(fSubsession.codecName(), "H265")) {
     codec_id = AV_CODEC_ID_HEVC;
   } else {
-    throw std::runtime_error("Unsupported codec type");  // FIXME
+    LOGW(SOURCE) << "Unsupported codec type";
+    return;
   }
+
+  is_valid_video_ = true;
 
   unsigned num = 1;
   unsigned records_num[3];
@@ -579,28 +576,30 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
     envir() << "\n";
   #endif
 
-  ourRTSPClient* client = reinterpret_cast<ourRTSPClient*>(fSubsession.miscPtr);
-  // start to check liveness for livestream, FIXME
-  client->resetLivenessTimer();
+  if (is_valid_video_) {
+    ourRTSPClient* client = reinterpret_cast<ourRTSPClient*>(fSubsession.miscPtr);
+    // start to check liveness for livestream, FIXME
+    client->resetLivenessTimer();
 
-  if (client->cb_ && frameSize) {
-    /*H264/H265, video frame*/
-    u_int8_t *buffer = fReceiveBuffer.get();
-    buffer[0] = 0x00;
-    buffer[1] = 0x00;
-    buffer[2] = 0x00;
-    buffer[3] = 0x01;
+    if (client->cb_ && frameSize) {
+      /*H264/H265, video frame*/
+      u_int8_t *buffer = fReceiveBuffer.get();
+      buffer[0] = 0x00;
+      buffer[1] = 0x00;
+      buffer[2] = 0x00;
+      buffer[3] = 0x01;
 
-    uint64_t ts = (presentationTime.tv_usec/1000 + presentationTime.tv_sec * 1000) * 90;
-    if (firstFrame) {
-      frameTimeStampBase = ts;
-      firstFrame = false;
+      uint64_t ts = (presentationTime.tv_usec/1000 + presentationTime.tv_sec * 1000) * 90;
+      if (firstFrame) {
+        frameTimeStampBase = ts;
+        firstFrame = false;
+      }
+      cnstream::VideoEsPacket packet;
+      packet.data = buffer;
+      packet.len = frameSize + 4;
+      packet.pts = ts - frameTimeStampBase;
+      parser_.Parse(packet);
     }
-    cnstream::VideoEsPacket packet;
-    packet.data = buffer;
-    packet.len = frameSize + 4;
-    packet.pts = ts - frameTimeStampBase;
-    parser_.Parse(packet);
   }
 
   // Then continue, to request the next frame of data:

@@ -29,20 +29,19 @@
 #include "video_postproc.hpp"
 
 /**
- * @brief Video postprocessing for magicmind YOLOv3 neural network
- * The input frame of the model should keep aspect ratio.
+ * @brief Video postprocessing for YOLOv5 network.
  */
 
 class VideoPostprocYolov5MM : public cnstream::VideoPostproc {
  public:
   /**
-   * @brief User process. Postprocess on outputs of magicmind YOLOv3 neural network and fill data to frame.
+   * @brief Execute YOLOv5 network postprocessing.
    *
-   * @param output_data: the raw output data from neural network
-   * @param model_output: the raw neural network output data
-   * @param model_info: model information, e.g., input/output number, shape and etc.
+   * @param[out] output_data: The result of postprocessing should be set to it.
+   * @param[in] model_output: The raw network output data.
+   * @param[in] model_info: The model information, e.g., input/output number, shape and etc.
    *
-   * @return return true if succeed
+   * @return Returns true if this function has run successfully. Otherwise, returns false.
    */
   bool Execute(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
                const infer_server::ModelInfo* model_info) override;
