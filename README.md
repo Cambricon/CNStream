@@ -37,7 +37,7 @@ CNStream provides the following built-in modules:
 
 You should find a sample from ``samples/simple_run_pipeline/simple_run_pipeline.cpp`` that helps developers easily understand how to develop a classic classification or detection application based on CNStream pipeline.
 
-This sample supports typical classification and detection neural networks like vgg resnet ssd fasterrcnn yolo-vx and so on.
+This sample supports typical classification and detection networks like vgg resnet ssd fasterrcnn yolo-vx and so on.
 
 This sample supports images or video file as input.
 

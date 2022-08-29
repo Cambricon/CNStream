@@ -85,7 +85,7 @@ class VideoPreproc : virtual public ReflexObjectEx<VideoPreproc> {
   /**
    * @brief Executes preprocessing on the origin data.
    *
-   * @param[out] model_input The input of neural network.
+   * @param[out] model_input The input of network.
    * @param[in] input_data The raw input data. The user could get infer_server::video::VideoFrame object from it.
    * @param[in] model_info The model information, e.g., input/output number, shape and etc.
    *
