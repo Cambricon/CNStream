@@ -79,9 +79,9 @@ class Postproc : virtual public ReflexObjectEx<Postproc> {
    */
   void SetThreshold(const float threshold);
   /**
-   * @brief Executes postproc on neural network outputs.
+   * @brief Executes postproc on network outputs.
    *
-   * @param[in] net_outputs Neural network outputs, and the data is stored on the host.
+   * @param[in] net_outputs Network outputs, and the data is stored on the host.
    * @param[in] model Model information including input shape and output shape.
    * @param[in,out] package Smart pointer of ``CNFrameInfo`` to store processed data.
    *
@@ -95,9 +95,9 @@ class Postproc : virtual public ReflexObjectEx<Postproc> {
                       const CNFrameInfoPtr& package) { return 0; }
 
   /**
-   * @brief Execute post processing on neural network outputs.
+   * @brief Execute post processing on network outputs.
    *
-   * @param[in] net_outputs Neural network outputs, and the data is stored on the MLU.
+   * @param[in] net_outputs Network outputs, and the data is stored on the MLU.
    * @param[in] model Model information including input shape and output shape.
    * @param[in,out] packages The batched frames's result of postprocessing.
    *
@@ -153,9 +153,9 @@ class ObjPostproc : virtual public ReflexObjectEx<ObjPostproc> {
    */
   void SetThreshold(const float threshold);
   /**
-   * @brief Executes post processing on neural network outputs.
+   * @brief Executes post processing on network outputs.
    *
-   * @param[in] net_outputs Neural network outputs, and the data is stored on the host.
+   * @param[in] net_outputs Network outputs, and the data is stored on the host.
    * @param[in] model Model information including input shape and output shape.
    * @param[in,out] finfo Smart pointer of ``CNFrameInfo`` to store processed data.
    * @param[in] pobj The deduced object information.
@@ -171,9 +171,9 @@ class ObjPostproc : virtual public ReflexObjectEx<ObjPostproc> {
                       const CNFrameInfoPtr& finfo, const std::shared_ptr<CNInferObject>& pobj) { return 0; }
 
   /**
-   * @brief Execute post processing on neural network outputs.
+   * @brief Execute post processing on network outputs.
    *
-   * @param[in] net_outputs Neural network outputs, and the data is stored on the MLU.
+   * @param[in] net_outputs Network outputs, and the data is stored on the MLU.
    * @param[in] model Model information including input shape and output shape.
    * @param[in,out] obj_infos The batched frames's result of postprocessing.
    *

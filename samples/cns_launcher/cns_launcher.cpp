@@ -282,6 +282,7 @@ int AddSourceForImageInMem(cnstream::DataSource *source, const std::string &stre
     LOGE(DEMO) << "there is no jpg files";
     return -1;
   }
+  files.sort();
 
   auto handler = cnstream::ESJpegMemHandler::Create(source, stream_id,
       FLAGS_maximum_image_width, FLAGS_maximum_image_height);

@@ -82,7 +82,7 @@ class VideoPostproc : virtual public ReflexObjectEx<VideoPostproc> {
    *
    * @param[out] output_data The postprocessing result. The result of postprocessing should be set to it.
    *                     You could set any type of data to this parameter and get it in UserProcess function.
-   * @param[in] model_output The neural network origin output data.
+   * @param[in] model_output The network origin output data.
    * @param[in] model_info The model information, such as input/output number and shape.
    *
    * @return Returns true if successful, otherwise returns false.

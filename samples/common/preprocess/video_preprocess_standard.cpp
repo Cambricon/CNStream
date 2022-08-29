@@ -158,9 +158,9 @@ bool VideoPreprocCpu::Execute(infer_server::ModelIO* model_input, const infer_se
 class VideoObjPreprocCpu : public cnstream::VideoPreproc {
  public:
    /**
-   * @brief Execute standard preprocessing for secondary neural network
+   * @brief Execute standard preprocessing for secondary inference
    *
-   * @param model_input: the input of neural network. The preproc result should be set to it.
+   * @param model_input: Inference input. The preproc result should be set to it.
    * @param input_data: the raw input data. The user could get infer_server::video::VideoFrame object from it.
    * @param model_info: model information, e.g., input/output number, shape and etc.
    *

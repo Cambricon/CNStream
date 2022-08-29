@@ -43,7 +43,7 @@ namespace cnstream {
 /**
  * @class Preproc
  *
- * @brief Preproc is the base class of neural network preprocessing for inference module.
+ * @brief Preproc is the base class of network preprocessing for inference module.
  */
 class Preproc : virtual public ReflexObjectEx<Preproc> {
  public:
@@ -71,9 +71,9 @@ class Preproc : virtual public ReflexObjectEx<Preproc> {
   virtual bool Init(const std::map<std::string, std::string> &params) { return true; }
 
   /**
-   * @brief Executes preprocess on neural network inputs.
+   * @brief Executes preprocess on network inputs.
    *
-   * @param[out] net_inputs  Neural network inputs.
+   * @param[out] net_inputs  Network inputs.
    * @param[in] model  Model information including input shape and output shape.
    * @param[in] package Smart pointer of ``CNFrameInfo`` which stores origin data.
    *
@@ -114,9 +114,9 @@ class ObjPreproc : virtual public ReflexObjectEx<ObjPreproc> {
   virtual bool Init(const std::map<std::string, std::string> &params) { return true; }
 
   /**
-   * @brief Executes preprocess on neural network inputs.
+   * @brief Executes preprocess on network inputs.
    *
-   * @param[out] net_inputs  Neural network inputs.
+   * @param[out] net_inputs  Network inputs.
    * @param[in] model  Model information including input shape and output shape.
    * @param[in] finfo Smart pointer of ``CNFrameInfo`` which stores origin data.
    * @param[in] obj The deduced object information.

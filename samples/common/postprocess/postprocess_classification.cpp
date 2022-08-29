@@ -40,9 +40,8 @@ int PostprocClassification::Execute(const std::vector<float*>& net_outputs,
                                     const std::shared_ptr<edk::ModelLoader>& model,
                                     const cnstream::CNFrameInfoPtr& package) {
   if (net_outputs.size() != 1) {
-    LOGE(DEMO) << "[Warning] classification neuron network only has one output,"
-                  " but get " +
-                      std::to_string(net_outputs.size());
+    LOGE(DEMO) << "[Warning] classification network only has one output, but get "
+               << std::to_string(net_outputs.size());
     return -1;
   }
 
@@ -85,8 +84,8 @@ int ObjPostprocClassification::Execute(const std::vector<float*>& net_outputs,
                                        const cnstream::CNFrameInfoPtr& finfo,
                                        const std::shared_ptr<cnstream::CNInferObject>& obj) {
   if (net_outputs.size() != 1) {
-    LOGE(DEMO) << "[Warning] classification neuron network only has one output,"
-                  " but get " + std::to_string(net_outputs.size());
+    LOGE(DEMO) << "[Warning] classification network only has one output, but get "
+               << std::to_string(net_outputs.size());
     return -1;
   }
 
