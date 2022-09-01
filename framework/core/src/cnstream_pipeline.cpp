@@ -90,12 +90,16 @@ bool Pipeline::BuildPipeline(const CNGraphConfig& graph_config) {
     return false;
   }
   // create modules by config
-  if (!CreateModules()) {
+  std::vector<std::shared_ptr<Module>> modules;  // used to init profiler
+  if (!CreateModules(&modules)) {
     LOGE(CORE) << "Create modules failed.";
     return false;
   }
   // generate parant mask for all nodes and route mask for head nodes.
   GenerateModulesMask();
+  // This call must after GenerateModulesMask called,
+  profiler_.reset(new PipelineProfiler(graph_->GetConfig().profiler_config, GetName(), modules,
+      GetSortedModuleNames()));
   // create connectors for all nodes beside head nodes.
   // This call must after GenerateModulesMask called,
   // then we can determine witch are the head nodes.
@@ -228,9 +232,7 @@ bool Pipeline::IsLeafNode(const std::string& module_name) const {
   return module->context_->node.lock()->GetNext().empty();
 }
 
-bool Pipeline::CreateModules() {
-  std::vector<std::shared_ptr<Module>> modules;  // used to init profiler
-
+bool Pipeline::CreateModules(std::vector<std::shared_ptr<Module>>* modules) {
   all_modules_mask_ = 0;
   for (auto node_iter = graph_->DFSBegin(); node_iter != graph_->DFSEnd(); ++node_iter) {
     const CNModuleConfig& config = node_iter->GetConfig();
@@ -247,12 +249,10 @@ bool Pipeline::CreateModules() {
     node_iter->data.route_mask = 0;
     node_iter->data.module = std::shared_ptr<Module>(module);
     node_iter->data.module->SetContainer(this);
-    modules.push_back(node_iter->data.module);
+    modules->push_back(node_iter->data.module);
     all_modules_mask_ |= 1UL << node_iter->data.module->GetId();
   }
 
-  profiler_.reset(new PipelineProfiler(graph_->GetConfig().profiler_config, GetName(), modules,
-      GetSortedModuleNames()));
   return true;
 }
 

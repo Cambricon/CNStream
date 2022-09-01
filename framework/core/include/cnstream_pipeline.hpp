@@ -319,7 +319,7 @@ class Pipeline : private NonCopyable {
 
  private:
   /** called by BuildPipeline **/
-  bool CreateModules();
+  bool CreateModules(std::vector<std::shared_ptr<Module>>* modules);
   void GenerateModulesMask();
   bool CreateConnectors();
 
