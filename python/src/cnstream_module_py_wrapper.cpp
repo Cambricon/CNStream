@@ -18,16 +18,16 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <pybind11/embed.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
-#include <cnstream_module.hpp>
-#include <cnstream_pipeline.hpp>
-
 #include <memory>
 #include <string>
 #include <utility>
+
+#include "pybind11/embed.h"
+#include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
+
+#include "cnstream_module.hpp"
+#include "cnstream_pipeline.hpp"
 
 #include "pymodule.h"
 
@@ -92,8 +92,8 @@ class Pybind11ModuleEx : public Pybind11Module {
 
 class Pybind11IModuleObserverV : public IModuleObserver {
  public:
-  void notify(std::shared_ptr<CNFrameInfo> frame) override {
-    PYBIND11_OVERRIDE_PURE(void, IModuleObserver, notify, frame);
+  void Notify(std::shared_ptr<CNFrameInfo> frame) override {
+    PYBIND11_OVERRIDE_PURE(void, IModuleObserver, Notify, frame);
   }
 };  // class Pybind11IModuleObserverV
 
@@ -189,10 +189,10 @@ int PyModule::Process(std::shared_ptr<CNFrameInfo> data) {
 
 void ModuleWrapper(py::module &m) {  // NOLINT
   py::enum_<EventType>(m, "EventType")
-      .value("event_invalid", EventType::EVENT_INVALID)
-      .value("event_error", EventType::EVENT_ERROR)
-      .value("event_warning", EventType::EVENT_WARNING)
-      .value("event_stream_error", EventType::EVENT_STREAM_ERROR)
+      .value("INVALID", EventType::EVENT_INVALID)
+      .value("ERROR", EventType::EVENT_ERROR)
+      .value("WARNING", EventType::EVENT_WARNING)
+      .value("STREAM_ERROR", EventType::EVENT_STREAM_ERROR)
       .export_values();
   py::class_<detail::Pybind11Module, detail::Pybind11ModuleV<detail::Pybind11Module>>(m, "Module")
       .def(py::init<const std::string&>())
@@ -216,7 +216,7 @@ void ModuleWrapper(py::module &m) {  // NOLINT
       .def(py::init<const std::string&>());
   py::class_<IModuleObserver, detail::Pybind11IModuleObserverV>(m, "ModuleObserver")
       .def(py::init<>())
-      .def("notify", &IModuleObserver::notify);
+      .def("notify", &IModuleObserver::Notify);
   py::class_<Module>(m, "CModule")
       .def("set_module_observer", &Module::SetObserver);
 }

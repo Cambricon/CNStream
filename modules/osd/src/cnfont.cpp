@@ -20,13 +20,13 @@
 
 #include "cnfont.hpp"
 
+#include <string>
+
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
 #include "opencv2/imgcodecs/imgcodecs.hpp"
 #endif
-
-#include <string>
 
 #include "cnstream_logging.hpp"
 
@@ -34,8 +34,9 @@ namespace cnstream {
 
 #ifdef HAVE_FREETYPE
 
-bool CnFont::Init(const std::string &font_path, float font_pixel, float space, float step) {
-if (FT_Init_FreeType(&m_library)) {
+bool CnFont::Init(const std::string& font_path, float font_pixel, float space, float step) {
+  std::unique_lock<std::mutex> guard(mutex_);
+  if (FT_Init_FreeType(&m_library)) {
     LOGE(OSD) << "FreeType init errors";
     return false;
   }
@@ -84,6 +85,7 @@ void CnFont::restoreFont(float font_pixel, float space, float step) {
 }
 
 uint32_t CnFont::GetFontPixel() {
+  std::unique_lock<std::mutex> guard(mutex_);
   if (!is_initialized_) {
     LOGE(OSD) << " [Osd] Please init CnFont first.";
     return 0;
@@ -125,6 +127,8 @@ bool CnFont::GetTextSize(char* text, uint32_t* width, uint32_t* height) {
     LOGE(OSD) << " [CnFont] [GetTextSize] The text, width or height is nullptr.";
     return false;
   }
+  std::unique_lock<std::mutex> guard(mutex_);
+
   if (!is_initialized_) {
     LOGE(OSD) << " [CnFont] [GetTextSize] Please init CnFont first.";
     return false;
@@ -171,12 +175,14 @@ void CnFont::GetWCharSize(wchar_t wc, uint32_t* width, uint32_t* height) {
   *width = slot->bitmap.width;
 }
 
-int CnFont::putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) {
+int CnFont::putText(CNDataFramePtr frame, char* text, cv::Point pos, cv::Scalar color) {
+  /*cv::Mat img = frame->ImageBGR();
   if (img.data == nullptr) {
     LOGE(OSD) << "[CnFont] [putText] img.data is nullptr.";
     return -1;
   }
-
+  */
+  std::unique_lock<std::mutex> guard(mutex_);
   if (text == nullptr) {
     LOGE(OSD) << "[CnFont] [putText] text is nullptr.";
   }
@@ -193,14 +199,14 @@ int CnFont::putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) {
   }
 
   for (int i = 0; w_str[i] != '\0'; ++i) {
-    putWChar(img, w_str[i], pos, color);
+    putWChar(frame, w_str[i], pos, color);
   }
 
   return 0;
 }
 
 // Output the current character and update the m pos position
-void CnFont::putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color) {
+void CnFont::putWChar(CNDataFramePtr frame, wchar_t wc, cv::Point& pos, cv::Scalar color) {
   // Generate a binary bitmap of a font based on unicode
   FT_UInt glyph_index = FT_Get_Char_Index(m_face, wc);
   FT_Load_Glyph(m_face, glyph_index, FT_LOAD_DEFAULT);
@@ -219,7 +225,9 @@ void CnFont::putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color
         int r = pos.y - (rows - 1 - i);
         int c = pos.x + j;
 
-        if (r >= 0 && r < img.rows && c >= 0 && c < img.cols) {
+        cv::Mat img = frame->ImageBGR();
+        if (r >= 0 && r < static_cast<int>(frame->buf_surf->GetHeight()) &&
+            c >= 0 && c < static_cast<int>(frame->buf_surf->GetWidth())) {
           cv::Vec3b pixel = img.at<cv::Vec3b>(cv::Point(c, r));
           cv::Scalar scalar = cv::Scalar(pixel.val[0], pixel.val[1], pixel.val[2]);
 
@@ -228,9 +236,9 @@ void CnFont::putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color
           for (int k = 0; k < 4; ++k) {
             scalar.val[k] = scalar.val[k] * (1 - p) + color.val[k] * p;
           }
-          img.at<cv::Vec3b>(cv::Point(c, r))[0] = (unsigned char)(scalar.val[0]);
-          img.at<cv::Vec3b>(cv::Point(c, r))[1] = (unsigned char)(scalar.val[1]);
-          img.at<cv::Vec3b>(cv::Point(c, r))[2] = (unsigned char)(scalar.val[2]);
+          img.at<cv::Vec3b>(cv::Point(c, r))[0] = (uint8_t)(scalar.val[0]);
+          img.at<cv::Vec3b>(cv::Point(c, r))[1] = (uint8_t)(scalar.val[1]);
+          img.at<cv::Vec3b>(cv::Point(c, r))[2] = (uint8_t)(scalar.val[2]);
         }
       }
     }
@@ -241,6 +249,83 @@ void CnFont::putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color
 
   pos.x += static_cast<int>((cols ? cols : space) + sep);
 }
+
+int CnFont::putText(char* text, cv::Scalar color, cv::Scalar bg_color, void* bitmap, cv::Size size) {
+  if (text == nullptr || bitmap == nullptr) {
+    LOGE(OSD) << "[CnFont] [putText] text or bitmap is nullptr.";
+  }
+
+  std::unique_lock<std::mutex> guard(mutex_);
+  if (!is_initialized_) {
+    LOGE(OSD) << " [Osd] Please init CnFont first.";
+    return -1;
+  }
+
+  wchar_t* w_str;
+  if (ToWchar(text, w_str) == -1) {
+    LOGE(OSD) << "[CnFont] [putText] [ToWchar] failed.";
+    return -1;
+  }
+
+  cv::Point pos(0, size.height - 1);
+  for (int i = 0; w_str[i] != '\0'; ++i) {
+    putWChar(w_str[i], pos, color, bg_color, bitmap, size);
+  }
+
+  return 0;
+}
+
+// Output the current character and update the m pos position
+void CnFont::putWChar(wchar_t wc, cv::Point& pos, cv::Scalar color, cv::Scalar bg_color, void* bitmap, cv::Size size) {
+  // Generate a binary bitmap of a font based on unicode
+  FT_UInt glyph_index = FT_Get_Char_Index(m_face, wc);
+  FT_Load_Glyph(m_face, glyph_index, FT_LOAD_DEFAULT);
+  FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_MONO);
+
+  FT_GlyphSlot slot = m_face->glyph;
+
+  // Cols and rows
+  int rows = slot->bitmap.rows;
+  int cols = slot->bitmap.width;
+
+  uint8_t* base = static_cast<uint8_t*>(bitmap);
+  uint32_t pitch = (size.width * 2 + 63) / 64 * 64;
+  for (int i = 0; i < rows; ++i) {
+    for (int j = 0; j < cols; ++j) {
+      int off = i * slot->bitmap.pitch + j / 8;
+      if (slot->bitmap.buffer[off] & (0xC0 >> (j % 8))) {
+        int r = pos.y - (rows - 1 - i);
+        int c = pos.x + j;
+        if (r >= 0 && r < size.height && c >= 0 && c < size.width) {
+          uint8_t* pixel = base + r * pitch + c * 2;
+
+#if 0
+          cv::Scalar scalar = bg_color;
+           // Color fusion
+          float p = m_fontDiaphaneity;
+          for (int k = 0; k < 4; ++k) {
+            scalar.val[k] = scalar.val[k] * (1 - p) + color.val[k] * p;
+          }
+#else
+          cv::Scalar scalar = color;
+#endif
+          uint8_t b = static_cast<uint8_t>(scalar.val[0]);
+          uint8_t g = static_cast<uint8_t>(scalar.val[1]);
+          uint8_t r = static_cast<uint8_t>(scalar.val[2]);
+          uint16_t argb1555 =
+              0x8000 + (b >> 3) + (static_cast<uint16_t>(g >> 3) << 5) + (static_cast<uint16_t>(r >> 3) << 10);
+          *reinterpret_cast<uint16_t*>(pixel) = argb1555;
+        }
+      }
+    }
+  }
+  // Modify the output position of the next word
+  double space = m_fontSize.val[0] * m_fontSize.val[1];
+  double sep = m_fontSize.val[0] * m_fontSize.val[2];
+
+  pos.x += static_cast<int>((cols ? cols : space) + sep);
+}
+
 #endif
 
 }  // namespace cnstream

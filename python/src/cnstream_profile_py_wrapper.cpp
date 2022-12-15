@@ -17,11 +17,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
 #include <string>
+
+#include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
 
 #include "profiler/module_profiler.hpp"
 #include "profiler/pipeline_profiler.hpp"

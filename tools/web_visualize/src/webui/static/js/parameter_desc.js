@@ -1,61 +1,26 @@
 window.PARAM_DESC = {}
 PARAM_DESC["cnstream::DataSource"] = {
     custom_params: {
-        output_type: "Optional. <br> Default value: [cpu] <br> Optional values: [cpu] [mlu] <br> Desc: Where the outputs will be stored.",
-        decoder_type: "Optional. <br> Default value: [cpu] <br> Optional values: [cpu] [mlu] <br> Desc: The decoder type.",
-        reuse_cndec_buf: "Optional. <br> Default value: [false] <br> Optional values: [false] [true] <br> Desc: Whether to enable the mechanism to reuse MLU codec's buffers by next modules. <br> Note: This parameter is used when decoder type is [mlu]",
-        input_buf_number: "Optional. <br> Default value: [2] <br> Optional values: integer <br> Desc: Input buffer's number used by MLU codec.",
-        output_buf_number: "Optional. <br> Default value: [3] <br> Optional values: integer <br> Desc: Output buffer's number used by MLU codec.",
         interval: "Optional. <br> Default value: [1] <br> Optional values: integer <br> Desc: The interval of outputting one frame. It outputs one frame every n (interval_) frames.",
-        apply_stride_align_for_scaler: "Optional. <br> Default value: [false] <br> Optional values: [false] [true] <br> Desc: Whether to set outputs meet the Scaler alignment requirement.",
+        bufpool_size: "Optional. <br> Default value: [16] <br> Optional values: integer <br> Desc: The bufpool size for the stream.",
         device_id: "Required when MLU is used. <br> Optional values: integer <br> Desc: The device ordinal. <br> Note: Set the value to -1 for CPU. Set the value for MLU in the range 0 - N.",
     },
 };
+
 PARAM_DESC["cnstream::Inferencer"] = {
     custom_params: {
-        model_path: "Required. <br> Optional values: model path <br> Desc: The path of the offline model.",
-        func_name: "Required. <br> Default value: [subnet0] <br> Desc: The function name that is defined in the offline model. <br> note: It could be found in Cambricon twins file. For most cases, it is 'subnet0' ",
-        use_scaler: "Optional. <br> Default value: [false] <br> Optional value: [true] [1] [TRUE] [True] [false] [0] [FALSE] [False] <br> Desc: Whether use the scaler to preprocess the input.",
-        preproc_name: "Optional. <br> Desc: The class name for custom preprocessing. Use mlu preproc by default.",
-        postproc_name: "Required. <br> Desc: The class name for postprocess.",
-        batching_timeout: "Optional. <br> Default value: [3000] <br> Optional values: integer <br> Desc: The batching timeout. unit[ms].",
-        threshold: "Optional. <br> Default value: [0] <br> Optional values: float <br> Desc: The threshold pass to postprocessing function.",
-        data_order: "Optional. <br> Default value: [NHWC] <br> Optional value: [NHWC] [NCHW] <br> Desc: The order in which the output data of the model are placed.",
-        infer_interval: "Optional. <br> Optional value: integer <br> Desc: Inferencing one frame every ``infer_interval`` frames.",
-        object_infer: "Optional. <br> Default value: [false] <br> Optional value: [true] [1] [TRUE] [True] [false] [0] [FALSE] [False] <br> Desc: If object_infer is set to true, the detection target is used as the input to inferencing. If it is set to false, the video frame is used as the input to inferencing.",
-        obj_filter_name: "Optional. <br> Desc: The class name for object filter. See cnstream::ObjFilter.",
-        keep_aspect_ratio: "Optional. <br> Default value: [false] <br> Optional value: [true] [1] [TRUE] [True] [false] [0] [FALSE] [False] <br> Desc: Keep aspect ratio, when the mlu is used for image processing.",
-        dump_resized_image_dir: "Optional. <br> Desc: Where to dump the resized image.",
-        model_input_pixel_format: "Optional. <br> Default value: [RGBA32] <br> Optional value: [ARGB32][ABGR32][RGBA32][BGRA32] <br> Desc: The pixel format of the model input image.",
-        mem_on_mlu_for_postproc: "Optional. <br> Default value: [false] <br> Optional value: [true][false] <br> Desc: Pass a batch mlu pointer directly to post-processing function without making d2h copies.",
-        saving_infer_input: "Optional. <br> Default value: [false] <br> Optional value: [true][false] <br> Desc: Save the inputs of the inference.",
-        pad_method: "Optional. <br> Default value: [center] <br> Optional values: [center][origin] <br> Desc: origin means image at top left corner.",
-        device_id: "Optional. <br> Default value: [0] <br> Optional values: integer <br> Desc: The device ordinal.",
-    },
-};
-
-PARAM_DESC["cnstream::Inferencer2"] = {
-    custom_params: {
-        model_path: "Required when backend is cnrt. <br> Optional values: model path <br> Desc: The path of the offline model.",
-        func_name: "Required when backend is cnrt. <br> Default value: [subnet0] <br> Desc: The function name that is defined in the offline model. <br> note: It could be found in Cambricon twins file. For most cases, it is 'subnet0' ",
-        preproc_name: "Optional. <br> Default value: [cncv] <br> Optional values: [rcop][scaler][cncv] or the class name for preprocess <br> Desc: The preprocess method. If use custom preprocess, set the class name of it. The class specified by this name must inherit from class cnstream::VideoPreproc.",
-        postproc_name: "Required. <br> Desc: The class name for postprocess. The class specified by this name must inherit from class cnstream::VideoPostproc.",
+        model_path: "Required. <br> Desc: The path of the offline model.",
+        preproc: "Required. <br> Desc: The class name for preprocess. Parameters related to postprocessing including name and use_cpu. The class specified by this name must inherit from class cnstream::Preproc",
+        postproc: "Required. <br> Desc: The class name for postprocess. Parameters related to postprocessing including name and threshold. The class specified by this name must inherit from class cnstream::Postproc.",
         engine_num: "Optional. <br> Default value: [1] <br> Optional values: integer <br> Desc: Infer server engine number. Increase the engine number to improve performance.",
-        batching_timeout: "Optional. <br> Default value: [1000] <br> Optional values: integer <br> Desc: The batching timeout. unit[ms].",
+        batch_timeout: "Optional. <br> Default value: [300] <br> Optional values: integer <br> Desc: The batching timeout. unit[ms].",
         batch_strategy: "Optional. <br> Default value: [dynamic] <br> Optional values: [dynamic][static] <br> Desc: The batch strategy. The dynamic strategy: high throughput but high latency. The static strategy: low latency but low throughput.",
-        threshold: "Optional. <br> Default value: [0] <br> Optional values: float <br> Desc: The threshold pass to postprocessing function.",
-        model_input_pixel_format: "Optional. <br> Default value: [RGBA32] <br> Optional value: [RGB24][BGR24][ARGB32][ABGR32][RGBA32][BGRA32] <br> Desc: The pixel format of the model input image. For using RCOP preproc ARGB32/ABGR32/RGBA32/BGRA32 are supported. For using Custom preproc RGB24/BGR24/ARGB32/ABGR32/RGBA32/BGRA32 are supported. This parameter does not take effect when SCALER preproc is used.",
-        object_infer: "Optional. <br> Default value: [false] <br> Optional value: [true] [1] [TRUE] [True] [false] [0] [FALSE] [False] <br> Desc: If object_infer is set to true, the detection target is used as the input to inferencing. If it is set to false, the video frame is used as the input to inferencing.",
-        keep_aspect_ratio: "Optional. <br> Default value: [false] <br> Optional value: [true] [1] [TRUE] [True] [false] [0] [FALSE] [False] <br> Desc: Keep aspect ratio, when the mlu is used for image processing.",
-        mean: "Optional. <br> Default value: {} <br> Optional value: float vector(size 3-4) e.g. \"104, 117, 123\" <br> Desc: Only when mean_std preprocess is used, it is valid. For getting the mean value of each pixel in input image.",
-        std: "Optional. <br> Default value: {} <br> Optional value: float vector(size 3-4) e.g. \"1, 1, 1\" <br> Desc: Only when mean_std preprocess is used, it is valid. For getting the std value of each pixel in input image.",
-        normalize: "Optional. <br> Default value: [false] <br> Optional value: [true] [1] [TRUE] [True] [false] [0] [FALSE] [False] <br> Desc: Only when mean_std preprocess is used, it is valid. For multiplying 255 in std and mean array.",
-        frame_filter_name: "Optional. <br> Desc: The class name for frame filter. See cnstream::FrameFilter.",
-        obj_filter_name: "Optional. <br> Desc: The class name for object filter. See cnstream::ObjFilter.",
-        infer_interval: "Optional. <br> Optional value: integer <br> Desc: Inferencing one frame every ``infer_interval`` frames.",
+        model_input_pixel_format: "Optional. <br> Default value: [RGBA32] <br> Optional value: For using custom preproc RGB24/BGR24/GRAY/TENSOR are supported. <br> Desc: The pixel format of the model input image.",
+        filter: "Optional. <br> Default value: [] <br> Desc: Parameters related to filter including name and categories. The class name for custom object filter must inherit from class cnstream::ObjectFilterVideo.. ",
+        interval: "Optional. <br> Optional value: integer <br> Desc: Inferencing one frame every ``interval`` frames.",
         priority: "Optional. <br> Default value: [0] <br> Optional values: integer[0-9] <br> Desc: The priority of this infer task in infer server. The lager the number is, the higher the priority is.",
-        data_order: "Optional. <br> Default value: [NHWC] <br> Optional value: [NHWC] [NCHW] <br> Desc: The order in which the output data of the model are placed.",
         show_stats: "Optional. <br> Default value: [false] <br> Optional value: [true] [1] [TRUE] [True] [false] [0] [FALSE] [False] <br> Desc: Whether show performance statistics.",
+        label_path: "Optional. <br> Desc: The path of the label.",
         custom_preproc_params: "Optional. <br> Default value: empty string <br> Optional value: json string <br> Desc: Custom preprocessing parameters.",
         custom_postproc_params: "Optional. <br> Default value: empty string <br> Optional value: json string <br> Desc: Custom postprocessing parameters.",
         device_id: "Optional. <br> Default value: [0] <br> Optional values: integer <br> Desc: The device ordinal.",
@@ -65,6 +30,7 @@ PARAM_DESC["cnstream::Inferencer2"] = {
 PARAM_DESC["cnstream::Osd"] = {
     custom_params: {
         label_path: "Optional. <br> Desc: The path of the label file.",
+        osd_handler: "Optional. <br> Desc: The name of osd handler.",
         font_path: "Optional. <br> Desc: The path of font.",
         label_size: "Optional. <br> Default value: [normal] <br> Optional value [normal] [large] [larger] [small] [smaller] float <br> Desc: The size of the label.",
         text_scale: "Optional. <br> Default value: [1] <br> Optional value float <br> Desc: The scale of the text, which can change the size of text put on image. scale = label_size * text_scale",
@@ -79,55 +45,30 @@ PARAM_DESC["cnstream::Osd"] = {
 PARAM_DESC["cnstream::Tracker"] = {
     custom_params: {
         model_path: "Optional. <br> Desc: path of offline model",
-        func_name: "Optional. <br> Default value: [subnet0] <br> Desc: function name defined in the offline model. It can be found in the Cambricon twins description file",
-        track_name: "Optional. <br> Default value: [FeatureMatch] <br> Optional values: [FeatureMatch] [KCF] <br> Desc: Track algorithm name.",
+        track_name: "Optional. <br> Default value: [FeatureMatch] <br> Optional values: [FeatureMatch] [IoUMatch] <br> Desc: Track algorithm name.",
         max_cosine_distance: "Optional. <br> Default value: [0.2] <br> Optional values: float <br> Desc: Threshold of cosine distance.",
+        engine_num: "Optional. <br> Default value: [1] <br> Optional values: integer <br> Desc: Infer server engine number. Increase the engine number to improve performance.",
+        batch_timeout: "Optional. <br> Default value: [300] <br> Optional values: integer <br> Desc: The batching timeout. unit[ms].",
+        model_input_pixel_format: "Optional. <br> Default value: [RGBA32] <br> Optional value: RGB24/BGR24/TENSOR are supported. <br> Desc: The pixel format of the model input image.",
+        priority: "Optional. <br> Default value: [0] <br> Optional values: integer[0-9] <br> Desc: The priority of this infer task in infer server. The lager the number is, the higher the priority is.",
+        show_stats: "Optional. <br> Default value: [false] <br> Optional value: [true] [1] [TRUE] [True] [false] [0] [FALSE] [False] <br> Desc: Whether show performance statistics.",
         device_id: "Optional. <br> Default value: [0] <br> Optional values: integer <br> Desc: The device id.",
     }
 };
 
-PARAM_DESC["cnstream::RtspSink"] = {
-    custom_params: {
-        port: "Optional. <br> Default value: [8554] <br> Desc: RTSP port.",
-        frame_rate: "Optional. <br> Default value: [30] <br> Desc: Frame rate of the encoded video.",
-        input_frame: "Optional. <br> Default value: [cpu] <br> Optional values: [cpu] <br> Desc: Frame source type.",
-        encoder_type: "Optional. <br> Default value: [mlu] <br> Optional values: [cpu] [mlu] <br> Desc: Encode type.",
-        dst_width: "Optional. <br> Default value: source width <br> Desc: The image width of the output.",
-        dst_height: "Optional. <br> Default value: source height <br> Desc: The image height of the output.",
-        resample: "Optional. <br> Default value: [false] <br> Optional values: [true] [false] <br> Desc: Resample frame with canvas, only support cpu input.",
-        view_rows: "Optional. <br> Default value: [4] <br> Desc: Divide the screen horizontally.",
-        view_cols: "Optional. <br> Default value: [4] <br> Desc: Divide the screen vertically.",
-        bit_rate: "Optional. <br> Default value: [4000000] <br> Desc: The amount data encoded for a unit of time.",
-        gop_size: "Optional. <br> Default value: [10] <br> Desc: Group of pictures is known as GOP.",
-        rtsp_over_http: "Optional. <br> Default value: [false] <br> Optional values: [false] [true] <br> Desc: RTSP Over HTTP.",
-        device_id: "Optional. <br> Default value: [0] <br> Optional values: integer <br> Desc: The device id.",
-    }
-};
-
-PARAM_DESC["cnstream::Encode"] = {
+PARAM_DESC["cnstream::VEncode"] = {
     custom_params: {
         file_name: "Optional. <br> Default value: [output/output.mp4] <br> Optional values: string <br> Desc: File name and path to store, the final name will be added with stream id or frame count.",
+        rtsp_port: "Optional. <br> Default value: [-1] <br> Optional values: integer <br> Desc: RTSP port. If this value is greater than 0, stream will be delivered by RTSP protocol.",
         frame_rate: "Optional. <br> Default value: [30] <br> Optional values: integer <br> Desc: Frame rate of the encoded video.",
-        input_frame: "Optional. <br> Default value: [cpu] <br> Optional values: [cpu] <br> Desc: Frame source type.",
-        encoder_type: "Optional. <br> Default value: [cpu] <br> Optional values: [cpu] [mlu] <br> Desc: Use cpu encoding or mlu encoding.",
+        hw_accel: "Optional. <br> Default value: [true] <br> Optional values: [true] [false] <br> Desc: Whether use hardware to encode.",
         dst_width: "Optional. <br> Default value: source width <br> Optional values: integer <br> Desc: The width of the output.",
         dst_height: "Optional. <br> Default value: source height <br> Optional values: integer <br> Desc: The height of the output.",
-        resample: "Optional. <br> Default value: [false] <br> Optional values: [true] [false] <br> Desc: Resample frame with canvas, only support cpu input.",
+        resample: "Optional. <br> Default value: [false] <br> Optional values: [true] [false] <br> Desc: Resample. If set true, some frame will be dropped.",
         view_rows: "Optional. <br> Default value: [4] <br> Desc: Divide the screen horizontally.",
         view_cols: "Optional. <br> Default value: [4] <br> Desc: Divide the screen vertically.",
         bit_rate: "Optional. <br> Default value: [4000000] <br> Desc: The amount data encoded for a unit of time.",
         gop_size: "Optional. <br> Default value: [10] <br> Desc: Group of pictures is known as GOP.",
         device_id: "Optional. <br> Default value: [0] <br> Optional values: integer <br> Desc: The device id.",
-    }
-};
-
-PARAM_DESC["cnstream::Displayer"] = {
-    custom_params: {
-        "window-width": "Required. <br> Optional values: integer <br> Desc: display window width",
-        "window-height": "Required. <br> Optional values: integer <br> Desc:  display window height",
-        "refresh-rate": "Required. <br> Optional values: integer <br> Desc: display refresh rate",
-        "max-channels": "Required. <br> Optional values: integer <br> Desc: max channels to display",
-        "full-screen": "Optional. <br> Default value: [false] <br> Optional values: [false] [true] <br> Desc: whether to full screen",
-        show: "Required. <br> Optional values: [false] [true] <br> Desc: whether to display or not",
     }
 };

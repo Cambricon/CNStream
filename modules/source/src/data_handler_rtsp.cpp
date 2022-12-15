@@ -34,24 +34,97 @@ extern "C" {
 #include <thread>
 #include <utility>
 
-#include "data_handler_rtsp.hpp"
+#include "cnrt.h"
 
+#include "cnedk_platform.h"
+#include "cnedk_buf_surface_util.hpp"
+#include "cnstream_logging.hpp"
+#include "data_handler_rtsp.hpp"
+#include "data_handler_util.hpp"
+#include "platform_utils.hpp"
 #include "profiler/module_profiler.hpp"
 #include "profiler/pipeline_profiler.hpp"
+#include "rtsp_client.hpp"
+#include "util/cnstream_queue.hpp"
+#include "video_decoder.hpp"
 
 namespace cnstream {
 
-std::shared_ptr<SourceHandler> RtspHandler::Create(DataSource *module, const std::string &stream_id,
-                                                   const std::string &url_name, bool use_ffmpeg, int reconnect,
-                                                   const MaximumVideoResolution &maximum_resolution,
-                                                   std::function<void(ESPacket, std::string)> callback) {
-  if (!module || stream_id.empty() || url_name.empty()) {
-    LOGE(SOURCE) << "[RtspHandler] Create function, invalid paramters.";
+class RtspHandlerImpl : public IDecodeResult, public SourceRender, public IUserPool {
+ public:
+  explicit RtspHandlerImpl(DataSource *module, const RtspSourceParam &param, RtspHandler *handler)
+      : SourceRender(handler),
+        module_(module),
+        handle_param_(param),
+        handler_(*handler),
+        stream_id_(handler_.GetStreamId()) {}
+  ~RtspHandlerImpl() { Close(); }
+  bool Open();
+  void Stop();
+  void Close();
+
+ private:
+  DataSource *module_ = nullptr;
+  RtspSourceParam handle_param_;
+  RtspHandler &handler_;
+  std::string stream_id_;
+  DataSourceParam param_;
+  CnedkPlatformInfo platform_info_;
+  CnedkBufSurfaceCreateParams create_params_;
+
+ private:
+  // IDecodeResult methods
+  void OnDecodeError(DecodeErrorCode error_code) override;
+  void OnDecodeFrame(cnedk::BufSurfWrapperPtr buf_surf) override;
+  void OnDecodeEos() override;
+
+  // IUserPool
+  int CreatePool(CnedkBufSurfaceCreateParams *params, uint32_t block_count);
+  void DestroyPool() override;
+  void OnBufInfo(int width, int height, CnedkBufSurfaceColorFormat fmt);
+  cnedk::BufSurfWrapperPtr GetBufSurface(int timeout_ms) override;
+
+ private:
+  void DemuxLoop();
+  void DecodeLoop();
+
+  std::shared_ptr<Decoder> decoder_ = nullptr;
+  cnedk::BufPool pool_;
+  bool pool_created_ = false;
+  std::mutex mutex_;
+  std::atomic<int> demux_exit_flag_ {0};
+  std::thread demux_thread_;
+  std::atomic<int> decode_exit_flag_{0};
+  std::thread decode_thread_;
+  std::atomic<bool> stream_info_set_{false};
+  std::mutex stream_info_mutex_;
+  VideoInfo stream_info_{};
+  BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
+  std::mutex stop_mutex_;
+
+  uint32_t interval_ = 1;
+  ModuleProfiler *module_profiler_ = nullptr;
+  PipelineProfiler *pipeline_profiler_ = nullptr;
+};  // class RtspHandlerImpl
+
+
+std::shared_ptr<SourceHandler> CreateSource(DataSource *module, const std::string &stream_id,
+                                            const RtspSourceParam &param) {
+  if (!module || stream_id.empty() || param.url_name.empty()) {
+    LOGE(SOURCE) << "CreateSource(): Create RtspHandler failed."
+                 << " source module, stream id and url_name must not be empty.";
     return nullptr;
   }
-  std::shared_ptr<RtspHandler> handler(
-      new (std::nothrow) RtspHandler(module, stream_id, url_name, use_ffmpeg, reconnect, maximum_resolution, callback));
-  return handler;
+  return std::make_shared<RtspHandler>(module, stream_id, param);
+}
+
+RtspHandler::RtspHandler(DataSource *module, const std::string &stream_id, const RtspSourceParam &param)
+    : SourceHandler(module, stream_id) {
+  impl_ = new (std::nothrow) RtspHandlerImpl(module, param, this);
+}
+
+RtspHandler::~RtspHandler() {
+  if (impl_) delete impl_, impl_ = nullptr;
 }
 
 namespace rtsp_detail {
@@ -84,9 +157,13 @@ class IDemuxer {
 
 class FFmpegDemuxer : public rtsp_detail::IDemuxer, public IParserResult {
  public:
-  FFmpegDemuxer(const std::string &stream_id, FrameQueue *queue, const std::string &url, bool only_I,
-                std::function<void(ESPacket, std::string)> cb = nullptr)
-      : rtsp_detail::IDemuxer(), queue_(queue), url_name_(url), parser_(stream_id), only_key_frame_(only_I) {
+  FFmpegDemuxer(const std::string &stream_id, FrameQueue *queue, const std::string &url,
+                bool only_key_frame, std::function<void(ESPacket, std::string)> cb = nullptr)
+      : rtsp_detail::IDemuxer(),
+        queue_(queue),
+        url_name_(url),
+        parser_(stream_id),
+        only_key_frame_(only_key_frame) {
     save_packet_cb_ = cb;
   }
 
@@ -149,22 +226,21 @@ class FFmpegDemuxer : public rtsp_detail::IDemuxer, public IParserResult {
 
 class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
  public:
-  Live555Demuxer(const std::string &stream_id, FrameQueue *queue, const std::string &url, int reconnect, bool only_I,
-                 std::function<void(ESPacket, std::string)> cb = nullptr)
+  Live555Demuxer(const std::string &stream_id, FrameQueue *queue, const std::string &url, int reconnect,
+                 bool only_key_frame, std::function<void(ESPacket, std::string)> cb = nullptr)
       : rtsp_detail::IDemuxer(),
         stream_id_(stream_id),
         queue_(queue),
         url_(url),
         reconnect_(reconnect),
-        only_key_frame_(only_I) {
+        only_key_frame_(only_key_frame) {
     save_packet_cb_ = cb;
   }
 
   virtual ~Live555Demuxer() {}
 
   bool PrepareResources(std::atomic<int> &exit_flag) override {
-    LOGD(SOURCE) << "[" << stream_id_ << "]: "
-                 << "Begin prepare resources";
+    VLOG1(SOURCE) << "[Live555Demuxer] PrepareResources(): [" << stream_id_ << "]: Begin";
     // start rtsp_client
     cnstream::OpenParam param;
     param.url = url_;
@@ -188,17 +264,14 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
       return false;
     }
 
-    LOGD(SOURCE) << "[" << stream_id_ << "]: "
-                 << "Finish prepare resources";
+    VLOG1(SOURCE) << "[Live555Demuxer] PrepareResources(): [" << stream_id_ << "]: Finish";
     return true;
   }
 
   void ClearResources(std::atomic<int> &exit_flag) override {
-    LOGD(SOURCE) << "[" << stream_id_ << "]: "
-                 << "Begin clear resources";
+    VLOG1(SOURCE) << "[Live555Demuxer] ClearResources(): [" << stream_id_ << "]: Begin";
     rtsp_session_.Close();
-    LOGD(SOURCE) << "[" << stream_id_ << "]: "
-                 << "Finish clear resources";
+    VLOG1(SOURCE) << "[Live555Demuxer] ClearResources(): [" << stream_id_ << "]: Finish";
   }
 
   bool Process() override {
@@ -224,15 +297,13 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
       }
       if (!connect_done_) {
         connect_done_.store(true);
-        LOGI(SOURCE) << "[" << stream_id_ << "]: "
-                     << "Rtsp connect success";
+        LOGI(SOURCE) << "[Live555Demuxer] OnRtspFrame(): [" << stream_id_ << "]: Rtsp connect success";
       }
     } else {
       pkt.flags = static_cast<size_t>(ESPacket::FLAG::FLAG_EOS);
       if (!connect_done_) {
         // Failed to connect server...
-        LOGW(SOURCE) << "[" << stream_id_ << "]: "
-                     << "Rtsp connect failed";
+        LOGI(SOURCE) << "[Live555Demuxer] OnRtspFrame(): [" << stream_id_ << "]: Rtsp connect failed";
         connect_failed_.store(true);
       }
     }
@@ -260,39 +331,29 @@ class Live555Demuxer : public rtsp_detail::IDemuxer, public IRtspCB {
   std::atomic<bool> rtsp_info_set_{false};
 };  // class Live555Demuxer
 
-RtspHandler::RtspHandler(DataSource *module, const std::string &stream_id, const std::string &url_name, bool use_ffmpeg,
-                         int reconnect, const MaximumVideoResolution &maximum_resolution,
-                         std::function<void(ESPacket, std::string)> callback)
-    : SourceHandler(module, stream_id) {
-  impl_ =
-      new (std::nothrow) RtspHandlerImpl(module, url_name, this, use_ffmpeg, reconnect, maximum_resolution, callback);
-}
-
-RtspHandler::~RtspHandler() {
-  if (impl_) {
-    delete impl_;
-  }
-}
 
 bool RtspHandler::Open() {
   if (!this->module_) {
-    LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                 << "module_ null";
+    LOGE(SOURCE) << "[RtspHandler] Open(): [" << stream_id_ << "]: module_ null";
     return false;
   }
   if (!impl_) {
-    LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                 << "RtspHandler open failed, no memory left";
+    LOGE(SOURCE) << "[RtspHandler] Open(): [" << stream_id_ << "]: no memory left";
     return false;
   }
 
-  if (stream_index_ == cnstream::INVALID_STREAM_IDX) {
-    LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                 << "invalid stream_idx";
+  if (stream_index_ == cnstream::kInvalidStreamIdx) {
+    LOGE(SOURCE) << "[RtspHandler] Open(): [" << stream_id_ << "]: Invalid stream_idx";
     return false;
   }
 
   return impl_->Open();
+}
+
+void RtspHandler::Stop() {
+  if (impl_) {
+    impl_->Stop();
+  }
 }
 
 void RtspHandler::Close() {
@@ -304,6 +365,41 @@ void RtspHandler::Close() {
 bool RtspHandlerImpl::Open() {
   DataSource *source = dynamic_cast<DataSource *>(module_);
   param_ = source->GetSourceParam();
+
+  if (CnedkPlatformGetInfo(param_.device_id, &platform_info_) < 0) {
+    LOGE(SOURCE) << "[RtspHandlerImpl] Open(): Get platform information failed";
+    return false;
+  }
+  std::string platform(platform_info_.name);
+
+  if (handle_param_.out_res.width > 0 && handle_param_.out_res.height > 0) {
+    LOGI(SOURCE) << "[RtspHandlerImpl] Open(): Create pool";
+    CnedkBufSurfaceCreateParams create_params;
+    memset(&create_params, 0, sizeof(create_params));
+    create_params.device_id = param_.device_id;
+    create_params.batch_size = 1;
+    create_params.color_format = CNEDK_BUF_COLOR_FORMAT_NV12;
+    create_params.width = handle_param_.out_res.width;
+    create_params.height = handle_param_.out_res.height;
+    if (IsEdgePlatform(platform)) {
+      create_params.mem_type = CNEDK_BUF_MEM_VB_CACHED;
+    } else {
+      create_params.mem_type = CNEDK_BUF_MEM_DEVICE;
+    }
+    if (CreatePool(&create_params, param_.bufpool_size) < 0) {
+      LOGE(SOURCE) << "[RtspHandlerImpl] Open(): Create pool failed";
+      return false;
+    }
+  }
+
+  if (!module_profiler_) {
+    if (module_) module_profiler_ = module_->GetProfiler();
+    if (!pipeline_profiler_) {
+      if (module_->GetContainer()) pipeline_profiler_ = module_->GetContainer()->GetProfiler();
+    }
+  }
+
+  interval_ = handle_param_.interval ? handle_param_.interval : param_.interval;
 
   size_t maxSize = 60;  // FIXME
   queue_ = new FrameQueue(maxSize);
@@ -318,7 +414,8 @@ bool RtspHandlerImpl::Open() {
   return true;
 }
 
-void RtspHandlerImpl::Close() {
+void RtspHandlerImpl::Stop() {
+  std::lock_guard<std::mutex> lk(stop_mutex_);  // Close called by multi threads
   if (!demux_exit_flag_) {
     demux_exit_flag_ = 1;
     if (demux_thread_.joinable()) {
@@ -332,27 +429,30 @@ void RtspHandlerImpl::Close() {
     }
   }
 
-  std::lock_guard<std::mutex> lk(mutex_);  // Close called by multi threads
   if (queue_) {
     delete queue_;
     queue_ = nullptr;
   }
 }
 
+void RtspHandlerImpl::Close() {
+  Stop();
+  LOGI(SOURCE) << "[RtspHandlerImpl] Close(): this(" << this << ") Destroy pool";
+  DestroyPool();
+}
+
 void RtspHandlerImpl::DemuxLoop() {
-  LOGD(SOURCE) << "[" << stream_id_ << "]: "
-               << "Create demuxer...";
+  VLOG1(SOURCE) << "[RtspHandlerImpl] DemuxLoop(): [" << stream_id_ << "]: Create demuxer...";
   std::unique_ptr<rtsp_detail::IDemuxer> demuxer;
-  if (use_ffmpeg_) {
-    demuxer.reset(new FFmpegDemuxer(stream_id_, queue_, url_name_, param_.only_key_frame_, save_es_packet_));
+  if (handle_param_.use_ffmpeg) {
+    demuxer.reset(new FFmpegDemuxer(stream_id_, queue_, handle_param_.url_name,
+                                    handle_param_.only_key_frame, handle_param_.callback));
   } else {
-    auto cb = handler_->GetStreamId();
-    demuxer.reset(
-        new Live555Demuxer(stream_id_, queue_, url_name_, reconnect_, param_.only_key_frame_, save_es_packet_));
+    demuxer.reset(new Live555Demuxer(stream_id_, queue_, handle_param_.url_name, handle_param_.reconnect,
+                                     handle_param_.only_key_frame, handle_param_.callback));
   }
   if (!demuxer) {
-    LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                 << "Failed to create demuxer";
+    LOGE(SOURCE) << "[RtspHandlerImpl] DemuxLoop(): [" << stream_id_ << "]: Failed to create demuxer";
     return;
   }
   if (!demuxer->PrepareResources(demux_exit_flag_)) {
@@ -365,28 +465,25 @@ void RtspHandlerImpl::DemuxLoop() {
       e.thread_id = std::this_thread::get_id();
       module_->PostEvent(e);
     }
-    LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                 << "PrepareResources failed";
+    LOGE(SOURCE) << "[RtspHandlerImpl] DemuxLoop(): [" << stream_id_ << "]: PrepareResources failed";
     return;
   }
 
-  LOGI(SOURCE) << "[" << stream_id_ << "]: "
-               << "Wait stream info...";
+  LOGI(SOURCE) << "[RtspHandlerImpl] DemuxLoop(): [" << stream_id_ << "]: Wait stream info...";
 
   do {
     {
-      std::lock_guard<std::mutex> lk(mutex_);
+      std::lock_guard<std::mutex> lk(stream_info_mutex_);
       if (demuxer->GetInfo(stream_info_) == true) {
         break;
       }
+      if (demux_exit_flag_) { return; }
     }
     usleep(1000);
-  }while(1);
-  stream_info_.maximum_resolution = maximum_resolution_;
+  } while (1);
   stream_info_set_.store(true);
 
-  LOGI(SOURCE) << "[" << stream_id_ << "]: "
-               << "Got stream info";
+  LOGI(SOURCE) << "[RtspHandlerImpl] DemuxLoop(): [" << stream_id_ << "]: Got stream info";
 
   while (!demux_exit_flag_) {
     if (demuxer->Process() != true) {
@@ -394,16 +491,12 @@ void RtspHandlerImpl::DemuxLoop() {
     }
   }
 
-  LOGD(SOURCE) << "[" << stream_id_ << "]: "
-               << "RTSP handler DemuxLoop Exit";
+  VLOG1(SOURCE) << "[RtspHandlerImpl] DemuxLoop(): [" << stream_id_ << "]: DemuxLoop Exit";
   demuxer->ClearResources(demux_exit_flag_);
 }
 
 void RtspHandlerImpl::DecodeLoop() {
-  /*meet cnrt requirement,
-   *  for cpu case(device_id < 0), MluDeviceGuard will do nothing
-   */
-  MluDeviceGuard guard(param_.device_id_);
+  cnrtSetDevice(param_.device_id);
 
   // wait stream_info
   while (!decode_exit_flag_) {
@@ -417,35 +510,25 @@ void RtspHandlerImpl::DecodeLoop() {
   }
 
   std::unique_ptr<Decoder> decoder_ = nullptr;
-  if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
-    decoder_.reset(new MluDecoder(stream_id_, this));
-  } else if (param_.decoder_type_ == DecoderType::DECODER_CPU) {
-    decoder_.reset(new FFmpegCpuDecoder(stream_id_, this));
-  } else {
-    LOGE(SOURCE) << "unsupported decoder_type";
+  decoder_.reset(new MluDecoder(stream_id_, this, this));
+  if (!decoder_) {
+    LOGE(SOURCE) << "[RtspHandlerImpl] DecodeLoop(): New decoder failed.";
     return;
   }
-  if (decoder_) {
-    ExtraDecoderInfo extra;
-    extra.device_id = param_.device_id_;
-    extra.input_buf_num = param_.input_buf_number_;
-    extra.output_buf_num = param_.output_buf_number_;
-    extra.apply_stride_align_for_scaler = param_.apply_stride_align_for_scaler_;
-    extra.extra_info = stream_info_.extra_data;
-    std::lock_guard<std::mutex> lk(mutex_);
-    bool ret = decoder_->Create(&stream_info_, &extra);
-    if (!ret) {
-      LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                   << "Failed to create decoder";
-      decoder_->Destroy();
-      return;
-    }
-  } else {
-    LOGE(SOURCE) << "[" << stream_id_ << "]: "
-                 << "Failed to create decoder";
+
+  decoder_->SetPlatformName(platform_info_.name);
+  ExtraDecoderInfo extra;
+  extra.device_id = param_.device_id;
+  extra.max_width = handle_param_.max_res.width;
+  extra.max_height = handle_param_.max_res.height;
+  std::unique_lock<std::mutex> lk(stream_info_mutex_);
+  bool ret = decoder_->Create(&stream_info_, &extra);
+  if (!ret) {
+    LOGE(SOURCE) << "[RtspHandlerImpl] DecodeLoop(): Create decoder failed.";
     decoder_->Destroy();
     return;
   }
+
 
   // feed extradata first
   if (stream_info_.extra_data.size()) {
@@ -457,6 +540,7 @@ void RtspHandlerImpl::DecodeLoop() {
       return;
     }
   }
+  lk.unlock();
 
   using EsPacketPtr = std::shared_ptr<EsPacket>;
   while (!decode_exit_flag_) {
@@ -464,14 +548,12 @@ void RtspHandlerImpl::DecodeLoop() {
     int timeoutMs = 1000;
     bool ret = this->queue_->Pop(timeoutMs, in);
     if (!ret) {
-      LOGD(SOURCE) << "[" << stream_id_ << "]: "
-                   << "Read packet Timeout";
+      VLOG1(SOURCE) << "[RtspHandlerImpl] DecodeLoop(): [" << stream_id_ << "]: Read packet Timeout";
       continue;
     }
 
     if (in->pkt_.flags & static_cast<size_t>(ESPacket::FLAG::FLAG_EOS)) {
-      LOGI(SOURCE) << "[" << stream_id_ << "]: "
-                   << "EOS reached in RtspHandler";
+      LOGI(SOURCE) << "[RtspHandlerImpl] DecodeLoop(): [" << stream_id_ << "]: EOS reached";
       decoder_->Process(nullptr);
       break;
     }  // if (eos)
@@ -481,11 +563,11 @@ void RtspHandlerImpl::DecodeLoop() {
     pkt.len = in->pkt_.size;
     pkt.pts = in->pkt_.pts;
 
-    if (module_ && module_->GetProfiler()) {
+    if (module_profiler_) {
       auto record_key = std::make_pair(stream_id_, pkt.pts);
-      module_->GetProfiler()->RecordProcessStart(kPROCESS_PROFILER_NAME, record_key);
-      if (module_->GetContainer() && module_->GetContainer()->GetProfiler()) {
-        module_->GetContainer()->GetProfiler()->RecordInput(record_key);
+      module_profiler_->RecordProcessStart(kPROCESS_PROFILER_NAME, record_key);
+      if (pipeline_profiler_) {
+        pipeline_profiler_->RecordInput(record_key);
       }
     }
 
@@ -495,7 +577,7 @@ void RtspHandlerImpl::DecodeLoop() {
     std::this_thread::yield();
   }
 
-  LOGD(SOURCE) << "RTSP handler DecodeLoop Exit";
+  VLOG1(SOURCE) << "[RtspHandlerImpl] DecodeLoop(): [" << stream_id_ << "]: Exit";
   if (decoder_.get()) {
     decoder_->Destroy();
   }
@@ -516,13 +598,9 @@ void RtspHandlerImpl::OnDecodeError(DecodeErrorCode error_code) {
   interrupt_.store(true);
 }
 
-void RtspHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
-  if (frame_count_++ % param_.interval_ != 0) {
+void RtspHandlerImpl::OnDecodeFrame(cnedk::BufSurfWrapperPtr wrapper) {
+  if (frame_count_++ % interval_ != 0) {
     return;  // discard frames
-  }
-  if (!frame) {
-    LOGW(SOURCE) << "[RtspHandlerImpl] OnDecodeFrame, frame is nullptr.";
-    return;
   }
 
   std::shared_ptr<CNFrameInfo> data = this->CreateFrameInfo();
@@ -531,15 +609,16 @@ void RtspHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
     return;
   }
 
-  data->timestamp = frame->pts;  // FIXME
-  if (!frame->valid) {
+  data->timestamp = wrapper->GetPts();
+  if (!wrapper->GetBufSurface()) {
     data->flags = static_cast<size_t>(CNFrameFlag::CN_FRAME_FLAG_INVALID);
     this->SendFrameInfo(data);
     return;
   }
 
-  int ret = SourceRender::Process(data, frame, frame_id_++, param_);
+  int ret = SourceRender::Process(data, std::move(wrapper), frame_id_++, param_);
   if (ret < 0) {
+    LOGE(SOURCE) << "[RtspHandlerImpl] OnDecodeFrame(): [" << stream_id_ << "]: Render frame failed";
     return;
   }
   this->SendFrameInfo(data);
@@ -547,6 +626,77 @@ void RtspHandlerImpl::OnDecodeFrame(DecodeFrame *frame) {
 
 void RtspHandlerImpl::OnDecodeEos() {
   this->SendFlowEos();
+  LOGI(SOURCE) << "[RtspHandlerImpl] OnDecodeEos(): called";
+}
+
+
+int RtspHandlerImpl::CreatePool(CnedkBufSurfaceCreateParams *params, uint32_t block_count) {
+  std::unique_lock<std::mutex> lk(mutex_);
+  if (!pool_.CreatePool(params, block_count)) {
+    pool_created_ = true;
+    return 0;
+  }
+  LOGE(SOURCE) << "[RtspHandlerImpl] CreatePool(): Create pool failed.";
+  return -1;
+}
+
+void RtspHandlerImpl::DestroyPool() {
+  std::unique_lock<std::mutex> lk(mutex_);
+  pool_.DestroyPool(5000);
+}
+
+void RtspHandlerImpl::OnBufInfo(int width, int height, CnedkBufSurfaceColorFormat fmt) {
+  // TODO(liujian): we create according to the first time (ignore Buffer Info changing).
+  std::string platform(platform_info_.name);
+  if (IsEdgePlatform(platform)) {
+    std::unique_lock<std::mutex> lk(mutex_);
+    if (pool_created_) return;
+    LOGI(SOURCE) << "[RtspHandlerImpl] OnBufInfo() Create pool";
+    memset(&create_params_, 0, sizeof(CnedkBufSurfaceCreateParams));
+    create_params_.device_id = param_.device_id;
+    create_params_.batch_size = 1;
+    if (fmt != CNEDK_BUF_COLOR_FORMAT_NV12 && fmt == CNEDK_BUF_COLOR_FORMAT_NV21) {
+      create_params_.color_format = CNEDK_BUF_COLOR_FORMAT_NV12;
+    }
+    create_params_.width = width;
+    create_params_.height = height;
+    create_params_.mem_type = CNEDK_BUF_MEM_VB_CACHED;
+
+    if (!pool_.CreatePool(&create_params_, param_.bufpool_size)) {
+      pool_created_ = true;
+    } else {
+      LOGE(SOURCE) << "[RtspHandlerImpl] OnBufInfo() Create pool failed";
+    }
+  } else if (IsCloudPlatform(platform)) {
+    memset(&create_params_, 0, sizeof(CnedkBufSurfaceCreateParams));
+    create_params_.width = width;
+    create_params_.height = height;
+    create_params_.device_id = param_.device_id;
+    create_params_.batch_size = 1;
+    create_params_.color_format = fmt;
+    create_params_.mem_type = CNEDK_BUF_MEM_DEVICE;
+    return;
+  }
+}
+
+cnedk::BufSurfWrapperPtr RtspHandlerImpl::GetBufSurface(int timeout_ms) {
+  std::string platform(platform_info_.name);
+  if (IsEdgePlatform(platform)) {
+    std::unique_lock<std::mutex> lk(mutex_);
+    return pool_.GetBufSurfaceWrapper(timeout_ms);
+  } else if (IsCloudPlatform(platform)) {
+    if (pool_created_) {
+      std::unique_lock<std::mutex> lk(mutex_);
+      return pool_.GetBufSurfaceWrapper(timeout_ms);
+    }
+    CnedkBufSurface *surf = nullptr;
+    if (CnedkBufSurfaceCreate(&surf, &create_params_) < 0) {
+        LOGE(SOURCE) << "[RtspHandlerImpl] GetBufSurface() Create BufSurface failed.";
+      return nullptr;
+    }
+    return std::make_shared<cnedk::BufSurfaceWrapper>(surf);
+  }
+  return nullptr;
 }
 
 }  // namespace cnstream

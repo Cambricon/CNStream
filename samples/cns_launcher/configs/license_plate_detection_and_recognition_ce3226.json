@@ -1,0 +1,34 @@
+{
+  "plate_detector" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["plate_ocr"],
+    "custom_params" : {
+      "model_path" : "../../../data/models/mobilenet_ssd_plate_detection_v0.13.0_4b_bgr_fp32.magicmind",
+      "engine_num" : 4,
+      "batch_timeout" : 200,
+      "preproc" : "name=PreprocSSDLpd;use_cpu=false",
+      "postproc" : "name=PostprocSSDLpd",
+      "model_input_pixel_format" : "TENSOR",
+      "filter" : "name=ObjectFilterVideoStruct; categories=2",
+      "device_id" : 0
+    }
+  },
+
+  "plate_ocr" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path" : "../../../data/models/lprnet_v0.13.0_4b_bgr_uint8.magicmind",
+      "engine_num" : 4,
+      "batch_timeout" : 200,
+      "preproc" : "name=PreprocLprnet;use_cpu=false",
+      "postproc" : "name=PostprocLprnet",
+      "model_input_pixel_format" : "BGR24",
+      "filter" : "name=ObjectFilterLpr; categories=1",
+      "device_id" : 0
+    }
+  }
+}

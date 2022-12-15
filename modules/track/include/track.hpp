@@ -26,17 +26,35 @@
  *  This file contains a declaration of struct Tracker
  */
 
+#include <map>
 #include <memory>
 #include <string>
-#include <map>
 
 #include "cnstream_frame.hpp"
 #include "cnstream_module.hpp"
-#include "easytrack/easy_track.h"
 
-namespace infer_server { class ModelInfo; }
+#include "private/cnstream_param.hpp"
+
+namespace infer_server {
+class ModelInfo;
+}
 
 namespace cnstream {
+
+using InferVideoPixelFmt = infer_server::NetworkInputFormat;
+
+typedef struct TrackParams {
+  uint32_t device_id = 0;
+  InferVideoPixelFmt input_format = infer_server::NetworkInputFormat::RGB;
+  uint32_t priority = 0;
+  uint32_t engine_num = 1;
+  uint32_t batch_timeout = 1000;  ///< only support in dynamic batch strategy
+  bool show_stats = false;
+  float max_cosine_distance = 0.2;
+  std::string model_path = "";
+  std::string track_name = "";
+} TrackParams;
+
 
 struct TrackerContext;
 
@@ -46,7 +64,7 @@ struct TrackerContext;
  * @brief Tracker is a module for realtime tracking.
  *   It would be MLU feature extracting if the model_path is provided, otherwise it would be done on CPU.
  */
-class Tracker : public Module, public ModuleCreator<Tracker> {
+class Tracker : public ModuleEx, public ModuleCreator<Tracker> {
  public:
   /**
    *  @brief  Generates a tracker.
@@ -67,12 +85,12 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
   /**
    *  @brief Configures a module.
    *
-   *  @param[in] paramSet  This module's parameters to configure Tracker. Please use `cnstream_inspect` tool to get each
+   *  @param[in] param_set  This module's parameters to configure Tracker. Please use `cnstream_inspect` tool to get each
    parameter's detail information.
 
    *  @return Returns true if opened successfully, otherwise returns false.
    */
-  bool Open(ModuleParamSet paramSet) override;
+  bool Open(ModuleParamSet param_set) override;
 
   /**
    * @brief  Closes a module.
@@ -94,29 +112,25 @@ class Tracker : public Module, public ModuleCreator<Tracker> {
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
   /**
-   * @brief Checks the parameters for a module.
+   * @brief Check ParamSet for this module.
    *
-   * @param[in] paramSet Parameters for this module.
+   * @param paramSet Parameters for this module.
    *
-   * @return Returns true if this API run successfully. Otherwise, returns false.
+   * @return Return true if this API run successfully. Otherwise, return false.
    */
-  bool CheckParamSet(const ModuleParamSet &paramSet) const override;
+  bool CheckParamSet(const ModuleParamSet& param_set) const override;
 
  private:
+  std::unique_ptr<ModuleParamsHelper<TrackParams>> param_helper_ = nullptr;
   bool InitFeatureExtractor(const CNFrameInfoPtr &data);
   TrackerContext *GetContext(const CNFrameInfoPtr &data);
   std::map<int, TrackerContext *> contexts_;
   std::shared_ptr<infer_server::ModelInfo> model_ = nullptr;
   std::mutex mutex_;
   std::function<void(const CNFrameInfoPtr, bool)> match_func_;
-  int device_id_ = 0;
-  std::string model_pattern1_ = "";
-  std::string model_pattern2_ = "";
-  std::string track_name_ = "";
-  float max_cosine_distance_ = 0.2;
-  int engine_num_ = 1;
   bool need_feature_ = true;
 };  // class Tracker
+extern int tracker_priority_;
 
 }  // namespace cnstream
 

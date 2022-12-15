@@ -239,7 +239,7 @@ bool KafkaClient::Produce(const uint8_t *payload, size_t length) {
 
 /* Kafka logger callback (optional) */
 void KafkaClient::logger(const rd_kafka_t *rk, int level, const char *fac, const char *buf) {
-  LOGD(Kafka) << "logger";
+  VLOG2(Kafka) << "logger";
   if (level <= RDKAFKA_LOG_ERR) {
     LOGE(Kafka) << fac << (rk ? (": " + std::string(rd_kafka_name(rk))) : "") << ": " << buf;
   } else if (level == RDKAFKA_LOG_NOTICE) {
@@ -247,7 +247,7 @@ void KafkaClient::logger(const rd_kafka_t *rk, int level, const char *fac, const
   } else if (level == RDKAFKA_LOG_INFO) {
     LOGI(Kafka) << fac << (rk ? (": " + std::string(rd_kafka_name(rk))) : "") << ": " << buf;
   } else {
-    LOGD(Kafka) << fac << (rk ? (": " + std::string(rd_kafka_name(rk))) : "") << ": " << buf;
+    VLOG2(Kafka) << fac << (rk ? (": " + std::string(rd_kafka_name(rk))) : "") << ": " << buf;
   }
 }
 

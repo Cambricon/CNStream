@@ -28,6 +28,7 @@
 #include "cnrt.h"
 #include "cnstream_source.hpp"
 #include "data_handler_file.hpp"
+#include "data_handler_util.hpp"
 #include "test_base.hpp"
 
 namespace cnstream {

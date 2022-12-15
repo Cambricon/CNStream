@@ -358,11 +358,9 @@ $(document).ready(function(){
         if (selected_demo === "classification") {
             json = "apps/resnet50.json";
         } else if (selected_demo === "detection") {
-            json = "apps/ssd.json";
+            json = "apps/yolov5.json";
         } else if (selected_demo === "tracking") {
-            json = "apps/yolov3_track.json";
-        } else if (selected_demo === "yolov3_mlu370") {
-            json = "apps/yolov3_mlu370.json";
+            json = "apps/yolov5_track.json";
         } else {
             json = "/user/" + selected_demo_text;
         }

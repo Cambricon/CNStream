@@ -18,12 +18,12 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
-#include <cnstream_config.hpp>
-
 #include <string>
+
+#include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
+
+#include "cnstream_config.hpp"
 
 namespace py = pybind11;
 
@@ -58,8 +58,8 @@ void ConfigWrapper(py::module &m) {  // NOLINT
       .def_readwrite("name", &CNModuleConfig::name)
       .def_readwrite("parameters", &CNModuleConfig::parameters)
       .def_readwrite("parallelism", &CNModuleConfig::parallelism)
-      .def_readwrite("max_input_queue_size", &CNModuleConfig::maxInputQueueSize)
-      .def_readwrite("class_name", &CNModuleConfig::className)
+      .def_readwrite("max_input_queue_size", &CNModuleConfig::max_input_queue_size)
+      .def_readwrite("class_name", &CNModuleConfig::class_name)
       .def_readwrite("next", &CNModuleConfig::next);
   py::class_<CNSubgraphConfig, CNConfigBase>(m, "CNSubgraphConfig")
       .def(py::init())

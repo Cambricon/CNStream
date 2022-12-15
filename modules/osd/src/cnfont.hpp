@@ -31,7 +31,7 @@
 #include FT_FREETYPE_H
 #endif
 
-#include "opencv2/highgui/highgui.hpp"
+#include "cnstream_frame_va.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
 namespace cnstream {
@@ -46,7 +46,7 @@ class CnFont {
   /**
    * @brief Constructor of CnFont
    */
-  CnFont() { }
+  CnFont() {}
   /**
    * @brief Release font resource
    */
@@ -56,7 +56,7 @@ class CnFont {
    * @param
    *   font_path: the font of path
    */
-  bool Init(const std::string &font_path, float font_pixel = 30, float space = 0.4, float step = 0.15);
+  bool Init(const std::string& font_path, float font_pixel = 30, float space = 0.4, float step = 0.15);
 
   /**
    * @brief Configure font Settings
@@ -71,9 +71,11 @@ class CnFont {
    *   color: the color of font
    * @return Size of the string
    */
-  int putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color);  // NOLINT
+  int putText(CNDataFramePtr frame, char* text, cv::Point pos, cv::Scalar color);
   bool GetTextSize(char* text, uint32_t* width, uint32_t* height);
   uint32_t GetFontPixel();
+
+  int putText(char* text, cv::Scalar color, cv::Scalar bg_color, void* argb1555, cv::Size size);
 
  private:
   void GetWCharSize(wchar_t wc, uint32_t* width, uint32_t* height);
@@ -97,7 +99,9 @@ class CnFont {
    *   pos: the show of position
    *   color: the color of font
    */
-  void putWChar(cv::Mat& img, wchar_t wc, cv::Point& pos, cv::Scalar color);  // NOLINT
+  void putWChar(CNDataFramePtr frame, wchar_t wc, cv::Point& pos, cv::Scalar color);  // NOLINT
+  void putWChar(wchar_t wc, cv::Point& pos, cv::Scalar color, cv::Scalar bg_color, void* bitmap,  // NOLINT
+                cv::Size size);
   CnFont& operator=(const CnFont&);
 
   FT_Library m_library;
@@ -105,18 +109,21 @@ class CnFont {
   bool is_initialized_ = false;
 
   // Default font output parameters
-  int m_fontType = 0;
+  int m_fontType;
   cv::Scalar m_fontSize;
-  bool m_fontUnderline = false;
-  float m_fontDiaphaneity = 0.f;
+  bool m_fontUnderline;
+  float m_fontDiaphaneity;
+
+  std::mutex mutex_;
 #else
 
  public:
   explicit CnFont(const char* font_path) {}
   ~CnFont() {}
-  int putText(cv::Mat& img, char* text, cv::Point pos, cv::Scalar color) { return 0; }  // NOLINT
+  int putText(CNDataFramePtr frame, char* text, cv::Point pos, cv::Scalar color) { return 0; }  // NOLINT
   bool GetTextSize(char* text, uint32_t* width, uint32_t* height) { return true; }
   uint32_t GetFontPixel() { return 0; }
+  int putText(char* text, cv::Scalar color, cv::Scalar bg_color, void* argb1555, cv::Size size) { return 0; }  // NOLINT
 #endif
 };  // class CnFont
 

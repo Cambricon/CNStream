@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2021] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,146 +18,148 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef MODULES_INFERENCE_INCLUDE_INFERENCER_HPP_
-#define MODULES_INFERENCE_INCLUDE_INFERENCER_HPP_
-
+#ifndef MODULES_INFERENCER_HPP_
+#define MODULES_INFERENCER_HPP_
 /**
- *  @file inferencer.hpp
- *
- *  This file contains a declaration of struct Inferencer and its substructure.
+ *  This file contains a declaration of class Inferencer
  */
 
+#include <map>
 #include <memory>
 #include <string>
-#include <thread>
+#include <unordered_map>
 #include <vector>
 
+#include "cnstream_core.hpp"
+#include "cnstream_frame.hpp"
+#include "cnstream_frame_va.hpp"
 #include "cnstream_module.hpp"
-#include "exception.hpp"
-
-#define DECLARE_PRIVATE(d_ptr, Class) \
-  friend class Class##Private;        \
-  Class##Private* d_ptr = nullptr;
-
-#define DECLARE_PUBLIC(q_ptr, Class) \
-  friend class Class;                \
-  Class* q_ptr = nullptr;
+#include "cnstream_postproc.hpp"
+#include "cnstream_preproc.hpp"
+#include "object_filter_video.hpp"
+#include "private/cnstream_param.hpp"
 
 namespace cnstream {
 
-CNSTREAM_REGISTER_EXCEPTION(Inferencer);
+using InferVideoPixelFmt = infer_server::NetworkInputFormat;
+using InferBatchStrategy = infer_server::BatchStrategy;
+/**
+ * @brief inference parameters used in Inferencer Module.
+ */
+typedef struct InferParams {
+  uint32_t device_id = 0;
+  uint32_t priority = 0;
+  uint32_t engine_num = 1;
+  uint32_t interval = 0;
+  bool show_stats = false;
+  InferBatchStrategy batch_strategy = InferBatchStrategy::DYNAMIC;
+  uint32_t batch_timeout = 1000;  ///< only support in dynamic batch strategy
+  InferVideoPixelFmt input_format = infer_server::NetworkInputFormat::BGR;
+  std::string model_path = "";
+  std::vector<std::string> label_path;
 
-class InferencerPrivate;
-class InferParamManager;
+  std::string preproc_name = "";
+  bool preproc_use_cpu = true;
+
+  std::string postproc_name = "";
+  float threshold = 0.f;
+
+  std::string filter_name = "";
+  std::vector<std::string> filter_categories;
+  std::unordered_map<std::string, std::string> custom_preproc_params;
+  std::unordered_map<std::string, std::string> custom_postproc_params;
+} InferParams;
+
+class InferObserver;
 
 /**
- * @class Inferencer
- *
- * @brief Inferencer is a module for running offline model to do inference.
- * The input data could come from Decoder or other plugins, in MLU memory
- * or CPU memory. Also, If the ``preproc_name`` parameter is set to ``PreprocCpu``
- * in the Open function or configuration file, CPU is used for image preprocessing.
- * Otherwise, if the ``preproc_name`` parameter is not
- * set, MLU is used for image preprocessing. The image preprocessing includes
- * data shape resizing and color space convertion.
- * Afterwards, you can infer with offline model loading from the model path.
- *
- * @attention
- * The error log will be reported when the following two situations occur as MLU is used to do preprocessing.
- *   case 1: scale-up factor is greater than 100.
- *   case 2: the image width before resize is greater than 7680.
+ * @brief for inference based on infer_server.
  */
-class Inferencer : public Module, public ModuleCreator<Inferencer> {
+class Inferencer : public ModuleEx,
+                   public ModuleCreator<Inferencer>,
+                   public infer_server::IPreproc,
+                   public infer_server::IPostproc {
  public:
   /**
-   * @brief Creates Inferencer module.
+   *  @brief  Generate Inferencer
    *
-   * @param[in] name The name of the Inferencer module.
+   *  @param  Name : Module name
    *
-   * @return None.
+   *  @return None
    */
-  explicit Inferencer(const std::string& name);
-  /**
-   * @brief Destructor, destructs the inference instance.
-   *
-   * @param None.
-   *
-   * @return None.
-   */
+  explicit Inferencer(const std::string &name);
   virtual ~Inferencer();
 
   /**
-   * @brief Called by pipeline when the pipeline is started.
+   * @brief Called by pipeline when pipeline start.
    *
-   * @param[in] paramSet:
-   * @verbatim
-   *   model_path: Required. The path of the offline model.
-   *   func_name: Required. The function name that is defined in the offline model.
-                  It could be found in Cambricon twins file. For most cases, it is "subnet0".
-   *   postproc_name: Required. The class name for postprocess. The class specified by this name must
-                      inherited from class cnstream::Postproc when [object_infer] is false, otherwise the
-                      class specified by this name must inherit from class cnstream::ObjPostproc.
-   *   preproc_name: Optional. The class name for preprocessing on CPU. The class specified by this name must
-                     inherited from class cnstream::Preproc when [object_infer] is false, otherwise the class
-                     specified by this name must inherit from class cnstream::ObjPreproc. Preprocessing will be
-                     done on MLU by ResizeYuv2Rgb (cambricon Bang op) when this parameter not set.
-   *   use_scaler: Optional. Whether use the scaler to preprocess the input. The scaler will not be used by default.
-   *   device_id: Optional. MLU device ordinal number. The default value is 0.
-   *   batching_timeout: Optional. The batching timeout. The default value is 3000.0[ms]. type[float]. unit[ms].
-   *   data_order: Optional. Data format. The default format is NHWC.
-   *   threshold: Optional. The threshold of the confidence. By default it is 0.
-   *   infer_interval: Optional. Process one frame for every ``infer_interval`` frames.
-   *   object_infer: Optional. if object_infer is set to true, the detection target is used as the input to
-                     inferencing. if it is set to false, the video frame is used as the input to inferencing.
-                     False by default.
-   *   obj_filter_name: Optional. The class name for object filter. See cnstream::ObjFilter. This parameter is valid
-                        when object_infer is true. When this parameter not set, no object will be filtered.
-   *   keep_aspect_ratio: Optional. As the mlu is used for image processing, the scale remains constant.
-   *   model_input_pixel_format: Optional. As the mlu is used for image processing, set the pixel format of the
-   *                             model input image. RGBA32 by default.
-   *   mem_on_mlu_for_postproc: Optional. Pass a batch mlu pointer directly to post-processing function without
-                                making d2h copies. see `Postproc` for details.
-   *   saving_infer_input: Optional. Save the data close to inferencing.
-   *   pad_method: Optional. When use mlu preprocessing, set the pad method. set pad_method = "center", image in center;
-                              set the pad_method = "origin". image in top left corner.
-   *                          if not set this param, the default value is "center"
-   * @endverbatim
+   * @param param_set: parameters for this module.
    *
-   * @return Returns true if the inferencer has been opened successfully.
+   * @return whether module open succeed.
    */
-  bool Open(ModuleParamSet paramSet) override;
+  bool Open(ModuleParamSet param_set) override;
+
   /**
-   * @brief Called by pipeline when the pipeline is stopped.
+   * @brief Called by pipeline when pipeline end.
    *
-   * @param None.
-   *
-   * @return Void.
+   * @return void.
    */
   void Close() override;
-  /**
-   * @brief Performs inference for each frame.
-   *
-   * @param[in] data The information and data of frames.
-   *
-   * @retval 1: The process has run successfully.
-   * @retval -1: The process is failed.
-   */
-  int Process(CNFrameInfoPtr data) final;
 
   /**
-   * @brief Check ParamSet for inferencer..
+   * @brief Process each data frame.
    *
-   * @param[in] param_set Parameters for this module.
+   * @param data : Pointer to the frame info.
    *
-   * @return Returns true if this API run successfully. Otherwise, returns false.
+   * @return whether post data to communicate processor succeed.
+   *
    */
-  bool CheckParamSet(const ModuleParamSet &param_set) const override;
+  int Process(std::shared_ptr<CNFrameInfo> data) override;
+
+  /**
+   * @brief Check ParamSet for this module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Return true if this API run successfully. Otherwise, return false.
+   */
+  bool CheckParamSet(const ModuleParamSet& paramSet) const override;
+
+  // user preproc
+  int OnTensorParams(const infer_server::CnPreprocTensorParams *params) override {
+    if (preproc_) {
+      return preproc_->OnTensorParams(params);
+    }
+    return -1;
+  }
+  int OnPreproc(cnedk::BufSurfWrapperPtr src, cnedk::BufSurfWrapperPtr dst,
+                const std::vector<CnedkTransformRect> &src_rects) override {
+    if (preproc_) {
+      return preproc_->Execute(src, dst, src_rects);
+    }
+    return -1;
+  }
+  // user postproc
+  int OnPostproc(const std::vector<infer_server::InferData *> &data_vec,
+                 const infer_server::ModelIO &model_output,
+                 const infer_server::ModelInfo *model_info) override;
+
+  void OnProcessDone(const CNFrameInfoPtr data) {
+    this->TransmitData(data);
+  }
 
  private:
-  InferParamManager *param_manager_ = nullptr;
-  DECLARE_PRIVATE(d_ptr_, Inferencer);
+  std::unique_ptr<ModuleParamsHelper<InferParams>> param_helper_ = nullptr;
+  std::unique_ptr<infer_server::InferServer> server_ = nullptr;
+  infer_server::Session_t session_ = nullptr;
+  std::shared_ptr<InferObserver> observer_ = nullptr;
+  std::shared_ptr<ObjectFilterVideo> filter_ = nullptr;
+  std::shared_ptr<Preproc> preproc_ = nullptr;
+  std::shared_ptr<Postproc> postproc_ = nullptr;
+  LabelStrings label_strings_;
+  std::map<std::string, uint32_t> drop_cnt_map_;
+  std::mutex drop_cnt_map_mtx_;
 };  // class Inferencer
 
 }  // namespace cnstream
-
-#endif  // MODULES_INFERENCE_INCLUDE_INFERENCER_HPP_
+#endif

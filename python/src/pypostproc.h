@@ -17,57 +17,36 @@
  * out of or in connection with the software or the use or other dealings in
  * the software.
  *************************************************************************/
-
-#include <postproc.hpp>
-#include <pybind11/pybind11.h>
-
 #include <memory>
 #include <string>
-#include <map>
-#include <utility>
+#include <unordered_map>
 #include <vector>
+
+#include "pybind11/pybind11.h"
+
+#include "cnstream_postproc.hpp"
 
 namespace cnstream {
 
-struct __attribute__((visibility("default"))) PostprocPyObjects {
-  bool Init(const std::map<std::string, std::string> &params);
-  ~PostprocPyObjects();
-  std::string pyclass_name;
-  pybind11::object pyinstance;
-  pybind11::object pyinit;
-  pybind11::object pyexecute;
-  std::map<std::string, std::string> params;
-};  // struct PostprocPyObjects
-
 class __attribute__((visibility("default"))) PyPostproc : public Postproc {
  public:
-  bool Init(const std::map<std::string, std::string> &params) override {
-    return pyobjs_.Init(params);
-  }
-  int Execute(const std::vector<float*> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
-              const cnstream::CNFrameInfoPtr &finfo) override;
-  int Execute(const std::vector<void*> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
-              const std::vector<CNFrameInfoPtr> &finfos) override;
+  ~PyPostproc();
+  int Init(const std::unordered_map<std::string, std::string> &params) override;
+  int Execute(const NetOutputs& net_outputs, const infer_server::ModelInfo& model_info,
+              const std::vector<CNFrameInfoPtr>& packages,
+              const LabelStrings& labels = LabelStrings()) override;
+  int Execute(const NetOutputs& net_outputs, const infer_server::ModelInfo& model_info,
+              const std::vector<CNFrameInfoPtr>& packages, const std::vector<CNInferObjectPtr>& objects,
+              const LabelStrings& labels = LabelStrings()) override;
 
  private:
-  PostprocPyObjects pyobjs_;
+  std::string pyclass_name_;
+  pybind11::object pyinstance_;
+  pybind11::object pyinit_;
+  pybind11::object pyexecute_;
+  pybind11::object pyexecute_secondary_;
   DECLARE_REFLEX_OBJECT_EX(PyPostproc, Postproc);
 };  // class PyPostproc
-
-class __attribute__((visibility("default"))) PyObjPostproc : public ObjPostproc {
- public:
-  bool Init(const std::map<std::string, std::string> &params) override {
-    return pyobjs_.Init(params);
-  }
-  int Execute(const std::vector<float*> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
-              const CNFrameInfoPtr &finfo, const std::shared_ptr<CNInferObject> &obj) override;
-  int Execute(const std::vector<void*> &net_outputs, const std::shared_ptr<edk::ModelLoader> &model,
-              const std::vector<std::pair<CNFrameInfoPtr, std::shared_ptr<CNInferObject>>> &obj_infos) override;
-
- private:
-  PostprocPyObjects pyobjs_;
-  DECLARE_REFLEX_OBJECT_EX(PyObjPostproc, ObjPostproc);
-};  // class PyObjPostproc
 
 }  // namespace cnstream
 

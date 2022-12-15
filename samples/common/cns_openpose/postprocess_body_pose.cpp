@@ -18,8 +18,6 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <opencv2/opencv.hpp>
-
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -30,9 +28,11 @@
 #include <utility>
 #include <vector>
 
-#include "cnstream_frame_va.hpp"
+#include "opencv2/opencv.hpp"
+
 #include "cns_openpose.hpp"
-#include "postproc.hpp"
+#include "cnstream_frame_va.hpp"
+#include "cnstream_postproc.hpp"
 
 void RemapKeypoints(cns_openpose::Keypoints* keypoints, int src_w, int src_h, int dst_w, int dst_h) {
   float scaling_factor = std::min(1.0f * src_w / dst_w, 1.0f * src_h / dst_h);
@@ -54,47 +54,61 @@ void RemapKeypoints(cns_openpose::Keypoints* keypoints, int src_w, int src_h, in
 template <int knKeypoints, int knLimbs>
 class PostprocPose : public cnstream::Postproc {
   static constexpr int knHeatmaps = knKeypoints + knLimbs * 2;
+
  public:
   virtual ~PostprocPose() {}
   using Heatmaps = std::array<cv::Mat, knHeatmaps>;
-  int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
-              const cnstream::CNFrameInfoPtr& package) override;
+  int Execute(const cnstream::NetOutputs& net_outputs, const infer_server::ModelInfo& model_info,
+              const std::vector<cnstream::CNFrameInfoPtr>& packages,
+              const cnstream::LabelStrings& labels) override;
 
  protected:
   virtual const std::array<std::pair<int, int>, knLimbs>& GetHeatmapIndexs() = 0;
   virtual const std::array<std::pair<int, int>, knLimbs>& GetLimbEndpointPairs() = 0;
 
  private:
-  Heatmaps GetHeatmaps(float* net_output, const std::shared_ptr<edk::ModelLoader>& model);
+  Heatmaps GetHeatmaps(float* net_output, const infer_server::ModelInfo& model_info);
   cns_openpose::Keypoints GetKeypoints(const Heatmaps& heatmaps);
   cns_openpose::Limbs GetLimbs(const Heatmaps& heatmaps, const cns_openpose::Keypoints& keypoints);
 };  // class PostprocPose
 
-template<int knKeypoints, int knLimbs>
-int PostprocPose<knKeypoints, knLimbs>::Execute(const std::vector<float*>& net_outputs,
-                                                const std::shared_ptr<edk::ModelLoader>& model,
-                                                const cnstream::CNFrameInfoPtr& package) {
-  // model output in NCHW order. see parameter named data_order in Inferencer module.
-  if (model->OutputShape(0).C() != knHeatmaps)
-    LOGF(POSTPROC_POSE) << "The number of heatmaps in model mismatched.";
-  auto frame = package->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag);
-  auto heatmaps = GetHeatmaps(net_outputs[0], model);
-  auto keypoints = GetKeypoints(heatmaps);
-  auto total_limbs = GetLimbs(heatmaps, keypoints);
-  RemapKeypoints(&keypoints, model->InputShape(0).W(), model->InputShape(0).H(), frame->width, frame->height);
-  package->collection.Add(cns_openpose::kPoseKeypointsTag, keypoints);
-  package->collection.Add(cns_openpose::kPoseLimbsTag, total_limbs);
+template <int knKeypoints, int knLimbs>
+int PostprocPose<knKeypoints, knLimbs>::Execute(const cnstream::NetOutputs& net_outputs,
+                                                const infer_server::ModelInfo& model_info,
+                                                const std::vector<cnstream::CNFrameInfoPtr>& packages,
+                                                const cnstream::LabelStrings& labels) {
+  cnedk::BufSurfWrapperPtr output0 = net_outputs[0].first;  // data
+  if (!output0->GetHostData(0)) {
+    LOGE(PostprocPose) << " copy data to host first.";
+    return -1;
+  }
+  CnedkBufSurfaceSyncForCpu(output0->GetBufSurface(), -1, -1);
+
+  for (size_t batch_idx = 0; batch_idx < packages.size(); batch_idx++) {
+    float* data = static_cast<float*>(output0->GetHostData(0, batch_idx));
+
+    cnstream::CNFrameInfoPtr package = packages[batch_idx];
+    const auto frame = package->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag);
+
+    auto heatmaps = GetHeatmaps(data, model_info);
+    auto keypoints = GetKeypoints(heatmaps);
+    auto total_limbs = GetLimbs(heatmaps, keypoints);
+    RemapKeypoints(&keypoints, model_info.InputShape(0)[2], model_info.InputShape(0)[1], frame->buf_surf->GetWidth(),
+                   frame->buf_surf->GetHeight());
+    package->collection.Add(cns_openpose::kPoseKeypointsTag, keypoints);
+    package->collection.Add(cns_openpose::kPoseLimbsTag, total_limbs);
+  }
   return 0;
 }
 
 template <int knKeypoints, int knLimbs>
-typename PostprocPose<knKeypoints, knLimbs>::Heatmaps
-PostprocPose<knKeypoints, knLimbs>::GetHeatmaps(float* net_output, const std::shared_ptr<edk::ModelLoader>& model) {
+typename PostprocPose<knKeypoints, knLimbs>::Heatmaps PostprocPose<knKeypoints, knLimbs>::GetHeatmaps(
+    float* net_output, const infer_server::ModelInfo& model_info) {
   Heatmaps heatmaps;
-  const int src_w = model->OutputShape(0).W();
-  const int src_h = model->OutputShape(0).H();
+  const int src_w = model_info.OutputShape(0)[3];
+  const int src_h = model_info.OutputShape(0)[2];
   const int src_heatmap_len = src_w * src_h;
-  const cv::Size dst_size(model->InputShape(0).W(), model->InputShape(0).H());
+  const cv::Size dst_size(model_info.InputShape(0)[2], model_info.InputShape(0)[1]);
   for (int i = 0; i < knHeatmaps; ++i) {
     cv::Mat src(src_h, src_w, CV_32FC1, net_output + i * src_heatmap_len);
     cv::Mat dst;
@@ -105,8 +119,7 @@ PostprocPose<knKeypoints, knLimbs>::GetHeatmaps(float* net_output, const std::sh
 }
 
 template <int knKeypoints, int knLimbs>
-cns_openpose::Keypoints
-PostprocPose<knKeypoints, knLimbs>::GetKeypoints(const Heatmaps& heatmaps) {
+cns_openpose::Keypoints PostprocPose<knKeypoints, knLimbs>::GetKeypoints(const Heatmaps& heatmaps) {
   cns_openpose::Keypoints keypoints(knKeypoints - 1);  // ignore background
   for (int i = 0; i < knKeypoints - 1; ++i) {
     static constexpr double kThreshold = 0.1;
@@ -136,8 +149,7 @@ PostprocPose<knKeypoints, knLimbs>::GetKeypoints(const Heatmaps& heatmaps) {
   return keypoints;
 }
 
-static
-std::vector<cv::Point> Sampling(cv::Point first_end, const cv::Point& second_end, int nsamples) {
+static std::vector<cv::Point> Sampling(cv::Point first_end, const cv::Point& second_end, int nsamples) {
   cv::Point distance = second_end - first_end;
   float x_step = 1.0 * distance.x / (nsamples - 1);
   float y_step = 1.0 * distance.y / (nsamples - 1);
@@ -151,8 +163,8 @@ std::vector<cv::Point> Sampling(cv::Point first_end, const cv::Point& second_end
 }
 
 template <int knKeypoints, int knLimbs>
-cns_openpose::Limbs
-PostprocPose<knKeypoints, knLimbs>::GetLimbs(const Heatmaps& heatmaps, const cns_openpose::Keypoints& keypoints) {
+cns_openpose::Limbs PostprocPose<knKeypoints, knLimbs>::GetLimbs(const Heatmaps& heatmaps,
+                                                                 const cns_openpose::Keypoints& keypoints) {
   static constexpr int knSamples = 10;  // number of samples between tow points
   static constexpr float kPafThreshold = 0.1;
   static constexpr float kSamplesMatchThreshold = 0.7;
@@ -177,8 +189,8 @@ PostprocPose<knKeypoints, knLimbs>::GetLimbs(const Heatmaps& heatmaps, const cns
     std::vector<std::pair<cv::Point, cv::Point>> limbs;
     // stores second endpoint status (selected or not), selected by which first endpoint and the score.
     // 0: selected or not,   1: index in limbs,  2: limb score
-    std::vector<std::tuple<bool, size_t, float>>
-      second_end_selected_status(knSecondEnds, std::make_tuple(false, -1, -1.0f));
+    std::vector<std::tuple<bool, size_t, float>> second_end_selected_status(knSecondEnds,
+                                                                            std::make_tuple(false, -1, -1.0f));
     // find max score between first ends and second ends
     for (int first_end_idx = 0; first_end_idx < knFirstEnds; ++first_end_idx) {
       int selected_second_end_idx = -1;
@@ -187,8 +199,7 @@ PostprocPose<knKeypoints, knLimbs>::GetLimbs(const Heatmaps& heatmaps, const cns
       for (int second_end_idx = 0; second_end_idx < knSecondEnds; ++second_end_idx) {
         const cv::Point& second_end = second_ends[second_end_idx];
         std::pair<float, float> distance = std::make_pair(second_end.x - first_end.x, second_end.y - first_end.y);
-        float norm2 = std::sqrt(distance.first * distance.first +
-                                distance.second * distance.second);
+        float norm2 = std::sqrt(distance.first * distance.first + distance.second * distance.second);
         distance.first /= norm2;
         distance.second /= norm2;
 
@@ -212,8 +223,7 @@ PostprocPose<knKeypoints, knLimbs>::GetLimbs(const Heatmaps& heatmaps, const cns
           float avg_score = sum_of_sample_score / sample_points.size();
           if (avg_score > max_score) {
             const auto& selected_status = second_end_selected_status[second_end_idx];
-            if (std::get<0>(selected_status) &&
-                std::get<2>(selected_status) > avg_score) {
+            if (std::get<0>(selected_status) && std::get<2>(selected_status) > avg_score) {
               // selected by other first endpoint and pre-score greater than current score
               continue;
             }
@@ -221,7 +231,7 @@ PostprocPose<knKeypoints, knLimbs>::GetLimbs(const Heatmaps& heatmaps, const cns
             max_score = avg_score;
           }
         }  // if kSamplesMatchThreshold
-      }  // for second ends
+      }    // for second ends
       if (-1 != selected_second_end_idx) {
         auto& selected_status = second_end_selected_status[selected_second_end_idx];
         // found best matchs second end, positions in keypoints vector
@@ -304,4 +314,3 @@ class PostprocCOCOPose : public PostprocPose<knCOCOKeypoints, knCOCOLimbs> {
 };  // class PostprocCOCOPose
 
 IMPLEMENT_REFLEX_OBJECT_EX(PostprocCOCOPose, cnstream::Postproc)
-

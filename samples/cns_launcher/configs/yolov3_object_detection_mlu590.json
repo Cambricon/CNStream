@@ -1,0 +1,16 @@
+{
+  "detector" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path" : "../../../data/models/yolov3_v0.14.0_4b_rgb_uint8.magicmind",
+      "preproc"  : "name=PreprocYolov3;use_cpu=false",
+      "postproc" : "name=PostprocYolov3;threshold=0.5",
+      "batch_timeout" : 200,
+      "engine_num" : 4,
+      "model_input_pixel_format" : "RGB24",
+      "device_id" : 0
+    }
+  }
+}

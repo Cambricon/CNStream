@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2021] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2022] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,63 +17,69 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-
-#include <algorithm>
-#include <memory>
 #include <vector>
 
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
-#if (CV_MAJOR_VERSION >= 3)
-#include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
-
-#include "cnstream_frame_va.hpp"
-#include "preproc.hpp"
 #include "cnstream_logging.hpp"
+#include "cnstream_preproc.hpp"
+#include "preprocess_common.hpp"
+
+// #define LOCAL_DEBUG_DUMP_IMAGE
+#ifdef LOCAL_DEBUG_DUMP_IMAGE
+#include <atomic>
+#endif
 
 class PreprocYolov5 : public cnstream::Preproc {
  public:
-  int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
-              const std::shared_ptr<cnstream::CNFrameInfo>& package) {
-    // check params
-    auto input_shape = model->InputShape(0);
-    if (net_inputs.size() != 1 || input_shape.C() != 3) {
-      LOGE(DEMO) << "[PreprocCpu] model input shape not supported";
+  int OnTensorParams(const infer_server::CnPreprocTensorParams *params) override {
+    std::unique_lock<std::mutex> lk(mutex_);
+    if (GetNetworkInfo(params, &info_) < 0) {
+      LOGE(PERPROC) << "[PreprocYolov5] get network information failed.";
       return -1;
     }
-    cnstream::CNDataFramePtr frame = package->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag);
 
-    int width = frame->width;
-    int height = frame->height;
-    int dst_w = input_shape.W();
-    int dst_h = input_shape.H();
-    cv::Mat img = frame->ImageBGR();
-    // resize
-    if (height != dst_h || width != dst_w) {
-      cv::Mat dst(dst_h, dst_w, CV_8UC3, cv::Scalar(0, 0, 0));
-      const float scaling_factors = std::min(1.0 * dst_w / width, 1.0 * dst_h / height);
-      cv::Mat resized(height * scaling_factors, width * scaling_factors, CV_8UC3);
-      cv::resize(img, resized, cv::Size(resized.cols, resized.rows));
-      cv::Rect roi;
-      roi.x = (dst.cols - resized.cols) / 2;
-      roi.y = (dst.rows - resized.rows) / 2;
-      roi.width = resized.cols;
-      roi.height = resized.rows;
-
-      resized.copyTo(dst(roi));
-      img = dst;
+    if (info_.c != 3) {
+      LOGE(PERPROC) << "[PreprocYolov5] input c is not 3, not suppoted yet";
+      return -1;
     }
 
-    // bgr 2 rgb
-    cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
-
-    // since model input data type is float, convert image to float
-    cv::Mat dst(dst_h, dst_w, CV_32FC3, net_inputs[0]);
-    img.convertTo(dst, CV_32F);
-    dst /= 255.0;
+    VLOG1(PERPROC) << "[PreprocYolov5] Model input : w = " << info_.w << ", h = " << info_.h << ", c = " << info_.c
+                   << ", dtype = " << static_cast<int>(info_.dtype)
+                   << ", pixel_format = " << static_cast<int>(info_.format);
     return 0;
   }
+
+  int Execute(cnedk::BufSurfWrapperPtr src, cnedk::BufSurfWrapperPtr dst,
+              const std::vector<CnedkTransformRect> &src_rects) {
+    bool keep_aspect_ratio = true;
+    int pad_val = 114;
+    infer_server::NetworkInputFormat fmt = info_.format;
+    if (hw_accel_) {
+      if (PreprocessTransform(src, dst, src_rects, info_, fmt, keep_aspect_ratio, pad_val) != 0) {
+        LOGE(PERPROC) << "[PreprocYolov5] preprocess on mlu failed.";
+        return -1;
+      }
+    } else {
+      if (PreprocessCpu(src, dst, src_rects, info_, fmt, keep_aspect_ratio, pad_val) != 0) {
+        LOGE(PERPROC) << "[PreprocYolov5] preprocess on cpu failed.";
+        return -1;
+      }
+    }
+
+#ifdef LOCAL_DEBUG_DUMP_IMAGE
+    static std::atomic<unsigned int> count{0};
+    std::unique_lock<std::mutex> lk(mutex_);
+    SaveResult("preproc_yolov5", count.load(), src->GetNumFilled(), dst, info_);
+    ++count;
+    lk.unlock();
+#endif
+    return 0;
+  }
+
+  ~PreprocYolov5() = default;
+
+ private:
+  std::mutex mutex_;
+  cnstream::CnPreprocNetworkInfo info_;
 
  private:
   DECLARE_REFLEX_OBJECT_EX(PreprocYolov5, cnstream::Preproc);

@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2020] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2022] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,67 +21,67 @@
 #ifndef MODULES_SOURCE_HANDLER_JPEG_MEM_HPP_
 #define MODULES_SOURCE_HANDLER_JPEG_MEM_HPP_
 
-#include <memory>
-#include <sstream>
 #include <string>
-#include <thread>
-#include <mutex>
 
-#include "cnstream_logging.hpp"
 #include "data_handler_util.hpp"
 #include "data_source.hpp"
-#include "util/video_decoder.hpp"
 
 namespace cnstream {
 
-class ESJpegMemHandlerImpl : public IDecodeResult, public SourceRender {
+class ESJpegMemHandlerImpl;
+/*!
+ * @class ESJpegMemHandler
+ *
+ * @brief ESJpegMemHandler is a class of source handler for Jpeg bitstreams in memory.
+ */
+class ESJpegMemHandler : public SourceHandler {
  public:
-  explicit ESJpegMemHandlerImpl(DataSource *module, ESJpegMemHandler *handler, int max_width, int max_height)
-      : SourceRender(handler),
-        module_(module),
-        stream_id_(handler->GetStreamId()),
-        max_width_(max_width),
-        max_height_(max_height) {}
-  ~ESJpegMemHandlerImpl() {}
+  /*!
+   * @brief A constructor to construct a ESJpegMemHandler object.
+   *
+   * @param[in] module The data source module.
+   * @param[in] stream_id The stream id of the stream.
+   * @param[in] param The parameters of the handler.
+   *
+   * @return No return value.
+   */
+  explicit ESJpegMemHandler(DataSource *module, const std::string &stream_id, const ESJpegMemSourceParam &param);
 
-  bool Open();
-  void Close();
+  /*!
+   * @brief The destructor of ESJpegMemHandler.
+   *
+   * @return No return value.
+   */
+  ~ESJpegMemHandler();
+  /*!
+   * @brief Opens source handler.
+   *
+   * @return Returns true if the source handler is opened successfully, otherwise returns false.
+   */
+  bool Open() override;
+  /*!
+   * @brief Closes source handler.
+   *
+   * @return No return value.
+   */
+  void Close() override;
 
-  int Write(ESPacket *pkt);
-
-  // IDecodeResult methods
-  void OnDecodeError(DecodeErrorCode error_code) override;
-  void OnDecodeFrame(DecodeFrame *frame) override;
-  void OnDecodeEos() override;
+  /*!
+   * @brief Sends data in frame mode.
+   *
+   * @param[in] pkt The data packet.
+   *
+   * @return Returns 0 if this function writes data successfully.
+   *         Returns -1 if it fails to writes data. The possible reason is the pkt is nullptr or decoding failed.
+   *
+   * @note Must write pkt to notify the handler it's the end of the stream,
+   *       set the data of the pkt to nullptr or the size to 0.
+   */
+  int Write(ESJpegPacket *pkt);
 
  private:
-  DataSource *module_ = nullptr;
-  std::string stream_id_;
-  DataSourceParam param_;
-
-#ifdef UNIT_TEST
- public:  // NOLINT
-#else
- private:  // NOLINT
-#endif
-  bool InitDecoder();
-  bool ProcessImage(ESPacket *pkt);
-
- private:
-  std::shared_ptr<Decoder> decoder_ = nullptr;
-  // maximum resolution 8K
-  int max_width_ = 7680;
-  int max_height_ = 4320;
-
-  RwLock running_lock_;
-  std::atomic<bool> running_{false};
-  std::atomic<bool> eos_reached_{false};
-
-#ifdef UNIT_TEST
- public:  // NOLINT
-  void SetDecodeParam(const DataSourceParam &param) { param_ = param; }
-#endif
-};  // class ESJpegMemHandlerImpl
+  ESJpegMemHandlerImpl *impl_ = nullptr;
+};  // class ESJpegMemHandler
 
 }  // namespace cnstream
 

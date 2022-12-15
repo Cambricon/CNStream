@@ -25,6 +25,6 @@
   },
 
   "subgraph:sinker" : {
-    "config_path" : "../configs/sinker_configs/__SINKER_PLACEHOLDER__"
+    "config_path" : "../configs/sinker_configs/__SINKER_PLACEHOLDER__.json"
   }
 }

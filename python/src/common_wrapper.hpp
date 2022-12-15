@@ -17,17 +17,16 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+#include <vector>
 
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
-#include <opencv2/imgcodecs/imgcodecs.hpp>
+#include "opencv2/imgcodecs/imgcodecs.hpp"
 #endif
 
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
-
-#include <vector>
+#include "pybind11/numpy.h"
+#include "pybind11/pybind11.h"
 
 namespace py = pybind11;
 
@@ -38,5 +37,6 @@ py::dtype GetNpDType(int depth);
 std::vector<std::size_t> GetMatShape(cv::Mat& m);  // NOLINT
 py::capsule MakeCapsuleForMat(cv::Mat& m);  // NOLINT
 py::array MatToArray(cv::Mat& m);  // NOLINT
+py::array ToArray(const std::vector<const float*> &vec, const std::vector<std::vector<int64_t>> &shapes);
 
 }  // namespace cnstream

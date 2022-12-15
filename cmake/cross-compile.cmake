@@ -1,11 +1,13 @@
-#this file is only an example to configure CMAKE_TOOLCHAIN_FILE for cross compile CNStream
+#this file is an example to configure CMAKE_TOOLCHAIN_FILE for cross compile EasyDK
 
 SET(CMAKE_SYSTEM_NAME Linux)
 
-SET(CROSS_PREFIX aarch64-linux-gnu-)  # for live555
-SET(CMAKE_C_COMPILER  aarch64-linux-gnu-gcc)
-SET(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+SET(BIN_DIR $ENV{CROSS_COMPILER_ROOT})
+SET(CROSS_PREFIX ${BIN_DIR}/aarch64-linux-gnu-)
+SET(CMAKE_C_COMPILER  ${BIN_DIR}/aarch64-linux-gnu-gcc)
+SET(CMAKE_CXX_COMPILER ${BIN_DIR}/aarch64-linux-gnu-g++)
 SET(CMAKE_SYSTEM_PROCESSOR aarch64)
+SET(CMAKE_FIND_ROOT_PATH $ENV{INSTALL_DIR})
 
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)

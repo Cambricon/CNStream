@@ -1,26 +1,10 @@
-cmake_minimum_required(VERSION 2.8.7)
-if(POLICY CMP0046)
-  cmake_policy(SET CMP0046 NEW)
-endif()
-if(POLICY CMP0054)
-  cmake_policy(SET CMP0054 NEW)
-endif()
+cmake_minimum_required(VERSION 3.5)
 
 # ---[ Options
-option(build_get_model_io "build cncodec reset" OFF)
-option(build_get_model_perfinfo "build cncodec reset" OFF)
-option(build_inspect "build cnstream inspect" ON)
-option(build_reset "build cncodec reset" OFF)
+option(BUILD_INSPECT "build cnstream inspect" ON)
 
-if(build_get_model_io)
-  add_subdirectory(get_model_io)
-endif()
-if(build_get_model_perfinfo)
-  add_subdirectory(get_model_perfinfo)
-endif()
-if(build_inspect)
+
+if(BUILD_INSPECT)
   add_subdirectory(inspect)
 endif()
-if(build_reset)
-  add_subdirectory(reset)
-endif()
+

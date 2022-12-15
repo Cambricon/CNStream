@@ -53,11 +53,11 @@ class FakeSink : public Module, public ModuleCreator<FakeSink> {
   /**
    *  @brief Called by pipeline when pipeline start.
    *
-   *  @param  paramSet : void
+   *  @param  param_set : void
    *
    *  @return if module open succeed
    */
-  bool Open(ModuleParamSet paramSet) override;
+  bool Open(ModuleParamSet param_set) override;
 
   /**
    * @brief  Called by pipeline when pipeline stop
@@ -79,13 +79,13 @@ class FakeSink : public Module, public ModuleCreator<FakeSink> {
   int Process(std::shared_ptr<CNFrameInfo> data) override;
 
   /**
-   * @brief Check ParamSet for a module.
+   * @brief Check param_set for a module.
    *
-   * @param paramSet Parameters for this module.
+   * @param param_set Parameters for this module.
    *
    * @return Returns true if this API run successfully. Otherwise, returns false.
    */
-  bool CheckParamSet(const ModuleParamSet& paramSet) const override;
+  bool CheckParamSet(const ModuleParamSet& param_set) const override;
 };  // class FakeSink
 
 }  // namespace cnstream

@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2022] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,96 +18,119 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef MODULES_ENCODER_INCLUDE_ENCODER_HPP_
-#define MODULES_ENCODER_INCLUDE_ENCODER_HPP_
-
-#include <memory>
-#include <mutex>
-#include <set>
-#include <string>
+#ifndef MODULES_ENCODE_HPP_
+#define MODULES_ENCODE_HPP_
+/*!
+ *  @file vout.hpp
+ *
+ *  This file contains a declaration of the VoutParam, and the Vout class.
+ */
+#include <fstream>
 #include <map>
+#include <memory>
+#include <string>
+#include <utility>
 
-#include "cnstream_frame.hpp"
-#include "cnstream_module.hpp"
-#include "cnstream_frame_va.hpp"
 #include "private/cnstream_param.hpp"
-
-#include "video/video_stream/video_stream.hpp"
+#include "cnstream_pipeline.hpp"
+#include "encode_handler.hpp"
+#include "tiler.hpp"
 
 namespace cnstream {
 
-using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
-
-struct EncoderContext;
-
-struct EncodeParam {
-  int device_id = 0;                 // mlu device id, -1 :disable mlu
-  bool mlu_input_frame = false;      // The input frame. true: source data , false: ImageBGR()
+struct VEncParam {
+  int device_id = 0;                 // device id, -1 :disable mlu
   bool mlu_encoder = true;           // whether use mlu encoding, default is true
   int dst_width = 0;                 // Target width, preferred size same with input
   int dst_height = 0;                // Target height, preferred size same with input
   double frame_rate = 0;             // Target fps
-  int bit_rate = 4000000;           // Target bit rate, default is 1Mbps
+  int bit_rate = 4000000;            // Target bit rate, default is 1Mbps
   int gop_size = 10;                 // Target gop, default is 10
   int tile_cols = 0;                 // Grids in horizontally of video tiling, only support cpu input
   int tile_rows = 0;                 // Grids in vertically of video tiling, only support cpu input
   bool resample = false;             // Resample frame with canvas, only support cpu input
   std::string file_name = "";        // File name to encode to
+  int rtsp_port = -1;                // rtsp output port
 };
 
-/**
- * @brief Encode is a module to encode video stream to file with/without container.
+class FrameRateControl;
+class VEncodeImplement;
+
+/*!
+ * @class VEncode
+ *
+ * @brief VEncode is a class to handle picutres to be encoded.
+ *
  */
-class Encode : public Module, public ModuleCreator<Encode> {
+class VEncode : public ModuleEx, public ModuleCreator<VEncode> {
  public:
-  /**
-   * @brief Encode constructor
+  /*!
+   * @brief Constructs a VEncode object.
    *
-   * @param  name : module name
+   * @param[in] name The name of this module.
+   *
+   * @return No return value.
    */
-  explicit Encode(const std::string& name);
-  /**
-   * @brief Encode destructor
-   */
-  ~Encode();
+  explicit VEncode(const std::string &name);
 
-  /**
-   * @brief Called by pipeline when pipeline start.
+  /*!
+   * @brief Destructs a VEncode object.
    *
-   * @param paramSet : parameter set
-   *
-   * @return true if module open succeed, otherwise false.
+   * @return No return value.
    */
-  bool Open(ModuleParamSet paramSet) override;
+  ~VEncode();
 
-  /**
-   * @brief  Called by pipeline when pipeline stop
+  /*!
+   * @brief Initializes the configuration of the Vout module.
+   *
+   * This function will be called by the pipeline when the pipeline starts.
+   *
+   * @param[in] param_set The module's parameter set to configure a Vout module.
+   *
+   * @return Returns true if the parammeter set is supported and valid, othersize returns false.
+   */
+  bool Open(ModuleParamSet param_set) override;
+
+  /*!
+   * @brief Frees the resources that the object may have acquired.
+   *
+   * This function will be called by the pipeline when the pipeline stops.
+   *
+   * @return No return value.
    */
   void Close() override;
 
   /**
-   * @brief Encode each frame
+   * @brief Process data
    *
    * @param data : data to be processed
    *
    * @return whether process succeed
    * @retval 0: succeed and do no intercept data
-   * @retval <0: failed
    */
-  int Process(CNFrameInfoPtr data) override;
+  int Process(std::shared_ptr<CNFrameInfo> data) override;
 
-  void OnEos(const std::string &stream_id) override;
+  /**
+   * @brief Check ParamSet for this module.
+   *
+   * @param paramSet Parameters for this module.
+   *
+   * @return Return true if this API run successfully. Otherwise, return false.
+   */
+  bool CheckParamSet(const ModuleParamSet& param_set) const override;
 
  private:
-  EncoderContext * GetContext(CNFrameInfoPtr data);
-  EncoderContext * CreateContext(CNFrameInfoPtr data, const std::string &stream_id);
-
-  std::unique_ptr<ModuleParamsHelper<EncodeParam>> param_helper_ = nullptr;
-  std::mutex ctx_lock_;
-  std::map<std::string, EncoderContext *> contexts_;
-  std::set<std::string> tile_streams_;
-};  // class Encode
+  std::map<std::string, std::shared_ptr<FrameRateControl>> frame_rate_ctx_;
+  std::map<std::string, std::shared_ptr<VEncodeImplement>> ivenc_;
+  std::unique_ptr<ModuleParamsHelper<VEncParam>> param_helper_ = nullptr;
+  std::mutex venc_mutex_;
+  std::mutex frame_rate_mutex_;
+  int stream_index_ = 0;
+  std::unique_ptr<Tiler> tiler_ = nullptr;
+  bool tiler_enable_ = false;
+  const std::string tiler_key_name_ = "tiler";
+};  // class VEncode
 
 }  // namespace cnstream
 
-#endif  // MODULES_ENCODER_INCLUDE_ENCODER_HPP_
+#endif  // MODULES_ENCODE_HPP_

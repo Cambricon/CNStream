@@ -30,59 +30,55 @@ close_called = False
 on_eos_called = False
 
 class CustomModule(cnstream.Module):
-    def __init__(self, name):
-        cnstream.Module.__init__(self, name)
+  def __init__(self, name):
+    cnstream.Module.__init__(self, name)
 
-    def open(self, params):
-        global open_param
-        open_param = params["param"]
-        return True
+  def open(self, params):
+    global open_param
+    open_param = params["param"]
+    return True
 
-    def close(self):
-        global close_called
-        close_called = True
+  def close(self):
+    global close_called
+    close_called = True
 
-    def process(self, data):
-        global process_called
-        process_called = True
-        return 1
+  def process(self, data):
+    global process_called
+    process_called = True
+    return 1
 
-    def on_eos(self, stream_id):
-        global on_eos_called
-        on_eos_called = True
+  def on_eos(self, stream_id):
+    global on_eos_called
+    on_eos_called = True
 
 class CustomModuleEx(cnstream.ModuleEx):
-    def __init__(self, name):
-        cnstream.ModuleEx.__init__(self, name)
+  def __init__(self, name):
+    cnstream.ModuleEx.__init__(self, name)
 
-class TestModule(object):
-    @staticmethod
-    def test_transmit_permissions():
-        module = CustomModule("test_module")
-        assert not module.has_transmit()
-        module = CustomModuleEx("test_module")
-        assert module.has_transmit()
+def test_transmit_permissions():
+  module = CustomModule("test_module")
+  assert not module.has_transmit()
+  module = CustomModuleEx("test_module")
+  assert module.has_transmit()
 
-    @staticmethod
-    def test_get_name():
-        module = CustomModule("test_module")
-        assert "test_module" == module.get_name()
-        module = CustomModuleEx("test_module")
-        assert "test_module" == module.get_name()
+def test_get_name():
+  module = CustomModule("test_module")
+  assert "test_module" == module.get_name()
+  module = CustomModuleEx("test_module")
+  assert "test_module" == module.get_name()
 
-    @staticmethod
-    def test_pymodule():
-        global open_param
-        global process_called
-        global close_called
-        global on_eos_called
-        open_param = ""
-        process_called = False
-        close_called = False
-        on_eos_called = False
-        params = {"pyclass_name" : "test.module_test.CustomModule", "param" : "value"}
-        assert cnstream_cpptest.cpptest_pymodule(params)
-        assert "value" == open_param
-        assert process_called
-        assert close_called
-        assert on_eos_called
+def test_pymodule():
+  global open_param
+  global process_called
+  global close_called
+  global on_eos_called
+  open_param = ""
+  process_called = False
+  close_called = False
+  on_eos_called = False
+  params = {"pyclass_name" : "test.module_test.CustomModule", "param" : "value"}
+  assert cnstream_cpptest.cpptest_pymodule(params)
+  assert "value" == open_param
+  assert process_called
+  assert close_called
+  assert on_eos_called

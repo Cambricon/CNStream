@@ -28,23 +28,26 @@
 #include <utility>
 #include <vector>
 
-#include "cnis/infer_server.h"
+#include "cnis/processor.h"
 #include "cnstream_frame.hpp"
 #include "cnstream_frame_va.hpp"
+#include "cnstream_preproc.hpp"
 #include "util/cnstream_queue.hpp"
 
 namespace cnstream {
 
 using CNInferObjectPtr = std::shared_ptr<CNInferObject>;
+using InferVideoPixelFmt = infer_server::NetworkInputFormat;
 
-class FeatureExtractor {
+class FeatureExtractor : public infer_server::IPreproc, public infer_server::IPostproc {
  public:
   explicit FeatureExtractor(std::function<void(const CNFrameInfoPtr, bool)> callback) : callback_(callback) {}
   FeatureExtractor(const std::shared_ptr<infer_server::ModelInfo>& model,
                    std::function<void(const CNFrameInfoPtr, bool)> callback, int device_id = 0);
   ~FeatureExtractor();
 
-  bool Init(int engine_num);
+  bool Init(InferVideoPixelFmt model_input_format, int engine_num, uint32_t batch_timeout = 3000,
+            int priority = 0);
   /*******************************************************
    * @brief inference and extract features of objects
    * @param
@@ -56,6 +59,14 @@ class FeatureExtractor {
   void WaitTaskDone(const std::string& stream_id);
 
  private:
+  int OnTensorParams(const infer_server::CnPreprocTensorParams* params) override;
+  int OnPreproc(cnedk::BufSurfWrapperPtr src, cnedk::BufSurfWrapperPtr dst,
+                const std::vector<CnedkTransformRect>& src_rects) override;
+  int OnPostproc(const std::vector<infer_server::InferData*>& data_vec,
+                 const infer_server::ModelIO& model_output,
+                 const infer_server::ModelInfo* model_info) override;
+
+ private:
   bool ExtractFeatureOnMlu(const CNFrameInfoPtr& info);
   bool ExtractFeatureOnCpu(const CNFrameInfoPtr& info);
   float CalcFeatureOfRow(const cv::Mat& image, int n);
@@ -64,8 +75,11 @@ class FeatureExtractor {
   std::unique_ptr<infer_server::InferServer> server_{nullptr};
   infer_server::Session_t session_{nullptr};
   std::function<void(const CNFrameInfoPtr, bool)> callback_{nullptr};
-  int device_id_ = -1;
+  int device_id_;
   bool is_initialized_ = false;
+  CnPreprocNetworkInfo info_;
+  std::vector<float> mean_{0.485, 0.456, 0.406};
+  std::vector<float> std_{0.229, 0.224, 0.225};
 };  // class FeatureExtractor
 
 }  // namespace cnstream

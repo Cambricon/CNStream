@@ -31,12 +31,25 @@
 #include <vector>
 
 std::vector<std::string> LoadLabels(const std::string &filename);
-bool CheckDir(const std::string &path, std::string *estr);
+bool CheckDir(const std::string &path, std::string *estr = nullptr);
 std::string GetExePath();
 void CheckExePath(const std::string &path);
+bool ExistsFile(const std::string& name);
 std::list<std::string> ReadFileList(const std::string &list);
 std::list<std::string> GetFileNameFromDir(const std::string &dir, const char *filter);
 size_t GetFileSize(const std::string &filename);
-void PrintPipelinePerformance(const std::string& prefix_str, const cnstream::PipelineProfile& profile);
+void PrintPipelinePerformance(const std::string &prefix_str, const cnstream::PipelineProfile &profile);
+int GetSensorNumber(const std::list<std::string> &urls);
+
+struct SensorParam {
+  int id = 0;  // optional
+  int type = 0;
+  int mipi_dev = 0;
+  int bus_id = 0;
+  int sns_clk_id = 0;
+};
+
+bool GetSensorParam(const std::list<std::string> &urls, std::vector<SensorParam>* sensor_param_vec);
+bool GetSensorId(const std::list<std::string> &urls, std::vector<int>* sensor_id_vec);
 
 #endif  // SAMPLES_COMMON_UTIL_HPP_

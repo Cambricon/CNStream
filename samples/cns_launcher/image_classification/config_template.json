@@ -4,16 +4,9 @@
     "enable_tracing" : false
   },
 
-  "source" : {
-    "class_name" : "cnstream::DataSource",
-    "next_modules" : ["subgraph:image_classification"],
-    "custom_params" : {
-      "reuse_cndec_buf" : "true",
-      "output_type" : "mlu",
-      "decoder_type" : "mlu",
-      "output_buf_number" : 16,
-      "device_id" : 0
-    }
+  "subgraph:decode" : {
+    "config_path" : "../configs/decode_config.json",
+    "next_modules" : ["subgraph:image_classification"]
   },
 
   "subgraph:image_classification" : {

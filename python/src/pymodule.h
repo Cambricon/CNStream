@@ -17,13 +17,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-
-#include <pybind11/pybind11.h>
-
-#include <cnstream_module.hpp>
-
 #include <memory>
 #include <string>
+
+#include "pybind11/pybind11.h"
+
+#include "cnstream_module.hpp"
 
 namespace cnstream {
 

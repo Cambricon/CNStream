@@ -1,6 +1,6 @@
 # Object Detection
 
- Detect objects in each frame of the input videos by Yolov3 network on MLU.
+ Detect objects in each frame of the input videos by Yolov3/Yolov5 network on MLU.
 
 ``${CNSTREAM_DIR}`` represents CNStream source directory.
 
@@ -16,9 +16,9 @@
 
 ## Supported Platform
 
-- MLU220
-- MLU270
+- MLU590
 - MLU370
+- CE3226
 
 ## Parameters
 
@@ -28,24 +28,23 @@
 
 - configuration: DataSource->Inferencer->Osd->Sinker
 
-  (Inferencer2 is used instead Inferencer on MLU370.)
-
-  (Sinker is chosen by users from Encode, RtspSink, Displayer and Kafka module.)
+  (Sinker is chosen by users from Encode and Vout module.)
 
 ## Models
 
-- For MLU220:
-  - [Yolov3](http://video.cambricon.com/models/MLU220/yolov3_b4c4_argb_mlu220.cambricon)
-    - preprocessing: EasyBang ResizeConvert operator
-    - postprocessing: [PostprocYolov3](../../common/postprocess/postprocess_yolov3.cpp)
-- For MLU270:
-  - [Yolov3](http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon)
-    - preprocessing: EasyBang ResizeConvert operator
-    - postprocessing: [PostprocYolov3](../../common/postprocess/postprocess_yolov3.cpp)
-- For MLU370:
-  - [Yolov3](http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model)
-    - preprocessing: CNCV (Cambricon CV library) operator(s)
-    - postprocessing: [VideoPostprocYolov3MM](../../common/postprocess/video_postprocess_yolov3_mm.cpp)
+- Yolov3
+  - model:
+    - For MLU590 platform, [model](http://video.cambricon.com/models/magicmind/v0.14.0/yolov3_v0.14.0_4b_rgb_uint8.magicmind)
+    - For MLU370 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/yolov3_v0.13.0_4b_rgb_uint8.magicmind)
+    - For CE3226 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/yolov3_v0.13.0_4b_rgb_uint8.magicmind)
+  - preprocessing: [PreprocYolov3](../../common/preprocess/preprocess_yolov3.cpp)
+  - postprocessing: [PostprocYolov3](../../common/postprocess/postprocess_yolov3.cpp)
+- Yolov5
+  - model:
+    - For MLU370 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/yolov5m_v0.13.0_4b_rgb_uint8.magicmind)
+    - For CE3226 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/yolov5m_v0.13.0_4b_rgb_uint8.magicmind)
+  - preprocessing: [PreprocYolov5](../../common/preprocess/preprocess_yolov5.cpp)
+  - postprocessing: [PostprocYolov5](../../common/postprocess/postprocess_yolov5.cpp)
 
 ## Sinker
 
@@ -57,25 +56,21 @@
 
 ``${CNSTREAM_DIR}/samples/cns_launcher/configs/sinker_configs/encode_video.json``
 
-**display**
-
-``${CNSTREAM_DIR}/samples/cns_launcher/configs/sinker_configs/display.json``
-
 **rtsp**
 
 ``${CNSTREAM_DIR}/samples/cns_launcher/configs/sinker_configs/rtsp.json``
 
-**kafka**
+**vout**
 
-``${CNSTREAM_DIR}/samples/cns_launcher/configs/sinker_configs/kafka.json``
+``${CNSTREAM_DIR}/samples/cns_launcher/configs/sinker_configs/vout.json``
 
 ## How to run
 
 ```sh
 cd ${CNSTREAM_DIR}/samples/cns_launcher/object_detection
-# Usages: ./run.sh [mlu220/mlu270/mlu370] [encode_jpeg/encode_video/display/rtsp/kafka]
-# For example, if the platform is mlu270 and the sinker is RtspSink
-./run.sh mlu270 rtsp
+# Usages: ./run.sh [mlu590/mlu370/ce3226] [encode_jpeg/encode_video/rtsp/vout] [yolov3/yolov5]
+# For example, if the platform is mlu370, we choose Yolov5 as the object detection network, and the sinker is rtsp
+./run.sh mlu370 rtsp yolov5
 ```
 
 
@@ -83,13 +78,13 @@ cd ${CNSTREAM_DIR}/samples/cns_launcher/object_detection
 After users run the script, the following steps will be done:
 
 - Setup environment.
-- Generate input file list files ``files.list_image`` , ``files.list_video`` and ``files.list_pose_image`` at ``${CNSTREAM_DIR}/samples`` , unless they are existed.
+- Generate input file list files ``files.list_image`` , ``files.list_video`` ``files.list_pose_image`` and ``files.list_sensor`` at ``${CNSTREAM_DIR}/samples`` , unless they are existed.
 - Download necessary Cambricon models and label files to ``${CNSTREAM_DIR}/data/models`` .
 - Replace multiple kinds of ``PLACE_HOLDER`` in ``config_template.json`` with parameters passed by user to generate file ``config.json`` , which is the configuration file used in the sample. The configuration could be seen as a graph. A graph may contains modules and subgraphs. Subgraphs are other json configuration files. Basically they are common and may not be used in only one sample, they are located at ``${CNSTREAM_DIR}/samples/cns_launcher/configs`` .
 - Run ``cns_launcher`` executable file which is at ``${CNSTREAM_DIR}/samples/bin`` with input list file, source frame rate, configuration file and so on.
 
 
+
 For more details, please refer to the [source code](../cns_launcher.cpp)
 
 Also users could modify the existing configuration files or create a new configuration file and pass it to ``cns_launcher`` through ``config_fname`` parameter. By doing this users do not need to recompile the project.
-

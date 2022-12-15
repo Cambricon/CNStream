@@ -30,7 +30,7 @@ sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../../../../pyt
 
 from cnstream import *
 
-preview_video_size = (1080, 720)
+preview_video_size = (1920, 1080)
 render_fps = 30
 timeouts = 100
 data_path = "./webui/static/data/"
@@ -75,7 +75,10 @@ class CNStreamService:
     self.print_perf_loop = perf.PrintPerformanceLoop(self.pipeline, perf_level=0)
     self.print_perf_loop.start()
 
-    file_handler = FileHandler(self.source, self.stream_id, input_file, 30)
+    param = FileSourceParam()
+    param.filename = input_file
+    param.framerate = render_fps
+    file_handler = create_source(self.source, self.stream_id, param)
     if self.source.add_source(file_handler) != 0:
       logger.error("Failed to add stream {}".format(input_file))
       return False
@@ -103,6 +106,11 @@ def getPreviewFrame():
   while True:
     if cnstream_service.is_running():
       start = time.time()
+      while True:
+        if (result_queue.empty()):
+          time.sleep(0.1)
+        else:
+          break
       frame_info = result_queue.get()
 
       if (True == frame_info.is_eos()):

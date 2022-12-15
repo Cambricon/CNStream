@@ -6157,12 +6157,26 @@ def extractFileNameAndLines(lines):
   del changedInfos[0]
   return changedInfos
 
+import os
+def get_filelist(dir):
+  newDir = dir
+  filelist = []
+  if os.path.isfile(dir):
+    filelist.append(dir)
+  elif os.path.isdir(dir):
+    for s in os.listdir(dir):
+      newDir=os.path.join(dir,s)
+      filelist.extend(get_filelist(newDir))
+  return filelist
+
+
 def main():
   child_ = subprocess.Popen("git rev-parse --show-toplevel", shell=True, stdout = subprocess.PIPE, stdin = subprocess.PIPE)
   pathInfo = child_.stdout.read()
   pathInfo = bytes.decode(pathInfo)
   pathsplit = pathInfo.split('\n')
   pathFrom = pathsplit[0]
+  isAll = False
   child1 = subprocess.Popen("git diff ", shell=True, stdout = subprocess.PIPE, stdin = subprocess.PIPE)
   if (len(sys.argv)>1):
     child1.kill()
@@ -6171,8 +6185,36 @@ def main():
     child1 = subprocess.Popen("git diff " + command, shell=True, stdout = subprocess.PIPE, stdin = subprocess.PIPE)
   if (len(sys.argv)>2):
     pathFrom = sys.argv[2]
+  if (len(sys.argv)>3) and sys.argv[3].upper() in ["ALL", "A"]:
+    isAll = True
+
+  if (isAll):
+    result_list = []
+    file_list = get_filelist(pathFrom)
+    include_conditions = [".cpp", ".c", ".hpp", ".h"]
+    exclude_conditions = ["tools/", "dist/", "3rdparty/", "backward/", "build/", "mps_internal/",
+                          "encode/src/rtsp/src/"]
+    for file_name in file_list:
+      not_use = False
+      for item in exclude_conditions:
+        if item in file_name:
+          not_use = True
+
+      for item in include_conditions:
+        if not_use == False and file_name.endswith(item):
+          result_list.append(file_name)
+        
+    _cpplint_state.ResetErrorCounts()
+    for filename in result_list:
+      ProcessFile(filename, _cpplint_state.verbose_level)
+      ResetManuellySuppressLinenum()
+    _cpplint_state.PrintErrorCounts()
+    sys.exit(_cpplint_state.error_count > 0)
+    exit(0)
+    
+    
   result = child1.stdout.read()
-  lines = result.decode('utf-8').split('\n')
+  lines = result.decode('utf-8', errors="ignore").split('\n')
   changedInfos = extractFileNameAndLines(lines)
   print(changedInfos)
 #-------------------------yuhag-----------------------------------

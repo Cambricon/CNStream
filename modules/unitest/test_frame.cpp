@@ -40,145 +40,45 @@ static const int width = 1280;
 static const int height = 720;
 static const int g_dev_id = 0;
 
-void InitFrame(CNDataFrame* frame, int image_type, void** ptr_cpu) {
-  frame->ctx.dev_type = DevContext::DevType::CPU;
-  frame->height = 1080;
-  frame->width = 1920;
-  frame->stride[0] = 1920;
-  if (image_type == 0) {  // RGB or BGR
-    ptr_cpu[0] = malloc(sizeof(uint8_t) * frame->height * frame->stride[0] * 3);
-  } else if (image_type == 1) {  // YUV and height % 2 == 0
-    frame->stride[1] = 1920;
-    ptr_cpu[0] = malloc(sizeof(uint8_t) * frame->height * frame->stride[0]);
-    ptr_cpu[1] = malloc(sizeof(uint8_t) * frame->height * frame->stride[1] * 0.5);
-  } else if (image_type == 2) {  // YUV and height % 2 != 0
-    frame->stride[1] = 1920;
-    frame->height -= 1;
-    ptr_cpu[0] = malloc(sizeof(uint8_t) * (frame->height) * frame->stride[0]);
-    ptr_cpu[1] = malloc(sizeof(uint8_t) * (frame->height) * frame->stride[1] * 0.5);
-  }
+void InitFrame(CNDataFrame* frame, CnedkBufSurfaceColorFormat fmt) {
+  CnedkBufSurfaceCreateParams create_params;
+  create_params.batch_size = 1;
+  memset(&create_params, 0, sizeof(create_params));
+  create_params.device_id = g_dev_id;
+  create_params.batch_size = 1;
+  create_params.width = 1920;
+  create_params.height = 1080;
+  create_params.color_format = fmt;
+  create_params.mem_type = CNEDK_BUF_MEM_DEVICE;
+
+  CnedkBufSurface* surf;
+
+  CnedkBufSurfaceCreate(&surf, &create_params);
+
+  frame->buf_surf = std::make_shared<cnedk::BufSurfaceWrapper>(surf, false);
 }
 
-void RunConvertImageTest(CNDataFrame* frame, int image_type, void** ptr_cpu) {
-  frame->dst_device_id = g_dev_id;
-  frame->CopyToSyncMem(ptr_cpu, true);
+void RunConvertImageTest(CNDataFrame* frame) {
   EXPECT_FALSE(frame->ImageBGR().empty());
-  free(ptr_cpu[0]);
-  if (image_type == 1 || image_type == 2) {  // YUV
-    free(ptr_cpu[1]);
-  }
-}
-
-TEST(CoreFrame, ConvertBGRImageToBGR) {
-  CNDataFrame frame;
-  void* ptr_cpu[1];
-  InitFrame(&frame, 0, ptr_cpu);
-  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
-  RunConvertImageTest(&frame, 0, ptr_cpu);
-}
-
-TEST(CoreFrame, ConvertRGBImageToBGR) {
-  CNDataFrame frame;
-  void* ptr_cpu[1];
-  InitFrame(&frame, 0, ptr_cpu);
-  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_RGB24;
-  RunConvertImageTest(&frame, 0, ptr_cpu);
 }
 
 TEST(CoreFrame, ConvertYUV12ImageToBGR) {
   CNDataFrame frame;
-  void* ptr_cpu[2];
-  InitFrame(&frame, 1, ptr_cpu);
-  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
-  RunConvertImageTest(&frame, 1, ptr_cpu);
+  InitFrame(&frame, CNEDK_BUF_COLOR_FORMAT_NV12);
+  RunConvertImageTest(&frame);
 }
 
 TEST(CoreFrame, ConvertYUV12ImageToBGR2) {  // height % 2 != 0
   CNDataFrame frame;
-  void* ptr_cpu[2];
-  InitFrame(&frame, 2, ptr_cpu);
-  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
-
-  RunConvertImageTest(&frame, 2, ptr_cpu);
+  InitFrame(&frame, CNEDK_BUF_COLOR_FORMAT_NV21);
+  RunConvertImageTest(&frame);
 }
 
-TEST(CoreFrame, ConvertYUV21ImageToBGR) {
+
+TEST(CoreFrameDeathTest, ConvertImageToBGRFailed) {
   CNDataFrame frame;
-  void* ptr_cpu[2];
-  InitFrame(&frame, 1, ptr_cpu);
-  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
-
-  RunConvertImageTest(&frame, 1, ptr_cpu);
-}
-
-TEST(CoreFrame, ConvertYUV21ImageToBGR2) {
-  CNDataFrame frame;
-  void* ptr_cpu[2];
-  InitFrame(&frame, 2, ptr_cpu);
-  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
-
-  RunConvertImageTest(&frame, 2, ptr_cpu);
-}
-
-TEST(CoreFrame, ConvertImageToBGRFailed) {
-  CNDataFrame frame;
-  void* ptr_cpu[2];
-  InitFrame(&frame, 1, ptr_cpu);
-  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
-  frame.dst_device_id = g_dev_id;
-  frame.CopyToSyncMem(ptr_cpu, true);
-  frame.fmt = CNDataFormat::CN_INVALID;
+  InitFrame(&frame, CNEDK_BUF_COLOR_FORMAT_BGR);
   EXPECT_DEATH(frame.ImageBGR(), ".*Unsupported pixel format.*");
-  free(ptr_cpu[0]);
-  free(ptr_cpu[1]);
-}
-
-TEST(CoreFrameDeathTest, CopyToSyncMemFailed) {
-  CNDataFrame frame;
-  void* ptr_cpu[2];
-  InitFrame(&frame, 0, ptr_cpu);
-  frame.fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
-  EXPECT_DEATH(frame.CopyToSyncMem(ptr_cpu, true), "");
-  frame.ctx.dev_type = DevContext::DevType::INVALID;
-  EXPECT_DEATH(frame.CopyToSyncMem(ptr_cpu, false), "");
-
-  free(ptr_cpu[0]);
-}
-
-TEST(CoreFrameDeathTest, CopyToSyncMemOnDevice) {
-  CNS_CNRT_CHECK(cnrtInit(0));
-  unsigned int dev_num = 0;
-  CNS_CNRT_CHECK(cnrtGetDeviceCount(&dev_num));
-
-  size_t nbytes = width * height * 3;
-  size_t boundary = 1 << 16;
-  nbytes = (nbytes + boundary - 1) & ~(boundary - 1);
-  std::shared_ptr<void> frame_data = cnMluMemAlloc(nbytes, g_dev_id);
-  // fake frame data
-  std::shared_ptr<CNDataFrame> frame = std::make_shared<CNDataFrame>();
-  if (frame == nullptr) {
-    std::cout << "frame create error\n";
-    return;
-  }
-  frame->frame_id = 0;
-  frame->width = width;
-  frame->height = height;
-  frame->mlu_data = frame_data;
-  frame->stride[0] = width;
-  frame->stride[1] = width;
-  frame->ctx.ddr_channel = 0;
-  frame->ctx.dev_id = g_dev_id;
-  frame->ctx.dev_type = DevContext::DevType::MLU;
-  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
-
-  EXPECT_DEATH(frame->CopyToSyncMemOnDevice(g_dev_id), "");
-  // check device num, if num > 1, do sync
-  // TODO(gaoyujia) : update driver and then uncomment the line below
-  // if (dev_num > 1) frame->CopyToSyncMemOnDevice(1);
-
-  EXPECT_DEATH(frame->CopyToSyncMemOnDevice(dev_num + 1), "");
-  frame->ctx.dev_type = DevContext::DevType::INVALID;
-  EXPECT_DEATH(frame->CopyToSyncMemOnDevice(1), "");
 }
 
 TEST(CoreFrame, InferObjAddAttribute) {

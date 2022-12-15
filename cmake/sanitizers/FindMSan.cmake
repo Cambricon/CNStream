@@ -23,7 +23,7 @@
 # SOFTWARE.
 
 set(FLAG_CANDIDATES
-    "-g -fsanitize=leak"
+    "-g -fsanitize=leak -fno-omit-frame-pointer"
 )
 
 

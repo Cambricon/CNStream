@@ -30,24 +30,28 @@
 #include "sys/stat.h"
 #include "sys/types.h"
 
-#include "device/mlu_context.h"
-#define PATH_MAX_SIZE 1024
+#include "cnedk_platform.h"
+#include "test_base.hpp"
 
-const std::vector<std::array<std::string, 3>> model_info = {
-    {"resnet50_b16c16_bgra_mlu270.cambricon", "/",
-     "http://video.cambricon.com/models/MLU270/resnet50_b16c16_bgra_mlu270.cambricon"},
-    {"feature_extract_for_tracker_b4c4_argb_mlu270.cambricon", "/",
-     "http://video.cambricon.com/models/MLU270/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon"},
-    {"yolov3_b4c4_argb_mlu270.cambricon", "/",
-     "http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon"}};
+#define PATH_MAX_SIZE 1024
 
 class TestEnvironment : public testing::Environment {
  public:
   virtual void SetUp() {
-    edk::MluContext mlu_ctx;
-    mlu_ctx.SetDeviceId(0);
-    mlu_ctx.BindDevice();
-    LOGI(MODULESUNITEST) << "Set Up global environment.";
+    CnedkSensorParams sensor_params[4];
+    memset(sensor_params, 0, sizeof(CnedkSensorParams) * 4);
+
+    CnedkPlatformConfig config;
+    memset(&config, 0, sizeof(config));
+
+
+    CnedkVoutParams vout_params;
+    memset(&vout_params, 0, sizeof(CnedkVoutParams));
+
+    CnedkPlatformInit(&config);
+  }
+  ~TestEnvironment() {
+    CnedkPlatformUninit();
   }
 };
 
@@ -79,7 +83,7 @@ std::vector<std::string> split_path(const std::string &s, char c) {
   return chip_path;
 }
 
-void GetModuleExists(const std::vector<std::array<std::string, 3>> model_info) {
+void GetModuleExists() {
   std::string get_execute_path = GetExecPath();
   // std::cout << "program execute path is :" << get_execute_path << std::endl;
   std::string model_path;
@@ -90,28 +94,29 @@ void GetModuleExists(const std::vector<std::array<std::string, 3>> model_info) {
   if (access(tmp.c_str(), F_OK) != 0) {
     mkdir(tmp.c_str(), 0777);
   }
-  tmp += "/MLU270";
-  if (access(tmp.c_str(), F_OK) != 0) {
-    mkdir(tmp.c_str(), 0777);
-  }
 
-  for (unsigned i = 0; i < model_info.size(); i++) {
-    std::string model_name = model_info[i][0];
-    std::string tmp_path = get_execute_path + "../../data/models";
-    model_path = tmp_path + model_info[i][1];
-    model_file_path = model_path + model_name;
-    // model file does not exists
+  std::string tmp_path = get_execute_path + "../../data/models";
+  std::vector<std::string> model_name = {
+      GetModelInfoStr("resnet50", "name"),
+      GetModelInfoStr("feature_extract", "name"),
+      GetModelInfoStr("yolov3", "name"),
+      GetLabelInfoStr("map_coco", "name"),
+      GetLabelInfoStr("synset_word", "name")};
+  std::vector<std::string> model_url = {
+      GetModelInfoStr("resnet50", "url"),
+      GetModelInfoStr("feature_extract", "url"),
+      GetModelInfoStr("yolov3", "url"),
+      GetLabelInfoStr("map_coco", "url"),
+      GetLabelInfoStr("synset_word", "url")};
+  model_path = tmp_path + "/";
+  for (unsigned i = 0; i < model_name.size(); i++) {
+    model_file_path = model_path + model_name[i];
+
     if (!check_file_existence(model_file_path)) {
-      // std::vector<std::string> chip_path = split_path(model_pair.find(model_name)->second.first);
-      std::vector<std::string> chip_path = split_path(model_info[i][1], '/');
-      for (unsigned i = 0; i < chip_path.size(); i++) {
-        tmp_path = tmp_path + "/" + chip_path[i];
-        if (access(tmp_path.c_str(), F_OK) != 0) {
-          mkdir(tmp_path.c_str(), 0777);
-        }
+      if (access(tmp_path.c_str(), F_OK) != 0) {
+        mkdir(tmp_path.c_str(), 0777);
       }
-      // std::string cmd ="wget -P " + model_path + " " + model_pair.find(model_name)->second.second;
-      std::string cmd = "wget -P " + model_path + " " + model_info[i][2];
+      std::string cmd = "wget -P " + model_path + " " + model_url[i];
       if (system(cmd.c_str()) != 0) {
         std::cerr << "shell execute failed" << std::endl;
       }
@@ -121,7 +126,7 @@ void GetModuleExists(const std::vector<std::array<std::string, 3>> model_info) {
 
 int main(int argc, char **argv) {
   // GetModuleExists(model_name, modulepath_pair);
-  GetModuleExists(model_info);
+  GetModuleExists();
   // fork process and write log to file in child proccess is not supported in log system
   // google::InitGoogleLogging(GetExecPath().c_str());
   testing::InitGoogleTest(&argc, argv);

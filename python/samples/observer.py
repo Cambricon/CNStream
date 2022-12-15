@@ -19,80 +19,91 @@
 # ==============================================================================
 
 import threading
+import signal
 
 import cnstream
+
+
+force_stop = False
+
+def sig_handler(signum, frame):
+    global force_stop
+    force_stop = True
+
+signal.signal(signal.SIGINT, sig_handler)
 
 g_source_lock = threading.Lock()
 
 # Define a message observer and register with the pipeline
 class CustomObserver(cnstream.StreamMsgObserver):
-    def __init__(self, pipeline, source):
-        cnstream.StreamMsgObserver.__init__(self)
-        self.pipeline = pipeline
-        self.source = source
+  def __init__(self, pipeline, source):
+    cnstream.StreamMsgObserver.__init__(self)
+    self.pipeline = pipeline
+    self.source = source
+    self.stop = False
+    self.wakener = threading.Condition()
+    self.stream_set = set()
+
+  def update(self, msg):
+    global g_source_lock
+    g_source_lock.acquire()
+    self.wakener.acquire()
+    if self.stop:
+      return
+    if msg.type == cnstream.StreamMsgType.EOS:
+      print("pipeline[{}] stream[{}] gets EOS".format(self.pipeline.get_name(), msg.stream_id))
+      if msg.stream_id in self.stream_set:
+        self.source.remove_source(msg.stream_id)
+        self.stream_set.remove(msg.stream_id)
+      if len(self.stream_set) == 0:
+        print("pipeline[{}] received all EOS".format(self.pipeline.get_name()))
+        self.stop = True
+    elif msg.type == cnstream.StreamMsgType.STREAM_ERR:
+      print("pipeline[{}] stream[{}] gets stream error".format(self.pipeline.get_name(), msg.stream_id))
+      if msg.stream_id in self.stream_set:
+        self.source.remove_source(msg.stream_id, True)
+        self.stream_set.remove(msg.stream_id)
+      if len(self.stream_set) == 0:
+        print("pipeline[{}] received all EOS".format(self.pipeline.get_name()))
+        self.stop = True
+    elif msg.type == cnstream.StreamMsgType.ERROR:
+      print("pipeline[{}] gets error".format(self.pipeline.get_name()))
+      self.source.remove_sources(True)
+      self.stream_set.clear()
+      self.stop = True
+    elif msg.type == cnstream.StreamMsgType.FRAME_ERR:
+      print("pipeline[{}] stream[{}] gets frame error".format(self.pipeline.get_name(), msg.stream_id))
+    else:
+      print("pipeline[{}] unknown message type".format(self.pipeline.get_name()))
+    if self.stop:
+      self.wakener.notify()
+
+    self.wakener.release()
+    g_source_lock.release()
+
+
+  def wait_for_stop(self):
+    global force_stop
+    self.wakener.acquire()
+    if len(self.stream_set) == 0:
+      self.stop = True
+    self.wakener.release()
+    while True:
+      if self.wakener.acquire():
+        self.wakener.wait_for(lambda: (self.stop or force_stop), 0.1)
+        if self.stop or force_stop:
+          break
+    self.wakener.release()
+    self.pipeline.stop()
+    print("pipeline[{}] stopped".format(self.pipeline.get_name()))
+
+
+  def increase_stream(self, stream_id):
+    self.wakener.acquire()
+    if stream_id in self.stream_set:
+      print("increase_stream() The stream is ongoing [{}]".format(stream_id))
+    else:
+      self.stream_set.add(stream_id)
+      if self.stop:
         self.stop = False
-        self.wakener = threading.Condition()
-        self.stream_set = set()
-
-    def update(self, msg):
-        global g_source_lock
-        g_source_lock.acquire()
-        self.wakener.acquire()
-        if self.stop:
-            return
-        if msg.type == cnstream.StreamMsgType.eos_msg:
-            print("pipeline[{}] stream[{}] gets EOS".format(self.pipeline.get_name(), msg.stream_id))
-            if msg.stream_id in self.stream_set:
-                self.source.remove_source(msg.stream_id)
-                self.stream_set.remove(msg.stream_id)
-            if len(self.stream_set) == 0:
-                print("pipeline[{}] received all EOS".format(self.pipeline.get_name()))
-                self.stop = True
-        elif msg.type == cnstream.StreamMsgType.stream_err_msg:
-            print("pipeline[{}] stream[{}] gets stream error".format(self.pipeline.get_name(), msg.stream_id))
-            if msg.stream_id in self.stream_set:
-                self.source.remove_source(msg.stream_id, True)
-                self.stream_set.remove(msg.stream_id)
-            if len(self.stream_set) == 0:
-                print("pipeline[{}] received all EOS".format(self.pipeline.get_name()))
-                self.stop = True
-        elif msg.type == cnstream.StreamMsgType.error_msg:
-            print("pipeline[{}] gets error".format(self.pipeline.get_name()))
-            self.source.remove_sources(True)
-            self.stream_set.clear()
-            self.stop = True
-        elif msg.type == cnstream.StreamMsgType.frame_err_msg:
-            print("pipeline[{}] stream[{}] gets frame error".format(self.pipeline.get_name(), msg.stream_id))
-        else:
-            print("pipeline[{}] unknown message type".format(self.pipeline.get_name()))
-        if self.stop:
-          self.wakener.notify()
-
-        self.wakener.release()
-        g_source_lock.release()
-
-
-    def wait_for_stop(self):
-        self.wakener.acquire()
-        if len(self.stream_set) == 0:
-            self.stop = True
-        self.wakener.release()
-        while True:
-            if self.wakener.acquire():
-                if not self.stop:
-                    self.wakener.wait()
-                else:
-                    self.pipeline.stop()
-                    break
-        self.wakener.release()
-
-
-    def increase_stream(self, stream_id):
-        self.wakener.acquire()
-        if stream_id in self.stream_set:
-            print("increase_stream() The stream is ongoing [{}]".format(stream_id))
-        else:
-            self.stream_set.add(stream_id)
-            if self.stop:
-                self.stop = False
-        self.wakener.release()
+    self.wakener.release()

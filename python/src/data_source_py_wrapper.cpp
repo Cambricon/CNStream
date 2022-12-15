@@ -17,13 +17,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "pybind11/numpy.h"
+#include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
 
 #include "cnstream_source.hpp"
 #include "data_source.hpp"
@@ -32,127 +32,124 @@ namespace py = pybind11;
 
 namespace cnstream {
 
-void DataHandlerWrapper(const py::module &m) {
-  py::class_<MaximumVideoResolution>(m, "MaximumVideoResolution")
+void DataHandlerWrapper(py::module &m) {  // NOLINT
+  py::class_<Resolution, std::shared_ptr<Resolution>>(m, "Resolution")
+      .def(py::init(
+          [](int width, int height) {
+            auto res = std::make_shared<Resolution>();
+            res->width = width;
+            res->height = height;
+            return res;
+          }), py::arg("width") = 0, py::arg("height") = 0)
+      .def_readwrite("width", &Resolution::width)
+      .def_readwrite("height", &Resolution::height);
+
+  py::class_<FileSourceParam, std::shared_ptr<FileSourceParam>>(m, "FileSourceParam")
       .def(py::init())
-      .def_readwrite("enable_variable_resolutions", &MaximumVideoResolution::enable_variable_resolutions)
-      .def_readwrite("maximum_width", &MaximumVideoResolution::maximum_width)
-      .def_readwrite("maximum_height", &MaximumVideoResolution::maximum_height);
-  py::enum_<OutputType>(m, "OutputType")
-      .value("output_cpu", OutputType::OUTPUT_CPU)
-      .value("output_mlu", OutputType::OUTPUT_MLU);
-  py::enum_<DecoderType>(m, "DecoderType")
-      .value("decoder_cpu", DecoderType::DECODER_CPU)
-      .value("decoder_mlu", DecoderType::DECODER_MLU);
-  py::class_<DataSourceParam>(m, "DataSourceParam")
+      .def_readwrite("filename", &FileSourceParam::filename)
+      .def_readwrite("framerate", &FileSourceParam::framerate)
+      .def_readwrite("loop", &FileSourceParam::loop)
+      .def_readwrite("max_res", &FileSourceParam::max_res)
+      .def_readwrite("only_key_frame", &FileSourceParam::only_key_frame)
+      .def_readwrite("out_res", &FileSourceParam::out_res);
+
+  py::class_<RtspSourceParam, std::shared_ptr<RtspSourceParam>>(m, "RtspSourceParam")
       .def(py::init())
-      .def_readwrite("output_type", &DataSourceParam::output_type_)
-      .def_readwrite("interval", &DataSourceParam::interval_)
-      .def_readwrite("decoder_type", &DataSourceParam::decoder_type_)
-      .def_readwrite("reuse_cndec_buf", &DataSourceParam::reuse_cndec_buf)
-      .def_readwrite("device_id", &DataSourceParam::device_id_)
-      .def_readwrite("input_buf_number", &DataSourceParam::input_buf_number_)
-      .def_readwrite("output_buf_number", &DataSourceParam::output_buf_number_)
-      .def_readwrite("apply_stride_align_for_scaler", &DataSourceParam::apply_stride_align_for_scaler_);
-  py::class_<DataSource, std::shared_ptr<DataSource>, SourceModule>(m, "DataSource")
-      .def(py::init<const std::string&>())
-      .def("open", &DataSource::Open)
-      .def("close", &DataSource::Close)
-      .def("check_param_set", &DataSource::CheckParamSet)
-      .def("get_source_param", &DataSource::GetSourceParam);
+      .def_readwrite("url_name", &RtspSourceParam::url_name)
+      .def_readwrite("max_res", &RtspSourceParam::max_res)
+      .def_readwrite("use_ffmpeg", &RtspSourceParam::use_ffmpeg)
+      .def_readwrite("reconnect", &RtspSourceParam::reconnect)
+      .def_readwrite("interval", &RtspSourceParam::interval)
+      .def_readwrite("only_key_frame", &RtspSourceParam::only_key_frame)
+      .def_readwrite("callback", &RtspSourceParam::callback)
+      .def_readwrite("out_res", &RtspSourceParam::out_res);
 
-  py::class_<FileHandler, std::shared_ptr<FileHandler>, SourceHandler>(m, "FileHandler")
-      .def(py::init([](DataSource *module, const std::string &stream_id,
-                       const std::string &filename, int framerate, bool loop,
-                       const MaximumVideoResolution& maximum_resolution) {
-        auto file_handler = FileHandler::Create(module, stream_id, filename, framerate,
-                                                loop, maximum_resolution);
-        return std::dynamic_pointer_cast<FileHandler>(file_handler);
-      }), py::arg("module"), py::arg("stream_id"), py::arg("filename"),
-      py::arg("framerate"), py::arg("loop") = false,
-      py::arg("maximum_resolution") = MaximumVideoResolution{})
-      .def("open", &FileHandler::Open)
-      .def("close", &FileHandler::Close);
+  py::enum_<ESMemSourceParam::DataType>(m, "ESMemSourceParamDataType")
+      .value("INVALID", ESMemSourceParam::DataType::INVALID)
+      .value("H264", ESMemSourceParam::DataType::H264)
+      .value("H265", ESMemSourceParam::DataType::H265);
 
-  py::class_<RtspHandler, std::shared_ptr<RtspHandler>, SourceHandler>(m, "RtspHandler")
-      .def(py::init([](DataSource *module, const std::string &stream_id,
-                       const std::string &url_name, bool use_ffmpeg,
-                       int reconnect, const MaximumVideoResolution& maximum_resolution) {
-        auto rtsp_handler = RtspHandler::Create(module, stream_id, url_name, use_ffmpeg,
-                                                reconnect, maximum_resolution);
-        return std::dynamic_pointer_cast<RtspHandler>(rtsp_handler);
-      }), py::arg("module"), py::arg("stream_id"), py::arg("url_name"),
-      py::arg("use_ffmpeg") = false, py::arg("reconnect") = 10,
-      py::arg("maximum_resolution") = MaximumVideoResolution{})
-      .def("open", &RtspHandler::Open)
-      .def("close", &RtspHandler::Close);
+  py::class_<ESMemSourceParam, std::shared_ptr<ESMemSourceParam>>(m, "ESMemSourceParam")
+      .def(py::init())
+      .def_readwrite("max_res", &ESMemSourceParam::max_res)
+      .def_readwrite("out_res", &ESMemSourceParam::out_res)
+      .def_readwrite("data_type", &ESMemSourceParam::data_type)
+      .def_readwrite("only_key_frame", &ESMemSourceParam::only_key_frame);
 
-  py::class_<RawImgMemHandler, std::shared_ptr<RawImgMemHandler>, SourceHandler>(m, "RawImgMemHandler")
-      .def(py::init([](DataSource *module, const std::string &stream_id) {
-        auto handler = RawImgMemHandler::Create(module, stream_id);
-        return std::dynamic_pointer_cast<RawImgMemHandler>(handler);
-      }))
-      .def("open", &RawImgMemHandler::Open)
-      .def("close", &RawImgMemHandler::Close)
-      .def("write", [](std::shared_ptr<RawImgMemHandler> handler, const py::array_t<uint8_t>& data_array,
-          const uint64_t pts, const CNDataFormat pixel_fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24) {
-        int width, height;
-        uint8_t* data;
-        size_t size;
-        {
-          py::gil_scoped_acquire gil;
-          py::buffer_info buf = data_array.request();
-          switch (pixel_fmt) {
-            case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
-            case CNDataFormat::CN_PIXEL_FORMAT_RGB24:
-              if (buf.ndim != 3) {
-                LOGE(SOURCE) << "The dimension number of RGB24 or BGR24 data should be 3, but got " << buf.ndim;
-                return -1;
-              }
-              break;
-            case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
-            case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
-              if (buf.ndim != 2) {
-                LOGE(SOURCE) << "The dimension number of YUV NV12 or NV12 data should be 2, but got" << buf.ndim;
-              }
-              break;
-            default:
-              LOGE(SOURCE) << "Only RGB24, BGR24, YUV NV12 and YUV NV21 pixel formats are supported.";
-              return -1;
-          }
-          if (buf.ndim == 3) {
-            width = buf.shape[1];
-            height = buf.shape[0];
-          } else {
-            width = buf.shape[1];
-            height = buf.shape[0] * 2 / 3;
-          }
-          data = reinterpret_cast<uint8_t*>(buf.ptr);
-          size = buf.size;
-        }
-        return handler->Write(data, size, pts, width, height, pixel_fmt);
-      }, py::arg().noconvert(), py::arg().noconvert(), py::arg("pixel_fmt") = CNDataFormat::CN_PIXEL_FORMAT_BGR24,
-      py::call_guard<py::gil_scoped_release>());
-  py::class_<ESJpegMemHandler, std::shared_ptr<ESJpegMemHandler>, SourceHandler>(m, "ESJpegMemHandler")
-      .def(py::init([](DataSource *module, const std::string &stream_id,
-                       int max_width, int max_height) {
-        auto handler = ESJpegMemHandler::Create(module, stream_id, max_width, max_height);
-        return std::dynamic_pointer_cast<ESJpegMemHandler>(handler);
-      }), py::arg("module"), py::arg("stream_id"),
-      py::arg("max_width") = 7680, py::arg("max_height") = 4320)
-      .def("open", &ESJpegMemHandler::Open)
-      .def("close", &ESJpegMemHandler::Close)
-      .def("write", [](std::shared_ptr<ESJpegMemHandler> handler, std::vector<unsigned char> data,
-          int size, uint64_t pts, bool is_eos) {
-        cnstream::ESPacket pkt;
+  py::class_<ESJpegMemSourceParam, std::shared_ptr<ESJpegMemSourceParam>>(m, "ESJpegMemSourceParam")
+      .def(py::init())
+      .def_readwrite("max_res", &ESJpegMemSourceParam::max_res)
+      .def_readwrite("out_res", &ESJpegMemSourceParam::out_res);
+
+  py::class_<ImageFrameSourceParam, std::shared_ptr<ImageFrameSourceParam>>(m, "ImageFrameSourceParam")
+      .def(py::init())
+      .def_readwrite("out_res", &ImageFrameSourceParam::out_res);
+
+  m.def("create_source", [](DataSource *module, const std::string &stream_id, const FileSourceParam &param) {
+      return CreateSource(module, stream_id, param);
+  });
+
+  m.def("create_source", [](DataSource *module, const std::string &stream_id, const RtspSourceParam &param) {
+      return CreateSource(module, stream_id, param);
+  });
+
+  m.def("create_source", [](DataSource *module, const std::string &stream_id, const SensorSourceParam &param) {
+      return CreateSource(module, stream_id, param);
+  });
+
+  m.def("create_source", [](DataSource *module, const std::string &stream_id, const ESMemSourceParam &param) {
+      return CreateSource(module, stream_id, param);
+  });
+
+  m.def("create_source", [](DataSource *module, const std::string &stream_id, const ESJpegMemSourceParam &param) {
+      return CreateSource(module, stream_id, param);
+  });
+
+  m.def("create_source", [](DataSource *module, const std::string &stream_id, const ImageFrameSourceParam &param) {
+      return CreateSource(module, stream_id, param);
+  });
+
+  m.def("write_mem_package",
+      [](std::shared_ptr<SourceHandler>handler, std::vector<unsigned char> data, int size,
+         uint64_t pts, bool is_eos) {
+        ESPacket pkt;
         pkt.data = data.data();
         pkt.size = size;
         pkt.pts = pts;
         if (is_eos) {
           pkt.flags = static_cast<size_t>(cnstream::ESPacket::FLAG::FLAG_EOS);
         }
-        return handler->Write(&pkt);
-      }, py::arg().noconvert(), py::arg().noconvert(), py::arg().noconvert(), py::arg("is_eos") = false);
+        return Write(handler, &pkt);
+      }, py::arg().noconvert(), py::arg().noconvert(), py::arg().noconvert(), py::arg().noconvert(),
+         py::arg("is_eos") = false);
+
+  m.def("write_jpeg_package",
+      [](std::shared_ptr<SourceHandler>handler, std::vector<unsigned char> data, int size,
+         uint64_t pts) {
+        ESJpegPacket pkt;
+        pkt.data = data.data();
+        pkt.size = size;
+        pkt.pts = pts;
+        return Write(handler, &pkt);
+      });
+
+  m.def("write_image_frame",
+      [](std::shared_ptr<SourceHandler>handler, cnedk::BufSurfWrapperPtr data) {
+        ImageFrame pkt;
+        pkt.data = data;
+        return Write(handler, &pkt);
+      });
+
+  py::class_<DataSourceParam>(m, "DataSourceParam")
+      .def(py::init())
+      .def_readwrite("interval", &DataSourceParam::interval)
+      .def_readwrite("device_id", &DataSourceParam::device_id)
+      .def_readwrite("bufpool_size", &DataSourceParam::bufpool_size);
+
+  py::class_<DataSource, std::shared_ptr<DataSource>, SourceModule>(m, "DataSource")
+      .def(py::init<const std::string&>())
+      .def("check_param_set", &DataSource::CheckParamSet)
+      .def("get_source_param", &DataSource::GetSourceParam);
 }
 
 }  // namespace cnstream

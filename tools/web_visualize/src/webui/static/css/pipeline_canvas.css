@@ -48,7 +48,7 @@
   min-width: 60px;
   text-align: center;
 }
-.pipeline-canvas .window.task.rtsp_sink {
+.pipeline-canvas .window.task.vencode {
   background-color: #ffb7dd;
   min-width: 60px;
   text-align: center;
@@ -58,21 +58,7 @@
   min-width: 60px;
   text-align: center;
 }
-.pipeline-canvas .window.task.encoder {
-  background-color: #9999ff;
-  min-width: 60px;
-  text-align: center;
-}
-.pipeline-canvas .window.task.inferencer2 {
-  background-color: #ccbbff;
-  min-width: 60px;
-  text-align: center;
-}
-.pipeline-canvas .window.task.displayer {
-  background-color: #deb887;
-  min-width: 60px;
-  text-align: center;
-}
+
 .pipeline-canvas .window.task .remove {
   display: none;
 }

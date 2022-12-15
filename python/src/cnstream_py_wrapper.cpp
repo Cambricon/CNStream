@@ -17,8 +17,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
 
 namespace py = pybind11;
 
@@ -26,24 +26,20 @@ namespace cnstream {
 
 void CNFrameInfoWrapper(const py::module&);
 void CNFrameVaWrapper(const py::module&);
-void CNSyncMemWrapper(const py::module&);
 void ModuleWrapper(py::module &);
 void SourceModuleWrapper(const py::module &);
 void ConfigWrapper(py::module &);
 void PipelineWrapper(py::module &);
-void DataHandlerWrapper(const py::module &);
+void DataHandlerWrapper(py::module &);
 void PerfPrintWrapper(py::module &);
 void PreprocWrapper(const py::module &);
 void PostprocWrapper(const py::module &m);
-void VideoPreprocWrapper(const py::module &);
-void VideoPostprocWrapper(const py::module &);
 void ProfileWrapper(const py::module &);
 
 PYBIND11_MODULE(cnstream, m) {
   m.doc() = "cnstream python api";
   CNFrameInfoWrapper(m);
   CNFrameVaWrapper(m);
-  CNSyncMemWrapper(m);
   ModuleWrapper(m);
   SourceModuleWrapper(m);
   ConfigWrapper(m);
@@ -52,8 +48,6 @@ PYBIND11_MODULE(cnstream, m) {
   PerfPrintWrapper(m);
   PreprocWrapper(m);
   PostprocWrapper(m);
-  VideoPreprocWrapper(m);
-  VideoPostprocWrapper(m);
   ProfileWrapper(m);
 }
 

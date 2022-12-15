@@ -73,17 +73,17 @@ KafkaContext *Kafka::GetContext(CNFrameInfoPtr data) {
 
 Kafka::~Kafka() { Close(); }
 
-bool Kafka::Open(cnstream::ModuleParamSet paramSet) {
-  if (paramSet.find("brokers") == paramSet.end() || paramSet.find("handler") == paramSet.end()) {
+bool Kafka::Open(cnstream::ModuleParamSet param_set) {
+  if (param_set.find("brokers") == param_set.end() || param_set.find("handler") == param_set.end()) {
     LOGE(Kafka) << "Miss parameters";
     return false;
   }
 
-  brokers_ = paramSet["brokers"];
-  handler_name_ = paramSet["handler"];
+  brokers_ = param_set["brokers"];
+  handler_name_ = param_set["handler"];
 
-  if (paramSet.find("topic") != paramSet.end()) {
-    topic_ = paramSet["topic"];
+  if (param_set.find("topic") != param_set.end()) {
+    topic_ = param_set["topic"];
   } else {
     topic_ = "CnstreamData";
   }

@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2022] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,373 +20,461 @@
 #include "encode.hpp"
 
 #include <algorithm>
-#include <fstream>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "video/video_sink/video_sink.hpp"
-#include "video/video_stream/video_stream.hpp"
+#include "cnedk_platform.h"
+
+#include "cnstream_frame_va.hpp"
+#include "cnstream_logging.hpp"
+
+#include "encode_handler_mlu.hpp"
+#include "encode_handler_ffmpeg.hpp"
+
+#include "fmp4_muxer/fmp4_muxer.hpp"
+#include "rtsp/rtsp_sink.hpp"
 
 namespace cnstream {
 
-struct EncoderContext {
-  std::unique_ptr<VideoStream> stream = nullptr;
-  std::unique_ptr<VideoSink> sink = nullptr;
-  std::unique_ptr<uint8_t[]> buffer = nullptr;
-  int buffer_size = 0;
-  std::ofstream file;
-  int64_t frame_count = 0;
+struct VEncImplParam {
+  VEncParam venc_param;
+  std::string stream_id = "";
+  uint32_t stream_index;
+  uint32_t stream_width;
+  uint32_t stream_height;
 };
 
-EncoderContext *Encode::GetContext(CNFrameInfoPtr data) {
-  auto params = param_helper_->GetParams();
-  std::lock_guard<std::mutex> lk(ctx_lock_);
-  EncoderContext *ctx = nullptr;
-  if (params.tile_cols > 1 || params.tile_rows > 1) {
-    if (!contexts_.empty()) {
-      ctx = contexts_.begin()->second;
-    } else {
-      ctx = CreateContext(data, "0");
+static inline int64_t CurrentTick() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+class VEncodeImplement {
+ public:
+  VEncodeImplement() {}
+  ~VEncodeImplement() {
+    if (handler_) {
+      handler_.reset();
+      handler_ = nullptr;
     }
-    if (!ctx) return nullptr;
-    if (!tile_streams_.count(data->stream_id)) {
-      if (tile_streams_.size() < static_cast<size_t>(params.tile_cols * params.tile_rows)) {
-        tile_streams_.emplace(data->stream_id);
+    if (mp4_muxer_) {
+      mp4_muxer_->Close();
+      mp4_muxer_.reset();
+      mp4_muxer_ = nullptr;
+    }
+    if (rtsp_sink_) {
+      rtsp_sink_->Close();
+      rtsp_sink_.reset();
+      rtsp_sink_ = nullptr;
+    }
+    if (file_.is_open()) {
+      file_.close();
+    }
+  }
+
+  int SetParams(VEncImplParam iparams) {
+    VEncParam& params = iparams.venc_param;
+
+    if (params.mlu_encoder) {
+      handler_.reset(new VencMluHandler(params.device_id));
+    } else {
+      handler_.reset(new VEncodeFFmpegHandler());
+    }
+
+    if (!params.file_name.empty()) {
+      auto dot = params.file_name.find_last_of(".");
+      if (dot == std::string::npos) {
+        LOGE(VENC) << "Process() unknown file type \"" << params.file_name << "\"";
       } else {
-        LOGE(Encode) << "GetContext() input video stream count over " <<
-            params.tile_cols << " * " << params.tile_rows << " = " << params.tile_cols * params.tile_rows;
-        return nullptr;
-      }
-    }
-  } else {
-    auto search = contexts_.find(data->stream_id);
-    if (search != contexts_.end()) {
-      ctx = search->second;
-    } else {
-      ctx = CreateContext(data, data->stream_id);
-    }
-  }
-  return ctx;
-}
+        std::string file_name = params.file_name.substr(0, dot);
+        std::string ext_name = params.file_name.substr(dot + 1);
 
+        std::string lower_file_name = file_name;
+        std::string lower_ext_name = ext_name;
+        std::transform(lower_file_name.begin(), lower_file_name.end(), lower_file_name.begin(), ::tolower);
+        std::transform(lower_ext_name.begin(), lower_ext_name.end(), lower_ext_name.begin(), ::tolower);
 
-EncoderContext *Encode::CreateContext(CNFrameInfoPtr data, const std::string &stream_id) {
-  if (data->IsEos()) {
-    LOGI(Encode) << "CreateContext() the data is an EOS frame";
-    return nullptr;
-  }
-  CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
-  bool with_container = false;
-  VideoCodecType codec_type = VideoCodecType::H264;
-  auto params = param_helper_->GetParams();
-  auto dot = params.file_name.find_last_of(".");
-  if (dot == std::string::npos) {
-    LOGE(Encode) << "CreateContext() unknown file type \"" << params.file_name << "\"";
-    return nullptr;
-  }
-  std::string file_name = params.file_name;
-  std::transform(file_name.begin(), file_name.end(), file_name.begin(), ::tolower);
-  if (file_name.find("hevc") != std::string::npos || file_name.find("h265") != std::string::npos) {
-    codec_type = VideoCodecType::H265;
-  }
-  std::string ext_name = file_name.substr(dot + 1);
-  file_name = file_name.substr(0, dot);
-  if (ext_name == "mp4" || ext_name == "mkv") {
-    with_container = true;
-  } else if (ext_name == "jpg" || ext_name == "jpeg") {
-    codec_type = VideoCodecType::JPEG;
-  }
-
-  EncoderContext *ctx = new EncoderContext;
-  VideoStream::Param sparam;
-  sparam.width = params.dst_width > 0 ? params.dst_width : frame->width;
-  sparam.height = params.dst_height > 0 ? params.dst_height : frame->height;
-  sparam.tile_cols = params.tile_cols;
-  sparam.tile_rows = params.tile_rows;
-  sparam.resample = params.resample;
-  sparam.frame_rate = params.frame_rate;
-  sparam.time_base = 90000;
-  sparam.bit_rate = params.bit_rate;
-  sparam.gop_size = params.gop_size;
-  VideoPixelFormat pixel_format =
-      frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 ? VideoPixelFormat::NV12 : VideoPixelFormat::NV21;
-  sparam.pixel_format = (params.mlu_encoder) ? pixel_format : VideoPixelFormat::I420;
-  sparam.codec_type = codec_type;
-  sparam.mlu_encoder = params.mlu_encoder;
-  sparam.device_id = params.device_id;
-  ctx->stream.reset(new VideoStream(sparam));
-  if (!ctx->stream) {
-    LOGE(Encode) << "CreateContext() create video stream failed";
-    delete ctx;
-    return nullptr;
-  }
-
-  if (with_container) {
-    VideoSink::Param kparam;
-    kparam.width = sparam.width;
-    kparam.height = sparam.height;
-    kparam.frame_rate = sparam.frame_rate;
-    kparam.time_base = sparam.time_base;
-    kparam.bit_rate = sparam.bit_rate;
-    kparam.gop_size = sparam.gop_size;
-    kparam.pixel_format = VideoPixelFormat::I420;
-    kparam.codec_type = sparam.codec_type;
-    kparam.file_name = params.file_name.substr(0, dot) + "_" + stream_id + "." + ext_name;
-    ctx->sink.reset(new VideoSink(kparam));
-    if (!ctx->sink) {
-      LOGE(Encode) << "CreateContext() create video sink failed";
-      delete ctx;
-      return nullptr;
-    }
-    if (VideoSink::SUCCESS != ctx->sink->Start()) {
-      LOGE(Encode) << "CreateContext() start video sink failed";
-      return nullptr;
-    }
-  }
-
-  auto event_callback = [=](EncoderContext *ctx, VideoStream::Event event) {
-    if (!ctx || !ctx->stream || (with_container && !ctx->sink)) return;
-    if (event == VideoStream::Event::EVENT_DATA) {
-      VideoPacket packet;
-      memset(&packet, 0, sizeof(VideoPacket));
-      int ret = ctx->stream->GetPacket(&packet);
-      if (ret < 0) {
-        LOGE(Encode) << "EventCallback() stream get packet size failed, ret=" << ret;
-        return;
-      }
-      if (ctx->buffer_size < ret) {
-        ctx->buffer.reset(new uint8_t[ret]);
-        ctx->buffer_size = ret;
-      }
-      packet.data = ctx->buffer.get();
-      packet.size = ctx->buffer_size;
-      ret = ctx->stream->GetPacket(&packet);
-      if (ret <= 0) {
-        LOGE(Encode) << "EventCallback() stream get packet failed, ret=" << ret;
-        return;
-      }
-      if (with_container) {
-        ret = ctx->sink->Write(&packet);
-        if (ret != VideoSink::SUCCESS) {
-          LOGE(Encode) << "EventCallback() sink write failed, ret=" << ret;
-          return;
+        if (lower_file_name.find("hevc") != std::string::npos || lower_file_name.find("h265") != std::string::npos ||
+            lower_ext_name.find("hevc") != std::string::npos || lower_ext_name.find("h265") != std::string::npos) {
+          handle_param_.codec_type = VideoCodecType::H265;
         }
-      } else if (codec_type == VideoCodecType::JPEG) {
-        auto jpeg_file_name = file_name + "_" + stream_id + "_" + std::to_string(ctx->frame_count++) + "." + ext_name;
-        std::ofstream file(jpeg_file_name);
-        if (!file.good()) {
-          LOGE(Encode) << "EventCallback() open " << jpeg_file_name << " failed";
-        } else {
-          file.write(reinterpret_cast<char *>(packet.data), packet.size);
+        if (lower_ext_name == "mp4") {
+          with_container_ = true;
+        } else if (lower_ext_name == "jpg" || lower_ext_name == "jpeg") {
+          jpeg_file_name_ = file_name + "_" + iparams.stream_id;
+          jpeg_ext_name_ = ext_name;
+          LOGI(VENC) << "jpeg_file_name " << jpeg_file_name_ << std::endl;
+          handle_param_.codec_type = VideoCodecType::JPEG;
         }
-        file.close();
-      } else {
-        if (!ctx->file.is_open()) {
-          auto video_file_name = file_name + "_" + stream_id + "." + ext_name;
-          ctx->file.open(video_file_name);
-          if (!ctx->file.good()) {
-            LOGE(Encode) << "EventCallback() open " << video_file_name << " failed";
-            return;
-          }
-        }
-        if (ctx->file.good()) ctx->file.write(reinterpret_cast<char *>(packet.data), packet.size);
+        file_name_ = file_name + "_" + iparams.stream_id + "." + ext_name;
       }
-    } else if (event == VideoStream::Event::EVENT_EOS) {
-      LOGI(Encode) << "EventCallback() EVENT_EOS";
-    } else if (event == VideoStream::Event::EVENT_ERROR) {
-      LOGE(Encode) << "EventCallback() EVENT_ERROR";
-      PostEvent(EventType::EVENT_ERROR, "encode receives error event");
     }
-  };
 
-  if (!ctx->stream->Open()) {
-    LOGE(Encode) << "CreateContext() open video stream failed. stream_id [" << stream_id << "]";
-    if (ctx->sink) ctx->sink->Stop();
-    delete ctx;
-    return nullptr;
-  }
-  ctx->stream->SetEventCallback(std::bind(event_callback, ctx, std::placeholders::_1));
+    handle_param_.width = params.dst_width;
+    handle_param_.height = params.dst_height;
+    handle_param_.frame_rate = params.frame_rate;
+    handle_param_.bitrate = params.bit_rate;
+    handle_param_.gop_size = params.gop_size;
 
-  contexts_[stream_id] = ctx;
-  return ctx;
-}
-
-Encode::Encode(const std::string &name) : Module(name) {
-  param_register_.SetModuleDesc("Encode is a module to encode videos or images.");
-  param_helper_.reset(new (std::nothrow) ModuleParamsHelper<EncodeParam>(name));
-  auto input_encoder_type_parser = [](const ModuleParamSet &param_set, const std::string &param_name,
-                                      const std::string &value, void *result) -> bool {
-    if (value == "cpu") {
-      *static_cast<bool *>(result) = false;
-    } else if (value == "mlu") {
-      *static_cast<bool *>(result) = true;
-    } else {
-      LOGE(Encode) << "[ModuleParamParser] [" << param_name << "]: " << value << " failed"
-                    << "\". Choose from \"mlu\", \"cpu\".";
-      return false;
+    if (handle_param_.width == 0) {
+      handle_param_.width = iparams.stream_width;
     }
-    return true;
-  };
-
-  static const std::vector<ModuleParamDesc> regist_param = {
-      {"device_id", "0", "Which MLU device will be used.", PARAM_OPTIONAL, OFFSET(EncodeParam, device_id),
-       ModuleParamParser<int>::Parser, "int"},
-      {"input_frame", "cpu", "Selection for the input frame. It should be 'mlu' or 'cpu." , PARAM_OPTIONAL,
-       OFFSET(EncodeParam, mlu_input_frame), input_encoder_type_parser, "bool"},
-      {"encoder_type", "cpu", "Selection for encoder type. It should be 'mlu' or 'cpu.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, mlu_encoder), input_encoder_type_parser, "bool"},
-      {"dst_width", "0", "Output video width. 0 means dst width is same with source", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, dst_width), ModuleParamParser<int>::Parser, "int"},
-      {"dst_height", "0", "Output video height. 0 means dst height is same with source", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, dst_height), ModuleParamParser<int>::Parser, "int"},
-      {"frame_rate", "30", "Frame rate of video encoding. Higher value means more fluent.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, frame_rate), ModuleParamParser<double>::Parser, "double"},
-      {"bit_rate", "4000000", "Bit rate of video encoding. Higher value means better video quality.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, bit_rate), ModuleParamParser<int>::Parser, "int"},
-      {"gop_size", "10", "Group of pictures. gop_size is the number of frames between two IDR frames.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, gop_size), ModuleParamParser<int>::Parser, "int"},
-      {"view_cols", "1", "Grids in horizontally of video tiling, only support cpu input.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, tile_cols), ModuleParamParser<int>::Parser, "int"},
-      {"view_rows", "1", "Grids in vertically of video tiling, only support cpu input.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, tile_rows), ModuleParamParser<int>::Parser, "int"},
-      {"resample", "false", "Resample frame with canvas, only support cpu input.", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, resample), ModuleParamParser<bool>::Parser, "bool"},
-      {"file_name", "output/output.mp4",
-       "File name and path to store, the final name will be added with stream id or frame count", PARAM_OPTIONAL,
-       OFFSET(EncodeParam, file_name), ModuleParamParser<std::string>::Parser, "string"},
-      {"codec_type", "", "Replaced by file_name's extension name.", PARAM_DEPRECATED},
-      {"output_dir", "", "Replaced by file_name's path.", PARAM_DEPRECATED},
-      {"use_ffmpeg", "", "Always is FFMpeg if doing CPU encoding.", PARAM_DEPRECATED},
-      {"kbit_rate", "", "Replaced by bit_rate", PARAM_DEPRECATED},
-      {"preproc_type", "", "selected automatically.", PARAM_DEPRECATED}};
-
-  param_helper_->Register(regist_param, &param_register_);
-}
-
-Encode::~Encode() {
-  Close();
-}
-
-bool Encode::Open(ModuleParamSet paramSet) {
-  if (!param_helper_->ParseParams(paramSet)) {
-    LOGE(Encode) << "[" << GetName() << "] parse parameters failed.";
-    return false;
-  }
-  auto params = param_helper_->GetParams();
-  if (params.mlu_encoder && params.device_id < 0) {
-    LOGE(Encode) << "Open() device_id is required to be greater than 0, if mlu encoding is used";
-    return false;
-  }
-  if (params.mlu_input_frame && (params.tile_cols > 1 || params.tile_rows > 1)) {
-    LOGE(Encode) << "Open() mlu input tiling is not supported";
-    return false;
-  }
-  return true;
-}
-
-void Encode::Close() {
-  if (contexts_.empty()) {
-    return;
-  }
-  for (auto &it : contexts_) {
-    EncoderContext *ctx = it.second;
-    if (ctx) {
-      if (ctx->stream) ctx->stream->Close();
-      if (ctx->sink) ctx->sink->Stop();
-      ctx->buffer_size = 0;
-      ctx->file.close();
-      delete ctx;
+    if (handle_param_.height == 0) {
+      handle_param_.height = iparams.stream_height;
     }
-  }
-  contexts_.clear();
-}
 
-int Encode::Process(CNFrameInfoPtr data) {
-  if (nullptr == data) {
-    return -1;
-  }
-  if (data->IsRemoved()) {
+    if (with_container_ && !mp4_muxer_ && params.mlu_encoder) {  // fix me ffmpeg encode not suport mp4
+      mp4_muxer_.reset(new Mp4Muxer());
+      if (mp4_muxer_) {
+        int ret = mp4_muxer_->Open(file_name_, handle_param_.width, handle_param_.height, handle_param_.codec_type);
+        if (ret < 0) {
+          mp4_muxer_.reset();
+          mp4_muxer_ = nullptr;
+          LOGE(VENC) << "failed to create mp4 muxer, stream_id = " << iparams.stream_id;
+        }
+      }
+    }
+
+    if (params.rtsp_port > 0) {
+      rtsp_sink_.reset(new RtspSink());
+      if (rtsp_sink_) {
+        int ret = rtsp_sink_->Open(params.rtsp_port + iparams.stream_index);
+        if (ret < 0) {
+          rtsp_sink_.reset();
+          rtsp_sink_ = nullptr;
+          LOGE(VENC) << "failed to create rtsp server, stream_id = " << iparams.stream_id;
+        }
+      }
+    }
+
+    handle_param_.on_framebits = std::bind(&VEncodeImplement::OnFrameBits, this, iparams, std::placeholders::_1);
+
+    handler_->SetParams(handle_param_);
     return 0;
   }
 
-  EncoderContext *ctx = GetContext(data);
-  if (!ctx) {
-    LOGE(Encode) << "Get Encoder Context Failed.";
+  void SetFrameRate(uint32_t frame_rate) {
+    if (frame_rate) frame_rate_ = frame_rate;
+  }
+
+  int OnFrameBits(VEncImplParam iparams, CnedkVEncFrameBits *framebits) {
+    framebits->pts = static_cast<uint64_t>(frame_count_++ * 1000 / frame_rate_);
+    if (mp4_muxer_) {
+      mp4_muxer_->Write(framebits);
+    } else if (!file_name_.empty()) {
+      if (handle_param_.codec_type == VideoCodecType::JPEG) {
+        std::string jpeg_file_name =
+            jpeg_file_name_ + "_" + std::to_string(frame_count_) + "." + jpeg_ext_name_;
+        std::ofstream file(jpeg_file_name);
+        if (!file.good()) {
+          LOGE(VENC) << "OnFrameBits() open " << jpeg_file_name << " failed";
+        } else {
+          file.write(reinterpret_cast<char *>(framebits->bits), framebits->len);
+        }
+        file.close();
+      } else {
+        if (!file_.is_open()) {
+          file_.open(file_name_);
+          if (!file_.good()) {
+            LOGE(VENC) << "EventCallback() open " << file_name_ << " failed";
+            return -1;
+          }
+        }
+        if (file_.good()) file_.write(reinterpret_cast<char *>(framebits->bits), framebits->len);
+      }
+    }
+    if (rtsp_sink_) rtsp_sink_->SendFrame(framebits);
+    return 0;
+  }
+
+  int SendFrame(std::shared_ptr<CNFrameInfo> data) {
+    return handler_->SendFrame(data);
+  }
+
+  int SendFrame(Scaler::Buffer* data) {
+    return handler_->SendFrame(data);
+  }
+
+  void Close() {
+    if (handler_) {
+      handler_.reset(nullptr);
+    }
+    if (mp4_muxer_) {
+      mp4_muxer_->Close();
+      mp4_muxer_.reset(nullptr);
+    }
+    if (rtsp_sink_) {
+      rtsp_sink_->Close();
+      rtsp_sink_.reset(nullptr);
+    }
+  }
+
+ private:
+  std::unique_ptr<VencHandler> handler_ = nullptr;
+  std::unique_ptr<Mp4Muxer> mp4_muxer_ = nullptr;
+  std::unique_ptr<RtspSink> rtsp_sink_ = nullptr;
+
+  VEncHandlerParam handle_param_;
+
+  std::string file_name_ = "";
+  uint32_t stream_index_;
+
+  bool with_container_ = false;
+  std::string jpeg_file_name_ = "";
+  std::string jpeg_ext_name_ = "";
+
+  uint64_t frame_count_ = 0;
+  std::ofstream file_;
+  uint32_t frame_rate_ = 25;
+};
+
+
+class FrameRateControl {
+ public:
+  explicit FrameRateControl(uint32_t target_fps) : target_fps_(target_fps) {}
+  ~FrameRateControl() = default;
+  void UpdateFrame() {
+    uint64_t cur_ms = CurrentTick();
+    if (frame_count_  == 0) {
+      priv_ms_ = cur_ms;
+    }
+    frame_count_++;
+    if ((cur_ms - priv_ms_) > 1000) {  // every 1s update framerate
+      input_fps_ = frame_count_ * 1000 / (cur_ms - priv_ms_);
+      priv_ms_ = cur_ms;
+      frame_count_ = 0;
+    }
+  }
+
+  uint32_t GetInputFrameRate() {
+    return input_fps_;
+  }
+
+  bool IsKeyFrame() {
+    bool ret = false;
+    key_frame_ += target_fps_;
+    if (key_frame_ >= input_fps_) {
+      key_frame_ -= input_fps_;
+      ret = true;
+    }
+    return ret;
+  }
+
+ private:
+  uint32_t  input_fps_ = 30;
+  uint32_t  target_fps_;
+  uint32_t  key_frame_ = 0;
+  uint32_t  frame_count_ = 0;
+  uint64_t  priv_ms_;
+};
+
+VEncode::VEncode(const std::string &name) : ModuleEx(name) {
+  param_register_.SetModuleDesc("VEncode is a module to encode videos or images."
+                                 "And save to file or deliver by RTSP protocol.");
+  param_helper_.reset(new (std::nothrow) ModuleParamsHelper<VEncParam>(name));
+
+  static const std::vector<ModuleParamDesc> register_param = {
+      {"device_id", "0", "Which device will be used.", PARAM_OPTIONAL, OFFSET(VEncParam, device_id),
+        ModuleParamParser<int>::Parser, "int"},
+      {"hw_accel", "true", "use hardware to encode", PARAM_OPTIONAL,
+        OFFSET(VEncParam, mlu_encoder), ModuleParamParser<bool>::Parser, "bool"},
+      {"dst_width", "0", "Output video width. 0 means dst width is same with source", PARAM_OPTIONAL,
+        OFFSET(VEncParam, dst_width), ModuleParamParser<int>::Parser, "int"},
+      {"dst_height", "0", "Output video height. 0 means dst height is same with source", PARAM_OPTIONAL,
+        OFFSET(VEncParam, dst_height), ModuleParamParser<int>::Parser, "int"},
+      {"view_cols", "1", "Grids in horizontally of video tiling, only support cpu input.", PARAM_OPTIONAL,
+       OFFSET(VEncParam, tile_cols), ModuleParamParser<int>::Parser, "int"},
+      {"view_rows", "1", "Grids in vertically of video tiling, only support cpu input.", PARAM_OPTIONAL,
+       OFFSET(VEncParam, tile_rows), ModuleParamParser<int>::Parser, "int"},
+      {"resample", "false", "Resample. If set true, some frame will be dropped.", PARAM_OPTIONAL,
+       OFFSET(VEncParam, resample), ModuleParamParser<bool>::Parser, "bool"},
+      {"frame_rate", "25", "Frame rate of video encoding. Higher value means more fluent.", PARAM_OPTIONAL,
+        OFFSET(VEncParam, frame_rate), ModuleParamParser<double>::Parser, "double"},
+      {"bit_rate", "4000000", "Bit rate of video encoding. Higher value means better video quality.", PARAM_OPTIONAL,
+        OFFSET(VEncParam, bit_rate), ModuleParamParser<int>::Parser, "int"},
+      {"gop_size", "10", "Group of pictures. gop_size is the number of frames between two IDR frames.", PARAM_OPTIONAL,
+        OFFSET(VEncParam, gop_size), ModuleParamParser<int>::Parser, "int"},
+      {"file_name", "",
+        "File name and path to store, the final name will be added with stream id or frame count", PARAM_OPTIONAL,
+        OFFSET(VEncParam, file_name), ModuleParamParser<std::string>::Parser, "string"},
+      {"rtsp_port", "-1", "RTSP port. If this value is greater than 0, stream will be delivered by RTSP protocol.",
+        PARAM_OPTIONAL, OFFSET(VEncParam, rtsp_port),
+        ModuleParamParser<int>::Parser, "int"}
+  };
+  param_helper_->Register(register_param, &param_register_);
+}
+
+VEncode::~VEncode() {}
+
+bool VEncode::Open(ModuleParamSet param_set) {
+  if (false == CheckParamSet(param_set)) {
+    return false;
+  }
+
+  auto params = param_helper_->GetParams();
+  if (params.tile_rows > 1 || params.tile_cols > 1) {
+    tiler_enable_ = true;
+  }
+
+  return true;
+}
+
+
+bool VEncode::CheckParamSet(const ModuleParamSet& param_set) const {
+  if (!param_helper_->ParseParams(param_set)) {
+    LOGE(VENC) << "[" << GetName() << "] parse parameters failed.";
+    return false;
+  }
+
+  auto params = param_helper_->GetParams();
+
+  if (params.dst_height % 2 != 0 || params.dst_width % 2 != 0) {
+    LOGE(VENC) << "[" << GetName() << "] dst width and height must be even, which dst_width: " << params.dst_width
+               << ", dst_height: " << params.dst_height;
+    return false;
+  }
+
+  if (params.mlu_encoder) {
+    uint32_t dev_cnt = 0;
+    if (cnrtGetDeviceCount(&dev_cnt) != cnrtSuccess || params.device_id < 0 ||
+        static_cast<uint32_t>(params.device_id) >= dev_cnt) {
+      LOGE(VENC) << "[" << GetName() << "] hardware encoding, device " << params.device_id << " does not exist.";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void VEncode::Close() {
+  if (tiler_) {
+    Scaler::Buffer* encode_buffer = nullptr;
+    ivenc_[tiler_key_name_]->SendFrame(encode_buffer);
+    ivenc_[tiler_key_name_]->Close();
+    ivenc_.clear();
+    tiler_.reset();
+    tiler_ = nullptr;
+  }
+
+  for (auto iter = ivenc_.begin(); iter != ivenc_.end(); ++iter) {
+    iter->second->Close();
+    iter->second.reset();
+    iter->second = nullptr;
+  }
+}
+
+int VEncode::Process(std::shared_ptr<CNFrameInfo> data) {
+  if (!data) {
+    LOGE(VENC) << "Process input data is nulltpr!";
     return -1;
   }
 
-  auto params = param_helper_->GetParams();
-  CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
-
-  if (!params.mlu_input_frame) {
-    if (!ctx->stream->Update(frame->ImageBGR(), VideoStream::ColorFormat::BGR, data->timestamp, data->stream_id)) {
-      LOGE(Encode) << "Process() video stream update failed.";
-    }
-  } else {
-#ifndef HAVE_CNCV
-    if (params.mlu_input_frame && params.mlu_encoder) {
-      LOGE(Encode) << "Process() Encode mlu input frame on mlu is not supported. Please install CNCV.";
-      return -1;
-    }
-#endif
-    if (frame->dst_device_id != params.device_id) {
-      LOGE(Encode) << "Process() Encode mlu input frame on different device is not supported";
-      return -1;
-    }
-    VideoStream::Buffer buffer;
-    buffer.width = frame->width;
-    buffer.height = frame->height;
-    buffer.data[0] = static_cast<uint8_t *>(const_cast<void *>(frame->data[0]->GetMluData()));
-    buffer.data[1] = static_cast<uint8_t *>(const_cast<void *>(frame->data[1]->GetMluData()));
-    buffer.stride[0] = frame->stride[0];
-    buffer.stride[1] = frame->stride[1];
-    buffer.color = frame->fmt == CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12 ? VideoStream::ColorFormat::YUV_NV12
-                                                                           : VideoStream::ColorFormat::YUV_NV21;
-    buffer.mlu_device_id = frame->dst_device_id;
-    if (!ctx->stream->Update(&buffer, data->timestamp, data->stream_id)) {
-      LOGE(Encode) << "Process() video stream update failed";
-    }
+  if (!data->IsEos() && data->IsRemoved()) {
+    return 0;
   }
 
+  if (!data->IsEos()) {
+    CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
+    if (!frame->buf_surf) {
+      TransmitData(data);
+      LOGE(VENC) << "surface is nulltpr!";
+      return -1;
+    }
+    auto params = param_helper_->GetParams();
+
+    if (params.resample) {
+      std::unique_lock<std::mutex> frame_rate_guard(frame_rate_mutex_);
+      if (!frame_rate_ctx_.count(data->stream_id)) {
+        frame_rate_ctx_[data->stream_id] = std::make_shared<FrameRateControl>(params.frame_rate);
+      }
+      frame_rate_ctx_[data->stream_id]->UpdateFrame();
+      bool key_frame = frame_rate_ctx_[data->stream_id]->IsKeyFrame();
+      frame_rate_guard.unlock();
+      if (!key_frame) {
+        TransmitData(data);
+        return 0;   // resample
+      }
+    }
+
+    std::unique_lock<std::mutex> guard(venc_mutex_);
+    if (tiler_enable_ && !ivenc_.count(tiler_key_name_)) {   // create tiler context
+      ivenc_[tiler_key_name_] = std::make_shared<VEncodeImplement>();
+      uint32_t width = params.dst_width;
+      uint32_t height = params.dst_height;
+
+      if (width == 0) {
+        width = frame->buf_surf->GetWidth();
+      }
+
+      if (height == 0) {
+        height = frame->buf_surf->GetHeight();
+      }
+
+      tiler_.reset(new (std::nothrow) Tiler(params.tile_cols, params.tile_rows,
+                                            Scaler::ColorFormat::YUV_NV12, width, height));
+
+      VEncImplParam iparam;
+      iparam.venc_param = params;
+      iparam.stream_id = data->stream_id;
+      iparam.stream_index = 0;
+
+      iparam.stream_height = frame->buf_surf->GetHeight();
+      iparam.stream_width = frame->buf_surf->GetWidth();
+      ivenc_[tiler_key_name_]->SetParams(iparam);
+
+    } else if (!tiler_enable_ && !ivenc_.count(data->stream_id)) {  // create normal context
+      VEncImplParam iparam;
+      ivenc_[data->stream_id] = std::make_shared<VEncodeImplement>();
+      iparam.venc_param = params;
+      iparam.stream_id = data->stream_id;
+      iparam.stream_index = data->GetStreamIndex();
+
+      iparam.stream_height = frame->buf_surf->GetHeight();
+      iparam.stream_width = frame->buf_surf->GetWidth();
+      ivenc_[data->stream_id]->SetParams(iparam);
+    }
+    guard.unlock();
+
+    if (tiler_) {   // enable tiler
+      std::unique_lock<std::mutex> lk(venc_mutex_);
+      CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
+      Scaler::Buffer buffer;
+      Scaler::MatToBuffer(frame->ImageBGR(), Scaler::ColorFormat::BGR, &buffer);
+
+      tiler_->Blit(&buffer, data->GetStreamIndex());
+      static int64_t last_tick = 0;
+      int64_t tick = CurrentTick();
+      if ((tick - last_tick) >= (1000 / params.frame_rate)) {
+        Scaler::Buffer* encode_buffer = tiler_->GetCanvas();
+        ivenc_[tiler_key_name_]->SetFrameRate(params.frame_rate);
+        ivenc_[tiler_key_name_]->SendFrame(encode_buffer);
+        tiler_->ReleaseCanvas();
+        last_tick = tick;
+      }
+      lk.unlock();
+    } else {
+      ivenc_[data->stream_id]->SetFrameRate(params.frame_rate);
+      ivenc_[data->stream_id]->SendFrame(data);
+    }
+  } else {
+    std::unique_lock<std::mutex> frame_rate_guard(frame_rate_mutex_);
+    auto frame_rate_iter = frame_rate_ctx_.find(data->stream_id);
+    if (frame_rate_iter != frame_rate_ctx_.end()) {
+      frame_rate_ctx_.erase(data->stream_id);
+    }
+    frame_rate_guard.unlock();
+
+    auto iter = ivenc_.find(data->stream_id);
+    if (iter != ivenc_.end()) {
+      ivenc_[data->stream_id]->SendFrame(data);
+      ivenc_[data->stream_id]->Close();
+      ivenc_.erase(data->stream_id);
+    }
+  }
+  TransmitData(data);  // data forwarded by this module
   return 0;
-}
-
-void Encode::OnEos(const std::string &stream_id) {
-  auto params = param_helper_->GetParams();
-  std::lock_guard<std::mutex> lk(ctx_lock_);
-  if (params.tile_cols > 1 || params.tile_rows > 1) {
-    if (contexts_.empty()) return;
-    EncoderContext *ctx = contexts_.begin()->second;
-    // clear last grid
-    if (ctx->stream) ctx->stream->Clear(stream_id);
-    tile_streams_.erase(stream_id);
-    if (tile_streams_.empty()) {
-      LOGI(Encode) << "OnEos() all streams stopped";
-      EncoderContext *ctx = contexts_.begin()->second;
-      if (ctx) {
-        if (ctx->stream) ctx->stream->Close();
-        if (ctx->sink) ctx->sink->Stop();
-        ctx->buffer_size = 0;
-        ctx->file.close();
-        delete ctx;
-      }
-      contexts_.clear();
-    }
-  } else {
-    auto search = contexts_.find(stream_id);
-    if (search != contexts_.end()) {
-      EncoderContext *ctx = search->second;
-      if (ctx) {
-        if (ctx->stream) ctx->stream->Close(!IsStreamRemoved(stream_id));
-        if (ctx->sink) ctx->sink->Stop();
-        ctx->buffer_size = 0;
-        ctx->file.close();
-        delete ctx;
-      }
-      contexts_.erase(stream_id);
-    }
-  }
 }
 
 }  // namespace cnstream

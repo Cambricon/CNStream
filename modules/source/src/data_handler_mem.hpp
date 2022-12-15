@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (C) [2019] by Cambricon, Inc. All rights reserved
+ * Copyright (C) [2022] by Cambricon, Inc. All rights reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,108 +21,77 @@
 #ifndef MODULES_SOURCE_HANDLER_MEM_HPP_
 #define MODULES_SOURCE_HANDLER_MEM_HPP_
 
-#include <memory>
-#include <sstream>
 #include <string>
-#include <thread>
-#include <mutex>
 
-#include "cnstream_logging.hpp"
 #include "data_handler_util.hpp"
 #include "data_source.hpp"
-#include "util/video_decoder.hpp"
-#include "util/video_parser.hpp"
 
 namespace cnstream {
 
-class ESMemHandlerImpl : public IParserResult, public IDecodeResult, public SourceRender {
+class ESMemHandlerImpl;
+/*!
+ * @class ESMemHandler
+ *
+ * @brief ESMemHandler is a class of source handler for H264/H265 bitstreams in memory.
+ */
+class ESMemHandler : public SourceHandler {
  public:
-  explicit ESMemHandlerImpl(DataSource *module, const MaximumVideoResolution& maximum_resolution,
-    ESMemHandler *handler)  // NOLINT
-    : SourceRender(handler), module_(module), maximum_resolution_(maximum_resolution),
-      stream_id_(handler->GetStreamId()) { }
-
-  ~ESMemHandlerImpl() {}
-
-  bool Open();
-  void Close();
-  void Stop();
-
-  int SetDataType(ESMemHandler::DataType data_type) {
-    data_type_ = data_type;
-    int ret = -1;
-    if (data_type_ == ESMemHandler::DataType::H264) {
-      ret = parser_.Open(AV_CODEC_ID_H264, this, nullptr, 0, param_.only_key_frame_);
-    } else if (data_type_ == ESMemHandler::DataType::H265) {
-      ret = parser_.Open(AV_CODEC_ID_HEVC, this, nullptr, 0, param_.only_key_frame_);
-    } else {
-      LOGF(SOURCE) << "Unsupported data type " << static_cast<int>(data_type);
-      ret = -1;
-    }
-    return ret;
-  }
-
-  int Write(ESPacket *pkt);
-  int Write(unsigned char *data, int len);
-  int WriteEos();
-
-  // IParserResult methods
-  void OnParserInfo(VideoInfo *info) override;
-  void OnParserFrame(VideoEsFrame *frame) override;
-
-  // IDecodeResult methods
-  void OnDecodeError(DecodeErrorCode error_code) override;
-  void OnDecodeFrame(DecodeFrame *frame) override;
-  void OnDecodeEos() override;
-
- private:
-  DataSource *module_ = nullptr;
-  MaximumVideoResolution maximum_resolution_;
-  std::string stream_id_;
-  DataSourceParam param_;
-  ESMemHandler::DataType data_type_ = ESMemHandler::DataType::INVALID;
-  bool first_frame_ = true;
-
-  std::mutex info_mutex_;
-  VideoInfo info_{};
-  std::atomic<bool> info_set_{false};
-
-#ifdef UNIT_TEST
- public:  // NOLINT
-#else
- private:  // NOLINT
-#endif
-  bool PrepareResources();
-  void ClearResources();
-  bool Process();
-  bool Extract();
-  void DecodeLoop();
-
- private:
-  /**/
-  std::atomic<bool> running_{false};
-  std::thread thread_;
-  std::atomic<bool> generate_pts_{false};
-  uint64_t fake_pts_ = 0;
-
-  EsParser parser_;
-  BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
-  /*
-   * Ensure that the queue_ is not deleted when the push is blocked.
+  /*!
+   * @brief A constructor to construct a ESMemHandler object.
+   *
+   * @param[in] module The data source module.
+   * @param[in] stream_id The stream id of the stream.
+   * @param[in] param The parameters of the handler.
+   *
+   * @return No return value.
    */
-  std::mutex queue_mutex_;
+  explicit ESMemHandler(DataSource *module, const std::string &stream_id, const ESMemSourceParam &param);
 
-  std::shared_ptr<Decoder> decoder_ = nullptr;
-  uint64_t pts_ = 0;
+  /*!
+   * @brief The destructor of ESMemHandler.
+   *
+   * @return No return value.
+   */
+  ~ESMemHandler();
+  /*!
+   * @brief Opens source handler.
+   *
+   * @return Returns true if the source handler is opened successfully, otherwise returns false.
+   */
+  bool Open() override;
+  /*!
+   * @brief Stops source handler. The Close() function should be called afterwards.
+   *
+   * @return No return value.
+   */
+  void Stop() override;
+  /*!
+   * @brief Closes source handler.
+   *
+   * @return No return value.
+   */
+  void Close() override;
 
-  // for parsing es-block
-  bool eos_reached_ = false;
+  /*!
+   * @brief Sends data in frame mode.
+   *
+   * @param[in] pkt The data packet.
+   *
+   * @return Returns 0 if this function writes data successfully.
+   *         Returns -1 if it fails to writes data. The possible reason is the handler is closed,
+   *         the pkt is nullptr or parsing failed.
+   *
+   * @note If the data does not end normally, must write pkt to notify the parser its the last packet,
+   *       set the data of the pkt to nullptr or the size of the pkt to 0.
+   *
+   * @note Must write pkt to notify the parser it's the end of the stream,
+   *       set FLAG_EOS to the flags of the pkt and set the data of the pkt to nullptr or the size to 0.
+   */
+  int Write(ESPacket *pkt);
 
-#ifdef UNIT_TEST
- public:  // NOLINT
-  void SetDecodeParam(const DataSourceParam &param) { param_ = param; }
-#endif
-};  // class ESMemHandlerImpl
+ private:
+  ESMemHandlerImpl *impl_ = nullptr;
+};  // class ESMemHandler
 
 }  // namespace cnstream
 

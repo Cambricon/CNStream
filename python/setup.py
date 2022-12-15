@@ -68,7 +68,7 @@ class CMakeBuild(build_ext):
             "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={}".format(extdir),
             "-DPYTHON_EXECUTABLE={}".format(sys.executable),
             "-DCMAKE_BUILD_TYPE={}".format(cfg),  # not used on MSVC, but no harm
-            "-Dbuild_python_api=ON",
+            "-DBUILD_PYTHON_API=ON",
         ]
         build_args = []
         # Adding CMake arguments set as environment variable
@@ -143,7 +143,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name="cnstream",
-    version="6.2.0",
+    version="7.1.0",
     author="Cambricon",
     url='https://gitee.com/SolutionSDK/CNStream',
     author_email="@cambricon.com",

@@ -16,5 +16,9 @@ cd $CURRENT_DIR
     echo "generate files.list_pose_image in $CURRENT_DIR"
     echo "$CURRENT_DIR/../data/pose_images/%d.jpg" >> files.list_pose_image
   fi
+  if [ ! -f $CURRENT_DIR/files.list_sensor ]; then
+    echo "generate files.list_sensor in $CURRENT_DIR"
+    echo "/sensor/id=0/type=6/mipi_dev=1/bus_id=0/sns_clk_id=0" >> files.list_sensor
+  fi
 cd -
 

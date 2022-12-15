@@ -1,14 +1,11 @@
 {
-  "rtsp_sink" : {
-    "class_name" : "cnstream::RtspSink",
+  "venc" : {
+    "class_name" : "cnstream::VEncode",
     "parallelism" : 1,
     "max_input_queue_size" : 10,
     "custom_params" : {
-      "encoder_type" : "mlu",
-      "port" : 9554,
-      "view_cols" : 1,
-      "view_rows" : 1,
-      "device_id" : 0
+      "rtsp_port" : 9554,
+      "device_id": 0
     }
   }
 }

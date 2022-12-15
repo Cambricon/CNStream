@@ -26,12 +26,6 @@
  *  This file contains a declaration of the DataSourceParam and ESPacket struct, and the DataSource, FileHandler,
  *  RtspHandler, ESMemHandler, ESJpegMemHandler and RawImgMemHandler class.
  */
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
-#if (CV_MAJOR_VERSION >= 3)
-#include "opencv2/imgcodecs/imgcodecs.hpp"
-#endif
-
 #include <memory>
 #include <string>
 #include <utility>
@@ -40,9 +34,20 @@
 #include "cnstream_frame_va.hpp"
 #include "cnstream_pipeline.hpp"
 #include "cnstream_source.hpp"
-#include "data_source_param.hpp"
+#include "private/cnstream_param.hpp"
 
 namespace cnstream {
+
+/*!
+ * @struct DataSourceParam
+ *
+ * @brief The DataSourceParam is a structure describing the parameters of a DataSource module.
+ */
+struct DataSourceParam {
+  uint32_t interval = 1;  /*!< The interval of outputting one frame. It outputs one frame every n (interval_) frames. */
+  int device_id = 0;      /*!< The device ordinal. */
+  uint32_t bufpool_size = 16;    /*!< The size of the buffer pool to store output frames. */
+};
 
 /*!
  * @class DataSource
@@ -56,11 +61,11 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
   /*!
    * @brief Constructs a DataSource object.
    *
-   * @param[in] moduleName The name of this module.
+   * @param[in] name The name of this module.
    *
    * @return No return value.
    */
-  explicit DataSource(const std::string &moduleName);
+  explicit DataSource(const std::string &name);
 
   /*!
    * @brief Destructs a DataSource object.
@@ -74,12 +79,11 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
    *
    * This function will be called by the pipeline when the pipeline starts.
    *
-   * @param[in] paramSet The module's parameter set to configure a DataSource module.
+   * @param[in] param_set The module's parameter set to configure a DataSource module.
    *
    * @return Returns true if the parammeter set is supported and valid, othersize returns false.
    */
-  bool Open(ModuleParamSet paramSet) override;
-
+  bool Open(ModuleParamSet param_set) override;
   /*!
    * @brief Frees the resources that the object may have acquired.
    *
@@ -92,11 +96,11 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
   /*!
    * @brief Checks the parameter set for the DataSource module.
    *
-   * @param[in] paramSet Parameters for this module.
+   * @param[in] param_set Parameters for this module.
    *
    * @return Returns true if all parameters are valid. Otherwise, returns false.
    */
-  bool CheckParamSet(const ModuleParamSet &paramSet) const override;
+  bool CheckParamSet(const ModuleParamSet &param_set) const override;
 
   /*!
    * @brief Gets the parameters of the DataSource module.
@@ -108,8 +112,20 @@ class DataSource : public SourceModule, public ModuleCreator<DataSource> {
   DataSourceParam GetSourceParam() const { return param_; }
 
  private:
+  std::unique_ptr<ModuleParamsHelper<DataSourceParam>> param_helper_ = nullptr;
   DataSourceParam param_;
 };  // class DataSource
+
+/*!
+ * @struct Resolution
+ *
+ * @brief The Resolution is a structure describing the width and the height.
+ */
+struct Resolution {
+  uint32_t width = 0;   /*!< The width. */
+  uint32_t height = 0;  /*!< The height. */
+};  // struct Resolution
+
 
 /*!
  * @struct ESPacket
@@ -120,6 +136,7 @@ struct ESPacket {
   unsigned char *data = nullptr;  /*!< The video data. */
   int size = 0;                   /*!< The size of the data. */
   uint64_t pts = 0;               /*!< The presentation time stamp of the data. */
+  bool has_pts = true;            /*!< Whether set pts by user. */
   uint32_t flags = 0;             /*!< The flags of the data. */
   enum class FLAG{
     FLAG_KEY_FRAME = 0x01,  /*!< The flag of key frame. */
@@ -127,181 +144,74 @@ struct ESPacket {
   };
 };  // struct ESPacket
 
-class FileHandlerImpl;
+/*!
+ * @struct ESJpegPacket
+ *
+ * @brief The ESJpegPacket is a structure describing the elementary stream data packet.
+ */
+struct ESJpegPacket {
+  unsigned char *data = nullptr;  /*!< The jpeg data. */
+  int size = 0;                   /*!< The size of the data. */
+  uint64_t pts = 0;               /*!< The presentation time stamp of the data. */
+  bool has_pts = true;            /*!< Whether set pts by user. */
+};  // struct ESJpegPacket
 
 /*!
- * @struct MaximumVideoResolution
+ * @struct ImageFrame
  *
- * @brief The MaximumVideoResolution (not supported on MLU220/MLU270) is a structure describing the maximum video
- * resolution parameters.
- *
+ * @brief The ImageFrame is a structure describing a image frame.
  */
-struct MaximumVideoResolution {
-  bool enable_variable_resolutions = false;  /*!< Whether to enable variable resolutions. */
-  uint32_t maximum_width;                    /*!< The maximum video width. */
-  uint32_t maximum_height;                   /*!< The maximum video height. */
-};  // struct MaximumVideoResolution
+struct ImageFrame {
+  cnedk::BufSurfWrapperPtr data;  /*!< The BufSurface wrapper containing a image frame. */
+  bool has_pts = true;            /*!< Whether set pts by user. */
+};  // struct ImageFrame
+
 
 /*!
- * @class FileHandler
+ * @struct FileSourceParam
  *
- * @brief FileHandler is a class of source handler for video with format mp4, flv, matroska and USBCamera
- * ("/dev/videoxxx") .
+ * @brief The FileSourceParam is a structure describing the parameters to create a FileHandler.
  */
-class FileHandler : public SourceHandler {
- public:
-  /*!
-   * @brief Creates source handler.
-   *
-   * @param[in] module The data source module.
-   * @param[in] stream_id The stream id of the stream.
-   * @param[in] filename The filename of the stream.
-   * @param[in] framerate Controls sending the frames of the stream with specific rate.
-   * @param[in] loop Loops the stream.
-   * @param[in] maximum_resolution The maximum video resolution for variable video resolutions.
-   * See ``MaximumVideoResolution`` for detail.
-   *
-   * @return Returns source handler if it is created successfully, otherwise returns nullptr.
-   */
-  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
-                                               const std::string &filename, int framerate, bool loop = false,
-                                               const MaximumVideoResolution& maximum_resolution = {});
-  /*!
-   * @brief The destructor of FileHandler.
-   *
-   * @return No return value.
-   */
-  ~FileHandler();
-  /*!
-   * @brief Opens source handler.
-   *
-   * @return Returns true if the source handler is opened successfully, otherwise returns false.
-   */
-  bool Open() override;
-  /*!
-   * @brief Stops source handler. The Close() function should be called afterwards.
-   *
-   * @return No return value.
-   */
-  void Stop() override;
-  /*!
-   * @brief Closes source handler.
-   *
-   * @return No return value
-   */
-  void Close() override;
-
- private:
-  explicit FileHandler(DataSource *module, const std::string &stream_id, const std::string &filename, int framerate,
-                       bool loop, const MaximumVideoResolution& maximum_resolution);
-
-#ifdef UNIT_TEST
- public:  // NOLINT
-#endif
-  FileHandlerImpl *impl_ = nullptr;
-};  // class FileHandler
-
-class RtspHandlerImpl;
+struct FileSourceParam {
+  std::string filename;       /*!< The filename of the stream. */
+  int framerate;              /*!< The framerate of feeding the stream. */
+  bool loop = false;          /*!< Whether loop the stream. */
+  Resolution max_res;         /*!< The maximum input resolution. */
+  Resolution out_res;         /*!< The output resolution. */
+  bool only_key_frame = false;    /*!< Only decode key frame. */
+};  // FileSourceParam
 /*!
- * @class RtspHandler
+ * @struct RtspSourceParam
  *
- * @brief RtspHandler is a class of source handler for rtsp stream.
+ * @brief The RtspSourceParam is a structure describing the parameters to create a FileHandler.
  */
-class RtspHandler : public SourceHandler {
- public:
-  /*!
-   * @brief Creates source handler.
-   *
-   * @param[in] module The data source module.
-   * @param[in] stream_id The stream ID of the stream.
-   * @param[in] url_name The url of the stream.
-   * @param[in] use_ffmpeg Uses ffmpeg demuxer if it is true, otherwise uses live555 demuxer.
-   * @param[in] reconnect It is valid when "use_ffmpeg" set false.
-   * @param[in] maximum_resolution The maximum video resolution for variable video resolutions.
-   * See ``MaximumVideoResolution`` for detail.
-   *
-   * @return Returns source handler if it is created successfully, otherwise returns nullptr.
-   */
-  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
-                                               const std::string &url_name, bool use_ffmpeg = false, int reconnect = 10,
-                                               const MaximumVideoResolution &maximum_resolution = {},
-                                               std::function<void(ESPacket, std::string)> callback = nullptr);
-  /*!
-   * @brief The destructor of RtspHandler.
-   *
-   * @return No return value.
-   */
-  ~RtspHandler();
-
-  /*!
-   * @brief Opens source handler.
-   *
-   * @return Returns true if the source handler is opened successfully, otherwise returns false.
-   */
-  bool Open() override;
-  /*!
-   * @brief Closes source handler.
-   *
-   * @return No return value.
-   */
-  void Close() override;
-
- private:
-  explicit RtspHandler(DataSource *module, const std::string &stream_id, const std::string &url_name, bool use_ffmpeg,
-                       int reconnect, const MaximumVideoResolution &maximum_resolution,
-                       std::function<void(ESPacket, std::string)> callback);
-
-#ifdef UNIT_TEST
- public:  // NOLINT
-#endif
-  RtspHandlerImpl *impl_ = nullptr;
-};  // class RtspHandler
-
-class ESMemHandlerImpl;
+struct RtspSourceParam {
+  std::string url_name;              /*!< The url of the stream. */
+  Resolution max_res;                /*!< The maximum input resolution. */
+  bool use_ffmpeg = false;           /*!< Uses ffmpeg demuxer if it is true, otherwise uses live555 demuxer. */
+  int reconnect = 10;                /*!< It is valid when "use_ffmpeg" set false. -1 means reconnect endless. */
+  uint32_t interval = 0;             /*!< Interval, 3 means keep a frame every 3 frames. */
+  bool only_key_frame = false;       /*!< Only decode key frame. */
+  std::function<void(ESPacket, std::string)> callback = nullptr;  /*!< The callback for getting h264/h265 video. */
+  Resolution out_res;                /*!< The output resolution. */
+};  // RtspSourceParam
 /*!
- * @class ESMemHandler
+ * @struct SensorSourceParam
  *
- * @brief ESMemHandler is a class of source handler for H264/H265 bitstreams in memory (with prefix-start-code).
+ * @brief The SensorSourceParam is a structure describing the parameters to create a CameraHandler.
  */
-class ESMemHandler : public SourceHandler {
- public:
-  /*!
-   * @brief Creates source handler.
-   *
-   * @param[in] module The data source module.
-   * @param[in] stream_id The stream id of the stream.
-   * @param[in] maximum_resolution The maximum video resolution for variable video resolutions.
-   * See ``MaximumVideoResolution`` for detail.
-   *
-   * @return Returns source handler if it is created successfully, otherwise returns nullptr.
-   */
-  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
-                                               const MaximumVideoResolution& maximum_resolution = {});
-  /*!
-   * @brief The destructor of ESMemHandler.
-   *
-   * @return No return value.
-   */
-  ~ESMemHandler();
-  /*!
-   * @brief Opens source handler.
-   *
-   * @return Returns true if the source handler is opened successfully, otherwise returns false.
-   */
-  bool Open() override;
-  /*!
-   * @brief Stops source handler. The Close() function should be called afterwards.
-   *
-   * @return No return value.
-   */
-  void Stop() override;
-  /*!
-   * @brief Closes source handler.
-   *
-   * @return No return value.
-   */
-  void Close() override;
-
+struct SensorSourceParam {
+  int sensor_id;       /*!< The sensor id. 0...n-1 */
+  Resolution out_res;  /*!< The output resolution. */
+};  // SensorSourceParam
+/*!
+ * @struct ESMemSourceParam
+ *
+ * @brief The ESMemSourceParam is a structure describing the parameters to create a ESMemHandler.
+ */
+struct ESMemSourceParam {
+  Resolution max_res;  /*!< The maximum input resolution. */
+  Resolution out_res;  /*!< The output resolution. */
   /*!
    * @enum DataType
    *
@@ -312,201 +222,164 @@ class ESMemHandler : public SourceHandler {
     H264,     /*!< The data type is H264. */
     H265      /*!< The data type is H265. */
   };
-
-  /*!
-   * @brief Sets data type.
-   *
-   * @param[in] type The data type.
-   *
-   * @return Returns 0 if data type is set successfully, otherwise returns -1.
-   * @note This function must be called before ``Write`` function.
-   */
-  int SetDataType(DataType type);
-
-  /*!
-   * @brief Sends data in frame mode.
-   *
-   * @param[in] pkt The data packet
-   *
-   * @return Returns 0 if the data is written successfully.
-   *         Returns -1 if failed to write data. The possible reasons are the handler is closed,
-   *         the end of the stream is received, the data is nullptr and the data is invalid,
-   *         so that the video infomations can not be parsed from it.
-   */
-  int Write(ESPacket *pkt);
-  /*!
-   * @brief Sends data in chunk mode.
-   *
-   * @param[in] buf The data buffer
-   * @param[in] len The length of the data
-   *
-   * @return Returns 0 if the data is written successfully.
-   *         Returns -1 if failed to write data. The possible reasons are the handler is closed, the end of the stream
-   *         is received and the data is invalid, so that the video infomations can not be parsed from it.
-   */
-  int Write(unsigned char *buf, int len);
-  /*!
-   * @brief Sends the end of the stream.
-   *
-   * The data remains in the parser will be dropped. Call this function, when the data of a stream is not completely
-   * written and the stream needed to be removed.
-   *
-   * @return Returns 0 if the end of the stream is written successfully.
-   *         Returns -1 if failed to write data. The possible reason is the handler is closed.
-   */
-  int WriteEos();
-
- private:
-  explicit ESMemHandler(DataSource *module, const std::string &stream_id,
-                        const MaximumVideoResolution& maximum_resolution);
-
-#ifdef UNIT_TEST
- public:  // NOLINT
-#else
- private:  // NOLINT
-#endif
-  ESMemHandlerImpl *impl_ = nullptr;
-};  // class ESMemHandler
-
-class ESJpegMemHandlerImpl;
+  DataType data_type = DataType::INVALID;
+  bool only_key_frame = false;    /*!< Only decode key frame. */
+};  // ESMemSourceParam
 /*!
- * @class ESJpegMemHandler
+ * @struct ESJpegMemSourceParam
  *
- * @brief ESJpegMemHandler is a class of source handler for Jpeg bitstreams in memory.
+ * @brief The ESJpegMemSourceParam is a structure describing the parameters to create a ESJpegMemHandler.
  */
-class ESJpegMemHandler : public SourceHandler {
- public:
-  /*!
-   * @brief Creates source handler.
-   *
-   * @param[in] module The data source module.
-   * @param[in] stream_id The stream id of the stream.
-   * @param[in] max_width The maximum width of the image.
-   * @param[in] max_height The maximum height of the image.
-   *
-   * @return Returns source handler if it is created successfully, otherwise returns nullptr.
-   */
-  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id,
-      int max_width = 7680, int max_height = 4320/*Jpeg decoder maximum resolution 8K*/);
-  /*!
-   * @brief The destructor of ESJpegMemHandler.
-   *
-   * @return No return value.
-   */
-  ~ESJpegMemHandler();
-  /*!
-   * @brief Opens source handler.
-   *
-   * @return Returns true if the source handler is opened successfully, otherwise returns false.
-   */
-  bool Open() override;
-  /*!
-   * @brief Closes source handler.
-   *
-   * @return No return value.
-   */
-  void Close() override;
-
-  /*!
-   * @brief Sends data in frame mode.
-   *
-   * @param[in] pkt The data packet.
-   *
-   * @return Returns 0 if the data is written successfully.
-   *         Returns -1 if failed to write data. The possible reason is the handler is closed or the data is nullptr.
-   */
-  int Write(ESPacket *pkt);
-
- private:
-  explicit ESJpegMemHandler(DataSource *module, const std::string &stream_id, int max_width, int max_height);
-
-#ifdef UNIT_TEST
- public:  // NOLINT
-#endif
-  ESJpegMemHandlerImpl *impl_ = nullptr;
-};  // class ESJpegMemHandler
-
-class RawImgMemHandlerImpl;
+struct ESJpegMemSourceParam {
+  Resolution max_res;  /*!< The maximum input resolution. */
+  Resolution out_res;  /*!< The output resolution. */
+};  // ESJpegMemSourceParam
 /*!
- * @class RawImgMemHandler
+ * @struct ImageFrameSourceParam
  *
- * @brief RawImgMemHandler is a class of source handler for raw image data in memory.
- *
- * @note This handler will not send data to MLU decoder as the raw data has been decoded.
+ * @brief The ImageFrameSourceParam is a structure describing the parameters to create a ImageFrameHandler.
  */
-class RawImgMemHandler : public SourceHandler {
- public:
-  /*!
-   * @brief Creates source handler.
-   *
-   * @param[in] module The data source module.
-   * @param[in] stream_id The stream id of the stream.
-   *
-   * @return Returns source handler if it is created successfully, otherwise returns nullptr.
-   */
-  static std::shared_ptr<SourceHandler> Create(DataSource *module, const std::string &stream_id);
-  /*!
-   * @brief The destructor of RawImgMemHandler.
-   *
-   * @return No return value.
-   */
-  ~RawImgMemHandler();
-  /*!
-   * @brief Opens source handler.
-   *
-   * @return Returns true if the source handler is opened successfully, otherwise returns false.
-   */
-  bool Open() override;
-  /*!
-   * @brief Closes source handler.
-   *
-   * @return No return value.
-   */
-  void Close() override;
+struct ImageFrameSourceParam {
+  Resolution out_res;  /*!< The output resolution. */
+};  // ImageFrameSourceParam
 
-  /*!
-   * @brief Sends raw image with cv::Mat. Only BGR data with 8UC3 type is supported, and data is continuous.
-   *
-   * @param[in] mat_data The bgr24 format image data.
-   * @param[in] pts The pts for mat_data, should be different for each image.
-   *
-   * @return Returns 0 if the data is written successfully.
-   *         Returns -1 if failed to write data. The possible reason is the end of the stream is received or failed to
-   *         process the data.
-   *         Returns -2 if the data is invalid.
-   *
-   * @note Sends nullptr after all data are sent.
-   */
-  int Write(const cv::Mat *mat_data, const uint64_t pts);
+// group: Source Function
+/*!
+ * @brief Creates a FileHandler.
+ *
+ * @param[in] module A pointer to DataSource module.
+ * @param[in] stream_id The unique identity for this stream.
+ * @param[in] param The parameter for creating the handler.
+ *
+ * @return Returns handler smart pointer if this function has run successfully, othersize returns nullptr.
+ *
+ * @note If either the param.max_res.width or param.max_res.height is 0 means that,
+ *       for h264/h265, the resolution is not vairable.
+ *       For Jpeg, the default value of param.max_res.width = 8192, height = 4320.
+ */
+std::shared_ptr<SourceHandler> CreateSource(DataSource *module, const std::string &stream_id,
+                                            const FileSourceParam &param);
+// group: Source Function
+/*!
+ * @brief Creates a RtspHandler.
+ *
+ * @param[in] module A pointer to DataSource module.
+ * @param[in] stream_id The unique identity for this stream.
+ * @param[in] param The parameter for creating the handler.
+ *
+ * @return Returns handler smart pointer if this function has run successfully, othersize returns nullptr.
+ *
+ * @note If either the param.max_res.width or param.max_res.height is 0 means that,
+ *       for h264/h265, the resolution is not vairable.
+ *       For Jpeg, the default value of param.max_res.width = 8192, height = 4320.
+ */
+std::shared_ptr<SourceHandler> CreateSource(DataSource *module, const std::string &stream_id,
+                                            const RtspSourceParam &param);
+// group: Source Function
+/*!
+ * @brief Creates a CameraHandler.
+ *
+ * @param[in] module A pointer to DataSource module.
+ * @param[in] stream_id The unique identity for this stream.
+ * @param[in] param The parameter for creating the handler.
+ *
+ * @return Returns handler smart pointer if this function has run successfully, othersize returns nullptr.
+ */
+std::shared_ptr<SourceHandler> CreateSource(DataSource *module, const std::string &stream_id,
+                                            const SensorSourceParam &param);
+// group: Source Function
+/*!
+ * @brief Creates a ESMemHandler.
+ *
+ * @param[in] module A pointer to DataSource module.
+ * @param[in] stream_id The unique identity for this stream.
+ * @param[in] param The parameter for creating the handler.
+ *
+ * @return Returns handler smart pointer if this function has run successfully, othersize returns nullptr.
+ *
+ * @note If either the param.max_res.width or param.max_res.height is 0 means that the resolution is not vairable.
+ */
+std::shared_ptr<SourceHandler> CreateSource(DataSource *module, const std::string &stream_id,
+                                            const ESMemSourceParam &param);
+// group: Source Function
+/*!
+ * @brief Creates a ESJpegMemHandler.
+ *
+ * @param[in] module A pointer to DataSource module.
+ * @param[in] stream_id The unique identity for this stream.
+ * @param[in] param The parameter for creating the handler.
+ *
+ * @return Returns handler smart pointer if this function has run successfully, othersize returns nullptr.
+ *
+ * @note The default value of param.max_res.width = 8192, height = 4320.
+ */
+std::shared_ptr<SourceHandler> CreateSource(DataSource *module, const std::string &stream_id,
+                                            const ESJpegMemSourceParam &param);
+// group: Source Function
+/*!
+ * @brief Creates a ImageFrameHandler.
+ *
+ * @param[in] module A pointer to DataSource module.
+ * @param[in] stream_id The unique identity for this stream.
+ * @param[in] param The parameter for creating the handler.
+ *
+ * @return Returns handler smart pointer if this function has run successfully, othersize returns nullptr.
+ */
+std::shared_ptr<SourceHandler> CreateSource(DataSource *module, const std::string &stream_id,
+                                            const ImageFrameSourceParam &param);
 
-  /*!
-   * @brief Sends raw image with image data and image infomation, support formats: bgr24, rgb24, nv21 and nv12.
-   *
-   * @param[in] data The data of the image, which is a continuous buffer.
-   * @param[in] size The size of the data.
-   * @param[in] pts The pts for raw image, should be different for each image.
-   * @param[in] width The width of the image.
-   * @param[in] height The height of the image.
-   * @param[in] pixel_fmt The pixel format of the image. These formats are supported, bgr24, rgb24, nv21 and nv12.
-   *
-   * @return Returns 0 if the data is written successfully.
-   *         Returns -1 if failed to write data. The possible reason is the end of the stream is received or failed to
-   *         process the data.
-   *         Returns -2 if the data is invalid.
-   *
-   * @note Sends nullptr as data and passes 0 as size after all data are sent.
-   */
-  int Write(const uint8_t *data, const int size, const uint64_t pts, const int width = 0, const int height = 0,
-            const CNDataFormat pixel_fmt = CNDataFormat::CN_INVALID);
-
- private:
-  explicit RawImgMemHandler(DataSource *module, const std::string &stream_id);
-
-#ifdef UNIT_TEST
- public:  // NOLINT
-#endif
-  RawImgMemHandlerImpl *impl_ = nullptr;
-};  // class RawImgMemHandler
+// group: Source Function
+/*!
+ * @brief Writes data to ESMemHandler.
+ *
+ * @param[in] handler A smart pointer to ESMemHandler.
+ * @param[in] pkt The packet containing H264/H265 bitstreams data.
+ *
+ * @return Returns 0 if this function writes data successfully.
+ *         Returns -1 if it fails to writes data. The possible reason is the handler is closed,
+ *         the pkt is nullptr or parsing failed.
+ *
+ * @note If the data does not end normally, must write pkt to notify the parser its the last packet,
+ *       set the data of the pkt to nullptr or the size of the pkt to 0.
+ *
+ * @note Must write pkt to notify the parser it's the end of the stream,
+ *       set FLAG_EOS to the flags of the pkt and set the data of the pkt to nullptr or the size to 0.
+ */
+int Write(std::shared_ptr<SourceHandler>handler, ESPacket* pkt);
+// group: Source Function
+/*!
+ * @brief Writes data to ESJpegMemHandler.
+ *
+ * @param[in] handler A smart pointer to ESJpegMemHandler.
+ * @param[in] pkt The packet containing Jpeg bitstreams data.
+ *
+ * @return Returns 0 if this function writes data successfully.
+ *         Returns -1 if it fails to writes data. The possible reason is the pkt is nullptr or decoding failed.
+ *
+ * @note Must write pkt to notify the handler it's the end of the stream,
+ *       set the data of the pkt to nullptr or the size to 0.
+ */
+int Write(std::shared_ptr<SourceHandler>handler, ESJpegPacket* pkt);
+// group: Source Function
+/*!
+ * @brief Writes data to RawImgMemHandler.
+ *
+ *        The frame will be converted to YUV420spNV12 by default.
+ *        Unless if the first frame is with YUV420spNV21 format, the frame will be converted to YUV420spNV21.
+ *        The supported color formats of inputs are YUV420spNV12, YUV420spNV21, RGB24, BGR24, ARGB32, ABGR32.
+ *
+ * @param[in] handler A smart pointer to RawImgMemHandler.
+ * @param[in] frame It Contains a image frame.
+ *
+ * @return Returns 0 if this function writes data successfully.
+ *         Returns -1 if failed to write data. The possible reason is the frame is nullptr,
+ *         invalid data or converting data failed.
+ *
+ * @note Must write pkt to notify the handler it's the end of the stream, set the data of the pkt to nullptr.
+ * @note Must not write a set of frames with both YUV420spNV12 and YUV420spNV21 formats.
+ *       If the first frame written is not YUV420spNV21 format, do not write YUV420spNV21 afterwards.
+ */
+int Write(std::shared_ptr<SourceHandler>handler, ImageFrame* frame);
 
 }  // namespace cnstream
 
