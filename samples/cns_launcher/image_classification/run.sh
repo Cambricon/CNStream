@@ -12,7 +12,7 @@ CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 source ${CURRENT_DIR}/../../env.sh
 
 PrintUsages(){
-    echo "Usages: run.sh mlu220/mlu270/mlu370"
+    echo "Usages: run.sh [mlu370/mlu590/ce3226]"
 }
 
 if [ $# -ne 1 ]; then
@@ -20,19 +20,23 @@ if [ $# -ne 1 ]; then
     exit 1
 fi
 
-if [[ ${1} == "mlu220" ]]; then
-    MODEL_PATH=${MODELS_DIR}/resnet18_b4c4_bgra_mlu220.cambricon
-    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU220/resnet18_b4c4_bgra_mlu220.cambricon
-elif [[ ${1} == "mlu270" ]]; then
-    MODEL_PATH=${MODELS_DIR}/resnet50_b16c16_bgra_mlu270.cambricon
-    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/resnet50_b16c16_bgra_mlu270.cambricon
+if [[ ${1} == "ce3226" ]]; then
+    MM_VER=v0.13.0
+    MODEL_PATH=${MODELS_DIR}/resnet50_${MM_VER}_4b_rgb_uint8.magicmind
+    REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/resnet50_${MM_VER}_4b_rgb_uint8.magicmind
 elif [[ ${1} == "mlu370" ]]; then
-    MODEL_PATH=${MODELS_DIR}/resnet50_nhwc.model
-    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/resnet50_nhwc_tfu_0.8.2_uint8_int8_fp16.model
+    MM_VER=v0.13.0
+    MODEL_PATH=${MODELS_DIR}/resnet50_${MM_VER}_4b_rgb_uint8.magicmind
+    REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/resnet50_${MM_VER}_4b_rgb_uint8.magicmind
+elif [[ ${1} == "mlu590" ]]; then
+    MM_VER=v0.14.0
+    MODEL_PATH=${MODELS_DIR}/resnet50_${MM_VER}_4b_rgb_uint8.magicmind
+    REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/resnet50_${MM_VER}_4b_rgb_uint8.magicmind
 else
     PrintUsages
     exit 1
 fi
+
 
 LABEL_PATH=${MODELS_DIR}/synset_words.txt
 REMOTE_LABEL_PATH=http://video.cambricon.com/models/labels/synset_words.txt

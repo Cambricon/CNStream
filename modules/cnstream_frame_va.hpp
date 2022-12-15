@@ -26,82 +26,24 @@
  *
  *  This file contains a declaration of the CNFrameData & CNInferObject struct and its substructure.
  */
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#if (CV_MAJOR_VERSION >= 3)
-#include <opencv2/imgcodecs/imgcodecs.hpp>
-#endif
-
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
-#include <map>
 #include <utility>
 #include <vector>
 
+#include "opencv2/imgproc/imgproc.hpp"
+
+#include "cnedk_buf_surface.h"
+#include "cnedk_buf_surface_util.hpp"
+#include "cnis/processor.h"
 #include "cnstream_common.hpp"
 #include "cnstream_frame.hpp"
-#include "cnstream_syncmem.hpp"
 #include "private/cnstream_allocator.hpp"
 #include "util/cnstream_any.hpp"
 
-constexpr int CN_MAX_PLANES = 6;
-
 namespace cnstream {
-/**
- * @enum CNDataFormat
- *
- * @brief Enumeration variables describling the pixel format of the data in CNDataFrame.
- */
-enum class CNDataFormat {
-  CN_INVALID = -1,                 /*!< This frame is invalid. */
-  CN_PIXEL_FORMAT_YUV420_NV21 = 0, /*!< This frame is in the YUV420SP(NV21) format. */
-  CN_PIXEL_FORMAT_YUV420_NV12,     /*!< This frame is in the YUV420sp(NV12) format. */
-  CN_PIXEL_FORMAT_BGR24,           /*!< This frame is in the BGR24 format. */
-  CN_PIXEL_FORMAT_RGB24,           /*!< This frame is in the RGB24 format. */
-  CN_PIXEL_FORMAT_ARGB32,          /*!< This frame is in the ARGB32 format. */
-  CN_PIXEL_FORMAT_ABGR32,          /*!< This frame is in the ABGR32 format. */
-  CN_PIXEL_FORMAT_RGBA32,          /*!< This frame is in the RGBA32 format. */
-  CN_PIXEL_FORMAT_BGRA32           /*!< This frame is in the BGRA32 format. */
-};
-
-/**
- * @struct DevContext
- *
- * @brief DevContext is a structure holding the information that CNDataFrame data is allocated by CPU or MLU.
- */
-struct DevContext {
-  enum class DevType {
-    INVALID = -1,                /*!< Invalid device type. */
-    CPU = 0,                     /*!< The data is allocated by CPU. */
-    MLU = 1,                     /*!< The data is allocated by MLU. */
-  } dev_type = DevType::INVALID; /*!< Device type. The default value is ``INVALID``.*/
-  int dev_id = 0;                /*!< Ordinal device ID. */
-  int ddr_channel = 0;           /*!< Ordinal channel ID for MLU. The value should be in the range [0, 4). */
-};
-
-// Group:Video Analysis Function
-/**
- * @brief Gets image plane number by a specified image format.
- *
- * @param[in] fmt The format of the image.
- *
- * @retval 0: Unsupported image format.
- * @retval >0: Image plane number.
- */
-inline int CNGetPlanes(CNDataFormat fmt) {
-  switch (fmt) {
-    case CNDataFormat::CN_PIXEL_FORMAT_BGR24:
-    case CNDataFormat::CN_PIXEL_FORMAT_RGB24:
-      return 1;
-    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12:
-    case CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21:
-      return 2;
-    default:
-      return 0;
-  }
-  return 0;
-}
 
 /**
  * @class CNDataFrame
@@ -121,48 +63,11 @@ class CNDataFrame : public NonCopyable {
    *
    * @return No return value.
    */
-  ~CNDataFrame() = default;
-  /**
-   * @brief Gets plane count for a specified frame.
-   *
-   *
-   * @return Returns the plane count of this frame.
-   */
-  int GetPlanes() const { return CNGetPlanes(fmt); }
-  /**
-   * @brief Gets the number of bytes in a specified plane.
-   *
-   * @param[in] plane_idx The index of the plane. The index increments from 0.
-   *
-   * @return Returns the number of bytes in the plane.
-   */
-  size_t GetPlaneBytes(int plane_idx) const;
-  /**
-   * @brief Gets the number of bytes in a frame.
-   *
-   * @return Returns the number of bytes in a frame.
-   */
-  size_t GetBytes() const;
+  ~CNDataFrame() {
+    if (buf_surf) buf_surf.reset();
+  }
 
  public:
-  /*!
-   * @brief Synchronizes the source data into ::CNSyncedMemory.
-   *
-   * @param[in] ptr_src The source data's address. This API internally judges the address is MLU memory or not.
-   * @param[in] dst_mlu The flag shows whether synchronizes the data to MLU memory.
-   *
-   * @note Sets the ``width``,``height``,``fmt``,``ctx``,``stride``,``dst_device_id``,``deAllocator_`` before calling
-   * this function.
-   * There are 5 situations:
-   * 1. Reuse codec's buffer and do not copy anything. Just assign the ptr_src to CNSyncedMemory mlu_ptr_.
-   * 2. This API allocates MLU buffer, and copy the source MLU data to the allocated buffer as the MLU destination.
-   * 3. This API allocates MLU buffer, and copy the source CPU data to the allocated buffer as the MLU destination.
-   * 4. This API allocates CPU buffer, and copy the source MLU data to the allocated buffer as the CPU destination.
-   * 5. This API allocates CPU buffer, and copy the source CPU data to the allocated buffer as the CPU destination.
-   * Whatever which situation happens, ::CNSyncedMemory doesn't own the buffer and it isn't responsible for releasing
-   * the data.
-   */
-  void CopyToSyncMem(void** ptr_src, bool dst_mlu);
   /**
    * @brief Converts data to the BGR format.
    *
@@ -182,44 +87,14 @@ class CNDataFrame : public NonCopyable {
     return true;
   }
 
-  /**
-   * @brief Synchronizes source data to specific device, and resets ctx.dev_id to device_id when synced, for
-   * multi-device case.
-   * @param[in] device_id The device id.
-   * @return No return value.
-   */
-  void CopyToSyncMemOnDevice(int device_id);
+  uint64_t frame_id = -1;  /*!< The frame index that incremented from 0. */
 
-  std::shared_ptr<void> cpu_data = nullptr;            /*!< A shared pointer to the CPU data. */
-  std::shared_ptr<void> mlu_data = nullptr;            /*!< A shared pointer to the MLU data. */
-  std::unique_ptr<CNSyncedMemory> data[CN_MAX_PLANES]; /*!< Synchronizes data helper. */
-  uint64_t frame_id = -1;                              /*!< The frame index that incremented from 0. */
-
-  CNDataFormat fmt;                                         /*!< The format of the frame. */
-  int width;                                                /*!< The width of the frame. */
-  int height;                                               /*!< The height of the frame. */
-  int stride[CN_MAX_PLANES];                                /*!< The strides of the frame. */
-  DevContext ctx;                                           /*!< The device context of SOURCE data (ptr_mlu/ptr_cpu). */
-  std::unique_ptr<IDataDeallocator> deAllocator_ = nullptr; /*!< The dedicated deallocator for CNDecoder buffer. */
-  std::atomic<int> dst_device_id{-1};                       /*!< The device context of SyncedMemory. */
+  cnedk::BufSurfWrapperPtr buf_surf = nullptr;
 
  private:
   std::mutex mtx;
-  cv::Mat bgr_mat; /*!< A Mat stores BGR image. */
-};                 // class CNDataFrame
-
-/**
- * @struct CNInferBoundingBox
- *
- * @brief CNInferBoundingBox is a structure holding the bounding box information of a detected object in normalized
- * coordinates.
- */
-struct CNInferBoundingBox {
-  float x;  ///< The x-axis coordinate in the upper left corner of the bounding box.
-  float y;  ///< The y-axis coordinate in the upper left corner of the bounding box.
-  float w;  ///< The width of the bounding box.
-  float h;  ///< The height of the bounding box.
-};
+  cv::Mat bgr_mat;  /*!< A Mat stores BGR image. */
+};  // class CNDataFrame
 
 /**
  * @struct CNInferAttr
@@ -243,11 +118,7 @@ using CNInferFeature = std::vector<float>;
  */
 using CNInferFeatures = std::vector<std::pair<std::string, CNInferFeature>>;
 
-/**
- * Defines an alias for std::vector<std::pair<std::string, std::string>>.
- */
-using StringPairs = std::vector<std::pair<std::string, std::string>>;
-
+using CnInferBbox = infer_server::CNInferBoundingBox;
 /**
  * @class CNInferObject
  *
@@ -255,7 +126,7 @@ using StringPairs = std::vector<std::pair<std::string, std::string>>;
  */
 class CNInferObject {
  public:
-CNS_IGNORE_DEPRECATED_PUSH
+  CNS_IGNORE_DEPRECATED_PUSH
   /**
    * @brief Constructs an instance storing inference results.
    *
@@ -268,14 +139,13 @@ CNS_IGNORE_DEPRECATED_PUSH
    * @return No return value.
    */
   ~CNInferObject() = default;
-CNS_IGNORE_DEPRECATED_POP
-  std::string id;           ///< The ID of the classification (label value).
-  std::string track_id;     ///< The tracking result.
-  float score;              ///< The label score.
-  CNInferBoundingBox bbox;  ///< The object normalized coordinates.
-  CNS_DEPRECATED std::map<int, any> datas;  ///< (Deprecated) User-defined structured information.
-  Collection collection;    ///< User-defined structured information.
-
+  CNS_IGNORE_DEPRECATED_POP
+  std::string id;                                   ///< The ID of the classification (label value).
+  std::string track_id;                             ///< The tracking result.
+  float score;                                      ///< The label score.
+  CnInferBbox bbox;                                 ///< The relative object normalized coordinates.
+  Collection collection;                            ///< User-defined structured information.
+  std::shared_ptr<CNInferObject> parent = nullptr;  ///< The parent object ptr.
   /**
    * @brief Adds the key of an attribute to a specified object.
    *
@@ -380,7 +250,7 @@ CNS_IGNORE_DEPRECATED_POP
    *
    * @note This is a thread-safe function.
    */
-  bool AddFeature(const std::string &key, const CNInferFeature &feature);
+  bool AddFeature(const std::string& key, const CNInferFeature& feature);
 
   /**
    * @brief Gets an feature by key.
@@ -392,7 +262,7 @@ CNS_IGNORE_DEPRECATED_POP
    *
    * @note This is a thread-safe function.
    */
-  CNInferFeature GetFeature(const std::string &key);
+  CNInferFeature GetFeature(const std::string& key);
 
   /**
    * @brief Gets the features of an object.
@@ -411,6 +281,25 @@ CNS_IGNORE_DEPRECATED_POP
   std::mutex feature_mutex_;
 };
 
+/**
+ * @brief Gets the absolute normalized coordinates of the object.
+ *
+ * @param[in] curr The object.
+ *
+ * @return Returns the bounding box coordinates.
+ */
+static inline CnInferBbox GetFullFovBbox(const CNInferObject* curr) {
+  if (!curr) {
+    return CnInferBbox(0.0, 0.0, 1.0, 1.0);
+  }
+  CnInferBbox parent = GetFullFovBbox(curr->parent.get());
+  float x = parent.x + curr->bbox.x * parent.w;
+  float y = parent.y + curr->bbox.y * parent.h;
+  float w = curr->bbox.w * parent.w;
+  float h = curr->bbox.h * parent.h;
+  return CnInferBbox(x, y, w, h);
+}
+
 /*!
  * Defines an alias for the std::shared_ptr<CNInferObject>. CNInferObjectPtr now denotes a shared pointer of inference
  * objects.
@@ -424,37 +313,7 @@ using CNInferObjectPtr = std::shared_ptr<CNInferObject>;
  */
 struct CNInferObjs : public NonCopyable {
   std::vector<std::shared_ptr<CNInferObject>> objs_;  /// The objects storing inference results.
-  std::mutex mutex_;   /// mutex of CNInferObjs
-};
-
-/**
- * @struct InferData
- *
- * @brief InferData is a structure holding the information of raw inference input & outputs.
- */
-struct InferData {
-  // infer input
-  CNDataFormat input_fmt_;               /*!< The input image's pixel format.*/
-  int input_width_;                      /*!< The input image's width.*/
-  int input_height_;                     /*!< The input image's height. */
-  std::shared_ptr<void> input_cpu_addr_; /*!< The input data's CPU address.*/
-  size_t input_size_;                    /*!< The input data's size. */
-
-  // infer output
-  std::vector<std::shared_ptr<void>> output_cpu_addr_; /*!< The corresponding inference outputs to the input data. */
-  std::vector<size_t> output_sizes_;                   /*!< The inference outputs' sizes.*/
-  size_t output_num_;                                  /*!< The inference output count.*/
-};
-
-/**
- * @struct CNInferData
- *
- * @brief CNInferData is a structure holding a map between module name and InferData.
- */
-struct CNInferData : public NonCopyable {
-  std::map<std::string, std::vector<std::shared_ptr<InferData>>> datas_map_;
-  /*!< The map between module name and InferData.*/
-  std::mutex mutex_; /*!< Inference data mutex.*/
+  std::mutex mutex_;                                  /// mutex of CNInferObjs
 };
 
 /*!
@@ -469,57 +328,10 @@ using CNInferObjsPtr = std::shared_ptr<CNInferObjs>;
  * Defines an alias for the std::vector<std::shared_ptr<CNInferObject>>.
  */
 using CNObjsVec = std::vector<std::shared_ptr<CNInferObject>>;
-/*!
- * Defines an alias for the std::shared_ptr<CNInferData>.
- */
-using CNInferDataPtr = std::shared_ptr<CNInferData>;
-
-/*
- * @deprecated
- * user-defined data structure: Key-value
- *   key type-- int
- *   value type -- cnstream::any, since we store it in an map, std::share_ptr<T> should be used
- */
-CNS_DEPRECATED static constexpr int CNDataFramePtrKey = 0;
-CNS_DEPRECATED static constexpr int CNInferObjsPtrKey = 1;
-CNS_DEPRECATED static constexpr int CNInferDataPtrKey = 2;
-
-CNS_IGNORE_DEPRECATED_PUSH
-// Group:Video Analysis Function
-/**
- *  @brief This helper will be deprecated in the future versions. Uses ``Collection::Get<CNDataFramePtr>(kCNDataFrameTag)`` instead.
- */
-CNS_DEPRECATED static inline
-CNDataFramePtr GetCNDataFramePtr(std::shared_ptr<CNFrameInfo> frameInfo) {
-  std::lock_guard<std::mutex> guard(frameInfo->datas_lock_);
-  return cnstream::any_cast<CNDataFramePtr>(frameInfo->datas[CNDataFramePtrKey]);
-}
-
-// Group:Video Analysis Function
-/**
- *  @brief This helper will be deprecated in the future versions. Uses ``Collection::Get<CNInferObjsPtr>(kCNInferObjsTag)`` instead.
- */
-CNS_DEPRECATED static inline
-CNInferObjsPtr GetCNInferObjsPtr(std::shared_ptr<CNFrameInfo> frameInfo) {
-  std::lock_guard<std::mutex> guard(frameInfo->datas_lock_);
-  return cnstream::any_cast<CNInferObjsPtr>(frameInfo->datas[CNInferObjsPtrKey]);
-}
-
-// Group:Video Analysis Function
-/**
- *  @brief This helper will be deprecated in the future versions. Uses ``Collection::Get<CNInferDataPtr>(kCNInferDataTag)`` instead.
- */
-CNS_DEPRECATED static inline
-CNInferDataPtr GetCNInferDataPtr(std::shared_ptr<CNFrameInfo> frameInfo) {
-  std::lock_guard<std::mutex> guard(frameInfo->datas_lock_);
-  return cnstream::any_cast<CNInferDataPtr>(frameInfo->datas[CNInferDataPtrKey]);
-}
-CNS_IGNORE_DEPRECATED_POP
 
 // Used by CNFrameInfo::Collection, the tags of data used by modules
 static constexpr char kCNDataFrameTag[] = "CNDataFrame"; /*!< value type in CNFrameInfo::Collection : CNDataFramePtr. */
 static constexpr char kCNInferObjsTag[] = "CNInferObjs"; /*!< value type in CNFrameInfo::Collection : CNInferObjsPtr. */
-static constexpr char kCNInferDataTag[] = "CNInferData"; /*!< value type in CNFrameInfo::Collection : CNInferDataPtr. */
 
 }  // namespace cnstream
 

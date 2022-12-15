@@ -10,7 +10,7 @@
   },
 
   "subgraph:object_detection" : {
-    "config_path" : "../configs/yolov3_object_detection___PLATFORM_PLACEHOLDER__.json",
+    "config_path" : "../configs/__NN___object_detection___PLATFORM_PLACEHOLDER__.json",
     "next_modules" : ["subgraph:osd_label_map_coco"]
   },
 
@@ -20,6 +20,6 @@
   },
 
   "subgraph:sinker" : {
-    "config_path" : "../configs/sinker_configs/__SINKER_PLACEHOLDER__"
+    "config_path" : "../configs/sinker_configs/__SINKER_PLACEHOLDER__.json"
   }
 }

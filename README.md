@@ -4,42 +4,31 @@ and essential elements.
 
 CNStream provides the following built-in modules:
 
-- DataSource: Support RTSP, video file,  images and elementary stream in memory （H.264, H.265, and JPEG decoding）.
-- Inferencer: MLU-based inference accelerator for detection and classification.
-- Inferencer2: Based on infer server to run inference, preprocessing and postprocessing.
+- DataSource: Support RTSP, video file, images, elementary stream in memory and sensor inputs (H.264, H.265, and JPEG decoding) (sensor input is only supported on edge platforms).
+- Inferencer: MLU-based inference accelerator for detection and classification, based on EasyDK InferServer.
 - Osd (On-screen display): Module for highlighting objects and text overlay.
-- Encode: Encode videos or images.
-- Displayer: Display the video on screen.
+- VEncode: Encode videos or images and write to file or push RTSP stream to internet.
+- Vout: Display the video on screen (Only support on edge platforms).
 - Tracker: Multi-object tracking.
-- RtspSink：Push RTSP stream to internet.
 
 ### Getting started ###
 
-  To start using CNStream, please refer to the chapter of ***quick start*** in the document of [Cambricon-CNStream-User-Guild-CN.pdf](./docs/release_document/latest/Cambricon-CNStream-User-Guide-CN-vlatest.pdf) .
+  To start using CNStream, please refer to the chapter of ***quick start*** in the document of [Cambricon-CNStream-User-Guide-CN.pdf](./docs/release_document/latest/Cambricon-CNStream-User-Guide-CN-vlatest.pdf) .
 ## Samples ##
 
 |                        Classification                        |               Object Detection                |
 | :----------------------------------------------------------: | :-------------------------------------------: |
 | <img src="./data/gifs/image_classification.gif" alt="Classification" style="height=350px" /> | <img src="./data/gifs/object_detection_yolov3.gif" alt="Object Detection" style="height=350px" /> |
 
-|               Object Tracking               |               License plate recognization               |
+|               Object Tracking               |               License plate recognition               |
 | :-----------------------------------------: | :-----------------------------------------------------: |
-| <img src="./data/gifs/object_tracking.gif" alt="Object Tracking" style="height=350px" /> | <img src="./data/gifs/lpr.gif" alt="License plate recognization" style="height=350px" /> |
+| <img src="./data/gifs/object_tracking.gif" alt="Object Tracking" style="height=350px" /> | <img src="./data/gifs/lpr.gif" alt="License plate recognition" style="height=350px" /> |
 
-|                           Body Pose                          |               Vehicle Detection               |
-| :----------------------------------------------------------: | :-----------------------------------------: |
-| <img src="./data/gifs/body_pose.gif" alt="Body Pose" style="height=350px" /> | <img src="./data/gifs/vehicle_cts.gif" alt="Vehicle Detection" style="height=350px" /> |
-
+|                           Body Pose                          |
+| :----------------------------------------------------------: |
+| <img src="./data/gifs/body_pose.gif" alt="Body Pose" style="height=350px" /> |
 
 ## Best Practices ##
-
-### **How to build a classic classification or detection application based on CNStream?** ###
-
-You should find a sample from ``samples/simple_run_pipeline/simple_run_pipeline.cpp`` that helps developers easily understand how to develop a classic classification or detection application based on CNStream pipeline.
-
-This sample supports typical classification and detection networks like vgg resnet ssd fasterrcnn yolo-vx and so on.
-
-This sample supports images or video file as input.
 
 ### **How to change the input video file?** ##
 

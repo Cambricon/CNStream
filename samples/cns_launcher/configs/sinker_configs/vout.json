@@ -1,0 +1,11 @@
+{
+  "vout" : {
+    "class_name" : "cnstream::Vout",
+    "parallelism" : 1,
+    "max_input_queue_size" : 10,
+    "custom_params" : {
+      // use channel 0 by default
+      "stream_id" : ""
+    }
+  }
+}

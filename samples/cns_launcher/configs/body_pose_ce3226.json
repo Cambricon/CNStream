@@ -1,0 +1,27 @@
+{
+  "body_pose" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["pose_osd"],
+    "custom_params" : {
+      "model_path" : "../../../data/models/body25_pose_v0.13.0_4b_bgr_uint8.magicmind",
+      "preproc"  : "name=PreprocBodyPose;use_cpu=false",
+      "postproc" : "name=PostprocBody25Pose",
+      "batch_timeout" : 200,
+      "engine_num" : 1,
+      "model_input_pixel_format" : "BGR24",
+      "device_id" : 0
+    }
+  },
+
+  "pose_osd" : {
+    "class_name" : "cns_openpose::PoseOsd",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "nkeypoints" : 25,  // body25 has 25 keypoints, ignore background
+      "nlimbs" : 26  // body25 has 26 limbs
+    }
+  }
+}

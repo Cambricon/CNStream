@@ -17,16 +17,15 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-
-#include <pybind11/functional.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
-#include <cnstream_pipeline.hpp>
-#include <cnstream_source.hpp>
-
 #include <memory>
 #include <string>
+
+#include "pybind11/functional.h"
+#include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
+
+#include "cnstream_pipeline.hpp"
+#include "cnstream_source.hpp"
 
 namespace py = pybind11;
 
@@ -43,10 +42,10 @@ class Pybind11StreamMsgObserverV : public StreamMsgObserver {
 
 void PipelineWrapper(py::module &m) {  // NOLINT
   py::enum_<StreamMsgType>(m, "StreamMsgType")
-      .value("eos_msg", StreamMsgType::EOS_MSG)
-      .value("error_msg", StreamMsgType::ERROR_MSG)
-      .value("stream_err_msg", StreamMsgType::STREAM_ERR_MSG)
-      .value("frame_err_msg", StreamMsgType::FRAME_ERR_MSG);
+      .value("EOS", StreamMsgType::EOS_MSG)
+      .value("ERROR", StreamMsgType::ERROR_MSG)
+      .value("STREAM_ERR", StreamMsgType::STREAM_ERR_MSG)
+      .value("FRAME_ERR", StreamMsgType::FRAME_ERR_MSG);
   py::class_<StreamMsg>(m, "StreamMsg")
       .def_readwrite("type", &StreamMsg::type)
       .def_readwrite("stream_id", &StreamMsg::stream_id)
@@ -84,6 +83,7 @@ void PipelineWrapper(py::module &m) {  // NOLINT
                     py::cpp_function(&Pipeline::GetStreamMsgObserver, py::return_value_policy::reference),
                     py::cpp_function(&Pipeline::SetStreamMsgObserver, py::keep_alive<1, 2>()))
       .def("is_root_node", &Pipeline::IsRootNode)
+      .def("is_leaf_node", &Pipeline::IsLeafNode)
       .def("register_frame_done_callback", &Pipeline::RegisterFrameDoneCallBack)
       .def("get_profile", [](Pipeline *pipeline) {
         return pipeline->GetProfiler()->GetProfile();

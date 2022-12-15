@@ -21,11 +21,28 @@
 #ifndef MODULES_TEST_INCLUDE_TEST_BASE_HPP_
 #define MODULES_TEST_INCLUDE_TEST_BASE_HPP_
 
+#include <memory>
 #include <string>
+
+#include "opencv2/opencv.hpp"
+
+#include "cnedk_buf_surface.h"
+
+#include "cnstream_frame_va.hpp"
 
 #define PATH_MAX_LENGTH 1024
 
 std::string GetExePath();
 void CheckExePath(const std::string& path);
+bool CvtBgrToYuv420sp(const cv::Mat &bgr_image, uint32_t alignment, CnedkBufSurface *surf);
+std::shared_ptr<cnstream::CNDataFrame> GenerateCNDataFrame(cv::Mat img, int device_id);
 
+std::string GetModelInfoStr(std::string model_name, std::string info_type);
+std::string GetLabelInfoStr(std::string label_name, std::string info_type);
+
+bool IsEdgePlatform(int device_id);
+
+bool IsCloudPlatform(int device_id);
+
+int InitPlatform(bool enable_vin, bool enable_vout);
 #endif  // MODULES_TEST_INCLUDE_TEST_BASE_HPP_

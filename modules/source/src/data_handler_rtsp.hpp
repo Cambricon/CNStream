@@ -21,77 +21,59 @@
 #ifndef MODULES_SOURCE_HANDLER_RTSP_HPP_
 #define MODULES_SOURCE_HANDLER_RTSP_HPP_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-#ifdef __cplusplus
-}
-#endif
 
-#include <memory>
-#include <sstream>
 #include <string>
-#include <thread>
 
-#include "cnstream_logging.hpp"
-#include "data_handler_util.hpp"
 #include "data_source.hpp"
-#include "util/rtsp_client.hpp"
-#include "util/cnstream_queue.hpp"
-#include "util/video_decoder.hpp"
 
 namespace cnstream {
 
-class RtspHandlerImpl : public IDecodeResult, public SourceRender {
+/*!
+ * @class RtspHandler
+ *
+ * @brief RtspHandler is a class of source handler for rtsp stream .
+ */
+class RtspHandlerImpl;
+class RtspHandler : public SourceHandler {
  public:
-  explicit RtspHandlerImpl(DataSource *module, const std::string &url_name, RtspHandler *handler, bool use_ffmpeg,
-                           int reconnect, const MaximumVideoResolution &maximum_resolution,
-                           std::function<void(ESPacket, std::string)> callback)
-      : SourceRender(handler),
-        module_(module),
-        url_name_(url_name),
-        stream_id_(handler->GetStreamId()),
-        use_ffmpeg_(use_ffmpeg),
-        reconnect_(reconnect),
-        maximum_resolution_(maximum_resolution),
-        save_es_packet_(callback) { }
-  ~RtspHandlerImpl() {}
-  bool Open();
-  void Close();
-
-  // IDecodeResult methods
-  void OnDecodeError(DecodeErrorCode error_code) override;
-  void OnDecodeFrame(DecodeFrame *frame) override;
-  void OnDecodeEos() override;
+  /*!
+   * @brief A constructor to construct a RtspHandler object.
+   *
+   * @param[in] module The data source module.
+   * @param[in] stream_id The stream id of the stream.
+   * @param[in] param The parameters of the handler.
+   *
+   * @return No return value.
+   */
+  explicit RtspHandler(DataSource *module, const std::string &stream_id, const RtspSourceParam &param);
+  /*!
+   * @brief The destructor of RtspHandler.
+   *
+   * @return No return value.
+   */
+  ~RtspHandler();
+  /*!
+   * @brief Opens source handler.
+   *
+   * @return Returns true if the source handler is opened successfully, otherwise returns false.
+   */
+  bool Open() override;
+  /*!
+   * @brief Stops source handler.
+   *
+   * @return No return value
+   */
+  void Stop() override;
+  /*!
+   * @brief Closes source handler.
+   *
+   * @return No return value
+   */
+  void Close() override;
 
  private:
-  DataSource *module_ = nullptr;
-  std::string url_name_;
-  std::string stream_id_;
-  DataSourceParam param_;
-  bool use_ffmpeg_ = false;
-  int reconnect_ = 0;
-  MaximumVideoResolution maximum_resolution_;
-  std::atomic<int> demux_exit_flag_ {0};
-  std::thread demux_thread_;
-  std::atomic<int> decode_exit_flag_{0};
-  std::thread decode_thread_;
-  std::atomic<bool> stream_info_set_{false};
-  std::mutex mutex_;
-  VideoInfo stream_info_{};
-  BoundedQueue<std::shared_ptr<EsPacket>> *queue_ = nullptr;
-  void DemuxLoop();
-  void DecodeLoop();
-  std::function<void(cnstream::ESPacket, std::string)> save_es_packet_ = nullptr;
-
-#ifdef UNIT_TEST
- public:  // NOLINT
-  void SetDecodeParam(const DataSourceParam &param) { param_ = param; }
-#endif
-};  // class RtspHandlerImpl
+  RtspHandlerImpl *impl_ = nullptr;
+};  // class RtspHandler
 
 }  // namespace cnstream
 

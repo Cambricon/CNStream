@@ -12,7 +12,7 @@ CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 source ${CURRENT_DIR}/../../env.sh
 
 PrintUsages(){
-    echo "Usages: run.sh [mlu220/mlu270] [encode_jpeg/encode_video/display/rtsp]"
+    echo "Usages: run.sh [mlu370/ce3226] [encode_jpeg/encode_video/rtsp/vout]"
 }
 
 if [ $# -ne 2 ]; then
@@ -20,32 +20,34 @@ if [ $# -ne 2 ]; then
     exit 1
 fi
 
-if [[ ${1} == "mlu220" ]]; then
-    MODEL_PATHS[0]=${MODELS_DIR}/yolov3_b4c4_argb_mlu220.cambricon
-    REMOTE_MODEL_PATHS[0]=http://video.cambricon.com/models/MLU220/yolov3_b4c4_argb_mlu220.cambricon
-    MODEL_PATHS[1]=${MODELS_DIR}/mobilenet_ssd_plate_detection_b4c4_bgra_mlu220.cambricon
-    REMOTE_MODEL_PATHS[1]=http://video.cambricon.com/models/MLU220/mobilenet_ssd_plate_detection_b4c4_bgra_mlu220.cambricon
-    MODEL_PATHS[2]=${MODELS_DIR}/lprnet_b4c4_bgra_mlu220.cambricon
-    REMOTE_MODEL_PATHS[2]=http://video.cambricon.com/models/MLU220/lprnet_b4c4_bgra_mlu220.cambricon
-elif [[ ${1} == "mlu270" ]]; then
-    MODEL_PATHS[0]=${MODELS_DIR}/yolov3_b4c4_argb_mlu270.cambricon
-    REMOTE_MODEL_PATHS[0]=http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon
-    MODEL_PATHS[1]=${MODELS_DIR}/mobilenet_ssd_plate_detection_b4c4_bgra_mlu270.cambricon
-    REMOTE_MODEL_PATHS[1]=http://video.cambricon.com/models/MLU270/mobilenet_ssd_plate_detection_b4c4_bgra_mlu270.cambricon
-    MODEL_PATHS[2]=${MODELS_DIR}/lprnet_b4c4_bgra_mlu270.cambricon
-    REMOTE_MODEL_PATHS[2]=http://video.cambricon.com/models/MLU270/lprnet_b4c4_bgra_mlu270.cambricon
+if [[ ${1} == "ce3226" ]]; then
+    MM_VER=v0.13.0
+    MODEL_PATHS[0]=${MODELS_DIR}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+    REMOTE_MODEL_PATHS[0]=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+    MODEL_PATHS[1]=${MODELS_DIR}/mobilenet_ssd_plate_detection_${MM_VER}_4b_bgr_fp32.magicmind
+    REMOTE_MODEL_PATHS[1]=http://video.cambricon.com/models/magicmind/${MM_VER}/mobilenet_ssd_plate_detection_${MM_VER}_4b_bgr_fp32.magicmind
+    MODEL_PATHS[2]=${MODELS_DIR}/lprnet_${MM_VER}_4b_bgr_uint8.magicmind
+REMOTE_MODEL_PATHS[2]=http://video.cambricon.com/models/magicmind/${MM_VER}/lprnet_${MM_VER}_4b_bgr_uint8.magicmind
+elif [[ ${1} == "mlu370" ]]; then
+    MM_VER=v0.13.0
+    MODEL_PATHS[0]=${MODELS_DIR}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+    REMOTE_MODEL_PATHS[0]=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+    MODEL_PATHS[1]=${MODELS_DIR}/mobilenet_ssd_plate_detection_${MM_VER}_4b_bgr_fp32.magicmind
+    REMOTE_MODEL_PATHS[1]=http://video.cambricon.com/models/magicmind/${MM_VER}/mobilenet_ssd_plate_detection_${MM_VER}_4b_bgr_fp32.magicmind
+    MODEL_PATHS[2]=${MODELS_DIR}/lprnet_${MM_VER}_4b_bgr_uint8.magicmind
+    REMOTE_MODEL_PATHS[2]=http://video.cambricon.com/models/magicmind/${MM_VER}/lprnet_${MM_VER}_4b_bgr_uint8.magicmind
 else
     PrintUsages
     exit 1
 fi
 
-if [[ ${2} != "encode_jpeg" && ${2} != "encode_video" && ${2} != "display" && ${2} != "rtsp" ]]; then
+if [[ ${2} != "encode_jpeg" && ${2} != "encode_video" && ${2} != "rtsp" && ${2} != "vout" ]]; then
     PrintUsages
     exit 1
 fi
 
-LABEL_PATH=${MODELS_DIR}/label_map_coco_add_license_plate.txt
-REMOTE_LABEL_PATH=http://video.cambricon.com/models/labels/label_map_coco_add_license_plate.txt
+LABEL_PATH=${MODELS_DIR}/label_map_coco.txt
+REMOTE_LABEL_PATH=http://video.cambricon.com/models/labels/label_map_coco.txt
 mkdir -p ${MODELS_DIR}
 
 for i in $(seq 0 `expr ${#MODEL_PATHS[@]} - 1`)
@@ -69,7 +71,7 @@ fi
 
 # generate config file with selected sinker and selected platform
 pushd ${CURRENT_DIR}
-    sed 's/__PLATFORM_PLACEHOLDER__/'"${1}"'/g' config_template.json | sed 's/__SINKER_PLACEHOLDER__/'"${2}"'.json/g' &> config.json
+    sed 's/__PLATFORM_PLACEHOLDER__/'"${1}"'/g;s/__SINKER_PLACEHOLDER__/'"${2}"'/g' config_template.json &> config.json
 popd
 
 ${SAMPLES_DIR}/generate_file_list.sh

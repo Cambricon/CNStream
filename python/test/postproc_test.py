@@ -20,6 +20,8 @@
 
 import os, sys
 sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../lib")
+sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../../easydk/python/lib")
+import cnis
 import cnstream
 import cnstream_cpptest
 
@@ -27,80 +29,54 @@ import cnstream_cpptest
 init_called = False
 execute_called = False
 postproc_params = None
-obj_init_called = False
-obj_execute_called = False
-obj_postproc_params = None
-received_input_shapes = None
-received_output_shape = None
+received_input_shapes = []
+received_output_shape = []
 
 class CustomPostproc(cnstream.Postproc):
-    def __init__(self):
-        cnstream.Postproc.__init__(self)
+  def __init__(self):
+    cnstream.Postproc.__init__(self)
 
-    def init(self, params):
-        global init_called
-        global postproc_params
-        init_called = True
-        postproc_params = params
-        return True
+  def init(self, params):
+    global init_called, postproc_params
 
-    def execute(self, net_outputs, input_shapes, finfo):
-        global execute_called
-        execute_called = True
-        global received_input_shapes
-        global received_output_shape
-        received_input_shapes = input_shapes
-        received_output_shape = net_outputs[0].shape
+    init_called = True
+    postproc_params = params
+    return 0
 
-class CustomObjPostproc(cnstream.ObjPostproc):
-    def __init__(self):
-        cnstream.ObjPostproc.__init__(self)
+  def execute(self, net_outputs, model_info, packages, labels):
+    global execute_called, received_input_shapes, received_output_shape
 
-    def init(self, params):
-        global obj_init_called
-        global obj_postproc_params
-        obj_init_called = True
-        obj_postproc_params = params
-        return True
+    execute_called = True
 
-    def execute(self, net_outputs, input_shapes, finfo, obj):
-        global obj_execute_called
-        obj_execute_called = True
-        global received_input_shapes
-        global received_output_shape
-        received_input_shapes = input_shapes
-        received_output_shape = net_outputs[0].shape
+    input_shapes = []
+    input_shapes.append(model_info.input_shape(0).vectorize())
+    received_input_shapes = input_shapes
+    for net_output in net_outputs:
+      received_output_shape.append(net_output[1].vectorize())
+    return 0
 
-class TestPostproc(object):
-    @staticmethod
-    def test_postproc():
-        params = {'pyclass_name' : 'test.postproc_test.CustomPostproc', 'param' : 'value'}
-        assert cnstream_cpptest.cpptest_pypostproc(params)
-        # test cpp call python init function success
-        assert init_called
-        # test custom parameters from cpp pass to python success
-        assert postproc_params['param'] == 'value'
-        # test cpp call python execute function success
-        assert execute_called
-        # check I/O shapes
-        expected_input_shapes = [[4, 160, 40, 4]]
-        expected_output_shape = (20, 1, 84)
-        assert expected_input_shapes == received_input_shapes
-        assert expected_output_shape == received_output_shape
+def test_postproc():
+  global init_called, postproc_params, execute_called, expected_input_shapes, expected_output_shape
 
-    @staticmethod
-    def test_obj_postproc():
-        params = {'pyclass_name' : 'test.postproc_test.CustomObjPostproc', 'param' : 'value'}
-        assert cnstream_cpptest.cpptest_pyobjpostproc(params)
-        # test cpp call python init function success
-        assert obj_init_called
-        # test custom parameters from cpp pass to python success
-        assert obj_postproc_params['param'] == 'value'
-        # test cpp call python execute function success
-        assert obj_execute_called
-        # check I/O shapes
-        expected_input_shapes = [[4, 160, 40, 4]]
-        expected_output_shape = (20, 1, 84)
-        assert expected_input_shapes == received_input_shapes
-        assert expected_output_shape == received_output_shape
+  model_file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+      "../../data/models/yolov5m_v0.13.0_4b_rgb_uint8.magicmind")
+  if not os.path.exists(model_file):
+    os.makedirs(os.path.dirname(model_file),exist_ok=True)
+    import urllib.request
+    url_str = "http://video.cambricon.com/models/magicmind/v0.13.0/yolov5m_v0.13.0_4b_rgb_uint8.magicmind"
+    print('Downloading {} ...'.format(url_str))
+    urllib.request.urlretrieve(url_str, model_file)
 
+  params = {'pyclass_name' : 'test.postproc_test.CustomPostproc', 'param' : 'value'}
+  assert cnstream_cpptest.cpptest_pypostproc(params) == 0
+  # test cpp call python init function success
+  assert init_called
+  # test custom parameters from cpp pass to python success
+  assert postproc_params['param'] == 'value'
+  # test cpp call python execute function success
+  assert execute_called
+  # check I/O shapes
+  expected_input_shapes = [[4, 640, 640, 3]]
+  expected_output_shape = [[4, 1024, 7], [4]]
+  assert expected_input_shapes == received_input_shapes
+  assert expected_output_shape == received_output_shape

@@ -17,17 +17,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include "data_source.hpp"
-
-#include <algorithm>
-#include <atomic>
-#include <functional>
-#include <map>
-#include <memory>
 #include <string>
+#include <vector>
 
+#include "data_source.hpp"
 #include "cnstream_logging.hpp"
-#include "profiler/module_profiler.hpp"
 
 namespace cnstream {
 
@@ -35,128 +29,34 @@ DataSource::DataSource(const std::string &name) : SourceModule(name) {
   param_register_.SetModuleDesc(
       "DataSource is a module for handling input data (videos or images)."
       " Feed data to codec and send decoded data to the next module if there is one.");
-  param_register_.Register("output_type",
-                           "Where the outputs will be stored. It could be cpu or mlu,"
-                           "It is used when decoder_type is cpu.");
-  param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
-  param_register_.Register("interval",
-                           "How many frames will be discarded between two frames"
-                           " which will be sent to next modules.");
-  param_register_.Register("decoder_type", "Which the input data will be decoded by. It could be cpu or mlu.");
-  param_register_.Register("reuse_cndec_buf",
-                           "This parameter decides whether the codec buffer that stores output data"
-                           "will be held and reused by the framework afterwards. It should be true or false.");
-  param_register_.Register("input_buf_number",
-                           "Codec buffer number for storing input data."
-                           " Basically, we do not need to set it, as it will be allocated automatically.");
-  param_register_.Register("output_buf_number",
-                           "Codec buffer number for storing output data."
-                           " Basically, we do not need to set it, as it will be allocated automatically.");
-  param_register_.Register("only_key_frame", "Only decode key frames and other frames are discarded. Default is false");
-  param_register_.Register("apply_stride_align_for_scaler",
-                           "The output data will align the scaler(hardware on mlu220) requirements."
-                           " Recommended for use with scaler on mlu220 platforms.");
+  param_helper_.reset(new (std::nothrow) ModuleParamsHelper<DataSourceParam>(name));
+
+  static const std::vector<ModuleParamDesc> register_param = {
+    {"interval", "1",
+    "How many frames will be discarded between two frames which will be sent to next modules.",
+    PARAM_OPTIONAL, OFFSET(DataSourceParam, interval), ModuleParamParser<uint32_t>::Parser, "uint32_t"},
+    {"bufpool_size", "16", "bufpool size for the stream. Please be noted, on CE3226, it must be VB pool, and video "
+     "encoder will use it as well.", PARAM_OPTIONAL, OFFSET(DataSourceParam, bufpool_size),
+     ModuleParamParser<uint32_t>::Parser, "uint32_t"},
+    {"device_id", "0",
+     "Which device will be used. If there is only one device, it might be 0.",
+     PARAM_REQUIRED, OFFSET(DataSourceParam, device_id), ModuleParamParser<int>::Parser, "int"}
+  };
+  param_helper_->Register(register_param, &param_register_);
 }
 
 DataSource::~DataSource() {}
 
-static int GetDeviceId(ModuleParamSet paramSet) {
-  if (paramSet.find("device_id") == paramSet.end()) {
-    return -1;
-  }
-  std::stringstream ss;
-  int device_id;
-  ss << paramSet["device_id"];
-  ss >> device_id;
-  /*check device_id valid or not,FIXME*/
-  return device_id;
-}
-
-bool DataSource::Open(ModuleParamSet paramSet) {
-  if(!CheckParamSet(paramSet)) {
+bool DataSource::Open(ModuleParamSet param_set) {
+  if (!CheckParamSet(param_set)) {
     return false;
   }
-  if (paramSet.find("output_type") != paramSet.end()) {
-    std::string out_type = paramSet["output_type"];
-    if (out_type == "cpu") {
-      param_.output_type_ = OutputType::OUTPUT_CPU;
-    } else if (out_type == "mlu") {
-      param_.output_type_ = OutputType::OUTPUT_MLU;
-    } else {
-      LOGE(SOURCE) << "output_type " << paramSet["output_type"] << " not supported";
-      return false;
-    }
-    if (param_.output_type_ == OutputType::OUTPUT_MLU) {
-      param_.device_id_ = GetDeviceId(paramSet);
-      if (param_.device_id_ < 0) {
-        LOGE(SOURCE) << "output_type MLU : device_id must be set";
-        return false;
-      }
-    }
-  }
 
-  if (paramSet.find("interval") != paramSet.end()) {
-    std::stringstream ss;
-    int interval;
-    ss << paramSet["interval"];
-    ss >> interval;
-    if (interval <= 0) {
-      LOGE(SOURCE) << "interval : invalid";
-      return false;
-    }
-    param_.interval_ = interval;
-  }
-
-  if (paramSet.find("decoder_type") != paramSet.end()) {
-    std::string dec_type = paramSet["decoder_type"];
-    if (dec_type == "cpu") {
-      param_.decoder_type_ = DecoderType::DECODER_CPU;
-    } else if (dec_type == "mlu") {
-      param_.decoder_type_ = DecoderType::DECODER_MLU;
-    } else {
-      LOGE(SOURCE) << "decoder_type " << paramSet["decoder_type"] << " not supported";
-      return false;
-    }
-    if (dec_type == "mlu") {
-      param_.device_id_ = GetDeviceId(paramSet);
-      if (param_.device_id_ < 0) {
-        LOGE(SOURCE) << "decoder_type MLU : device_id must be set";
-        return false;
-      }
-    }
-  }
-
-  if (param_.decoder_type_ == DecoderType::DECODER_MLU) {
-    param_.reuse_cndec_buf = false;
-    if (paramSet.find("reuse_cndec_buf") != paramSet.end()) {
-      if (paramSet["reuse_cndec_buf"] == "true") {
-        param_.reuse_cndec_buf = true;
-      } else {
-        param_.reuse_cndec_buf = false;
-      }
-    }
-  }
-
-  if (paramSet.find("input_buf_number") != paramSet.end()) {
-    std::string ibn_str = paramSet["input_buf_number"];
-    std::stringstream ss;
-    ss << paramSet["input_buf_number"];
-    ss >> param_.input_buf_number_;
-  }
-
-  if (paramSet.find("output_buf_number") != paramSet.end()) {
-    std::string obn_str = paramSet["output_buf_number"];
-    std::stringstream ss;
-    ss << paramSet["output_buf_number"];
-    ss >> param_.output_buf_number_;
-  }
-
-  if (paramSet.find("apply_stride_align_for_scaler") != paramSet.end()) {
-    param_.apply_stride_align_for_scaler_ = paramSet["apply_stride_align_for_scaler"] == "true";
-  }
-
-  if (paramSet.find("only_key_frame") != paramSet.end()) {
-    param_.only_key_frame_ = (paramSet["only_key_frame"] == "true");
+  param_ = param_helper_->GetParams();
+  uint32_t dev_cnt = 0;
+  if (cnrtGetDeviceCount(&dev_cnt) != cnrtSuccess || static_cast<uint32_t>(param_.device_id) >= dev_cnt) {
+    LOGE(SOURCE) << "[" << GetName() << "] device " << param_.device_id << " does not exist.";
+    return false;
   }
 
   return true;
@@ -164,48 +64,18 @@ bool DataSource::Open(ModuleParamSet paramSet) {
 
 void DataSource::Close() { RemoveSources(); }
 
-bool DataSource::CheckParamSet(const ModuleParamSet &paramSet) const {
+bool DataSource::CheckParamSet(const ModuleParamSet &param_set) const {
+  std::string err_msg;
+  if (!param_helper_->ParseParams(param_set)) {
+    LOGE(SOURCE) << "[" << GetName() << "] parse parameters failed.";
+    return false;
+  }
+
   bool ret = true;
   ParametersChecker checker;
-  for (auto &it : paramSet) {
-    if (!param_register_.IsRegisted(it.first)) {
-      LOGW(SOURCE) << "[DataSource] Unknown param: " << it.first;
-    }
-  }
-  int device_id = GetDeviceId(paramSet);
-  if (paramSet.find("output_type") != paramSet.end()) {
-    if (paramSet.at("output_type") != "cpu" && paramSet.at("output_type") != "mlu") {
-      LOGE(SOURCE) << "[DataSource] [output_type] " << paramSet.at("output_type") << " not supported";
-      ret = false;
-    }
-    if (paramSet.at("output_type") == "mlu" && device_id < 0) {
-      LOGE(SOURCE) << "[DataSource] [output_type] MLU : device_id must be set";
-      ret = false;
-    }
-  }
-
-  std::string err_msg;
-  if (!checker.IsNum({"interval", "input_buf_number", "output_buf_number"}, paramSet, err_msg, true)) {
+  if (!checker.IsNum({"interval", "bufpool_size", "device_id"}, param_set, err_msg, true)) {
     LOGE(SOURCE) << "[DataSource] " << err_msg;
     ret = false;
-  }
-
-  if (paramSet.find("decoder_type") != paramSet.end()) {
-    std::string dec_type = paramSet.at("decoder_type");
-    if (dec_type != "cpu" && dec_type != "mlu") {
-      LOGE(SOURCE) << "[DataSource] [decoder_type] " << dec_type << " not supported.";
-      ret = false;
-    }
-    if (dec_type == "mlu" && device_id < 0) {
-      LOGE(SOURCE) << "[DataSource] [decoder_type] MLU : device_id must be set";
-      ret = false;
-    }
-    if (dec_type == "mlu" && paramSet.find("reuse_cndec_buf") != paramSet.end()) {
-      if (paramSet.at("reuse_cndec_buf") != "true" && paramSet.at("reuse_cndec_buf") != "false") {
-        LOGE(SOURCE) << "[DataSource] [reuse_cndec_buf] should be true or false";
-        ret = false;
-      }
-    }
   }
 
   return ret;

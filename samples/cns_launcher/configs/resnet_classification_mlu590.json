@@ -1,0 +1,16 @@
+{
+  "classifier" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "model_path": "../../../data/models/resnet50_v0.14.0_4b_rgb_uint8.magicmind",
+      "preproc"  : "name=PreprocClassification;use_cpu=false",
+      "postproc" : "name=PostprocClassification;threshold=0.1",
+      "batch_timeout" : 100,
+      "engine_num" : 4,
+      "model_input_pixel_format" : "RGB24",
+      "device_id" : 0
+    }
+  }
+}

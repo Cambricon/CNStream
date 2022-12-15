@@ -24,13 +24,12 @@
 #include <memory>
 #include <string>
 
+#include "cnstream_frame.hpp"
 #include "cnstream_frame_va.hpp"
 
 #include "reflex_object.h"
 
 namespace cnstream {
-
-using CNFrameInfoPtr = std::shared_ptr<CNFrameInfo>;
 
 class KafkaClient;
 

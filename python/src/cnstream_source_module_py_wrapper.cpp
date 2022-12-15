@@ -17,11 +17,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
 #include <memory>
 #include <string>
+
+#include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
 
 #include "cnstream_source.hpp"
 #include "data_source.hpp"
@@ -93,6 +93,7 @@ void SourceModuleWrapper(const py::module &m) {
       .def(py::init<SourceModule*, const std::string&>())
       .def("open", &SourceHandler::Open)
       .def("close", &SourceHandler::Close)
+      .def("stop", &SourceHandler::Stop)
       .def("get_stream_id", &SourceHandler::GetStreamId)
       .def("create_frame_info", [](std::shared_ptr<SourceHandler> handler, bool eos) {
         return handler->CreateFrameInfo(eos);

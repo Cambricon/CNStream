@@ -17,14 +17,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
 #include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "pybind11/numpy.h"
+#include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
 
 #include "cnstream_frame.hpp"
 #include "cnstream_frame_va.hpp"
@@ -56,55 +56,13 @@ void CNDataFrameWrapper(const py::module &m) {
       .def(py::init([]() {
         return std::make_shared<CNDataFrame>();
       }))
-      .def("get_planes", &CNDataFrame::GetPlanes)
-      .def("get_plane_bytes", &CNDataFrame::GetPlaneBytes)
-      .def("get_bytes", &CNDataFrame::GetBytes)
       .def("image_bgr", [](std::shared_ptr<CNDataFrame> data_frame) {
         cv::Mat bgr_img = data_frame->ImageBGR();
         return MatToArray(bgr_img);
       })
       .def("has_bgr_image", &CNDataFrame::HasBGRImage)
-      .def("data", [](const CNDataFrame& data_frame, int plane_idx) {
-          return data_frame.data[plane_idx].get();
-      }, py::return_value_policy::reference_internal)
-      .def_readwrite("frame_id", &CNDataFrame::frame_id)
-      .def_readwrite("fmt", &CNDataFrame::fmt)
-      .def_readwrite("width", &CNDataFrame::width)
-      .def_readwrite("height", &CNDataFrame::height)
-      .def_property("stride", [](const CNDataFrame& data_frame) {
-          return py::array_t<int>({CN_MAX_PLANES}, {sizeof(int)}, data_frame.stride);
-      }, [](std::shared_ptr<CNDataFrame> data_frame, py::array_t<int> strides) {
-          py::buffer_info strides_buf = strides.request();
-          int size = std::min(static_cast<int>(strides_buf.size), CN_MAX_PLANES);
-          memcpy(data_frame->stride, strides_buf.ptr, size * sizeof(int));
-      })
-      .def_readwrite("ctx", &CNDataFrame::ctx)
-      .def_property("dst_device_id", [](const CNDataFrame& data_frame) {
-          return data_frame.dst_device_id.load();
-      }, [](std::shared_ptr<CNDataFrame> data_frame, int dev_id) {
-          data_frame->dst_device_id.store(dev_id);
-      });
-
-  py::enum_<CNDataFormat>(m, "CNDataFormat")
-      .value("CN_INVALID", CNDataFormat::CN_INVALID)
-      .value("CN_PIXEL_FORMAT_YUV420_NV21", CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21)
-      .value("CN_PIXEL_FORMAT_YUV420_NV12", CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12)
-      .value("CN_PIXEL_FORMAT_BGR24", CNDataFormat::CN_PIXEL_FORMAT_BGR24)
-      .value("CN_PIXEL_FORMAT_RGB24", CNDataFormat::CN_PIXEL_FORMAT_RGB24)
-      .value("CN_PIXEL_FORMAT_ARGB32", CNDataFormat::CN_PIXEL_FORMAT_ARGB32)
-      .value("CN_PIXEL_FORMAT_ABGR32", CNDataFormat::CN_PIXEL_FORMAT_ABGR32)
-      .value("CN_PIXEL_FORMAT_RGBA32", CNDataFormat::CN_PIXEL_FORMAT_RGBA32)
-      .value("CN_PIXEL_FORMAT_BGRA32", CNDataFormat::CN_PIXEL_FORMAT_BGRA32);
-
-  py::class_<DevContext>(m, "DevContext")
-      .def(py::init())
-      .def_readwrite("dev_type", &DevContext::dev_type)
-      .def_readwrite("dev_id", &DevContext::dev_id);
-
-  py::enum_<DevContext::DevType>(m, "DevType")
-    .value("INVALID", DevContext::DevType::INVALID)
-    .value("CPU", DevContext::DevType::CPU)
-    .value("MLU", DevContext::DevType::MLU);
+      .def_readwrite("buf_surf", &CNDataFrame::buf_surf)
+      .def_readwrite("frame_id", &CNDataFrame::frame_id);
 }
 
 void CNInferObjsWrapper(const py::module &m) {
@@ -123,24 +81,6 @@ void CNInferObjsWrapper(const py::module &m) {
           std::lock_guard<std::mutex> lk(objs_holder->mutex_);
           objs_holder->objs_.push_back(obj);
       });
-
-
-  py::class_<CNInferBoundingBox, std::shared_ptr<CNInferBoundingBox>>(m, "CNInferBoundingBox")
-      .def(py::init([]() {
-        return std::make_shared<CNInferBoundingBox>();
-      }))
-      .def(py::init([](float x, float y, float w, float h) {
-        auto bbox = std::make_shared<CNInferBoundingBox>();
-        bbox->x = x;
-        bbox->y = y;
-        bbox->w = w;
-        bbox->h = h;
-        return bbox;
-      }))
-      .def_readwrite("x", &CNInferBoundingBox::x)
-      .def_readwrite("y", &CNInferBoundingBox::y)
-      .def_readwrite("w", &CNInferBoundingBox::w)
-      .def_readwrite("h", &CNInferBoundingBox::h);
 
 
   py::class_<CNInferAttr, std::shared_ptr<CNInferAttr>>(m, "CNInferAttr")

@@ -1,6 +1,6 @@
 # Classification
 
-Classify the input images by ResNet50 (on MLU270 and MLU370) or ResNet18 (on MLU220) network on MLU.
+Classify the input images by ResNet50 network on MLU.
 
 ``${CNSTREAM_DIR}`` represents CNStream source directory.
 
@@ -16,9 +16,9 @@ Classify the input images by ResNet50 (on MLU270 and MLU370) or ResNet18 (on MLU
 
 ## Supported Platform
 
-- MLU220
-- MLU270
+- MLU590
 - MLU370
+- CE3226
 
 ## Parameters
 
@@ -28,39 +28,30 @@ Classify the input images by ResNet50 (on MLU270 and MLU370) or ResNet18 (on MLU
 
 - configuration: DataSource->Inferencer->Osd->Encode
 
-  (Inferencer2 is used instead Inferencer on MLU370. )
-
 ## Models
 
-- For MLU220:
-  - [ResNet18](http://video.cambricon.com/models/MLU220/resnet18_b4c4_bgra_mlu220.cambricon)
-    - preprocessing: EasyBang ResizeConvert operator
-    - postprocessing: [PostprocClassification](../../common/postprocess/postprocess_classification.cpp)
-- For MLU270:
-  - [ResNet50](http://video.cambricon.com/models/MLU270/resnet50_b16c16_bgra_mlu270.cambricon)
-    - preprocessing: EasyBang ResizeConvert operator
-    - postprocessing: [PostprocClassification](../../common/postprocess/postprocess_classification.cpp)
-- For MLU370:
-  - [ResNet50](http://video.cambricon.com/models/MLU370/resnet50_nhwc_tfu_0.8.2_uint8_int8_fp16.model)
-    - preprocessing: CNCV (Cambricon CV library) operator(s)
-    - postprocessing: [VideoPostprocClassification](../../common/postprocess/video_postprocess_classification.cpp)
+- ResNet50
+  - model:
+    - For MLU590 platform, [model](http://video.cambricon.com/models/magicmind/v0.14.0/resnet50_v0.14.0_4b_rgb_uint8.magicmind)
+    - For MLU370 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/resnet50_v0.13.0_4b_rgb_uint8.magicmind)
+    - For CE3226 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/resnet50_v0.13.0_4b_rgb_uint8.magicmind)
+  - preprocessing: [PreprocClassification](../../common/preprocess/preprocess_classification.cpp)
+  - postprocessing: [PostprocClassification](../../common/postprocess/postprocess_classification.cpp)
 
 ## How to run
 
 ```sh
 cd ${CNSTREAM_DIR}/samples/cns_launcher/image_classification
-# Usages: ./run.sh [mlu220/mlu270/mlu370]
-./run.sh mlu220  # For MLU220 platform
-./run.sh mlu270  # For MLU270 platform
-./run.sh mlu370  # For MLU370 platform
+# Usages: ./run.sh [mlu590/mlu370/ce3226]
+# For example, if the platform is mlu370
+./run.sh mlu370
 ```
-
 
 
 After users run the script, the following steps will be done:
 
 - Setup environment.
-- Generate input file list files ``files.list_image`` , ``files.list_video`` and ``files.list_pose_image`` at ``${CNSTREAM_DIR}/samples`` , unless they are existed.
+- Generate input file list files ``files.list_image`` , ``files.list_video`` ``files.list_pose_image`` and ``files.list_sensor`` at ``${CNSTREAM_DIR}/samples`` , unless they are existed.
 - Download necessary Cambricon models and label files to ``${CNSTREAM_DIR}/data/models`` .
 - Replace multiple kinds of ``PLACE_HOLDER`` in ``config_template.json`` with parameters passed by user to generate file ``config.json`` , which is the configuration file used in the sample. The configuration could be seen as a graph. A graph may contains modules and subgraphs. Subgraphs are other json configuration files. Basically they are common and may not be used in only one sample, they are located at ``${CNSTREAM_DIR}/samples/cns_launcher/configs`` .
 - Run ``cns_launcher`` executable file which is at ``${CNSTREAM_DIR}/samples/bin`` with input list file, source frame rate, configuration file and so on.

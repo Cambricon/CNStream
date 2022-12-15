@@ -18,32 +18,33 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#ifndef _CNSTREAM_SOURCE_HANDLER_UTIL_HPP_
-#define _CNSTREAM_SOURCE_HANDLER_UTIL_HPP_
+#ifndef CNSTREAM_SOURCE_HANDLER_UTIL_HPP_
+#define CNSTREAM_SOURCE_HANDLER_UTIL_HPP_
 
 #include <assert.h>
-
+#include <algorithm>
 #include <atomic>
-#include <condition_variable>
 #include <chrono>
+#include <condition_variable>
+#include <iostream>
+#include <memory>
 #include <mutex>
 #include <queue>
-#include <memory>
-#include <iostream>
-#include <thread>
+#include <sstream>
 #include <string>
+#include <thread>
 
 #include "cnstream_frame_va.hpp"
 #include "cnstream_logging.hpp"
 #include "data_source.hpp"
-#include "util/video_decoder.hpp"
+#include "video_decoder.hpp"
 
 namespace cnstream {
 
 struct EsPacket {
   explicit EsPacket(ESPacket *pkt) {
     if (pkt && pkt->data && pkt->size) {
-      pkt_.data = new(std::nothrow) unsigned char[pkt->size];
+      pkt_.data = new (std::nothrow) unsigned char[pkt->size];
       if (pkt_.data) {
         memcpy(pkt_.data, pkt->data, pkt->size);
         pkt_.size = pkt->size;
@@ -62,7 +63,7 @@ struct EsPacket {
 
   ~EsPacket() {
     if (pkt_.data) {
-      delete []pkt_.data, pkt_.data = nullptr;
+      delete[] pkt_.data, pkt_.data = nullptr;
     }
     pkt_.size = 0;
     pkt_.flags = 0;
@@ -72,28 +73,25 @@ struct EsPacket {
   ESPacket pkt_;
 };
 
-template<typename T>
+template <typename T>
 class BoundedQueue {
  public:
-  BoundedQueue(const BoundedQueue<T>&) = delete;
-  BoundedQueue& operator=(const BoundedQueue<T>&) = delete;
+  BoundedQueue(const BoundedQueue<T> &) = delete;
+  BoundedQueue &operator=(const BoundedQueue<T> &) = delete;
 
-  explicit BoundedQueue<T>(size_t maxSize)
-    : mutex_(),
-    maxSize_(maxSize)
-  {}
+  explicit BoundedQueue<T>(size_t maxSize) : mutex_(), maxSize_(maxSize) {}
 
-  void Push(const T& x) {
+  void Push(const T &x) {
     std::unique_lock<std::mutex> lk(mutex_);
-    notFull_.wait(lk, [this]() {return queue_.size() < maxSize_; });
+    notFull_.wait(lk, [this]() { return queue_.size() < maxSize_; });
     queue_.push(x);
     lk.unlock();
     notEmpty_.notify_one();
   }
 
-  bool Push(int timeoutMs, const T& x) {
+  bool Push(int timeout_ms, const T &x) {
     std::unique_lock<std::mutex> lk(mutex_);
-    notFull_.wait_for(lk, std::chrono::milliseconds(timeoutMs),  [this]() {return queue_.size() < maxSize_; });
+    notFull_.wait_for(lk, std::chrono::milliseconds(timeout_ms), [this]() { return queue_.size() < maxSize_; });
     if (queue_.size() >= maxSize_) {
       return false;
     }
@@ -105,7 +103,7 @@ class BoundedQueue {
 
   T Pop() {
     std::unique_lock<std::mutex> lk(mutex_);
-    notEmpty_.wait(lk, [this]() {return !queue_.empty(); });
+    notEmpty_.wait(lk, [this]() { return !queue_.empty(); });
     T front(queue_.front());
     queue_.pop();
     lk.unlock();
@@ -113,9 +111,9 @@ class BoundedQueue {
     return front;
   }
 
-  bool Pop(int timeoutMs, T& out) {  // NOLINT
+  bool Pop(int timeout_ms, T &out) {  // NOLINT
     std::unique_lock<std::mutex> lk(mutex_);
-    notEmpty_.wait_for(lk, std::chrono::milliseconds(timeoutMs), [this]() {return !queue_.empty(); });
+    notEmpty_.wait_for(lk, std::chrono::milliseconds(timeout_ms), [this]() { return !queue_.empty(); });
     if (queue_.empty()) return false;
     out = queue_.front();
     queue_.pop();
@@ -134,9 +132,7 @@ class BoundedQueue {
     return queue_.size();
   }
 
-  size_t MaxSize() const {
-    return maxSize_;
-  }
+  size_t MaxSize() const { return maxSize_; }
 
  private:
   mutable std::mutex mutex_;
@@ -155,27 +151,26 @@ class SourceRender {
   virtual bool CreateInterrupt() { return interrupt_.load(); }
   std::shared_ptr<CNFrameInfo> CreateFrameInfo(bool eos = false) {
     std::shared_ptr<CNFrameInfo> data;
+    int retry_cnt = 1;
     while (1) {
       data = handler_->CreateFrameInfo(eos);
       if (data != nullptr) break;
       if (CreateInterrupt()) break;
-      std::this_thread::sleep_for(std::chrono::microseconds(5));
+      std::this_thread::sleep_for(std::chrono::microseconds(5 * retry_cnt));
+      retry_cnt = std::min(retry_cnt * 2, 20);
     }
-    auto dataframe = std::make_shared<CNDataFrame>();
-    if (!dataframe) {
-      return nullptr;
+    if (!eos) {
+      auto dataframe = std::make_shared<CNDataFrame>();
+      if (!dataframe) {
+        return nullptr;
+      }
+      auto inferobjs = std::make_shared<CNInferObjs>();
+      if (!inferobjs) {
+        return nullptr;
+      }
+      data->collection.Add(kCNDataFrameTag, dataframe);
+      data->collection.Add(kCNInferObjsTag, inferobjs);
     }
-    auto inferobjs = std::make_shared<CNInferObjs>();
-    if (!inferobjs) {
-      return nullptr;
-    }
-    auto inferdata =  std::make_shared<CNInferData>();
-    if (!inferdata) {
-      return nullptr;
-    }
-    data->collection.Add(kCNDataFrameTag, dataframe);
-    data->collection.Add(kCNInferObjsTag, inferobjs);
-    data->collection.Add(kCNInferDataTag, inferdata);
     return data;
   }
 
@@ -183,19 +178,15 @@ class SourceRender {
     if (eos_sent_) return;
     auto data = CreateFrameInfo(true);
     if (!data) {
-      LOGE(SOURCE) << "[" << handler_->GetStreamId() << "]: "
-                   << "SendFlowEos: Create CNFrameInfo failed";
+      LOGE(SOURCE) << "[" << handler_->GetStreamId() << "]: SendFlowEos: Create CNFrameInfo failed";
       return;
     }
     SendFrameInfo(data);
     eos_sent_ = true;
-    LOGI(SOURCE) << "[" << handler_->GetStreamId() << "]: "
-                  << "Send EOS frame info";
+    LOGI(SOURCE) << "[" << handler_->GetStreamId() << "]: Send EOS frame info";
   }
 
-  bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) {
-    return handler_->SendData(data);
-  }
+  bool SendFrameInfo(std::shared_ptr<CNFrameInfo> data) { return handler_->SendData(data); }
 
  protected:
   SourceHandler *handler_;
@@ -207,10 +198,42 @@ class SourceRender {
   uint64_t frame_id_ = 0;
 
  public:
-  static int Process(std::shared_ptr<CNFrameInfo> frame_info,
-                     DecodeFrame *frame, uint64_t frame_id, const DataSourceParam &param_);
+  static int Process(std::shared_ptr<CNFrameInfo> frame_info, cnedk::BufSurfWrapperPtr wrapper, uint64_t frame_id,
+                     const DataSourceParam &param_);
 };
+
+/***********************************************************************
+ * @brief FrController is used to control the frequency of sending data.
+ ***********************************************************************/
+class FrController {
+ public:
+  FrController() {}
+  explicit FrController(uint32_t frame_rate) : frame_rate_(frame_rate) {}
+  void Start() { start_ = std::chrono::steady_clock::now(); }
+  void Control() {
+    if (0 == frame_rate_) return;
+    double delay = 1000.0 / frame_rate_;
+    end_ = std::chrono::steady_clock::now();
+    std::chrono::duration<double, std::milli> diff = end_ - start_;
+    auto gap = delay - diff.count() - time_gap_;
+    if (gap > 0) {
+      std::chrono::duration<double, std::milli> dura(gap);
+      std::this_thread::sleep_for(dura);
+      time_gap_ = 0;
+    } else {
+      time_gap_ = -gap;
+    }
+    Start();
+  }
+  inline uint32_t GetFrameRate() const { return frame_rate_; }
+  inline void SetFrameRate(uint32_t frame_rate) { frame_rate_ = frame_rate; }
+
+ private:
+  uint32_t frame_rate_ = 0;
+  double time_gap_ = 0;
+  std::chrono::time_point<std::chrono::steady_clock> start_, end_;
+};  // class FrController
 
 }  // namespace cnstream
 
-#endif  // _CNSTREAM_SOURCE_HANDLER_UTIL_HPP_
+#endif  // CNSTREAM_SOURCE_HANDLER_UTIL_HPP_

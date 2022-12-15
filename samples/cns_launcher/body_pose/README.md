@@ -16,8 +16,8 @@ Detect the body pose in each input image by OpenPose network on MLU.
 
 ## Supported Platform
 
-- MLU220
-- MLU270
+- MLU370
+- CE3226
 
 ## Parameters
 
@@ -29,18 +29,16 @@ Detect the body pose in each input image by OpenPose network on MLU.
 
   (PoseOsd is a custom module defined at ``${CNSTREAM_DIR}/samples/common/cns_openpose/pose_osd_module.cpp``)
 
-  (Sinker is chosen by users from Encode, RtspSink and Displayer module.)
+  (Sinker is chosen by users from Encode and Vout module.)
 
 ## Models
 
-- For MLU220:
-  - [OpenPose](http://video.cambricon.com/models/MLU220/coco_pose_b4c4_bgra_mlu220.cambricon)
-    - preprocessing: EasyBang ResizeConvert operator
-    - postprocessing: [PostprocPose](../../common/cns_openpose/postprocess_body_pose.cpp)
-- For MLU270:
-  - [OpenPose](http://video.cambricon.com/models/MLU270/coco_pose_b4c4_bgra_mlu270.cambricon)
-    - preprocessing: EasyBang ResizeConvert operator
-    - postprocessing: [PostprocPose](../../common/cns_openpose/postprocess_body_pose.cpp)
+- OpenPose
+  - model:
+    - For MLU370 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/body25_pose_v0.13.0_4b_bgr_uint8.magicmind)
+    - For CE3226 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/body25_pose_v0.13.0_4b_bgr_uint8.magicmind)
+  - preprocessing: [PreprocPose](../../common/cns_openpose/preprocess_body_pose.cpp)
+  - postprocessing: [PostprocPose](../../common/cns_openpose/postprocess_body_pose.cpp)
 
 ## Sinker
 
@@ -52,21 +50,21 @@ Detect the body pose in each input image by OpenPose network on MLU.
 
 ``${CNSTREAM_DIR}/samples/cns_launcher/configs/sinker_configs/encode_video.json``
 
-**display**
-
-``${CNSTREAM_DIR}/samples/cns_launcher/configs/sinker_configs/display.json``
-
 **rtsp**
 
 ``${CNSTREAM_DIR}/samples/cns_launcher/configs/sinker_configs/rtsp.json``
+
+**vout**
+
+``${CNSTREAM_DIR}/samples/cns_launcher/configs/sinker_configs/vout.json``
 
 ## How to run
 
 ```sh
 cd ${CNSTREAM_DIR}/samples/cns_launcher/body_pose
-# Usages: run.sh [mlu220/mlu270] [encode_jpeg/encode_video/display/rtsp]
-# For example, if the platform is mlu270 and the sinker is RtspSink
-./run.sh mlu270 rtsp
+# Usages: run.sh [mlu370/ce3226] [encode_jpeg/encode_video/rtsp/vout]
+# For example, if the platform is mlu370 and the sinker is rtsp
+./run.sh mlu370 rtsp
 ```
 
 
@@ -74,7 +72,7 @@ cd ${CNSTREAM_DIR}/samples/cns_launcher/body_pose
 After users run the script, the following steps will be done:
 
 - Setup environment.
-- Generate input file list files ``files.list_image`` , ``files.list_video`` and ``files.list_pose_image`` at ``${CNSTREAM_DIR}/samples`` , unless they are existed.
+- Generate input file list files ``files.list_image`` , ``files.list_video`` ``files.list_pose_image`` and ``files.list_sensor`` at ``${CNSTREAM_DIR}/samples`` , unless they are existed.
 - Download necessary Cambricon models and label files to ``${CNSTREAM_DIR}/data/models`` .
 - Replace multiple kinds of ``PLACE_HOLDER`` in ``config_template.json`` with parameters passed by user to generate file ``config.json`` , which is the configuration file used in the sample. The configuration could be seen as a graph. A graph may contains modules and subgraphs. Subgraphs are other json configuration files. Basically they are common and may not be used in only one sample, they are located at ``${CNSTREAM_DIR}/samples/cns_launcher/configs`` .
 - Run ``cns_launcher`` executable file which is at ``${CNSTREAM_DIR}/samples/bin`` with input list file, source frame rate, configuration file and so on.

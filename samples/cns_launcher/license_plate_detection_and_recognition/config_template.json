@@ -25,12 +25,13 @@
     "max_input_queue_size" : 20,
     "next_modules" : ["subgraph:sinker"],
     "custom_params" : {
-      "label_path" : "../../../data/models/label_map_coco_add_license_plate.txt",
-      "attr_keys" : "plate_number, plate_ocr_score"
+      "label_path" : "../../../data/models/label_map_coco.txt",
+      "label_size" : "normal",
+      "osd_handler": "OsdHandlerVS"
     }
   },
 
   "subgraph:sinker" : {
-    "config_path" : "../configs/sinker_configs/__SINKER_PLACEHOLDER__"
+    "config_path" : "../configs/sinker_configs/__SINKER_PLACEHOLDER__.json"
   }
 }

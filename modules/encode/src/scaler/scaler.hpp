@@ -21,6 +21,10 @@
 #ifndef __SCALER_H__
 #define __SCALER_H__
 
+#include <cstdint>
+
+#include "opencv2/core/core.hpp"
+
 namespace cnstream {
 
 class Scaler {
@@ -43,7 +47,6 @@ class Scaler {
     uint8_t *data[3];
     uint32_t stride[3];
     ColorFormat color;
-    int mlu_device_id = -1;
   };
 
   struct Rect {
@@ -72,7 +75,6 @@ class Scaler {
     OPENCV  = 0,
     LIBYUV,
     FFMPEG,
-    CNCV,
     CARRIER_MAX,
   };
 
@@ -80,6 +82,27 @@ class Scaler {
   static int GetCarrier() { return carrier_; }
   static bool Process(const Buffer *src, Buffer *dst, const Rect *src_crop = nullptr, const Rect *dst_crop = nullptr,
                       int carrier = DEFAULT);
+
+  static void MatToBuffer(const cv::Mat &mat, Scaler::ColorFormat color, Scaler::Buffer *buffer) {
+    if (!buffer) return;
+    buffer->width = mat.cols;
+    buffer->height = mat.rows;
+    buffer->color = color;
+    if (color <=  Scaler::ColorFormat::YUV_NV21) {
+      buffer->height = mat.rows * 2 / 3;
+      buffer->data[0] = mat.data;
+      buffer->stride[0] = mat.step;
+      buffer->data[1] = mat.data + mat.step * buffer->height;
+      buffer->stride[1] = mat.step;
+      if (color ==  Scaler::ColorFormat::YUV_I420) {
+        buffer->data[2] = mat.data + mat.step * buffer->height * 5 / 4;
+        buffer->stride[1] = buffer->stride[2] = mat.step / 2;
+      }
+    } else {
+      buffer->data[0] = mat.data;
+      buffer->stride[0] = mat.step;
+    }
+  }
 
  private:
   static int carrier_;

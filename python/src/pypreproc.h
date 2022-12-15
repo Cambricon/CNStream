@@ -17,28 +17,29 @@
  * out of or in connection with the software or the use or other dealings in
  * the software.
  *************************************************************************/
-
-#include <preproc.hpp>
-#include <pybind11/pybind11.h>
-
 #include <memory>
 #include <string>
-#include <map>
+#include <unordered_map>
 #include <vector>
+
+#include "pybind11/pybind11.h"
+
+#include "cnstream_preproc.hpp"
 
 namespace cnstream {
 
 class __attribute__((visibility("default"))) PyPreproc : public Preproc {
  public:
   ~PyPreproc();
-  bool Init(const std::map<std::string, std::string> &params) override;
-  int Execute(const std::vector<float*> &net_inputs, const std::shared_ptr<edk::ModelLoader> &model,
-              const cnstream::CNFrameInfoPtr &finfo) override;
-
+  int Init(const std::unordered_map<std::string, std::string> &params) override;
+  int OnTensorParams(const infer_server::CnPreprocTensorParams *params) override;
+  int Execute(cnedk::BufSurfWrapperPtr src, cnedk::BufSurfWrapperPtr dst,
+              const std::vector<CnedkTransformRect> &src_rects) override;
  private:
   std::string pyclass_name_;
   pybind11::object pyinstance_;
   pybind11::object pyinit_;
+  pybind11::object pyon_tensor_params_;
   pybind11::object pyexecute_;
   DECLARE_REFLEX_OBJECT_EX(PyPreproc, Preproc);
 };  // class PyPreproc

@@ -1,0 +1,30 @@
+{
+  "classific" : {
+    "class_name" : "cnstream::Inferencer",
+    "parallelism" : 1,
+    "max_input_queue_size" : 20,
+    "next_modules" : ["osd"],
+    "custom_params" : {
+      "model_path" : "../../../data/models/resnet50_v0.13.0_4b_rgb_uint8.magicmind",
+      "preproc"  : "name=PreprocClassification;use_cpu=false",
+      "postproc" : "name=PostprocClassification;threshold=0.1",
+      // "filter" : "categories=car,bus,truck",
+      "filter" : "categories=2,5,7",
+      "batch_timeout" : 100,
+      "engine_num" : 1,
+      "model_input_pixel_format" : "RGB24",
+      "device_id" : 0
+    }
+  },
+
+  "osd" : {
+    "class_name" : "cnstream::Osd",
+    "parallelism" : 4,
+    "max_input_queue_size" : 20,
+    "custom_params" : {
+      "label_path" : "../../../data/models/label_map_coco.txt",
+      "secondary_label_path" : "../../../data/models/synset_words.txt",
+      "attr_keys" : "classification"
+    }
+  }
+}

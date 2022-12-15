@@ -24,17 +24,21 @@
 
 #include "cnis/processor.h"
 #include "cnstream_frame_va.hpp"
-#include "device/mlu_context.h"
+#include "easytrack/include/easy_track.h"
 #include "feature_extractor.hpp"
 #include "profiler/module_profiler.hpp"
 #include "track.hpp"
+
+#include "private/cnstream_param.hpp"
 
 #define CLIP(x) ((x) < 0 ? 0 : ((x) > 1 ? 1 : (x)))
 
 namespace cnstream {
 
+int tracker_priority_ = -1;
+
 struct TrackerContext {
-  std::unique_ptr<edk::EasyTrack> processer_ = nullptr;
+  std::unique_ptr<EasyTrack> processer_ = nullptr;
   TrackerContext() = default;
   ~TrackerContext() = default;
   TrackerContext(const TrackerContext &) = delete;
@@ -43,19 +47,66 @@ struct TrackerContext {
 
 thread_local std::unique_ptr<FeatureExtractor> g_feature_extractor;
 
-Tracker::Tracker(const std::string &name) : Module(name) {
-  hasTransmit_.store(true);
-  param_register_.SetModuleDesc("Tracker is a module for realtime tracking.");
-  param_register_.Register("model_path",
-                           "The offline model path. Normally offline model is a file"
-                           " with cambricon or model extension.");
-  param_register_.Register("func_name",
-                           "The offline model function name, usually is 'subnet0'."
-                           "Works only if backend is CNRT.");
-  param_register_.Register("engine_num", "Infer server engine number.");
-  param_register_.Register("track_name", "Track algorithm name. Choose from FeatureMatch and IoUMatch.");
-  param_register_.Register("device_id", "Which device will be used. If there is only one device, it might be 0.");
-  param_register_.Register("max_cosine_distance", "Threshold of cosine distance.");
+Tracker::Tracker(const std::string &name) : ModuleEx(name) {
+  param_register_.SetModuleDesc(
+      "Tracker is a module for realtime tracking.");
+  param_helper_.reset(new (std::nothrow) ModuleParamsHelper<TrackParams>(name));
+
+  auto model_input_pixel_format_parser = [](const ModuleParamSet& param_set, const std::string& param_name,
+                                            const std::string& value, void* result) -> bool {
+    if ("RGB24" == value) {
+      *(static_cast<InferVideoPixelFmt*>(result)) = infer_server::NetworkInputFormat::RGB;
+    } else if ("BGR24" == value) {
+      *(static_cast<InferVideoPixelFmt*>(result)) = infer_server::NetworkInputFormat::BGR;
+    } else if ("GRAY" == value) {
+      *(static_cast<InferVideoPixelFmt*>(result)) = infer_server::NetworkInputFormat::GRAY;
+    } else if ("TENSOR" == value) {
+      *(static_cast<InferVideoPixelFmt*>(result)) = infer_server::NetworkInputFormat::TENSOR;
+    } else {
+      LOGE(Inferencer) << "[ModuleParamParser] [" << param_name << "]:" << value << " failed";
+      return false;
+    }
+    return true;
+  };
+
+  static const std::vector<ModuleParamDesc> register_param = {
+    {"device_id", "0", "Device ordinal number.", PARAM_OPTIONAL, OFFSET(TrackParams, device_id),
+      ModuleParamParser<uint32_t>::Parser, "uint32_t"},
+
+    {"model_input_pixel_format", "RGB24", "Optional. The pixel format of the model input image. "
+       "RGB24/BGR24/TENSOR are supported. ",
+       PARAM_OPTIONAL, OFFSET(TrackParams, input_format), model_input_pixel_format_parser, "InferVideoPixelFmt"},
+
+    {"priority", "0", "Optional. The priority of this infer task in infer server.", PARAM_OPTIONAL,
+      OFFSET(TrackParams, priority), ModuleParamParser<uint32_t>::Parser, "uint32_t"},
+
+    {"engine_num", "1",
+      "Optional. infer server engine number. Increase the engine number to improve performance. "
+      "However, more MLU resources will be used. It is important to choose a proper number. "
+      "Usually, it could be set to the core number of the device / the core number of the model.",
+      PARAM_OPTIONAL, OFFSET(TrackParams, engine_num), ModuleParamParser<uint32_t>::Parser, "uint32_t"},
+
+    {"batch_timeout", "300", "The batching timeout. unit[ms].", PARAM_OPTIONAL, OFFSET(TrackParams, batch_timeout),
+      ModuleParamParser<uint32_t>::Parser, "uint32_t"},
+
+    {"show_stats", "false",
+      "Optional. Whether show performance statistics. "
+      "1/true/TRUE/True/0/false/FALSE/False these values are accepted.",
+      PARAM_OPTIONAL, OFFSET(TrackParams, show_stats), ModuleParamParser<bool>::Parser, "bool"},
+
+    {"model_path", "", "The path of the offline model.", PARAM_OPTIONAL, OFFSET(TrackParams, model_path),
+      ModuleParamParser<std::string>::Parser, "string"},
+
+    {"track_name", "FeatureMatch", "Track algorithm name. Choose from FeatureMatch and IoUMatch.",
+      PARAM_OPTIONAL, OFFSET(TrackParams, track_name),
+      ModuleParamParser<std::string>::Parser, "string"},
+
+    {"max_cosine_distance", "0.2", "Threshold of cosine distance.",
+      PARAM_OPTIONAL, OFFSET(TrackParams, max_cosine_distance),
+      ModuleParamParser<float>::Parser, "float"}
+  };
+
+  param_helper_->Register(register_param, &param_register_);
 }
 
 Tracker::~Tracker() { Close(); }
@@ -66,9 +117,10 @@ bool Tracker::InitFeatureExtractor(const CNFrameInfoPtr &data) {
       LOGI(TRACK) << "[Track] FeatureExtract model not set, extract feature on CPU";
       g_feature_extractor.reset(new FeatureExtractor(match_func_));
     } else {
-      if (!infer_server::SetCurrentDevice(device_id_)) return false;
-      g_feature_extractor.reset(new FeatureExtractor(model_, match_func_, device_id_));
-      if (!g_feature_extractor->Init(engine_num_)) {
+      auto params = param_helper_->GetParams();
+      if (!infer_server::SetCurrentDevice(params.device_id)) return false;
+      g_feature_extractor.reset(new FeatureExtractor(model_, match_func_, params.device_id));
+      if (!g_feature_extractor->Init(params.input_format, params.engine_num, params.batch_timeout, params.priority)) {
         LOGE(TRACK) << "[Track] Extract feature on MLU. Init extractor failed.";
         g_feature_extractor.reset();
         return false;
@@ -87,58 +139,38 @@ TrackerContext *Tracker::GetContext(const CNFrameInfoPtr &data) {
     ctx = search->second;
   } else {
     ctx = new TrackerContext;
-    edk::FeatureMatchTrack *track = new edk::FeatureMatchTrack;
-    track->SetParams(max_cosine_distance_, 100, 0.7, 30, 3);
+    auto params = param_helper_->GetParams();
+    FeatureMatchTrack *track = new FeatureMatchTrack;
+    track->SetParams(params.max_cosine_distance, 100, 0.7, 30, 3);
     ctx->processer_.reset(track);
     contexts_[data->GetStreamIndex()] = ctx;
   }
   return ctx;
 }
 
-bool Tracker::Open(ModuleParamSet paramSet) {
-#ifdef CNIS_USE_MAGICMIND
-    if (paramSet.find("model_path") != paramSet.end()) {
-      model_pattern1_ = paramSet["model_path"];
-      model_pattern1_ = GetPathRelativeToTheJSONFile(model_pattern1_, paramSet);
-    }
-    if (!model_pattern1_.empty())
-      model_ = infer_server::InferServer::LoadModel(model_pattern1_);
-#else
-    if (paramSet.find("model_path") != paramSet.end()) {
-      model_pattern1_ = paramSet["model_path"];
-      model_pattern1_ = GetPathRelativeToTheJSONFile(model_pattern1_, paramSet);
-    }
-
-    std::string model_pattern2_ = "subnet0";
-    if (paramSet.find("func_name") != paramSet.end()) {
-      model_pattern2_ = paramSet["func_name"];
-    }
-    if (!model_pattern1_.empty() && !model_pattern2_.empty())
-      model_ = infer_server::InferServer::LoadModel(model_pattern1_, model_pattern2_);
-#endif
-
-  if (paramSet.find("max_cosine_distance") != paramSet.end()) {
-    max_cosine_distance_ = std::stof(paramSet["max_cosine_distance"]);
-  }
-
-  if (paramSet.find("engine_num") != paramSet.end()) {
-    engine_num_ = std::stoi(paramSet["engine_num"]);
-  }
-
-  if (paramSet.find("device_id") != paramSet.end()) {
-    device_id_ = std::stoi(paramSet["device_id"]);
-  }
-
-  track_name_ = "FeatureMatch";
-  if (paramSet.find("track_name") != paramSet.end()) {
-    track_name_ = paramSet["track_name"];
-  }
-
-  if (track_name_ != "FeatureMatch" && track_name_ != "IoUMatch") {
-    LOGE(TRACK) << "Unsupported track type: " << track_name_;
+bool Tracker::Open(ModuleParamSet param_set) {
+  if (false == CheckParamSet(param_set)) {
     return false;
   }
-  need_feature_ = (track_name_ == "FeatureMatch");
+
+  auto params = param_helper_->GetParams();
+
+  if (!params.model_path.empty()) {
+    params.model_path = GetPathRelativeToTheJSONFile(params.model_path, param_set);
+
+    if (!params.model_path.empty()) {
+      uint32_t dev_cnt = 0;
+      if (cnrtGetDeviceCount(&dev_cnt) != cnrtSuccess || params.device_id < 0 ||
+          static_cast<uint32_t>(params.device_id) >= dev_cnt) {
+        LOGE(TRACK) << "[" << GetName() << "] device " << params.device_id << " does not exist.";
+        return false;
+      }
+      cnrtSetDevice(params.device_id);
+      model_ = infer_server::InferServer::LoadModel(params.model_path);
+    }
+  }
+
+  need_feature_ = (params.track_name == "FeatureMatch");
 
   match_func_ = [this](const CNFrameInfoPtr data, bool valid) {
     if (!valid) {
@@ -147,10 +179,13 @@ bool Tracker::Open(ModuleParamSet paramSet) {
     }
     CNInferObjsPtr objs_holder = data->collection.Get<CNInferObjsPtr>(kCNInferObjsTag);
 
-    std::vector<edk::DetectObject> in, out;
+    std::vector<DetectObject> in, out;
+    std::unique_lock<std::mutex> guard(objs_holder->mutex_);
     in.reserve(objs_holder->objs_.size());
+
+    // CNDataFramePtr dataframe = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
     for (size_t i = 0; i < objs_holder->objs_.size(); i++) {
-      edk::DetectObject obj;
+      DetectObject obj;
       obj.label = std::stoi(objs_holder->objs_[i]->id);
       obj.score = objs_holder->objs_[i]->score;
       obj.bbox.x = objs_holder->objs_[i]->bbox.x;
@@ -160,15 +195,16 @@ bool Tracker::Open(ModuleParamSet paramSet) {
       obj.feature = objs_holder->objs_[i]->GetFeature("track");
       in.emplace_back(obj);
     }
-
-    GetContext(data)->processer_->UpdateFrame(edk::TrackFrame(), in, &out);
-
+    GetContext(data)->processer_->UpdateFrame(in, &out);
     for (size_t i = 0; i < out.size(); i++) {
       objs_holder->objs_[out[i].detect_id]->track_id = std::to_string(out[i].track_id);
     }
+
+    guard.unlock();
     TransmitData(data);
   };
 
+  tracker_priority_ = this->GetPriority();
   return true;
 }
 
@@ -181,6 +217,22 @@ void Tracker::Close() {
 }
 
 int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
+  if (!data) {
+    LOGE(TRACK) << "Process input data is nulltpr!";
+    return -1;
+  }
+  if (data->IsEos()) {
+    if (need_feature_) {
+      g_feature_extractor->WaitTaskDone(data->stream_id);
+    }
+    TransmitData(data);
+    return 0;
+  }
+
+  if (data->IsRemoved()) {
+    return 0;
+  }
+
   if (data->GetStreamIndex() >= GetMaxStreamNumber()) {
     return -1;
   }
@@ -189,90 +241,58 @@ int Tracker::Process(std::shared_ptr<CNFrameInfo> data) {
     return -1;
   }
 
-  if (!data->IsEos()) {
-    CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
-    if (frame->width <= 0 || frame->height <= 0) {
-      LOGE(TRACK) << "Frame width and height can not be lower than 0.";
+  CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
+  bool have_obj = data->collection.HasValue(kCNInferObjsTag);
+  if (have_obj) {
+    CNInferObjsPtr objs_holder = data->collection.Get<CNInferObjsPtr>(kCNInferObjsTag);
+    std::unique_lock<std::mutex> guard(objs_holder->mutex_);
+    for (size_t idx = 0; idx < objs_holder->objs_.size(); ++idx) {
+      auto &obj = objs_holder->objs_[idx];
+      infer_server::CNInferBoundingBox &bbox = obj->bbox;
+      bbox.x = CLIP(bbox.x);
+      bbox.w = CLIP(bbox.w);
+      bbox.y = CLIP(bbox.y);
+      bbox.h = CLIP(bbox.h);
+      bbox.w = (bbox.x + bbox.w > 1.0) ? (1.0 - bbox.x) : bbox.w;
+      bbox.h = (bbox.y + bbox.h > 1.0) ? (1.0 - bbox.y) : bbox.h;
+    }
+  }
+
+  if (need_feature_) {
+    // async extract feature
+    if (!g_feature_extractor->ExtractFeature(data)) {
+      LOGE(TRACK) << "Extract Feature failed";
       return -1;
     }
-    bool have_obj = data->collection.HasValue(kCNInferObjsTag);
-    if (have_obj) {
-      CNInferObjsPtr objs_holder = data->collection.Get<CNInferObjsPtr>(kCNInferObjsTag);
-      for (size_t idx = 0; idx < objs_holder->objs_.size(); ++idx) {
-        auto &obj = objs_holder->objs_[idx];
-        cnstream::CNInferBoundingBox &bbox = obj->bbox;
-        bbox.x = CLIP(bbox.x);
-        bbox.w = CLIP(bbox.w);
-        bbox.y = CLIP(bbox.y);
-        bbox.h = CLIP(bbox.h);
-        bbox.w = (bbox.x + bbox.w > 1.0) ? (1.0 - bbox.x) : bbox.w;
-        bbox.h = (bbox.y + bbox.h > 1.0) ? (1.0 - bbox.y) : bbox.h;
-      }
-    }
-
-    if (need_feature_) {
-      // async extract feature
-      if (!g_feature_extractor->ExtractFeature(data)) {
-        LOGE(TRACK) << "Extract Feature failed";
-        return -1;
-      }
-    } else {
-      match_func_(data, true);
-    }
   } else {
-    if (need_feature_) {
-      g_feature_extractor->WaitTaskDone(data->stream_id);
-    }
-    TransmitData(data);
+    match_func_(data, true);
   }
+
   return 0;
 }
 
-bool Tracker::CheckParamSet(const ModuleParamSet &paramSet) const {
+bool Tracker::CheckParamSet(const ModuleParamSet& param_set) const {
+  if (!param_helper_->ParseParams(param_set)) {
+    LOGE(TRACK) << "[" << GetName() << "] parse parameters failed.";
+    return false;
+  }
+
   bool ret = true;
+
+  auto params = param_helper_->GetParams();
+
   ParametersChecker checker;
-  for (auto &it : paramSet) {
-    if (!param_register_.IsRegisted(it.first)) {
-      LOGW(TRACK) << "[Tracker] Unknown param: " << it.first;
-    }
+
+  if (!checker.CheckPath(params.model_path, param_set)) {
+    LOGE(TRACK) << "[Tracker] [model_path] : " << params.model_path << " non-existence.";
+    ret = false;
   }
 
-  if (paramSet.find("model_path") != paramSet.end()) {
-    if (!checker.CheckPath(paramSet.at("model_path"), paramSet)) {
-      LOGE(TRACK) << "[Tracker] [model_path] : " << paramSet.at("model_path") << " non-existence.";
-      ret = false;
-    }
+  if (params.track_name != "FeatureMatch" && params.track_name != "IoUMatch") {
+    LOGE(TRACK) << "Unsupported track type: " << params.track_name;
+    ret = false;
   }
 
-  if (paramSet.find("track_name") != paramSet.end()) {
-    std::string track_name = paramSet.at("track_name");
-    if (track_name != "FeatureMatch" && track_name != "IoUMatch") {
-      LOGE(TRACK) << "[Tracker] [track_name] : Unsupported tracker type " << track_name;
-      ret = false;
-    }
-  }
-
-  std::string err_msg;
-  if (paramSet.find("device_id") != paramSet.end()) {
-    if (!checker.IsNum({"device_id"}, paramSet, err_msg)) {
-      LOGE(TRACK) << "[Tracker] " << err_msg;
-      ret = false;
-    }
-  }
-
-  if (paramSet.find("engine_num") != paramSet.end()) {
-    if (!checker.IsNum({"engine_num"}, paramSet, err_msg)) {
-      LOGE(TRACK) << "[Tracker] " << err_msg;
-      ret = false;
-    }
-  }
-
-  if (paramSet.find("max_cosine_distance") != paramSet.end()) {
-    if (!checker.IsNum({"max_cosine_distance"}, paramSet, err_msg)) {
-      LOGE(TRACK) << "[Tracker] " << err_msg;
-      ret = false;
-    }
-  }
   return ret;
 }
 

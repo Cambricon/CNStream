@@ -66,7 +66,7 @@ using ObjectConstructor = std::function<T*()>;
 template <typename T>
 class ClassInfo {
  public:
-  ClassInfo(const std::string& name, const ObjectConstructor<T>& constructor, bool regist = false);
+  ClassInfo(const std::string& name, const ObjectConstructor<T>& constructor, bool register = false);
 
   T* CreateObject() const;
 
@@ -104,9 +104,9 @@ class ReflexObjectEx : public ReflexObject {
 };  // class reflectobject
 
 template <typename T>
-ClassInfo<T>::ClassInfo(const std::string& name, const ObjectConstructor<T>& constructor, bool regist)
+ClassInfo<T>::ClassInfo(const std::string& name, const ObjectConstructor<T>& constructor, bool call_register)
     : name_(name), constructor_(constructor) {
-  if (regist) {
+  if (call_register) {
     Register();
   }
 }

@@ -33,29 +33,13 @@
 #include "cnis/processor.h"
 #include "cnstream_frame_va.hpp"
 #include "cnstream_module.hpp"
-#include "device/mlu_context.h"
-#include "easyinfer/mlu_memory_op.h"
 #include "test_base.hpp"
 #include "track.hpp"
 
 namespace cnstream {
 
 static std::string GetDSModelPath() {
-  if (infer_server::Predictor::Backend() == "magicmind") {
-    return "../../data/models/feature_extract_nhwc.model";
-  }
-  edk::MluContext ctx;
-  edk::CoreVersion core_ver = ctx.GetCoreVersion();
-  std::string model_path = "";
-  switch (core_ver) {
-    case edk::CoreVersion::MLU220:
-      model_path = "../../data/models/feature_extract_for_tracker_b4c4_argb_mlu220.cambricon";
-      break;
-    case edk::CoreVersion::MLU270:
-    default:
-      model_path = "../../data/models/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon";
-      break;
-  }
+  std::string model_path = "../../data/models/" + GetModelInfoStr("feature_extract", "name");
   return model_path;
 }
 
@@ -63,7 +47,6 @@ static constexpr const char* g_model_graph = "../../data/models/feature_extract_
 static constexpr const char* g_model_data = "../../data/models/feature_extract_nhwc.data";
 
 static constexpr const char *gname = "track";
-static constexpr const char *gfunc_name = "subnet0";
 static constexpr const char *ds_track = "FeatureMatch";
 static constexpr const char *img_path = "../../data/images/19.jpg";
 static constexpr int g_dev_id = 0;
@@ -86,13 +69,7 @@ TEST(Tracker, CheckParamSet) {
   param["device_id"] = "fake_id";
   EXPECT_FALSE(track->CheckParamSet(param));
 
-  bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
-  if (use_magicmind) {
-    param["model_path"] = GetExePath() + GetDSModelPath();
-  } else {
-    param["model_path"] = GetExePath() + GetDSModelPath();
-    param["func_name"] = gfunc_name;
-  }
+  param["model_path"] = GetExePath() + GetDSModelPath();
   param["device_id"] = std::to_string(g_dev_id);
   EXPECT_TRUE(track->CheckParamSet(param));
 
@@ -113,13 +90,12 @@ TEST(Tracker, CheckParamSet) {
   param["engine_num"] = "1";
   EXPECT_TRUE(track->CheckParamSet(param));
   param["no_such_param"] = "no_such_value";
-  EXPECT_TRUE(track->CheckParamSet(param));
+  EXPECT_FALSE(track->CheckParamSet(param));
 }
 
 TEST(Tracker, OpenClose) {
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   ModuleParamSet param;
-
   // Deep Sort On CPU
   param["track_name"] = ds_track;
   EXPECT_TRUE(track->Open(param));
@@ -128,19 +104,29 @@ TEST(Tracker, OpenClose) {
   EXPECT_TRUE(track->Open(param));
   // FeatureMatch On MLU
   param["track_name"] = ds_track;
-  bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
-  if (use_magicmind) {
-    param["model_path"] = GetExePath() + GetDSModelPath();
-  } else {
-    param["model_path"] = GetExePath() + GetDSModelPath();
-    param["func_name"] = gfunc_name;
-  }
+  param["device_id"] = "0";
+
+  param["model_path"] = GetExePath() + GetDSModelPath();
+
   EXPECT_TRUE(track->Open(param));
 
   param["max_cosine_distance"] = "0.06";
   param["engine_num"] = "1";
-  param["device_id"] = "0";
+
   param["track_name"] = "no_such_track_name";
+  EXPECT_FALSE(track->Open(param));
+
+  param["track_name"] = ds_track;
+  param["model_input_pixel_format"] = "BGR24";
+  EXPECT_TRUE(track->Open(param));
+
+  param["model_input_pixel_format"] = "GRAY";
+  EXPECT_TRUE(track->Open(param));
+
+  param["model_input_pixel_format"] = "TENSOR";
+  EXPECT_TRUE(track->Open(param));
+
+  param["model_input_pixel_format"] = "NO_THIS_FORMAT";
   EXPECT_FALSE(track->Open(param));
   track->Close();
 }
@@ -153,24 +139,33 @@ std::shared_ptr<CNFrameInfo> GenTestData(int iter, int obj_num) {
 
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
   data->SetStreamIndex(g_channel_id);
-  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
-  frame->frame_id = 1;
   data->timestamp = 1000;
-  frame->width = width;
-  frame->height = height;
-  void* ptr_cpu[1] = {img.data};
-  frame->stride[0] = width;
-  frame->ctx.dev_type = DevContext::DevType::CPU;
-  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
-  frame->dst_device_id = g_dev_id;
-  frame->CopyToSyncMem(ptr_cpu, true);
+
+  CnedkBufSurfaceCreateParams create_params;
+  create_params.batch_size = 1;
+  memset(&create_params, 0, sizeof(create_params));
+  create_params.device_id = g_dev_id;
+  create_params.batch_size = 1;
+  create_params.width = 1920;
+  create_params.height = 1080;
+  create_params.color_format = CNEDK_BUF_COLOR_FORMAT_NV21;
+  create_params.mem_type = CNEDK_BUF_MEM_DEVICE;
+
+  CnedkBufSurface* surf;
+  CnedkBufSurfaceCreate(&surf, &create_params);
+
+
+  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
+
+  frame->frame_id = 1;
+  frame->buf_surf = std::make_shared<cnedk::BufSurfaceWrapper>(surf, false);
 
   std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
   for (int i = 0; i < obj_num; ++i) {
     auto obj = std::make_shared<CNInferObject>();
     obj->id = std::to_string(i);
     float val = i * 0.1 + 0.01;
-    CNInferBoundingBox bbox = {val, val, val, val};
+    CnInferBbox bbox(val, val, val, val);
     obj->bbox = bbox;
     objs_holder->objs_.push_back(obj);
   }
@@ -179,66 +174,23 @@ std::shared_ptr<CNFrameInfo> GenTestData(int iter, int obj_num) {
   return data;
 }
 
-std::shared_ptr<CNFrameInfo> GenTestYUVData(int iter, int obj_num) {
+
+std::shared_ptr<CNFrameInfo> GenTestImageData(bool eos = false) {
   // prepare data
-  int width = 1920;
-  int height = 1080;
-  cv::Mat img(height + height / 2, width, CV_8UC1);
-
-  auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
-  data->SetStreamIndex(g_channel_id);
-  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
-  frame->frame_id = 1;
-  data->timestamp = 1000;
-  frame->width = width;
-  frame->height = height;
-  void* ptr_cpu[2] = {img.data, img.data + height * width};
-  frame->stride[0] = width;
-  frame->stride[1] = width;
-  frame->ctx.dev_type = DevContext::DevType::CPU;
-  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
-  frame->dst_device_id = g_dev_id;
-  frame->CopyToSyncMem(ptr_cpu, true);
-
-  std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
-  for (int i = 0; i < obj_num; ++i) {
-    auto obj = std::make_shared<CNInferObject>();
-    obj->id = std::to_string(i);
-    float val = i * 0.1 + 0.01;
-    CNInferBoundingBox bbox = {val, val, val, val};
-    obj->bbox = bbox;
-    objs_holder->objs_.push_back(obj);
-  }
-
-  data->collection.Add(kCNDataFrameTag, frame);
-  data->collection.Add(kCNInferObjsTag, objs_holder);
-  return data;
-}
-
-std::shared_ptr<CNFrameInfo> GenTestImageData() {
-  // prepare data
-  cv::Mat img;
   std::string image_path = GetExePath() + img_path;
-  img = cv::imread(image_path, cv::IMREAD_COLOR);
 
-  auto data = cnstream::CNFrameInfo::Create("1", false);
+  cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
+
+  auto data = cnstream::CNFrameInfo::Create("1", eos);
   data->SetStreamIndex(g_channel_id);
-  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
-  frame->frame_id = 1;
   data->timestamp = 1000;
-  frame->width = img.cols;
-  frame->height = img.rows;
-  void* ptr_cpu[1] = {img.data};
-  frame->stride[0] = img.cols;
-  frame->ctx.dev_type = DevContext::DevType::CPU;
-  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
-  frame->dst_device_id = g_dev_id;
-  frame->CopyToSyncMem(ptr_cpu, true);
+
+  std::shared_ptr<CNDataFrame> frame = GenerateCNDataFrame(img, g_dev_id);
 
   std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(1);
-  CNInferBoundingBox bbox = {0.2, 0.2, 0.6, 0.6};
+  CnInferBbox bbox(0.2, 0.2, 0.6, 0.6);
   obj->bbox = bbox;
   objs_holder->objs_.push_back(obj);
   data->collection.Add(kCNDataFrameTag, frame);
@@ -251,20 +203,15 @@ TEST(Tracker, ProcessMluFeature) {
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   ModuleParamSet param;
   param["track_name"] = ds_track;
-  bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
-  if (use_magicmind) {
-    param["model_path"] = GetExePath() + GetDSModelPath();
-  } else {
-    param["model_path"] = GetExePath() + GetDSModelPath();
-    param["func_name"] = gfunc_name;
-  }
+  param["model_path"] = GetExePath() + GetDSModelPath();
+
   ASSERT_TRUE(track->Open(param));
 
   int obj_num = 4;
   int repeat_time = 10;
 
   for (int n = 0; n < repeat_time; ++n) {
-    auto data = GenTestYUVData(n, obj_num);
+    auto data = GenTestData(n, obj_num);
     EXPECT_EQ(track->Process(data), 0);
     // send eos to ensure data process done
     auto eos = cnstream::CNFrameInfo::Create(std::to_string(0), true);
@@ -298,9 +245,12 @@ TEST(Tracker, ProcessCpuFeature) {
     }
   }
 
+  EXPECT_NE(track->Process(nullptr), 0);
   // Illegal StreamIndex
   data->SetStreamIndex(128);
   EXPECT_EQ(track->Process(data), -1);
+  data = GenTestImageData(true);
+  EXPECT_EQ(track->Process(data), 0);
 }
 
 TEST(Tracker, ProcessFeatureMatchCPU0) {
@@ -326,20 +276,8 @@ TEST(Tracker, ProcessFeatureMatchCPU1) {
   auto data = GenTestData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
 
-  // Illegal width and height
   CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
-  frame->width = -1;
-  EXPECT_EQ(track->Process(data), -1);
-  frame->width = 1920;
-  EXPECT_EQ(track->Process(data), 0);
 
-  frame->height = -1;
-  EXPECT_EQ(track->Process(data), -1);
-  frame->height = 1080;
-  EXPECT_EQ(track->Process(data), 0);
-
-  frame->width = 1920;
-  frame->height = 1080;
   EXPECT_EQ(track->Process(data), 0);
 }
 
@@ -357,7 +295,7 @@ TEST(Tracker, ProcessFeatureMatchCPU2) {
   CNInferObjsPtr objs_holder = data->collection.Get<CNInferObjsPtr>(kCNInferObjsTag);
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(5);
-  CNInferBoundingBox bbox = {0.6, 0.6, -0.1, -0.1};
+  CnInferBbox bbox(0.6, 0.6, 0.6, 0.6);
   obj->bbox = bbox;
   objs_holder->objs_.push_back(obj);
   EXPECT_EQ(track->Process(data), 0);
@@ -377,7 +315,7 @@ TEST(Tracker, ProcessFeatureMatchCPU3) {
   CNInferObjsPtr objs_holder = data->collection.Get<CNInferObjsPtr>(kCNInferObjsTag);
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(6);
-  CNInferBoundingBox bbox = {0.6, 0.6, 0.6, 0.6};
+  CnInferBbox bbox(0.6, 0.6, 0.6, 0.6);
   obj->bbox = bbox;
   objs_holder->objs_.push_back(obj);
   EXPECT_EQ(track->Process(data), 0);
@@ -405,34 +343,33 @@ TEST(Tracker, ProcessFeatureMatchCPU4) {
 
 TEST(Tracker, ProcessFeatureMatchMLU1) {
   // create track
-  std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
-  ModuleParamSet param;
-  param["track_name"] = "FeatureMatch";
-  bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
-  if (use_magicmind) {
-    param["model_path"] = GetExePath() + GetDSModelPath();
-  } else {
-    param["model_path"] = GetExePath() + GetDSModelPath();
-    param["func_name"] = gfunc_name;
-  }
-  ASSERT_TRUE(track->Open(param));
-  int iter = 0;
-  int obj_num = 3;
-  auto data = GenTestYUVData(iter, obj_num);
+  // std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
+  // ModuleParamSet param;
+  // param["track_name"] = "FeatureMatch";
+  // bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
+  // if (use_magicmind) {
+  //   param["model_path"] = GetExePath() + GetDSModelPath();
+  // } else {
+  //   param["model_path"] = GetExePath() + GetDSModelPath();
+  // }
+  // ASSERT_TRUE(track->Open(param));
+  // int iter = 0;
+  // int obj_num = 3;
+  // auto data = GenTestData(iter, obj_num);
 
-  CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
-  // invalid fmt
-  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_RGB24;
-  EXPECT_EQ(track->Process(data), -1);
-  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
-  EXPECT_EQ(track->Process(data), -1);
-  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
-  // invalid width and height
-  frame->width = -1;
-  EXPECT_EQ(track->Process(data), -1);
+  // CNDataFramePtr frame = data->collection.Get<CNDataFramePtr>(kCNDataFrameTag);
+  // // invalid fmt
+  // frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_RGB24;
+  // EXPECT_EQ(track->Process(data), -1);
+  // frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
+  // EXPECT_EQ(track->Process(data), -1);
+  // frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV21;
+  // // invalid width and height
+  // frame->width = -1;
+  // EXPECT_EQ(track->Process(data), -1);
 
-  frame->height = -1;
-  EXPECT_EQ(track->Process(data), -1);
+  // frame->height = -1;
+  // EXPECT_EQ(track->Process(data), -1);
 }
 
 TEST(Tracker, ProcessFeatureMatchMLU2) {
@@ -440,17 +377,11 @@ TEST(Tracker, ProcessFeatureMatchMLU2) {
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   ModuleParamSet param;
   param["track_name"] = "FeatureMatch";
-  bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
-  if (use_magicmind) {
-    param["model_path"] = GetExePath() + GetDSModelPath();
-  } else {
-    param["model_path"] = GetExePath() + GetDSModelPath();
-    param["func_name"] = gfunc_name;
-  }
+  param["model_path"] = GetExePath() + GetDSModelPath();
   ASSERT_TRUE(track->Open(param));
   int iter = 0;
   int obj_num = 0;
-  auto data = GenTestYUVData(iter, obj_num);
+  auto data = GenTestData(iter, obj_num);
   EXPECT_EQ(track->Process(data), 0);
   // send eos to ensure data process done
   auto eos = cnstream::CNFrameInfo::Create(std::to_string(0), true);
@@ -466,21 +397,15 @@ TEST(Tracker, ProcessFeatureMatchMLU3) {
   std::shared_ptr<Module> track = std::make_shared<Tracker>(gname);
   ModuleParamSet param;
   param["track_name"] = "FeatureMatch";
-  bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
-  if (use_magicmind) {
-    param["model_graph"] = GetExePath() + g_model_graph;
-    param["model_data"] = GetExePath() + g_model_data;
-  } else {
-    param["model_path"] = GetExePath() + GetDSModelPath();
-    param["func_name"] = gfunc_name;
-  }
+  param["model_path"] = GetExePath() + GetDSModelPath();
+
   ASSERT_TRUE(track->Open(param));
 
   int repeat_time = 10;
   int obj_num = 4;
   std::vector<CNFrameInfoPtr> datas(10);
   for (int n = 0; n < repeat_time; ++n) {
-    datas[n] = GenTestYUVData(n, obj_num);
+    datas[n] = GenTestData(n, obj_num);
     EXPECT_EQ(track->Process(datas[n]), 0);
   }
 

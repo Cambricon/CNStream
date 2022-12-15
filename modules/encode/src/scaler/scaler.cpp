@@ -18,36 +18,17 @@
  * THE SOFTWARE.
  *************************************************************************/
 
-#include <cnrt.h>
-
 #include "cnstream_logging.hpp"
 
 #include "scaler.hpp"
 
 namespace cnstream {
 
-#define SCALER_CNRT_CHECK(__EXPRESSION__)                                                                       \
-  do {                                                                                                          \
-    cnrtRet_t ret = (__EXPRESSION__);                                                                           \
-    LOGF_IF(Scaler, CNRT_RET_SUCCESS != ret) << "Call [" << #__EXPRESSION__ << "] failed, error code: " << ret; \
-  } while (0)
-
-#define CALL_CNRT_BY_CONTEXT(__EXPRESSION__, __DEV_ID__, __DDR_CHN__)          \
-  do {                                                                         \
-    int dev_id = (__DEV_ID__);                                                 \
-    cnrtDev_t dev;                                                             \
-    cnrtChannelType_t ddr_chn = static_cast<cnrtChannelType_t>((__DDR_CHN__)); \
-    SCALER_CNRT_CHECK(cnrtGetDeviceHandle(&dev, dev_id));                      \
-    SCALER_CNRT_CHECK(cnrtSetCurrentDevice(dev));                              \
-    if (ddr_chn >= 0) SCALER_CNRT_CHECK(cnrtSetCurrentChannel(ddr_chn));       \
-    SCALER_CNRT_CHECK(__EXPRESSION__);                                         \
-  } while (0)
 
 extern bool OpenCVProcess(const Scaler::Buffer *src, Scaler::Buffer *dst);
 extern bool LibYUVProcess(const Scaler::Buffer *src, Scaler::Buffer *dst);
 extern bool FFmpegProcess(const Scaler::Buffer *src, Scaler::Buffer *dst);
-extern bool CncvProcess(const Scaler::Buffer *src, Scaler::Buffer *dst, const Scaler::Rect *src_crop,
-                        const Scaler::Rect *dst_crop);
+
 
 const Scaler::Rect Scaler::NullRect = {0, 0, 0, 0};
 
@@ -155,37 +136,20 @@ bool Scaler::Process(const Buffer *src, Buffer *dst, const Rect *src_crop, const
   }
 
   Buffer src_buf, dst_buf;
-  if (src->mlu_device_id < 0) {
-    if (dst->mlu_device_id < 0) {
-      ScalerGetCropBuffer(src, &src_buf, src_crop);
-      ScalerGetCropBuffer(dst, &dst_buf, dst_crop);
-      if (carrier == OPENCV) {
-        return OpenCVProcess(&src_buf, &dst_buf);
-      } else if (carrier == LIBYUV) {
-        return LibYUVProcess(&src_buf, &dst_buf);
-      } else if (carrier == FFMPEG) {
-        return FFmpegProcess(&src_buf, &dst_buf);
-      } else {
-        LOGE(Scaler) << "unsupported arithmetic operator";
-        return false;
-      }
-    } else {
-      LOGE(Scaler) << "dst memory must be same with src (HOST)";
-      return false;
-    }
+
+  ScalerGetCropBuffer(src, &src_buf, src_crop);
+  ScalerGetCropBuffer(dst, &dst_buf, dst_crop);
+  if (carrier == OPENCV) {
+    return OpenCVProcess(&src_buf, &dst_buf);
+  } else if (carrier == LIBYUV) {
+    return LibYUVProcess(&src_buf, &dst_buf);
+  } else if (carrier == FFMPEG) {
+    return FFmpegProcess(&src_buf, &dst_buf);
   } else {
-    if (dst->mlu_device_id >= 0) {
-    } else {
-      LOGE(Scaler) << "dst memory must be same with src (DEVICE)";
-      return false;
-    }
-    // do resize & crop & color convert on MLU
-    src_buf = *src;
-    dst_buf = *dst;
-    ScalerFillBufferStride(&src_buf);
-    ScalerFillBufferStride(&dst_buf);
-    return CncvProcess(&src_buf, &dst_buf, src_crop, dst_crop);
+    LOGE(Scaler) << "unsupported arithmetic operator";
+    return false;
   }
+
   return true;
 }
 

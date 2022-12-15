@@ -40,7 +40,7 @@ class Kafka : public cnstream::Module, public cnstream::ModuleCreator<Kafka> {
   explicit Kafka(const std::string &name);
   ~Kafka();
 
-  bool Open(cnstream::ModuleParamSet paramSet) override;
+  bool Open(cnstream::ModuleParamSet param_set) override;
   void Close() override;
   int Process(CNFrameInfoPtr data) override;
 

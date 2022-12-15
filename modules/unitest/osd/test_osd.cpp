@@ -23,6 +23,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
@@ -33,11 +34,31 @@
 #include "cnstream_module.hpp"
 #include "osd.hpp"
 #include "test_base.hpp"
+#include "osd_handler.hpp"
 
 namespace cnstream {
 
 static constexpr const char *gname = "osd";
-static constexpr const char *glabel_path = "../../modules/unitest/osd/test_label.txt";
+static constexpr const char *glabel_path = "../../modules/unitest/data/test_label.txt";
+static constexpr const char *img_path = "../../data/images/19.jpg";
+
+class FakeOsdHandler : public cnstream::OsdHandler {
+ public:
+  FakeOsdHandler() = default;
+  ~FakeOsdHandler() = default;
+  int GetDrawInfo(const CNObjsVec &objects, const std::vector<std::string> &labels,
+                  std::vector<cnstream::OsdHandler::DrawInfo> *info) override {
+    return 0;
+  };
+
+ private:
+  DECLARE_REFLEX_OBJECT_EX(FakeOsdHandler, cnstream::OsdHandler);
+};
+
+IMPLEMENT_REFLEX_OBJECT_EX(FakeOsdHandler, cnstream::OsdHandler);
+
+
+int g_dev_id = 0;
 
 TEST(Osd, Construct) {
   std::shared_ptr<Module> osd = std::make_shared<Osd>(gname);
@@ -49,7 +70,7 @@ TEST(Osd, OpenClose) {
   ModuleParamSet param;
   EXPECT_TRUE(osd->Open(param));
   param["label_path"] = "test-osd";
-  EXPECT_TRUE(osd->Open(param)) << "if can not read labels, function should not return false";
+  EXPECT_FALSE(osd->Open(param)) << "if can not read labels, function should not return false";
   std::string label_path = GetExePath() + glabel_path;
   param["label_path"] = label_path;
   EXPECT_TRUE(osd->Open(param));
@@ -94,41 +115,38 @@ TEST(Osd, Process) {
   ASSERT_TRUE(osd->Open(param));
 
   // prepare data
-  int width = 1920;
-  int height = 1080;
-  cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
-  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
   data->SetStreamIndex(0);
-  frame->frame_id = 1;
   data->timestamp = 1000;
-  frame->width = width;
-  frame->height = height;
-  void* ptr_cpu[1] = {img.data};
-  frame->stride[0] = width;
-  frame->ctx.dev_type = DevContext::DevType::CPU;
-  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
-  frame->CopyToSyncMem(ptr_cpu, false);
+
+  std::string image_path = GetExePath() + img_path;
+  cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
+
+  cv::resize(img, img, cv::Size(1920, 1080));
+
+  std::shared_ptr<CNDataFrame> frame = GenerateCNDataFrame(img, g_dev_id);
+
   data->collection.Add(kCNDataFrameTag, frame);
+
 
   std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(11);
-  CNInferBoundingBox bbox = {0.6, 0.4, 0.6, 1};
+  CnInferBbox bbox(0.6, 0.4, 0.6, 1);
   obj->bbox = bbox;
   objs_holder->objs_.push_back(obj);
 
   auto obj2 = std::make_shared<CNInferObject>();
   obj2->id = std::to_string(12);
-  bbox = {0.1, -0.2, 0.3, 0.4};
-  obj2->bbox = bbox;
+  CnInferBbox bbox1(0.1, -0.2, 0.3, 0.4);
+  obj2->bbox = bbox1;
   objs_holder->objs_.push_back(obj2);
 
   for (int i = 0; i < 5; ++i) {
     auto obj = std::make_shared<CNInferObject>();
     obj->id = std::to_string(i);
     float val = i * 0.1;
-    CNInferBoundingBox bbox = {val, val, val, val};
+    CnInferBbox bbox(val, val, val, val);
     obj->bbox = bbox;
     objs_holder->objs_.push_back(obj);
   }
@@ -136,8 +154,7 @@ TEST(Osd, Process) {
   data->collection.Add(kCNInferObjsTag, objs_holder);
   EXPECT_EQ(osd->Process(data), 0);
   EXPECT_EQ(osd->Process(data), 0);
-  frame->width = -1;
-  EXPECT_EQ(osd->Process(data), -1);
+  // EXPECT_EQ(osd->Process(data), -1);
 }
 
 TEST(Osd, ProcessSecondary) {
@@ -151,27 +168,23 @@ TEST(Osd, ProcessSecondary) {
   ASSERT_TRUE(osd->Open(param));
 
   // prepare data
-  int width = 1920;
-  int height = 1080;
-  cv::Mat img(height, width, CV_8UC3, cv::Scalar(0, 0, 0));
   auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
-  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
   data->SetStreamIndex(0);
-  frame->frame_id = 1;
   data->timestamp = 1000;
-  frame->width = width;
-  frame->height = height;
-  void* ptr_cpu[1] = {img.data};
-  frame->stride[0] = width;
-  frame->ctx.dev_type = DevContext::DevType::CPU;
-  frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_BGR24;
-  frame->CopyToSyncMem(ptr_cpu, false);
+
+  std::string image_path = GetExePath() + img_path;
+  cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
+
+  cv::resize(img, img, cv::Size(1920, 1080));
+
+  std::shared_ptr<CNDataFrame> frame = GenerateCNDataFrame(img, g_dev_id);
+
   data->collection.Add(kCNDataFrameTag, frame);
 
   std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
   auto obj = std::make_shared<CNInferObject>();
   obj->id = std::to_string(11);
-  CNInferBoundingBox bbox = {0.6, 0.4, 0.6, 0.3};
+  CnInferBbox bbox(0.6, 0.4, 0.6, 0.3);
   obj->bbox = bbox;
   cnstream::CNInferAttr attr;
   attr.id = 0;
@@ -182,8 +195,10 @@ TEST(Osd, ProcessSecondary) {
 
   auto obj2 = std::make_shared<CNInferObject>();
   obj2->id = std::to_string(12);
-  bbox = {0.1, -0.2, 0.3, 0.4};
-  obj2->bbox = bbox;
+  {
+    CnInferBbox bbox(0.1, -0.2, 0.3, 0.4);
+    obj2->bbox = bbox;
+  }
   cnstream::CNInferAttr attr2;
   attr2.id = 0;
   attr2.value = 2;
@@ -195,13 +210,18 @@ TEST(Osd, ProcessSecondary) {
     auto obj = std::make_shared<CNInferObject>();
     obj->id = std::to_string(i);
     float val = i * 0.1;
-    CNInferBoundingBox bbox = {val, val, val, val};
+    CnInferBbox bbox(val, val, val, val);
     obj->bbox = bbox;
     objs_holder->objs_.push_back(obj);
   }
 
   data->collection.Add(kCNInferObjsTag, objs_holder);
+
   EXPECT_EQ(osd->Process(data), 0);
+  data = cnstream::CNFrameInfo::Create(std::to_string(0), true);  //  eos
+  data->collection.Add(kCNDataFrameTag, frame);
+  EXPECT_EQ(osd->Process(data), 0);
+  osd->OnEos(std::to_string(0));
 }
 
 TEST(Osd, CheckParamSet) {
@@ -250,7 +270,64 @@ TEST(Osd, CheckParamSet) {
   param.clear();
 
   param["test_param"] = "test";
-  EXPECT_TRUE(osd->CheckParamSet(param));
+  EXPECT_FALSE(osd->CheckParamSet(param));
+}
+
+
+TEST(Osd, OsdHandler) {
+  std::shared_ptr<Module> osd = std::make_shared<Osd>(gname);
+  ModuleParamSet param;
+  param.clear();
+  param["osd_handler"] = "FakeOsdHandler";
+
+  std::string label_path = GetExePath() + glabel_path;
+  param["label_path"] = label_path;
+  param["logo"] = "Cambricon-test";
+  ASSERT_TRUE(osd->Open(param));
+
+
+  // prepare data
+  auto data = cnstream::CNFrameInfo::Create(std::to_string(0));
+  data->SetStreamIndex(0);
+  data->timestamp = 1000;
+
+  std::string image_path = GetExePath() + img_path;
+  cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
+
+  cv::resize(img, img, cv::Size(1920, 1080));
+
+  std::shared_ptr<CNDataFrame> frame = GenerateCNDataFrame(img, g_dev_id);
+
+  data->collection.Add(kCNDataFrameTag, frame);
+
+
+  std::shared_ptr<CNInferObjs> objs_holder = std::make_shared<CNInferObjs>();
+  auto obj = std::make_shared<CNInferObject>();
+  obj->id = std::to_string(11);
+  CnInferBbox bbox(0.6, 0.4, 0.6, 1);
+  obj->bbox = bbox;
+  objs_holder->objs_.push_back(obj);
+
+  auto obj2 = std::make_shared<CNInferObject>();
+  obj2->id = std::to_string(12);
+  CnInferBbox bbox1(0.1, -0.2, 0.3, 0.4);
+  obj2->bbox = bbox1;
+  objs_holder->objs_.push_back(obj2);
+
+  for (int i = 0; i < 5; ++i) {
+    auto obj = std::make_shared<CNInferObject>();
+    obj->id = std::to_string(i);
+    float val = i * 0.1;
+    CnInferBbox bbox(val, val, val, val);
+    obj->bbox = bbox;
+    objs_holder->objs_.push_back(obj);
+  }
+
+  data->collection.Add(kCNInferObjsTag, objs_holder);
+  EXPECT_EQ(osd->Process(data), 0);
+  EXPECT_NE(osd->Process(nullptr), 0);
+  EXPECT_EQ(osd->Process(data), 0);
+  osd->OnEos(std::to_string(0));
 }
 
 }  // namespace cnstream

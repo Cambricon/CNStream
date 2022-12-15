@@ -17,9 +17,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-
-#include <opencv2/opencv.hpp>
-
 #include <algorithm>
 #include <memory>
 #include <random>
@@ -27,14 +24,16 @@
 #include <utility>
 #include <vector>
 
+#include "opencv2/opencv.hpp"
+#include "libyuv.h"
+
+#include "cns_openpose.hpp"
 #include "cnstream_frame_va.hpp"
 #include "cnstream_module.hpp"
-#include "cns_openpose.hpp"
 
 namespace cns_openpose {
 
-static
-std::vector<cv::Scalar> GenerateColors(size_t ncolors) {
+static std::vector<cv::Scalar> GenerateColors(size_t ncolors) {
   std::random_device rd;
   std::mt19937 num_gen(rd());
   std::uniform_int_distribution<> b(64, 255);
@@ -71,7 +70,9 @@ class PoseOsd : public cnstream::Module, public cnstream::ModuleCreator<PoseOsd>
     colors_ = GenerateColors(std::max(nkeypoints_, nlimbs_));
     return true;
   }
+
   void Close() override {}
+
   int Process(std::shared_ptr<cnstream::CNFrameInfo> package) override {
     auto frame = package->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag);
     const auto& keypoints = package->collection.Get<Keypoints>(kPoseKeypointsTag);
@@ -86,12 +87,38 @@ class PoseOsd : public cnstream::Module, public cnstream::ModuleCreator<PoseOsd>
     // draw limbs
     for (size_t i = 0; i < total_limbs.size(); ++i) {
       for (const auto& limb : total_limbs[i]) {
-        cv::line(origin_img, keypoints[limb.first.x][limb.first.y],
-                 keypoints[limb.second.x][limb.second.y],
-                 colors_[i], 3);
+        cv::line(origin_img, keypoints[limb.first.x][limb.first.y], keypoints[limb.second.x][limb.second.y], colors_[i],
+                 3);
       }
     }
+    UpdateVframe(frame);
     return 0;
+  }
+
+ private:
+  void UpdateVframe(std::shared_ptr<cnstream::CNDataFrame> frame) {
+    /*update frame->vframe for vout, venc etc...  FIXME
+     *  BGR->yuv420sp
+     */
+    cv::Mat img = frame->ImageBGR();
+    int h = img.rows;
+    int w = img.cols;
+
+    // BGR covert to yuv420sp
+    unsigned char* dst_y = static_cast<unsigned char*>(frame->buf_surf->GetHostData(0));
+    unsigned char* dst_uv = static_cast<unsigned char*>(frame->buf_surf->GetHostData(1));
+    int y_stride = frame->buf_surf->GetStride(0);
+    int uv_stride = frame->buf_surf->GetStride(1);
+
+    if (frame->buf_surf->GetColorFormat() == CNEDK_BUF_COLOR_FORMAT_NV21) {
+      libyuv::RGB24ToNV21(img.data, w * 3, dst_y, y_stride, dst_uv, uv_stride, w, h);
+    } else if (frame->buf_surf->GetColorFormat() == CNEDK_BUF_COLOR_FORMAT_NV12) {
+      libyuv::RGB24ToNV12(img.data, w * 3, dst_y, y_stride, dst_uv, uv_stride, w, h);
+    } else {
+      LOGE(PoseOsd) << "fmt not supported yet.";
+    }
+
+    frame->buf_surf->SyncHostToDevice();
   }
 
  private:
@@ -101,4 +128,3 @@ class PoseOsd : public cnstream::Module, public cnstream::ModuleCreator<PoseOsd>
 };  // class PoseOsd
 
 }  // namespace cns_openpose
-

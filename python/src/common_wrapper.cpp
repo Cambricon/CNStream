@@ -17,17 +17,16 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
+#include <vector>
 
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
 #if (CV_MAJOR_VERSION >= 3)
-#include <opencv2/imgcodecs/imgcodecs.hpp>
+#include "opencv2/imgcodecs/imgcodecs.hpp"
 #endif
 
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
-
-#include <vector>
+#include "pybind11/numpy.h"
+#include "pybind11/pybind11.h"
 
 #include "cnstream_pipeline.hpp"
 #include "util.hpp"
@@ -85,6 +84,16 @@ void PerfPrintWrapper(py::module &m) {  // NOLINT
     PrintPipelinePerformance("Last two seconds",
                              pipeline->GetProfiler()->GetProfileBefore(Clock::now(), duration));
   });
+}
+
+std::vector<py::array> ToArray(const std::vector<const float*> &vec, const std::vector<std::vector<int64_t>> &shapes) {
+  std::vector<py::array> ret;
+  for (size_t i = 0; i < vec.size(); ++i) {
+    auto sp_ignore_n = shapes[i];
+    sp_ignore_n.erase(sp_ignore_n.begin());
+    ret.emplace_back(py::array(sp_ignore_n, vec[i]));
+  }
+  return ret;
 }
 
 }  // namespace cnstream

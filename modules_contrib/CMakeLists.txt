@@ -8,30 +8,17 @@ endif()
 
 set(CNSTREAM_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
-include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
-if(NOT COMPILER_SUPPORTS_CXX11)
-  message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
-endif()
-
-if(USE_libstdcpp)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libstdc++")
-  message("-- Warning: forcing libstdc++ (controlled by USE_libstdcpp option in cmake)")
-endif()
-
-# compile flags
-set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG -O2")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG -g")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -D_REENTRANT -fPIC -Wno-deprecated-declarations -Wall -Werror")
-
 set(LIBRARY_OUTPUT_PATH ${CNSTREAM_ROOT_DIR}/lib)
 
-set(contrib_modules_list fakesink)
+set(contrib_modules_list fakesink selector)
 
-# ---[ cnstream_va
 include_directories(${CNSTREAM_ROOT_DIR}/modules)
 include_directories(${CNSTREAM_ROOT_DIR}/modules/util/include)
+# ---[ cnstream_va
+have_modules_target(${CNSTREAM_ROOT_DIR})
+# ---[ easydk
+have_easydk_target(${CNSTREAM_ROOT_DIR})
+
 
 foreach(contrib_module ${contrib_modules_list})
   include_directories(${CMAKE_CURRENT_SOURCE_DIR}/${contrib_module}/include)
@@ -44,6 +31,7 @@ if(DEFINED contrib_modules_list)
   include(${CNSTREAM_ROOT_DIR}/cmake/have_cnstream_target.cmake)
   have_framework_target(${CNSTREAM_ROOT_DIR})
   have_modules_target(${CNSTREAM_ROOT_DIR})
+  message(STATUS "@@@@@@@@@@@ Target : cnstream_contrib")
   add_library(cnstream_contrib SHARED ${contrib_module_srcs})
   set_target_properties(cnstream_contrib PROPERTIES LINK_FLAGS_RELEASE -s)
   if(HAVE_FRAMEWORK_TARGET)

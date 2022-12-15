@@ -23,64 +23,63 @@ sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../lib")
 import cnstream
 import cnstream_cpptest
 
-class TestCNFrameInfo(object):
-    @staticmethod
-    def test_frame_info():
-        stream_id = "stream_id_0"
-        frame = cnstream.CNFrameInfo(stream_id)
-        ts = 1000
-        frame.timestamp = ts
+def test_frame_info():
+  stream_id = "stream_id_0"
+  frame = cnstream.CNFrameInfo(stream_id)
+  ts = 1000
+  frame.timestamp = ts
 
-        assert not frame.is_eos()
-        assert not frame.is_removed()
-        assert not frame.is_invalid()
+  assert not frame.is_eos()
+  assert not frame.is_removed()
+  assert not frame.is_invalid()
 
-        assert stream_id == frame.stream_id
-        assert ts == frame.timestamp
+  assert stream_id == frame.stream_id
+  assert ts == frame.timestamp
 
-        # eos frame
-        frame = cnstream.CNFrameInfo(stream_id, True)
-        assert frame.is_eos()
+  # eos frame
+  frame = cnstream.CNFrameInfo(stream_id, True)
+  assert frame.is_eos()
 
-    @staticmethod
-    def test_py_collection():
-      class UserData(object):
-        @staticmethod
-        def add(a ,b):
-          return a + b
+class UserData(object):
+  def __init__(self, x):
+    self.x = x
 
-      # frame info created in cpp
-      cpp_test_helper = cnstream_cpptest.CppCNFrameInfoTestHelper()
-      frame = cpp_test_helper.get_frame_info()
-      # pyCollection
-      user_dict = frame.get_py_collection()
-      # insert data to pyCollection
-      user_dict[1] = "hi"
-      user_dict["name"] = "cns"
-      user_dict["user_data"] = UserData()
+  def add(self, y):
+    return self.x + y
 
-      # get data from pyCollection
-      user_dict = frame.get_py_collection()
-      assert len(frame.get_py_collection().keys()) == 3
-      assert user_dict[1] == frame.get_py_collection()[1]
-      assert user_dict["name"] == frame.get_py_collection()["name"]
-      assert user_dict["user_data"] == frame.get_py_collection()["user_data"]
-      assert 3 == frame.get_py_collection()["user_data"].add(1, 2)
+def test_py_collection():
+  # frame info created in cpp
+  cpp_test_helper = cnstream_cpptest.CppCNFrameInfoTestHelper()
+  frame = cpp_test_helper.get_frame_info()
+  # pyCollection
+  user_dict = frame.get_py_collection()
+  # insert data to pyCollection
+  user_dict[1] = "hi"
+  user_dict["name"] = "cns"
+  user_dict["user_data"] = UserData(1)
 
-      # delete a key-value from pyCollection
-      del user_dict["user_data"]
-      assert len(frame.get_py_collection().keys()) == 2
-      assert not "user_data" in frame.get_py_collection().keys()
+  # get data from pyCollection
+  user_dict = frame.get_py_collection()
+  assert len(frame.get_py_collection().keys()) == 3
+  assert user_dict[1] == frame.get_py_collection()[1]
+  assert user_dict["name"] == frame.get_py_collection()["name"]
+  assert user_dict["user_data"] == frame.get_py_collection()["user_data"]
+  assert 3 == frame.get_py_collection()["user_data"].add(2)
 
-      # clear pyCollection
-      user_dict.clear()
-      assert len(frame.get_py_collection().keys()) == 0
+  # delete a key-value from pyCollection
+  del user_dict["user_data"]
+  assert len(frame.get_py_collection().keys()) == 2
+  assert not "user_data" in frame.get_py_collection().keys()
 
-      # add a key-value to pyCollection
-      user_dict["age"] = 25
-      assert "age" in frame.get_py_collection()
-      assert frame.get_py_collection()["age"] == 25
+  # clear pyCollection
+  user_dict.clear()
+  assert len(frame.get_py_collection().keys()) == 0
 
-      user_dict = None
-      assert "age" in frame.get_py_collection()
-      assert frame.get_py_collection()["age"] == 25
+  # add a key-value to pyCollection
+  user_dict["age"] = 25
+  assert "age" in frame.get_py_collection()
+  assert frame.get_py_collection()["age"] == 25
+
+  user_dict = None
+  assert "age" in frame.get_py_collection()
+  assert frame.get_py_collection()["age"] == 25

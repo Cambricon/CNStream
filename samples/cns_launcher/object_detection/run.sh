@@ -14,41 +14,55 @@ CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 source ${CURRENT_DIR}/../../env.sh
 
 PrintUsages(){
-    echo "Usages: run.sh [mlu220/mlu270/mlu370] [encode_jpeg/encode_video/display/rtsp/kafka] $1"
+    echo "Usages: run.sh [mlu370/mlu590/ce3226] [encode_jpeg/encode_video/rtsp/vout] [yolov3/yolov5]"
 }
 
 ${SAMPLES_DIR}/generate_file_list.sh
 
-if [[ $# == 3 ]];then
-    if [[ ${3} == "usb" ]];then
-        #change the input URL to usb device.
-        echo "/dev/video0" > ${SAMPLES_DIR}/files.list_video
+if [[ $# != 3 ]];then
+    PrintUsages
+    exit 1
+fi
+
+if [[ ${3} != "yolov3" && ${3} != "yolov5" ]]; then
+    PrintUsages
+    exit 1
+fi
+
+if [[ ${1} == "ce3226" ]]; then
+    MM_VER=v0.13.0
+    if [[ ${3} == "yolov3" ]]; then
+        MODEL_PATH=${MODELS_DIR}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+        REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
     else
-        PrintUsages "usb"
-        exit 1
+        MODEL_PATH=${MODELS_DIR}/yolov5m_${MM_VER}_4b_rgb_uint8.magicmind
+        REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov5m_${MM_VER}_4b_rgb_uint8.magicmind
     fi
-else
-    if [[ $# != 2 ]];then
+elif [[ ${1} == "mlu370" ]]; then
+    MM_VER=v0.13.0
+    if [[ ${3} == "yolov3" ]]; then
+        MODEL_PATH=${MODELS_DIR}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+        REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+    else
+        MODEL_PATH=${MODELS_DIR}/yolov5m_${MM_VER}_4b_rgb_uint8.magicmind
+        REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov5m_${MM_VER}_4b_rgb_uint8.magicmind
+    fi
+elif [[ ${1} == "mlu590" ]]; then
+    MM_VER=v0.14.0
+    if [[ ${3} == "yolov3" ]]; then
+        MODEL_PATH=${MODELS_DIR}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+        REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+    else
+        echo "yolov5 on MLU590 is not supported yet"
         PrintUsages
         exit 1
     fi
-fi
-
-if [[ ${1} == "mlu220" ]]; then
-    MODEL_PATH=${MODELS_DIR}/yolov3_b4c4_argb_mlu220.cambricon
-    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU220/yolov3_b4c4_argb_mlu220.cambricon
-elif [[ ${1} == "mlu270" ]]; then
-    MODEL_PATH=${MODELS_DIR}/yolov3_b4c4_argb_mlu270.cambricon
-    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon
-elif [[ ${1} == "mlu370" ]]; then
-    MODEL_PATH=${MODELS_DIR}/yolov3_nhwc.model
-    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model
 else
     PrintUsages
     exit 1
 fi
 
-if [[ ${2} != "encode_jpeg" && ${2} != "encode_video" && ${2} != "display" && ${2} != "rtsp"  && ${2} != "kafka" ]]; then
+if [[ ${2} != "encode_jpeg" && ${2} != "encode_video" && ${2} != "rtsp" && ${2} != "vout" ]]; then
     PrintUsages
     exit 1
 fi
@@ -74,15 +88,9 @@ if [[ ! -f ${LABEL_PATH} ]]; then
     fi
 fi
 
-# generate config file with selected sinker and selected platform
+# generate config file with selected sinker
 pushd ${CURRENT_DIR}
-    if [[ $# == 2 ]];then
-        sed 's/__PLATFORM_PLACEHOLDER__/'"${1}"'/g' config_template.json | sed 's/__SINKER_PLACEHOLDER__/'"${2}"'.json/g' &> config.json
-    else
-        #Because MLU may not support some usb cameras' codec format like AV_CODEC_ID_MSMPEG4V1, here we prefer to select CPU decoder.
-        sed 's/decoder_type.*mlu/decoder_type\"\:\"cpu/g' ${CONFIGS_DIR}/decode_config.json &> ${CONFIGS_DIR}/cpu_decode_config.json
-        sed 's/__PLATFORM_PLACEHOLDER__/'"${1}"'/g' config_template.json | sed 's/__SINKER_PLACEHOLDER__/'"${2}"'.json/g' | sed 's/decode_config/cpu_decode_config/g' &> config.json
-    fi
+    sed 's/__PLATFORM_PLACEHOLDER__/'"${1}"'/g;s/__SINKER_PLACEHOLDER__/'"${2}"'/g;s/__NN__/'"${3}"'/g' config_template.json &> config.json
 popd
 
 

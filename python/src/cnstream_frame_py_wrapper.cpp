@@ -17,13 +17,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *************************************************************************/
-
-#include <pybind11/embed.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
 #include <memory>
 #include <string>
+
+#include "pybind11/embed.h"
+#include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
 
 #include "cnstream_frame.hpp"
 #include "cnstream_source.hpp"

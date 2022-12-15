@@ -125,7 +125,7 @@ static void PrintAllModulesDesc() {
   const uint32_t width = 40;
   const uint32_t sub_str_len = 80;
 
-  std::vector<std::string> modules = cnstream::ModuleFactory::Instance()->GetRegisted();
+  std::vector<std::string> modules = cnstream::ModuleFactory::Instance()->GetRegistered();
   cnstream::ModuleCreatorWorker creator;
 
   std::cout << "\033[01;32m"<< std::left << std::setw(width) << "Module Name"

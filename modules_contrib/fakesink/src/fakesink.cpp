@@ -29,12 +29,12 @@ FakeSink::FakeSink(const std::string &name) : Module(name) {
   param_register_.SetModuleDesc("FakeSink is a module for synchronization.");
 }
 
-bool FakeSink::Open(ModuleParamSet paramSet) { return true; }
+bool FakeSink::Open(ModuleParamSet param_set) { return true; }
 
 void FakeSink::Close() {}
 
 int FakeSink::Process(std::shared_ptr<CNFrameInfo> data) { return 0; }
 
-bool FakeSink::CheckParamSet(const ModuleParamSet& paramSet) const { return true;}
+bool FakeSink::CheckParamSet(const ModuleParamSet& param_set) const { return true;}
 
 }  // namespace cnstream

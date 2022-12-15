@@ -19,9 +19,99 @@ jobs:
     runs-on: cnstream-video
     steps:
     - uses: actions/checkout@v2
-      with:
-          submodules: true
+
+    - name: checkout submodules
+      run: |
+        git submodule update --init --recursive
+
     - name: configure
-      run:  mkdir build && cd build && cmake -Dbuild_tests=ON .. && make -j
+      run:  mkdir build && cd build && cmake -DPLATFORM=MLU370 -DBUILD_TESTS=ON -DBUILD_SAMPLES=ON -DCODE_COVERAGE_TEST=ON -DBUILD_PYTHON_API=ON .. && make -j8
+
     - name: test
-      run: export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/neuware/lib64 && ./build/bin/cnstream_core_test && ./build/bin/cnstream_test
+      run: |
+        export NEUWARE_HOME=/usr/local/neuware
+          export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:/usr/local/neuware/lib64
+          export GLOG_minloglevel=0
+          # export GLOG_v=5
+          pushd build
+            cmake -DPLATFORM=MLU370 -DBUILD_TESTS=ON -DBUILD_SAMPLES=ON -DCODE_COVERAGE_TEST=ON -DBUILD_PYTHON_API=ON ..
+            make -j8
+            ./bin/cnstream_core_test
+            if [ $? -ne 0 ];then
+              exit 1
+            fi
+            ./bin/cnstream_va_test
+            if [ $? -ne 0 ];then
+              exit 1
+            fi
+            pip3 --default-timeout=1000 install -U pytest -i https://pypi.tuna.tsinghua.edu.cn/simple
+            pip3 --default-timeout=1000 install -r ../python/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+            ./../python/test/run_pytest.sh
+            if [ $? -ne 0 ];then
+              exit 1
+            fi
+          popd
+
+          pushd samples/cns_launcher/decode
+            ./run.sh
+            if [ $? -ne 0 ];then
+              exit 1
+            fi
+          popd
+          pushd samples/cns_launcher/image_classification
+                ./run.sh mlu370
+                if [ $? -ne 0 ]; then
+                    exit 1
+                fi
+            popd
+            pushd samples/cns_launcher/object_detection
+                ./run.sh mlu370 encode_jpeg yolov3
+                if [ $? -ne 0 ]; then
+                    exit 1
+                fi
+                ./run.sh mlu370 rtsp yolov5
+                if [ $? -ne 0 ]; then
+                    exit 1
+                fi
+            popd
+            pushd samples/cns_launcher/object_tracking
+                ./run.sh mlu370 rtsp yolov3
+                if [ $? -ne 0 ]; then
+                    exit 1
+                fi
+                ./run.sh mlu370 rtsp yolov5
+                if [ $? -ne 0 ]; then
+                    exit 1
+                fi
+            popd
+            pushd samples/cns_launcher/vehicle_recognition
+                ./run.sh mlu370 encode_video
+                if [ $? -ne 0 ]; then
+                    exit 1
+                fi
+            popd
+            pushd samples/cns_launcher/license_plate_detection_and_recognition
+                ./run.sh mlu370 rtsp
+                if [ $? -ne 0 ]; then
+                    exit 1
+                fi
+            popd
+            pushd samples/simple_run_pipeline
+                ./run.sh mlu370
+                if [ $? -ne 0 ]; then
+                    exit 1
+                fi
+            popd
+            pushd python/samples/
+                pip3 --default-timeout=1000 install -U pytest -i https://pypi.tuna.tsinghua.edu.cn/simple
+                pip3 --default-timeout=1000 install -r ../requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+                python pycnstream_demo.py
+                if [ $? -ne 0 ]; then
+                    exit 1
+                fi
+                python yolov5_detector.py
+                if [ $? -ne 0 ]; then
+                    exit 1
+                fi
+            popd
+
