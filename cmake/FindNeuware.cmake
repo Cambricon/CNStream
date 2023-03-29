@@ -47,46 +47,39 @@ else()
 endif()
 
 # ---[ cncodec
-find_library(CNCODEC_LIB_T
+find_library(CNCODEC_LIBS
              NAMES cncodec
-             PATHS $ENV{NEUWARE_HOME}/lib64
+             PATHS ${NEUWARE_HOME}/lib64
              NO_CMAKE_FIND_ROOT_PATH
              NO_CMAKE_PATH
              NO_DEFAULT_PATH
              NO_CMAKE_SYSTEM_PATH)
-find_library(ION_LIB_T
-             NAMES ion
-             PATHS $ENV{NEUWARE_HOME}/lib64
-             NO_CMAKE_FIND_ROOT_PATH
-             NO_CMAKE_PATH
-             NO_DEFAULT_PATH
-             NO_CMAKE_SYSTEM_PATH)
-if(CNCODEC_LIB_T)
-  set(CNCODEC_LIBS ${CNCODEC_LIB_T})
-else()
-  message(FATAL_ERROR "cncodec not found!")
-endif()
 
-# ---[ ion
-find_library(ION_LIB_T
+find_library(ION_LIBS
              NAMES ion
-             PATHS $ENV{NEUWARE_HOME}/lib64
+             PATHS ${NEUWARE_HOME}/lib64
              NO_CMAKE_FIND_ROOT_PATH
              NO_CMAKE_PATH
              NO_DEFAULT_PATH
              NO_CMAKE_SYSTEM_PATH)
-if(ION_LIB_T)
-  list(APPEND CNCODEC_LIBS ${ION_LIB_T})
+if(ION_LIBS)
+  list(APPEND CNCODEC_LIBS ${ION_LIBS})
+endif()
+if (CNCODEC_LIBS)
+  message(STATUS "Found CNCODEC: ${CNCODEC_LIBS}")
 endif()
 
 # ---[ cncodecv3
 find_library(CNCODECV3_LIBS
              NAMES cncodec_v3
-             PATHS $ENV{NEUWARE_HOME}/lib64
+             PATHS ${NEUWARE_HOME}/lib64
              NO_CMAKE_FIND_ROOT_PATH
              NO_CMAKE_PATH
              NO_DEFAULT_PATH
              NO_CMAKE_SYSTEM_PATH)
+if (CNCODECV3_LIBS)
+  message(STATUS "Found CNCODE_V3: ${CNCODECV3_LIBS}")
+endif()
 
 # ---[ cncv
 find_library(CNCV_LIB_T

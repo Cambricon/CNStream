@@ -35,7 +35,7 @@ namespace cnstream {
 
 TEST(Inferencer2, CheckParamSet) {
   std::string ssd_model_path = GetExePath() + "../../data/models/MLU270/Primary_Detector/ssd/resnet34_ssd.cambricon";
-  std::string model_path = GetExePath() + "../../data/models/resnet50_nhwc.model";
+  std::string model_path = GetExePath() + "../../data/models/resnet50_v1.1.0_4b_rgb_uint8.magicmind";
   std::string infer_name = "detector";
   std::unique_ptr<Inferencer2> infer(new Inferencer2(infer_name));
 

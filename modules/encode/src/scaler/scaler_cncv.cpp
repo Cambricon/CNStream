@@ -36,6 +36,7 @@
 #include <device/mlu_context.h>
 
 #include "cnstream_logging.hpp"
+#include "private/cnstream_cnrt_wrap.hpp"
 
 #include "scaler.hpp"
 
@@ -68,7 +69,7 @@ class CncvContext {
     edk::MluContext mlu_ctx;
     mlu_ctx.SetDeviceId(device_id_);
     mlu_ctx.BindDevice();
-    SCALER_CNRT_CHECK(cnrtCreateQueue(&queue_));
+    SCALER_CNRT_CHECK(cnrt::QueueCreate(&queue_));
     SCALER_CNCV_CHECK(cncvCreate(&handle_));
     SCALER_CNCV_CHECK(cncvSetQueue(handle_, queue_));
   }
@@ -81,7 +82,7 @@ class CncvContext {
   cncvImageDescriptor& GetDstImageDesc() { return dst_desc_; }
   virtual ~CncvContext() {
     if (handle_) SCALER_CNCV_CHECK(cncvDestroy(handle_));
-    if (queue_) SCALER_CNRT_CHECK(cnrtDestroyQueue(queue_));
+    if (queue_) SCALER_CNRT_CHECK(cnrt::QueueDestroy(queue_));
   }
   static cncvPixelFormat GetPixFormat(ColorFormat format) {
     static const cncvPixelFormat color_map[] = {
@@ -178,9 +179,15 @@ bool CncvResizeYuvContext::Process(const Buffer &src, Buffer *dst, const Rect &c
     SCALER_CNRT_CHECK(cnrtMalloc(&(workspace_), required_workspace_size));
   }
 
+#if CNCV_MAJOR < 1
   SCALER_CNCV_CHECK(cncvResizeYuv(handle_, batch_size, &(src_desc_), &(src_roi_), mlu_input_, &(dst_desc_), mlu_output_,
                                   &(dst_roi_), required_workspace_size, workspace_, CNCV_INTER_BILINEAR));
-  SCALER_CNRT_CHECK(cnrtSyncQueue(queue_));
+#else
+  SCALER_CNCV_CHECK(cncvResizeYuv_AdvancedROI(handle_, batch_size, &(src_desc_), &(src_roi_), mlu_input_,
+                                              &(dst_desc_), &(dst_roi_), mlu_output_,
+                                              required_workspace_size, workspace_, CNCV_INTER_BILINEAR));
+#endif
+  SCALER_CNRT_CHECK(cnrt::QueueSync(queue_));
   return true;
 }
 
@@ -258,7 +265,7 @@ bool CncvResizeRgbxContext::Process(const Buffer &src, Buffer *dst, const Rect &
 
   SCALER_CNCV_CHECK(cncvResizeRgbx(handle_, batch_size, src_desc_, &(src_roi_), mlu_input_, dst_desc_,
                                    &(dst_roi_), mlu_output_, required_workspace_size, workspace_, CNCV_INTER_BILINEAR));
-  SCALER_CNRT_CHECK(cnrtSyncQueue(queue_));
+  SCALER_CNRT_CHECK(cnrt::QueueSync(queue_));
   return true;
 }
 
@@ -313,7 +320,7 @@ bool CncvRgbxToYuvContext::Process(const Buffer &src, Buffer *dst, const Rect &c
   SCALER_CNRT_CHECK(cnrtMemcpy(mlu_output_, cpu_output_, 2 * sizeof(void*), CNRT_MEM_TRANS_DIR_HOST2DEV));
 
   SCALER_CNCV_CHECK(cncvRgbxToYuv(handle_, src_desc_, src_roi_, mlu_input, dst_desc_, mlu_output_));
-  SCALER_CNRT_CHECK(cnrtSyncQueue(queue_));
+  SCALER_CNRT_CHECK(cnrt::QueueSync(queue_));
   return true;
 }
 

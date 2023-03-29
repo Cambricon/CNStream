@@ -39,7 +39,13 @@ const std::vector<std::array<std::string, 3>> model_info = {
     {"feature_extract_for_tracker_b4c4_argb_mlu270.cambricon", "/",
      "http://video.cambricon.com/models/MLU270/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon"},
     {"yolov3_b4c4_argb_mlu270.cambricon", "/",
-     "http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon"}};
+     "http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon"},
+    {"resnet50_v1.1.0_4b_rgb_uint8.magicmind", "/",
+     "http://video.cambricon.com/models/magicmind/v1.1.0/resnet50_v1.1.0_4b_rgb_uint8.magicmind"},
+    {"yolov3_v1.1.0_4b_rgb_uint8.magicmind", "/",
+     "http://video.cambricon.com/models/magicmind/v1.1.0/yolov3_v1.1.0_4b_rgb_uint8.magicmind"},
+    {"feature_extract_v1.1.0_4b_rgb_fp32.magicmind", "/",
+     "http://video.cambricon.com/models/magicmind/v1.1.0/feature_extract_v1.1.0_4b_rgb_fp32.magicmind"} };
 
 class TestEnvironment : public testing::Environment {
  public:

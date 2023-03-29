@@ -52,7 +52,6 @@ extern "C" {
 #include <vector>
 
 #include "device/mlu_context.h"
-#include "easyinfer/mlu_memory_op.h"
 #include "gtest/gtest.h"
 #include "cnstream_frame_va.hpp"
 #include "rtsp_sink.hpp"
@@ -183,17 +182,16 @@ bool PullRtspStreamFFmpeg(int port = 9445) {
 }
 
 std::shared_ptr<CNFrameInfo> GenTestData(CNPixelFormat pix_fmt, int width, int height, int frame_rate,
-                                         void **frame_data_ptr) {
+                                         std::shared_ptr<void>* frame_data_ptr) {
   size_t nbytes = width * height * sizeof(uint8_t) * 3;
   size_t boundary = 1 << 16;
   nbytes = (nbytes + boundary - 1) & ~(boundary - 1);  // align to 64kb
 
   // fake data
   void *planes[CN_MAX_PLANES] = {nullptr, nullptr, nullptr};
-  edk::MluMemoryOp mem_op;
-  *frame_data_ptr = mem_op.AllocMlu(nbytes);
-  cnrtMemset(*frame_data_ptr, 0, nbytes);
-  void *frame_data = *frame_data_ptr;
+  *frame_data_ptr = cnMluMemAlloc(nbytes, g_dev_id);
+  cnrtMemset(frame_data_ptr->get(), 0, nbytes);
+  void *frame_data = frame_data_ptr->get();
   planes[0] = frame_data;                                                                              // 0 plane
   planes[1] = reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(frame_data) + width * height);      // 1 plane
   planes[2] = reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(frame_data) + 2 * width * height);  // 2 plane
@@ -237,12 +235,11 @@ void Process(std::shared_ptr<Module> ptr, CNPixelFormat pix_fmt, int width, int 
              int line) {
   if (g_channel_id > 3) g_channel_id = 0;
   g_frame_id = 0;
-  void *frame_data = nullptr;
-  edk::MluMemoryOp mem_op;
+  std::shared_ptr<void> frame_data = nullptr;
   auto data = GenTestData(pix_fmt, width, height, frame_rate, &frame_data);
 
   int ret = ptr->Process(data);
-  mem_op.FreeMlu(frame_data);
+  frame_data.reset();
   auto fut = std::async(std::launch::async, PullRtspStreamFFmpeg, port);
   EXPECT_EQ(ret, 0) << line;
 
@@ -250,7 +247,7 @@ void Process(std::shared_ptr<Module> ptr, CNPixelFormat pix_fmt, int width, int 
     data = GenTestData(pix_fmt, width, height, frame_rate, &frame_data);
     ret = ptr->Process(data);
     std::this_thread::sleep_for(std::chrono::milliseconds(1000 / frame_rate));
-    mem_op.FreeMlu(frame_data);
+    frame_data.reset();
     EXPECT_EQ(ret, 0) << line;
   }
   // create eos frame for clearing stream idx

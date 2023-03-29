@@ -23,36 +23,18 @@
 #include <memory>
 
 #include "cnrt.h"
+#include "private/cnstream_cnrt_wrap.hpp"
 
 namespace cnstream {
-
-#if (CNRT_MAJOR_VERSION < 5)
-class CnrtInit {
- public:
-  CnrtInit() { cnrtInit(0); }
-  ~CnrtInit() { cnrtDestroy(); }
-};
-static CnrtInit cnrt_init_;
-#endif
 
 MluDeviceGuard::MluDeviceGuard(int device_id) : device_id_(device_id) {
   if (device_id < 0) {
     // means use cpu, do nothing.
   } else {
-    unsigned int dev_num = 0;
-    cnrtGetDeviceCount(&dev_num);
-    if (dev_num < 1) {
-      LOGE(CORE) << "There is no valid device";
-    } else if (device_id > static_cast<int>(dev_num - 1)) {
-      LOGE(CORE) << "The device ID: " << device_id << "must be less than " << dev_num;
+    if (!cnrt::CheckDeviceId(device_id)) {
+      LOGE(CORE) << "The device id is invalid: " << device_id;
     } else {
-  #if (CNRT_MAJOR_VERSION < 5)
-      cnrtDev_t dev;
-      cnrtGetDeviceHandle(&dev, device_id_);
-      cnrtSetCurrentDevice(dev);
-  #else
-      cnrtSetDevice(device_id_);
-  #endif
+      cnrt::BindDevice(device_id_);
     }
   }
 }

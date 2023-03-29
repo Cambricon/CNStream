@@ -39,25 +39,25 @@
     - preprocessing: EasyBang ResizeConvert operator
     - postprocessing: [PostprocYolov3](../../common/postprocess/postprocess_yolov3.cpp)
   - [Yolov5](http://video.cambricon.com/models/MLU220/yolov5/yolov5_b4c4_rgb_mlu220.cambricon)
-    - preprocessing: [VideoPreprocYolov5](../../common/preprocess/video_preprocess_yolov5.cpp)
-    - postprocessing: [VideoPostprocYolov5](../../common/postprocess/video_postprocess_yolov5.cpp)
+    - preprocessing: [VideoPreprocYolov5](../../common/video_preprocess/video_preprocess_yolov5.cpp)
+    - postprocessing: [VideoPostprocYolov5](../../common/video_postprocess/video_postprocess_yolov5.cpp)
   - [FeatureExtract](http://video.cambricon.com/models/MLU220/feature_extract_for_tracker_b4c4_argb_mlu220.cambricon)
 - For MLU270:
   - [Yolov3](http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon)
     - preprocessing: EasyBang ResizeConvert operator
     - postprocessing: [PostprocYolov3](../../common/postprocess/postprocess_yolov3.cpp)
   - [Yolov5](http://video.cambricon.com/models/MLU270/yolov5/yolov5_b4c4_rgb_mlu270.cambricon)
-    - preprocessing: [VideoPreprocYolov5](../../common/preprocess/video_preprocess_yolov5.cpp)
-    - postprocessing: [VideoPostprocYolov5](../../common/postprocess/video_postprocess_yolov5.cpp)
+    - preprocessing: [VideoPreprocYolov5](../../common/video_preprocess/video_preprocess_yolov5.cpp)
+    - postprocessing: [VideoPostprocYolov5](../../common/video_postprocess/video_postprocess_yolov5.cpp)
   - [FeatureExtract](http://video.cambricon.com/models/MLU270/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon)
 - For MLU370:
-  - [Yolov3](http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model)
+  - [Yolov3](http://video.cambricon.com/models/magicmind/v1.1.0/yolov3_v1.1.0_4b_rgb_uint8.magicmind)
     - preprocessing: CNCV (Cambricon CV library) operator(s)
-    - postprocessing: [VideoPostprocYolov3MM](../../common/postprocess/video_postprocess_yolov3_mm.cpp)
-  - [Yolov5](http://video.cambricon.com/models/MLU370/yolov5_nhwc_tfu_0.8.2_uint8_int8_fp16.model)
+    - postprocessing: [VideoPostprocYolov3MM](../../common/video_postprocess/video_postprocess_yolov3_mm.cpp)
+  - [Yolov5](http://video.cambricon.com/models/magicmind/v1.1.0/yolov5m_v1.1.0_4b_rgb_uint8.magicmind)
     - preprocessing: CNCV (Cambricon CV library) operator(s)
-    - postprocessing: [VideoPostprocYolov5MM](../../common/postprocess/video_postprocess_yolov5_mm.cpp)
-  - [FeatureExtract](http://video.cambricon.com/models/MLU370/feature_extract_nhwc_tfu_0.8.2_fp32_int8_fp16.model)
+    - postprocessing: [VideoPostprocYolov5MM](../../common/video_postprocess/video_postprocess_yolov5_mm.cpp)
+  - [FeatureExtract](http://video.cambricon.com/models/magicmind/v1.1.0/feature_extract_v1.1.0_4b_rgb_fp32.magicmind)
 
 ## Sinker
 

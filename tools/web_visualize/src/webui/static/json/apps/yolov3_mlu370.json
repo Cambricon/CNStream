@@ -22,7 +22,7 @@
     "max_input_queue_size" : 20,
     "next_modules" : ["osd"],
     "custom_params" : {
-      "model_path" : "../../models/yolov3_nhwc.model",
+      "model_path" : "../../models/yolov3_v1.1.0_4b_rgb_uint8.magicmind",
       "postproc_name" : "VideoPostprocYolov3MM",
       "preproc_name" : "CNCV",
       "normalize" : true,

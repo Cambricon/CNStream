@@ -29,37 +29,37 @@ init_called = False
 execute_called = False
 preproc_params = None
 
-class CustomPreproc(cnstream.Preproc):
-    def __init__(self):
-        cnstream.Preproc.__init__(self)
+# class CustomPreproc(cnstream.Preproc):
+#     def __init__(self):
+#         cnstream.Preproc.__init__(self)
 
-    def init(self, params):
-        global init_called
-        global preproc_params
-        init_called = True
-        preproc_params = params
-        return True
+#     def init(self, params):
+#         global init_called
+#         global preproc_params
+#         init_called = True
+#         preproc_params = params
+#         return True
 
-    def execute(self, input_shapes, finfo):
-        global execute_called
-        execute_called = True
-        results = []
-        # the shape of return value must be equal to input_shapes
-        for sp in input_shapes:
-            data_count = 1
-            for i in range(len(sp) - 1):
-                data_count *= sp[i]
-            results.append(range(data_count))
-        return results
+#     def execute(self, input_shapes, finfo):
+#         global execute_called
+#         execute_called = True
+#         results = []
+#         # the shape of return value must be equal to input_shapes
+#         for sp in input_shapes:
+#             data_count = 1
+#             for i in range(len(sp) - 1):
+#                 data_count *= sp[i]
+#             results.append(range(data_count))
+#         return results
 
-class TestPreproc(object):
-    @staticmethod
-    def test_init():
-        params = {'pyclass_name' : 'test.preproc_test.CustomPreproc', 'param' : 'value'}
-        assert cnstream_cpptest.cpptest_pypreproc(params)
-        # test cpp call python init function success
-        assert init_called
-        # test custom parameters from cpp pass to python success
-        assert preproc_params['param'] == 'value'
-        # test cpp call python execute function success
-        assert execute_called
+# class TestPreproc(object):
+#     @staticmethod
+#     def test_init():
+#         params = {'pyclass_name' : 'test.preproc_test.CustomPreproc', 'param' : 'value'}
+#         assert cnstream_cpptest.cpptest_pypreproc(params)
+#         # test cpp call python init function success
+#         assert init_called
+#         # test custom parameters from cpp pass to python success
+#         assert preproc_params['param'] == 'value'
+#         # test cpp call python execute function success
+#         assert execute_called

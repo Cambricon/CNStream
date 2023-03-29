@@ -59,7 +59,7 @@ set_target_properties(cnstream_core PROPERTIES VERSION ${CNSTREAM_TARGET_VERSION
 
 # install
 set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")  #set runtime path
-install(TARGETS cnstream_core LIBRARY DESTINATION lib)
+install(TARGETS cnstream_core LIBRARY DESTINATION lib64)
 install(DIRECTORY core/include/ DESTINATION include)
 
 if(build_tests)

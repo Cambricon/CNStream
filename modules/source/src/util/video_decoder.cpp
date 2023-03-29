@@ -33,6 +33,7 @@
 
 #include "cnstream_common.hpp"
 #include "cnstream_logging.hpp"
+#include "private/cnstream_cnrt_wrap.hpp"
 #include "video_decoder.hpp"
 
 CNS_IGNORE_DEPRECATED_PUSH
@@ -64,13 +65,11 @@ bool MluDecoder::Create(VideoInfo *info, ExtraDecoderInfo *extra) {
     LOGW(SOURCE) << "[" << stream_id_ << "]: Decoder create duplicated.";
     return false;
   }
-  cnrtDeviceInfo_t dev_info;
-  cnrtRet_t cnrt_ret = cnrtGetDeviceInfo(&dev_info, extra->device_id);
-  if (CNRT_RET_SUCCESS != cnrt_ret) {
-    LOGE(SOURCE) << "Call cnrtGetDeviceInfo failed. ret = " << cnrt_ret;
+  std::string device_name = cnrt::GetDeviceName(extra->device_id);
+  if (device_name.empty()) {
+    LOGE(SOURCE) << "GetDeviceName failed";
     return false;
   }
-  const std::string device_name(dev_info.device_name);
   if (std::string::npos != device_name.find("MLU3")) {
     impl_ = CreateMlu3xxDecoder(stream_id_, result_);
   } else if (std::string::npos != device_name.find("MLU270") || std::string::npos != device_name.find("MLU220")) {

@@ -146,7 +146,9 @@ TEST(CoreFrameDeathTest, CopyToSyncMemFailed) {
 }
 
 TEST(CoreFrameDeathTest, CopyToSyncMemOnDevice) {
+#if CNRT_MAJOR_VERSION < 5
   CNS_CNRT_CHECK(cnrtInit(0));
+#endif
   unsigned int dev_num = 0;
   CNS_CNRT_CHECK(cnrtGetDeviceCount(&dev_num));
 

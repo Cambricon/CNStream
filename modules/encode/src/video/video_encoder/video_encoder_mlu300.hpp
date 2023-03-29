@@ -48,14 +48,14 @@ class VideoEncoderMlu300 : public VideoEncoderBase {
   int SendFrame(const VideoFrame *frame, int timeout_ms = -1) override;
   int GetPacket(VideoPacket *packet, PacketInfo *info = nullptr) override;
 
-  i32_t EventHandlerCallback(int event, void *data);
-  i32_t EventHandler(int event, void *data);
+  int32_t EventHandlerCallback(int event, void *data);
+  int32_t EventHandler(int event, void *data);
 
  private:
   bool GetPacketInfo(int64_t index, PacketInfo *info) override;
   void ReceivePacket(void *data);
   void ReceiveEOS();
-  i32_t ErrorHandler(int event);
+  int32_t ErrorHandler(int event);
 
   std::unique_ptr<VideoEncoderMlu300Private> priv_;
 };  // VideoEncoderMlu300

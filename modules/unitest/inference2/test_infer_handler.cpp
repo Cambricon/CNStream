@@ -23,7 +23,6 @@
 #include <memory>
 #include <string>
 
-#include "easyinfer/mlu_memory_op.h"
 #include "cnstream_logging.hpp"
 
 #include "inferencer2.hpp"
@@ -51,25 +50,23 @@ static std::string GetModelPath() {
   return model_path;
 }
 
-static std::string GetModelPathMM() { return "../../data/models/resnet50_nhwc.model"; }
+static std::string GetModelPathMM() { return "../../data/models/resnet50_v1.1.0_4b_rgb_uint8.magicmind"; }
 
 // the data is related to model
-static cnstream::CNFrameInfoPtr CreatData(std::string device_id, bool is_eos = false, bool mlu_data = true) {
+cnstream::CNFrameInfoPtr CreatInferTestData(std::string device_id, bool is_eos = false, bool mlu_data = true) {
   auto data = cnstream::CNFrameInfo::Create(device_id, is_eos);
-  cv::Mat image = cv::imread(GetExePath() + "../../data/images/0.jpg");
-  int width = image.cols;
-  int height = image.rows;
-  size_t nbytes = width * height * sizeof(uint8_t) * 3;
+  int width = 256;
+  int height = 256;
+  size_t nbytes = width * height * sizeof(uint8_t) * 3 / 2;
 
   data->stream_id = "1";
   std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
   if (mlu_data) {
-    void *frame_data = image.data;
     void *planes[CN_MAX_PLANES] = {nullptr, nullptr};
-    edk::MluMemoryOp mem_op;
-    frame_data = mem_op.AllocMlu(nbytes);
-    planes[0] = frame_data;                                                                        // y plane
-    planes[1] = reinterpret_cast<void *>(reinterpret_cast<int64_t>(frame_data) + width * height);  // uv plane
+    std::shared_ptr<void> frame_data = nullptr;
+    frame_data = cnMluMemAlloc(nbytes, std::stoi(device_id));
+    planes[0] = frame_data.get();                                              // y plane
+    planes[1] = reinterpret_cast<uint8_t*>(frame_data.get()) + width * height;  // uv plane
     void *ptr_mlu[2] = {planes[0], planes[1]};
     frame->ctx.dev_type = DevContext::DevType::MLU;
     frame->ctx.ddr_channel = std::stoi(device_id);
@@ -87,17 +84,19 @@ static cnstream::CNFrameInfoPtr CreatData(std::string device_id, bool is_eos = f
     data->collection.Add(kCNInferObjsTag, objs);
     return data;
   } else {
+    std::shared_ptr<void> frame_data = nullptr;
+    frame_data = cnCpuMemAlloc(nbytes);
     frame->frame_id = 1;
     data->timestamp = 1000;
     frame->width = width;
     frame->height = height;
-    void *ptr_cpu[2] = {image.data, image.data + nbytes * 2 / 3};
+    void *ptr_cpu[2] = {frame_data.get(), reinterpret_cast<uint8_t*>(frame_data.get()) + width * height};
     frame->stride[0] = frame->stride[1] = width;
     frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
     frame->ctx.dev_type = DevContext::DevType::CPU;
     frame->dst_device_id = std::stoi(device_id);
     frame->ctx.dev_id = std::stoi(device_id);
-    frame->CopyToSyncMem(ptr_cpu, true);
+    frame->CopyToSyncMem(ptr_cpu, false);
 
     std::shared_ptr<CNInferObjs> objs(new (std::nothrow) CNInferObjs());
     data->collection.Add(kCNDataFrameTag, frame);
@@ -223,7 +222,7 @@ TEST(Inferencer2, InferHandlerProcess) {
         std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
     ASSERT_TRUE(infer_handler->Open());
     bool is_eos = true;
-    auto data = CreatData(std::to_string(param.device_id), is_eos);
+    auto data = CreatInferTestData(std::to_string(param.device_id), is_eos);
     EXPECT_EQ(infer_handler->Process(data, param.object_infer), -1);
   }
 
@@ -234,7 +233,7 @@ TEST(Inferencer2, InferHandlerProcess) {
           std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
       ASSERT_TRUE(infer_handler->Open());
       bool is_eos = false;
-      auto data = CreatData(std::to_string(param.device_id), is_eos);
+      auto data = CreatInferTestData(std::to_string(param.device_id), is_eos);
       EXPECT_EQ(infer_handler->Process(data, param.object_infer), 0);
       infer_handler->WaitTaskDone(data->stream_id);
     } else {
@@ -243,7 +242,7 @@ TEST(Inferencer2, InferHandlerProcess) {
           std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
       ASSERT_TRUE(infer_handler->Open());
       bool is_eos = false;
-      auto data = CreatData(std::to_string(param.device_id), is_eos);
+      auto data = CreatInferTestData(std::to_string(param.device_id), is_eos);
       EXPECT_EQ(infer_handler->Process(data, param.object_infer), 0);
       infer_handler->WaitTaskDone(data->stream_id);
     }
@@ -259,7 +258,7 @@ TEST(Inferencer2, InferHandlerProcess) {
             std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
         ASSERT_TRUE(infer_handler->Open());
         bool is_eos = false;
-        auto data = CreatData(std::to_string(param.device_id), is_eos);
+        auto data = CreatInferTestData(std::to_string(param.device_id), is_eos);
         EXPECT_EQ(infer_handler->Process(data, param.object_infer), 0);
         infer_handler->WaitTaskDone(data->stream_id);
       }
@@ -272,7 +271,7 @@ TEST(Inferencer2, InferHandlerProcess) {
         std::make_shared<InferHandlerImpl>(Infer2, param, post_processor, pre_processor, nullptr, nullptr);
     ASSERT_TRUE(infer_handler->Open());
     bool is_eos = false;
-    auto data = CreatData(std::to_string(param.device_id), is_eos);
+    auto data = CreatInferTestData(std::to_string(param.device_id), is_eos);
     EXPECT_EQ(infer_handler->Process(data, param.object_infer), 0);
     infer_handler->WaitTaskDone(data->stream_id);
   }
@@ -284,9 +283,9 @@ TEST(Inferencer2, InferHandlerProcess) {
       param.preproc_name = "RCOP";
     }
     bool is_eos = false;
-    auto data_no_obj = CreatData(std::to_string(param.device_id), is_eos);
+    auto data_no_obj = CreatInferTestData(std::to_string(param.device_id), is_eos);
 
-    auto data_has_obj = CreatData(std::to_string(param.device_id), is_eos);
+    auto data_has_obj = CreatInferTestData(std::to_string(param.device_id), is_eos);
     // make objs
     cnstream::CNObjsVec objs;
     std::shared_ptr<cnstream::CNInferObject> object = std::make_shared<cnstream::CNInferObject>();
@@ -317,7 +316,7 @@ TEST(Inferencer2, InferHandlerProcess) {
     }
     param.object_infer = true;
     bool is_eos = false;
-    auto data = CreatData(std::to_string(param.device_id), is_eos);
+    auto data = CreatInferTestData(std::to_string(param.device_id), is_eos);
 
     // make objs
     cnstream::CNObjsVec objs;

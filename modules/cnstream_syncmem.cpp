@@ -33,6 +33,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "cnstream_common.hpp"
 #include "cnstream_syncmem.hpp"
+#include "private/cnstream_cnrt_wrap.hpp"
 
 namespace cnstream {
 
@@ -162,9 +163,9 @@ void CNSyncedMemory::SetMluDevContext(int dev_id, int ddr_chn) {
   /*
     check device
    */
-  cnrtDev_t dev;
-  LOGF_IF(FRAME, CNRT_RET_SUCCESS != cnrtGetDeviceHandle(&dev, dev_id)) << "Can not find device by id: " << dev_id;
-  // LOGF_IF(FRAME, ddr_chn < 0 || ddr_chn >= 4) << "Invalid ddr channel [0,4) :" << ddr_chn;
+  if (!cnrt::CheckDeviceId(dev_id)) {
+    LOGF(FRAME) << "Can not find device by id: " << dev_id;
+  }
 
   dev_id_ = dev_id;
   ddr_chn_ = ddr_chn;

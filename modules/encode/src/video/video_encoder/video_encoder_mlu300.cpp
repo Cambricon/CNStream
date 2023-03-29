@@ -39,6 +39,7 @@
 #include "cncodec_v3_enc.h"
 
 #include "cnstream_logging.hpp"
+#include "private/cnstream_cnrt_wrap.hpp"
 
 #include "video_encoder_mlu300.hpp"
 
@@ -112,7 +113,7 @@ static inline int64_t CurrentTick() {
       std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-static i32_t EncoderEventCallback(cncodecEventType_t event_type, void *user_context, void *data) {
+static int32_t EncoderEventCallback(cncodecEventType_t event_type, void *user_context, void *data) {
   VideoEncoderMlu300 *encoder = reinterpret_cast<VideoEncoderMlu300 *>(user_context);
   return encoder->EventHandlerCallback(event_type, data);
 }
@@ -210,7 +211,11 @@ int VideoEncoderMlu300::Start() {
     priv_->cn_param.coding_attr.frame_interval_p = 3;
     priv_->cn_param.coding_attr.codec_attr.hevc_attr.enable_repeat_sps_pps = 1;
     priv_->cn_param.coding_attr.codec_attr.hevc_attr.idr_period = param_.gop_size;
+#if CNCODEC_MAJOR_VERSION < 1
     priv_->cn_param.coding_attr.codec_attr.hevc_attr.tier = CNCODEC_ENC_TIER_HEVC_HIGHT;
+#else
+    priv_->cn_param.coding_attr.codec_attr.hevc_attr.tier = CNCODEC_ENC_TIER_HEVC_HIGH;
+#endif
   }
 
   std::unique_lock<std::mutex> dlk(g_device_mutex);
@@ -499,7 +504,7 @@ int VideoEncoderMlu300::SendFrame(const VideoFrame *frame, int timeout_ms) {
     }
     timeout = std::max(timeout - (CurrentTick() - start), 0L);
 
-    cnrtSetDevice(param_.mlu_device_id);
+    cnrt::BindDevice(param_.mlu_device_id);
 
     size_t copy_size;
     switch (param_.pixel_format) {
@@ -622,7 +627,7 @@ bool VideoEncoderMlu300::GetPacketInfo(int64_t index, PacketInfo *info) {
   return true;
 }
 
-i32_t VideoEncoderMlu300::EventHandlerCallback(int event, void *data) {
+int32_t VideoEncoderMlu300::EventHandlerCallback(int event, void *data) {
   std::lock_guard<std::mutex> dlk(g_device_mutex);
   if (g_device_contexts.count(param_.mlu_device_id) == 0) {
     LOGE(VideoEncoderMlu) << "EventHandlerCallback() context is not exist for device " << param_.mlu_device_id;
@@ -647,7 +652,7 @@ i32_t VideoEncoderMlu300::EventHandlerCallback(int event, void *data) {
     cncodecEncStreamRef(priv_->cn_encoder, stream);
     event_data.data = *stream;
   }
-  // return EventHandler(event, data);
+  return EventHandler(event, data);
   event_data.index = ictx.enqueue_index++;
   ctx.queue.push(event_data);
   lk.unlock();
@@ -682,7 +687,7 @@ void VideoEncoderMlu300::ReceivePacket(void *data) {
     return;
   }
 
-  cnrtSetDevice(param_.mlu_device_id);
+  cnrt::BindDevice(param_.mlu_device_id);
 
   VideoPacket packet;
   memset(&packet, 0, sizeof(VideoPacket));
@@ -764,7 +769,7 @@ void VideoEncoderMlu300::ReceiveEOS() {
   if (event_callback_) event_callback_(cnstream::VideoEncoder::EVENT_EOS);
 }
 
-i32_t VideoEncoderMlu300::ErrorHandler(int event) {
+int32_t VideoEncoderMlu300::ErrorHandler(int event) {
   std::lock_guard<std::mutex> lk(cb_mtx_);
   switch (event) {
     case CNCODEC_EVENT_OUT_OF_MEMORY:

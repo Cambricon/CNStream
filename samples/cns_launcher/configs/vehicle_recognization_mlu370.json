@@ -23,7 +23,7 @@
     "max_input_queue_size" : 20,
     "next_modules" : ["classific"],
     "custom_params" : {
-      "model_path" : "../../../data/models/yolov3_nhwc.model",
+      "model_path" : "../../../data/models/yolov3_v1.1.0_4b_rgb_uint8.magicmind",
       "postproc_name" : "VideoPostprocYolov3MM",
       "preproc_name" : "CNCV",
       "threshold" : 0.5,
@@ -41,7 +41,7 @@
     "max_input_queue_size" : 20,
     "next_modules" : ["osd"],
     "custom_params" : {
-      "model_path" : "../../../data/models/resnet50_nhwc.model",
+      "model_path" : "../../../data/models/resnet50_v1.1.0_4b_rgb_uint8.magicmind",
       "object_infer" : true,
       "postproc_name" : "VideoObjPostprocClassification",
       "preproc_name" : "CNCV",

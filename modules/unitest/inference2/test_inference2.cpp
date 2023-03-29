@@ -29,11 +29,9 @@
 #include "opencv2/imgcodecs/imgcodecs.hpp"
 #endif
 
-#include "easyinfer/mlu_memory_op.h"
 #include "cnstream_logging.hpp"
 
 #include "inferencer2.hpp"
-#include "postproc.hpp"
 #include "video_preproc.hpp"
 #include "test_base.hpp"
 
@@ -81,63 +79,10 @@ static std::string GetModelPath() {
   return model_path;
 }
 
-static std::string GetModelPathMM() { return "../../data/models/yolov3_nhwc.model"; }
+static std::string GetModelPathMM() { return "../../data/models/yolov3_v1.1.0_4b_rgb_uint8.magicmind"; }
 
 // the data is related to model
-static cnstream::CNFrameInfoPtr CreatData(std::string device_id, bool is_eos = false, bool mlu_data = true) {
-  auto data = cnstream::CNFrameInfo::Create(device_id, is_eos);
-  cv::Mat image = cv::imread(GetExePath() + "../../data/images/0.jpg");
-  int width = image.cols;
-  int height = image.rows;
-  size_t nbytes = width * height * sizeof(uint8_t) * 3;
-
-  data->stream_id = "1";
-  std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
-  if (mlu_data) {
-    void *frame_data = image.data;
-    void *planes[CN_MAX_PLANES] = {nullptr, nullptr};
-    edk::MluMemoryOp mem_op;
-    frame_data = mem_op.AllocMlu(nbytes);
-    planes[0] = frame_data;                                                                        // y plane
-    planes[1] = reinterpret_cast<void *>(reinterpret_cast<int64_t>(frame_data) + width * height);  // uv plane
-    void *ptr_mlu[2] = {planes[0], planes[1]};
-    frame->ctx.dev_type = DevContext::DevType::MLU;
-    frame->ctx.ddr_channel = std::stoi(device_id);
-    frame->ctx.dev_id = std::stoi(device_id);
-    frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
-    frame->dst_device_id = std::stoi(device_id);
-    frame->frame_id = 1;
-    data->timestamp = 1000;
-    frame->width = width;
-    frame->height = height;
-    frame->stride[0] = frame->stride[1] = width;
-    frame->CopyToSyncMem(ptr_mlu, true);
-    std::shared_ptr<CNInferObjs> objs(new (std::nothrow) CNInferObjs());
-    data->collection.Add(kCNDataFrameTag, frame);
-    data->collection.Add(kCNInferObjsTag, objs);
-    return data;
-  } else {
-    frame->frame_id = 1;
-    data->timestamp = 1000;
-    frame->width = width;
-    frame->height = height;
-    void *ptr_cpu[2] = {image.data, image.data + nbytes * 2 / 3};
-    frame->stride[0] = frame->stride[1] = width;
-    frame->fmt = CNDataFormat::CN_PIXEL_FORMAT_YUV420_NV12;
-    frame->ctx.dev_type = DevContext::DevType::CPU;
-    frame->dst_device_id = std::stoi(device_id);
-    frame->ctx.dev_id = std::stoi(device_id);
-    frame->cpu_data = cnCpuMemAlloc(nbytes);
-    memcpy(frame->cpu_data.get(), image.data, nbytes);
-    frame->CopyToSyncMem(ptr_cpu, true);
-
-    std::shared_ptr<CNInferObjs> objs(new (std::nothrow) CNInferObjs());
-    data->collection.Add(kCNDataFrameTag, frame);
-    data->collection.Add(kCNInferObjsTag, objs);
-    return data;
-  }
-  return nullptr;
-}
+extern cnstream::CNFrameInfoPtr CreatInferTestData(std::string device_id, bool is_eos = false, bool mlu_data = true);
 
 TEST(Inferencer2, Open) {
   bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
@@ -306,7 +251,7 @@ TEST(Inferencer2, Process) {
     ASSERT_TRUE(infer->Open(param));
     std::string device_id = param["device_id"];
     bool is_eos = true;
-    auto data = CreatData(device_id, is_eos);
+    auto data = CreatInferTestData(device_id, is_eos);
     EXPECT_EQ(infer->Process(data), 0);
   }
 
@@ -316,7 +261,7 @@ TEST(Inferencer2, Process) {
       std::string device_id = "1";
       bool is_eos = false;
       bool mlu_data = true;
-      auto data = CreatData(device_id, is_eos, mlu_data);
+      auto data = CreatInferTestData(device_id, is_eos, mlu_data);
       EXPECT_EQ(infer->Process(data), 0);
     }
   }
@@ -326,7 +271,7 @@ TEST(Inferencer2, Process) {
     std::string device_id = "1";
     bool is_eos = false;
     bool mlu_data = false;
-    auto data = CreatData(device_id, is_eos, mlu_data);
+    auto data = CreatInferTestData(device_id, is_eos, mlu_data);
     EXPECT_EQ(infer->Process(data), 0);
   }
 
@@ -335,7 +280,7 @@ TEST(Inferencer2, Process) {
     std::string device_id = param["device_id"];
     bool is_eos = false;
     bool mlu_data = true;
-    auto data = CreatData(device_id, is_eos, mlu_data);
+    auto data = CreatInferTestData(device_id, is_eos, mlu_data);
     EXPECT_EQ(infer->Process(data), 0);
   }
 
@@ -344,7 +289,7 @@ TEST(Inferencer2, Process) {
     std::string device_id = param["device_id"];
     bool is_eos = false;
     bool mlu_data = false;
-    auto data = CreatData(device_id, is_eos, mlu_data);
+    auto data = CreatInferTestData(device_id, is_eos, mlu_data);
     EXPECT_EQ(infer->Process(data), 0);
   }
   EXPECT_NO_THROW(infer->Close());

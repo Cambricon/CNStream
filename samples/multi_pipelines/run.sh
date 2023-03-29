@@ -25,8 +25,9 @@ elif [[ ${1} == "mlu270" ]]; then
     MODEL_PATH=${MODELS_DIR}/yolov3_b4c4_argb_mlu270.cambricon
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon
 elif [[ ${1} == "mlu370" ]]; then
-    MODEL_PATH=${MODELS_DIR}/yolov3_nhwc.model
-    REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model
+    MM_VER=v1.1.0
+    MODEL_PATH=${MODELS_DIR}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+    REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
 else
     PrintUsages
     exit 1
@@ -70,7 +71,7 @@ cp ${CONFIGS_DIR}/decode_config.json ${SECOND_CONIFG_PATH}/
 sed "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" ${CONFIGS_DIR}/decode_config.json &>  ${SECOND_CONIFG_PATH}/decode_config.json
 sed "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" ${CONFIGS_DIR}/yolov3_object_detection_${1}.json &>  ${SECOND_CONIFG_PATH}/yolov3_object_detection_${1}.json
 sed "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" ${CONFIGS_DIR}/sinker_configs/${2}.json  &>  ${SECOND_CONIFG_PATH}/${2}.json
-#sed -e "s/\"device_id\".*0/\"device_id\"\ :\ 1/g" -e "s/\/output/\/second_ouput/g"  ${CONFIGS_DIR}/sinker_configs/${2}.json  &>  ${SECOND_CONIFG_PATH}/${2}.json
+sed "s/\"device_id\".*0/\"device_id\"\ :\ 1/g;s/\"port\".*/\"port\"\ :\ 8554,/g" ${CONFIGS_DIR}/sinker_configs/${2}.json  &>  ${SECOND_CONIFG_PATH}/${2}.json
 
 # generate config file with selected sinker and selected platform
 pushd ${CURRENT_DIR}

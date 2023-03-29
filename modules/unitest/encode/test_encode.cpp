@@ -30,7 +30,6 @@
 #include <vector>
 
 #include "cnstream_frame_va.hpp"
-#include "easyinfer/mlu_memory_op.h"
 #include "encode.hpp"
 
 namespace cnstream {
@@ -149,10 +148,10 @@ TEST(EncodeModule, ProcessFailedCase) {
   module.Close();
 }
 
-std::shared_ptr<CNFrameInfo> CreateFrame(int frame_id, int w, int h, std::string stream_id, void** src_ptr) {
+std::shared_ptr<CNFrameInfo> CreateFrame(int frame_id, int w, int h, std::string stream_id,
+                                         std::shared_ptr<void>* src_ptr) {
   size_t nbytes = ROUND_UP(w, 16) * h * 3 / 2;
-  edk::MluMemoryOp mem_op;
-  *src_ptr = mem_op.AllocMlu(nbytes);
+  *src_ptr = cnMluMemAlloc(nbytes, g_device_id);
   auto data = CNFrameInfo::Create(stream_id);
   std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
   frame->frame_id = frame_id;
@@ -161,8 +160,9 @@ std::shared_ptr<CNFrameInfo> CreateFrame(int frame_id, int w, int h, std::string
   frame->height = h;
   frame->stride[0] = ROUND_UP(w, 16);
   frame->stride[1] = ROUND_UP(w, 16);
+  void* src_ptr_tmp = src_ptr->get();
   void *ptr_mlu[2] =
-      {*src_ptr, reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(*src_ptr) + ROUND_UP(w, 16) * h)};
+      {src_ptr_tmp, reinterpret_cast<uint8_t *>(src_ptr_tmp) + ROUND_UP(w, 16) * h};
   frame->ctx.dev_type = DevContext::DevType::MLU;
   frame->ctx.ddr_channel = g_channel_id;
   frame->ctx.dev_id = g_device_id;
@@ -176,7 +176,6 @@ std::shared_ptr<CNFrameInfo> CreateFrame(int frame_id, int w, int h, std::string
 void TestFunc(const ModuleParamSet &params, std::vector<std::pair<uint32_t, uint32_t>> src_wh_vec,
               int frame_num = 1, std::string stream_id = "0", bool resample = false) {
   int frame_id = 0;
-  edk::MluMemoryOp mem_op;
   std::shared_ptr<Module> ptr = std::make_shared<Encode>(gname);
   EXPECT_TRUE(ptr->Open(params)) << " encoder_type: " << params.at("encoder_type")
                                  << ", file_name: " << params.at("file_name")
@@ -185,7 +184,7 @@ void TestFunc(const ModuleParamSet &params, std::vector<std::pair<uint32_t, uint
   for (auto &src_wh : src_wh_vec) {
     for (int i = 0; i < frame_num; i++) {
       auto start = std::chrono::steady_clock::now();
-      void* src = nullptr;
+      std::shared_ptr<void> src = nullptr;
       auto data = CreateFrame(frame_id, src_wh.first, src_wh.second, stream_id, &src);
       auto frame = data->collection.Get<std::shared_ptr<CNDataFrame>>(kCNDataFrameTag);
       EXPECT_EQ(ptr->Process(data), 0) << " encoder type: " << params.at("encoder_type")
@@ -193,7 +192,6 @@ void TestFunc(const ModuleParamSet &params, std::vector<std::pair<uint32_t, uint
                                        << ", src_w/h: " << src_wh.first << "/" << src_wh.second
                                        << ", dst_w/h: " << params.at("dst_width") << "/" << params.at("dst_height")
                                        << ", process_idx: " << i;
-      mem_op.FreeMlu(src);
       frame_id++;
       if (resample) {
         auto end = std::chrono::steady_clock::now();
@@ -294,11 +292,10 @@ void TestFuncMultiView(const ModuleParamSet &params,
     ASSERT_TRUE(data_num == src_wh.size());
   }
   int frame_id = 0;
-  edk::MluMemoryOp mem_op;
   for (uint32_t data_idx = 0; data_idx < data_num; data_idx++) {
     for (int i = 0; i < frame_num; i++) {
       for (uint32_t stream_id = 0 ; stream_id < stream_num; stream_id++) {
-        void* src = nullptr;
+        std::shared_ptr<void> src = nullptr;
         int width = src_wh_vec[stream_id][data_idx].first;
         int height = src_wh_vec[stream_id][data_idx].second;
         auto data = CreateFrame(frame_id, width, height, std::to_string(stream_id), &src);
@@ -308,7 +305,6 @@ void TestFuncMultiView(const ModuleParamSet &params,
                                        << ", src_w/h: " << width << "/" << height
                                        << ", dst_w/h: " << params.at("dst_width") << "/" << params.at("dst_height")
                                        << ", process_idx: " << i;
-        mem_op.FreeMlu(src);
         frame_id++;
       }
     }

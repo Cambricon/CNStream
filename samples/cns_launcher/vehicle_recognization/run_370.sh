@@ -14,10 +14,11 @@ source ${CURRENT_DIR}/../../env.sh
 LABEL_PATH=${MODELS_DIR}/label_map_coco.txt
 REMOTE_LABEL_PATH=http://video.cambricon.com/models/labels/label_map_coco.txt
 
-MODEL_PATHS[0]=${MODELS_DIR}/yolov3_nhwc.model
-REMOTE_MODEL_PATHS[0]=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model
-MODEL_PATHS[1]=${MODELS_DIR}/resnet50_nhwc.model
-REMOTE_MODEL_PATHS[1]=http://video.cambricon.com/models/MLU370/resnet50_nhwc_tfu_0.8.2_uint8_int8_fp16.model
+MM_VER=v1.1.0
+MODEL_PATHS[0]=${MODELS_DIR}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+REMOTE_MODEL_PATHS[0]=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+MODEL_PATHS[1]=${MODELS_DIR}/resnet50_${MM_VER}_4b_rgb_uint8.magicmind
+REMOTE_MODEL_PATHS[1]=http://video.cambricon.com/models/magicmind/${MM_VER}/resnet50_${MM_VER}_4b_rgb_uint8.magicmind
 
 for i in $(seq 0 `expr ${#MODEL_PATHS[@]} - 1`)
 do

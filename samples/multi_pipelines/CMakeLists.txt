@@ -80,8 +80,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../common)
 # ---[ sources
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR} srcs)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/../common common_srcs)
+if(build_inference AND (NOT CNIS_USE_MAGICMIND))
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/../common/preprocess preprocess_srcs)
-aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/../common/postprocess postprocess_srcs)
+  aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/../common/postprocess postprocess_srcs)
+endif()
+if(build_inference2)
+  aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/../common/video_preprocess video_preprocess_srcs)
+  aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/../common/video_postprocess video_postprocess_srcs)
+endif()
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/../common/obj_filter obj_filter_srcs)
 
 # ---[ dependencies
@@ -106,7 +112,7 @@ endif()
 
 # ---[ add target
 set(EXECUTABLE_OUTPUT_PATH ${SAMPLES_ROOT_DIR}/bin)
-add_executable(multi_pipelines ${srcs} ${common_srcs} ${preprocess_srcs} ${postprocess_srcs} ${obj_filter_srcs})
+add_executable(multi_pipelines ${srcs} ${common_srcs} ${preprocess_srcs} ${postprocess_srcs} ${video_preprocess_srcs} ${video_postprocess_srcs} ${obj_filter_srcs})
 add_sanitizers(multi_pipelines)
 if(NOT "${SAMPLES_DEPENDENCIES} " STREQUAL " ")
   add_dependencies(multi_pipelines ${SAMPLES_DEPENDENCIES})

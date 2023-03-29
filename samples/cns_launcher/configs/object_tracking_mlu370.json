@@ -4,7 +4,7 @@
     "parallelism" : 1,
     "max_input_queue_size" : 20,
     "custom_params" : {
-      "model_path" : "../../../data/models/feature_extract_nhwc.model",
+      "model_path" : "../../../data/models/feature_extract_v1.1.0_4b_rgb_fp32.magicmind",
       "max_cosine_distance": "0.06",
       "device_id" : 0
     }

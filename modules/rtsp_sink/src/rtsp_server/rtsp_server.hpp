@@ -25,6 +25,11 @@
 #include <thread>
 #include <string>
 
+#include "BasicUsageEnvironment.hh"
+#include "GroupsockHelper.hh"
+#include "UsageEnvironment.hh"
+#include "liveMedia.hh"
+
 namespace cnstream {
 
 class RtspFramedSource;
@@ -73,6 +78,9 @@ class RtspServer {
   char quit_ = 1;
   std::thread thread_;
   RtspFramedSource *source_ = nullptr;
+  RTSPServer *rtsp_server_ = nullptr;
+  TaskScheduler *scheduler_ = nullptr;
+  UsageEnvironment *env_ = nullptr;
 };  // RtspServer
 
 }  // namespace cnstream

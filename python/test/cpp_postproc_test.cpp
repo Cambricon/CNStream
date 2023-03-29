@@ -7,11 +7,14 @@
 #include <map>
 #include <vector>
 
+#ifdef WITH_INFERENCER
 #include "pypostproc.h"
+#endif
 
 namespace py = pybind11;
 
 bool TestPyPostproc(const std::map<std::string, std::string> &params) {
+#ifdef WITH_INFERENCER
   auto model = std::make_shared<edk::ModelLoader>("data/test_model.cambricon", "subnet0");
   std::vector<float*> outputs;
   for (uint32_t i = 0; i < model->OutputNum(); ++i) {
@@ -28,9 +31,13 @@ bool TestPyPostproc(const std::map<std::string, std::string> &params) {
   bool ret = 0 == pypostproc.Execute(outputs, model, nullptr);
   free_outputs();
   return ret;
+#else
+  return true;
+#endif
 }
 
 bool TestPyObjPostproc(const std::map<std::string, std::string> &params) {
+#ifdef WITH_INFERENCER
   auto model = std::make_shared<edk::ModelLoader>("data/test_model.cambricon", "subnet0");
   std::vector<float*> outputs;
   for (uint32_t i = 0; i < model->OutputNum(); ++i) {
@@ -47,6 +54,9 @@ bool TestPyObjPostproc(const std::map<std::string, std::string> &params) {
   bool ret = 0 == pyobjpostproc.Execute(outputs, model, nullptr, nullptr);
   free_outputs();
   return ret;
+#else
+  return true;
+#endif
 }
 
 void PostprocTestWrapper(py::module &m) {  // NOLINT

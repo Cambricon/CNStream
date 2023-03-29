@@ -7,11 +7,14 @@
 #include <map>
 #include <vector>
 
+#ifdef WITH_INFERENCER
 #include "pypreproc.h"
+#endif
 
 namespace py = pybind11;
 
 bool TestPyPreproc(const std::map<std::string, std::string> &params) {
+#ifdef WITH_INFERENCER
   auto model = std::make_shared<edk::ModelLoader>("data/test_model.cambricon", "subnet0");
   std::vector<float*> inputs;
   for (uint32_t i = 0; i < model->InputNum(); ++i) {
@@ -28,6 +31,9 @@ bool TestPyPreproc(const std::map<std::string, std::string> &params) {
   bool ret = 0 == pypreproc.Execute(inputs, model, nullptr);
   free_inputs();
   return ret;
+#else
+  return true;
+#endif
 }
 
 void PreprocTestWrapper(py::module &m) {  // NOLINT

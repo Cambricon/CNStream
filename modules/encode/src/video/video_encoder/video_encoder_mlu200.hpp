@@ -21,6 +21,8 @@
 #ifndef __VIDEO_ENCODER_MLU200_HPP__
 #define __VIDEO_ENCODER_MLU200_HPP__
 
+#ifdef ENABLE_MLU200_CODEC
+
 #include <memory>
 
 #include "video_encoder_base.hpp"
@@ -48,14 +50,14 @@ class VideoEncoderMlu200 : public VideoEncoderBase {
   int SendFrame(const VideoFrame *frame, int timeout_ms = -1) override;
   int GetPacket(VideoPacket *packet, PacketInfo *info = nullptr) override;
 
-  i32_t EventHandlerCallback(int event, void *data);
-  i32_t EventHandler(int event, void *data);
+  int32_t EventHandlerCallback(int event, void *data);
+  int32_t EventHandler(int event, void *data);
 
  private:
   bool GetPacketInfo(int64_t index, PacketInfo *info) override;
   void ReceivePacket(void *data);
   void ReceiveEOS();
-  i32_t ErrorHandler(int event);
+  int32_t ErrorHandler(int event);
 
   std::unique_ptr<VideoEncoderMlu200Private> priv_;
 };  // VideoEncoderMlu200
@@ -63,5 +65,7 @@ class VideoEncoderMlu200 : public VideoEncoderBase {
 }  // namespace video
 
 }  // namespace cnstream
+
+#endif
 
 #endif  // __VIDEO_ENCODER_MLU200_HPP__

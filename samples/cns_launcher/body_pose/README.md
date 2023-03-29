@@ -18,6 +18,7 @@ Detect the body pose in each input image by OpenPose network on MLU.
 
 - MLU220
 - MLU270
+- MLU370
 
 ## Parameters
 
@@ -26,6 +27,8 @@ Detect the body pose in each input image by OpenPose network on MLU.
 - src_frame_rate: 25
 
 - configuration: DataSource->Inferencer->PoseOsd->Sinker
+
+  (Inferencer2 is used instead of Inferencer on MLU370.)
 
   (PoseOsd is a custom module defined at ``${CNSTREAM_DIR}/samples/common/cns_openpose/pose_osd_module.cpp``)
 
@@ -36,11 +39,15 @@ Detect the body pose in each input image by OpenPose network on MLU.
 - For MLU220:
   - [OpenPose](http://video.cambricon.com/models/MLU220/coco_pose_b4c4_bgra_mlu220.cambricon)
     - preprocessing: EasyBang ResizeConvert operator
-    - postprocessing: [PostprocPose](../../common/cns_openpose/postprocess_body_pose.cpp)
+    - postprocessing: [PostprocPose](../../common/postprocess/postprocess_body_pose.cpp)
 - For MLU270:
   - [OpenPose](http://video.cambricon.com/models/MLU270/coco_pose_b4c4_bgra_mlu270.cambricon)
     - preprocessing: EasyBang ResizeConvert operator
-    - postprocessing: [PostprocPose](../../common/cns_openpose/postprocess_body_pose.cpp)
+    - postprocessing: [PostprocPose](../../common/postprocess/postprocess_body_pose.cpp)
+- For MLU370:
+  - [OpenPose](http://video.cambricon.com/models/magicmind/${MM_VER}/body25_pose_${MM_VER}_4b_bgr_uint8.magicmind)
+    - preprocessing:  CNCV (Cambricon CV library) operator(s)
+    - postprocessing: [PostprocPose](../../common/postprocess/video_postprocess_body_pose_mm.cpp)
 
 ## Sinker
 
@@ -64,7 +71,7 @@ Detect the body pose in each input image by OpenPose network on MLU.
 
 ```sh
 cd ${CNSTREAM_DIR}/samples/cns_launcher/body_pose
-# Usages: run.sh [mlu220/mlu270] [encode_jpeg/encode_video/display/rtsp]
+# Usages: run.sh [mlu220/mlu270/mlu370] [encode_jpeg/encode_video/display/rtsp]
 # For example, if the platform is mlu270 and the sinker is RtspSink
 ./run.sh mlu270 rtsp
 ```

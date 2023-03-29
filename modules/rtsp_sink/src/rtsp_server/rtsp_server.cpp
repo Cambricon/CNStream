@@ -50,6 +50,18 @@ bool RtspServer::Start() {
     return false;
   }
 
+  UserAuthenticationDatabase *authDB = nullptr;
+  if (param_.authentication) {
+    authDB = new UserAuthenticationDatabase;
+    authDB->addUserRecord(param_.user_name.c_str(), param_.password.c_str());
+  }
+  scheduler_ = BasicTaskScheduler::createNew();
+  env_ = BasicUsageEnvironment::createNew(*scheduler_);
+  rtsp_server_ = RTSPServer::createNew(*env_, param_.port, authDB);
+  if (!rtsp_server_) {
+    LOGE(RtspServer) << "Failed to create RTSPServer: " << env_->getResultMsg();
+    return false;
+  }
   quit_ = 0;
   thread_ = std::thread(&RtspServer::Loop, this);
 
@@ -62,6 +74,8 @@ bool RtspServer::Stop() {
   quit_ = 1;
   if (thread_.joinable()) thread_.join();
 
+  if (scheduler_) delete scheduler_;
+
   return true;
 }
 
@@ -70,52 +84,40 @@ void RtspServer::OnEvent(Event event) {
 }
 
 void RtspServer::Loop() {
-  TaskScheduler *scheduler;
-  UsageEnvironment *env;
-
   char streamName[1024] = {0};
   snprintf(streamName, sizeof(streamName), "%s", "live");
 
-  scheduler = BasicTaskScheduler::createNew();
-  env = BasicUsageEnvironment::createNew(*scheduler);
-  UserAuthenticationDatabase *authDB = nullptr;
-  if (param_.authentication) {
-    authDB = new UserAuthenticationDatabase;
-    authDB->addUserRecord(param_.user_name.c_str(), param_.password.c_str());
-  }
-
   OutPacketBuffer::increaseMaxSizeTo(param_.bit_rate);
 
-  RTSPServer *rtspServer = RTSPServer::createNew(*env, param_.port, authDB);
-  if (!rtspServer) {
-    LOGE(RtspServer) << "Failed to create RTSPServer: " << env->getResultMsg();
+  if (!rtsp_server_) {
+    LOGE(RtspServer) << "Failed to create RTSPServer";
     return;
   } else {
-    if (param_.rtsp_over_http) rtspServer->setUpTunnelingOverHTTP(param_.port);
-    source_ = RtspFramedSource::createNew(*env, this, !param_.stream_mode);
-    StreamReplicator *replicator = StreamReplicator::createNew(*env, source_, false);
+    if (param_.rtsp_over_http) rtsp_server_->setUpTunnelingOverHTTP(param_.port);
+    source_ = RtspFramedSource::createNew(*env_, this, !param_.stream_mode);
+    StreamReplicator *replicator = StreamReplicator::createNew(*env_, source_, false);
     char const *descriptionString = "RTSP Live Streaming Session";
-    ServerMediaSession *sms = ServerMediaSession::createNew(*env, streamName, streamName, descriptionString);
-    RtspMediaSubsession *sub = RtspMediaSubsession::createNew(*env, replicator, param_.codec_type, !param_.stream_mode);
+    ServerMediaSession *sms = ServerMediaSession::createNew(*env_, streamName, streamName, descriptionString);
+    RtspMediaSubsession *sub =
+        RtspMediaSubsession::createNew(*env_, replicator, param_.codec_type, !param_.stream_mode);
     sub->SetBitrate(param_.bit_rate);
     sms->addSubsession(sub);
-    rtspServer->addServerMediaSession(sms);
+    rtsp_server_->addServerMediaSession(sms);
 
-    char *url = rtspServer->rtspURL(sms);
+    char *url = rtsp_server_->rtspURL(sms);
     LOGI(RtspServer) << "\033[36m Stream URL \"" << url << "\"\033[0m";
     delete[] url;
 
     // signal(SIGNIT,sighandler);
-    env->taskScheduler().doEventLoop(&quit_);  // does not return
+    env_->taskScheduler().doEventLoop(&quit_);  // does not return
 
-    Medium::close(rtspServer);
+    Medium::close(rtsp_server_);
     Medium::close(replicator);
 
     LOGI(RtspServer) << "Loop() Exit";
   }
 
-  env->reclaim();
-  delete scheduler;
+  env_->reclaim();
 }
 
 }  // namespace cnstream

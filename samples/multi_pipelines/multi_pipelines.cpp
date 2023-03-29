@@ -221,6 +221,15 @@ int main(int argc, char **argv) {
       }
     });
   }
+  std::future<void> perf_print_th_ret1;
+  if (pipeline1.IsProfilingEnabled()) {
+    perf_print_th_ret1 = std::async(std::launch::async, [&pipeline1] {
+      while (!gstop_perf_print) {
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        ::PrintPipelinePerformance("Whole", pipeline1.GetProfiler()->GetProfile());
+      }
+    });
+  }
 
   /*
     add stream sources...
@@ -265,6 +274,11 @@ int main(int argc, char **argv) {
     gstop_perf_print = true;
     perf_print_th_ret.get();
     ::PrintPipelinePerformance("Whole", pipeline.GetProfiler()->GetProfile());
+  }
+  if (pipeline1.IsProfilingEnabled()) {
+    gstop_perf_print = true;
+    perf_print_th_ret1.get();
+    ::PrintPipelinePerformance("Whole", pipeline1.GetProfiler()->GetProfile());
   }
   return EXIT_SUCCESS;
 }

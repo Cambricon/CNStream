@@ -33,10 +33,14 @@ void ConfigWrapper(py::module &);
 void PipelineWrapper(py::module &);
 void DataHandlerWrapper(const py::module &);
 void PerfPrintWrapper(py::module &);
+#ifdef WITH_INFERENCER
 void PreprocWrapper(const py::module &);
 void PostprocWrapper(const py::module &m);
+#endif
+#ifdef WITH_INFERENCER2
 void VideoPreprocWrapper(const py::module &);
 void VideoPostprocWrapper(const py::module &);
+#endif
 void ProfileWrapper(const py::module &);
 
 PYBIND11_MODULE(cnstream, m) {
@@ -50,10 +54,14 @@ PYBIND11_MODULE(cnstream, m) {
   PipelineWrapper(m);
   DataHandlerWrapper(m);
   PerfPrintWrapper(m);
+#ifdef WITH_INFERENCER
   PreprocWrapper(m);
   PostprocWrapper(m);
+#endif
+#ifdef WITH_INFERENCER2
   VideoPreprocWrapper(m);
   VideoPostprocWrapper(m);
+#endif
   ProfileWrapper(m);
 }
 

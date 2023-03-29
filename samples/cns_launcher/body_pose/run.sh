@@ -12,7 +12,7 @@ CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 source ${CURRENT_DIR}/../../env.sh
 
 PrintUsages(){
-    echo "Usages: run.sh [mlu220/mlu270] [encode_jpeg/encode_video/display/rtsp]"
+    echo "Usages: run.sh [mlu220/mlu270/mlu370] [encode_jpeg/encode_video/display/rtsp]"
 }
 
 if [ $# -ne 2 ]; then
@@ -26,6 +26,10 @@ if [[ ${1} == "mlu220" ]]; then
 elif [[ ${1} == "mlu270" ]]; then
     MODEL_PATH=${MODELS_DIR}/coco_pose_b4c4_bgra_mlu270.cambricon
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/coco_pose_b4c4_bgra_mlu270.cambricon
+elif [[ ${1} == "mlu370" ]]; then
+    MM_VER=v1.1.0
+    MODEL_PATH=${MODELS_DIR}/body25_pose_${MM_VER}_4b_bgr_uint8.magicmind
+    REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/body25_pose_${MM_VER}_4b_bgr_uint8.magicmind
 else
     PrintUsages
     exit 1
