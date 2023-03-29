@@ -28,7 +28,7 @@ Classify the input images by ResNet50 (on MLU270 and MLU370) or ResNet18 (on MLU
 
 - configuration: DataSource->Inferencer->Osd->Encode
 
-  (Inferencer2 is used instead Inferencer on MLU370. )
+  (Inferencer2 is used instead of Inferencer on MLU370. )
 
 ## Models
 
@@ -41,9 +41,9 @@ Classify the input images by ResNet50 (on MLU270 and MLU370) or ResNet18 (on MLU
     - preprocessing: EasyBang ResizeConvert operator
     - postprocessing: [PostprocClassification](../../common/postprocess/postprocess_classification.cpp)
 - For MLU370:
-  - [ResNet50](http://video.cambricon.com/models/MLU370/resnet50_nhwc_tfu_0.8.2_uint8_int8_fp16.model)
+  - [ResNet50](http://video.cambricon.com/models/magicmind/v1.1.0/resnet50_v1.1.0_4b_rgb_uint8.magicmind)
     - preprocessing: CNCV (Cambricon CV library) operator(s)
-    - postprocessing: [VideoPostprocClassification](../../common/postprocess/video_postprocess_classification.cpp)
+    - postprocessing: [VideoPostprocClassification](../../common/video_postprocess/video_postprocess_classification.cpp)
 
 ## How to run
 

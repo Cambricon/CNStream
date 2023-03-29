@@ -37,8 +37,8 @@
 
 #include "cnstream_frame_va.hpp"
 #include "data_source.hpp"
-#include "postproc.hpp"
-#include "preproc.hpp"
+#include "video_postproc.hpp"
+#include "video_preproc.hpp"
 
 DEFINE_string(input_url, "", "video file or images. "
   "eg. /your/path/to/file.mp4, /your/path/to/images/%d.jpg.");
@@ -94,36 +94,38 @@ bool InitGlobalValues() {
 
 using CNFrameInfoSptr = std::shared_ptr<cnstream::CNFrameInfo>;
 using SourceHandlerSptr = std::shared_ptr<cnstream::SourceHandler>;
+using VideoPixelFmt = infer_server::video::PixelFmt;
 
-// Reflex object, used to do image preprocessing. See parameter named preproc_name in Inferencer module.
-class Preprocessor : public cnstream::Preproc {
+// Reflex object, used to do image preprocessing. See parameter named preproc_name in Inferencer2 module.
+class Preprocessor : public cnstream::VideoPreproc {
  public:
-  int Execute(const std::vector<float*>& net_inputs, const std::shared_ptr<edk::ModelLoader>& model,
-              const CNFrameInfoSptr& frame_info) override;
+  bool Execute(infer_server::ModelIO* model_input, const infer_server::InferData& input_data,
+               const infer_server::ModelInfo* model_info) override;
 
  private:
-  cv::Mat Resize(cv::Mat img, const cv::Size& dst_size);
-  DECLARE_REFLEX_OBJECT_EX(simple_pipeline::Preprocessor, cnstream::Preproc);
+  bool ConvertColorSpace(size_t width, size_t height, size_t stride, VideoPixelFmt src_fmt, VideoPixelFmt dst_fmt,
+                         uint8_t* src_img_data, cv::Mat* dst_img);
+  DECLARE_REFLEX_OBJECT_EX(simple_pipeline::Preprocessor, cnstream::VideoPreproc);
 };  // class Preprocessor
 
-IMPLEMENT_REFLEX_OBJECT_EX(simple_pipeline::Preprocessor, cnstream::Preproc);
+IMPLEMENT_REFLEX_OBJECT_EX(simple_pipeline::Preprocessor, cnstream::VideoPreproc);
 
-// Reflex object, used to do postprocessing. See parameter named postproc_name in Inferencer module.
-// Supports classification models and detection models. eg. vgg, resnet, ssd, yolo-vx...
-class Postprocessor : public cnstream::Postproc {
+// Reflex object, used to do postprocessing. See parameter named postproc_name in Inferencer2 module.
+// Supports classification models and detection models. eg. resnet and YOLOv5
+class Postprocessor : public cnstream::VideoPostproc {
  public:
-  int Execute(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
-              const CNFrameInfoSptr& frame_info) override;
+  bool Execute(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
+               const infer_server::ModelInfo* model_info) override;
 
  private:
-  int ExecuteDetect(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
-                    const CNFrameInfoSptr& frame_info);
-  int ExecuteClassify(const std::vector<float*>& net_outputs, const std::shared_ptr<edk::ModelLoader>& model,
-                      const CNFrameInfoSptr& frame_info);
-  DECLARE_REFLEX_OBJECT_EX(simple_pipeline::Postprocessor, cnstream::Postproc)
+  bool ExecuteDetect(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
+                     const infer_server::ModelInfo* model_info);
+  bool ExecuteClassify(infer_server::InferData* output_data, const infer_server::ModelIO& model_output,
+                       const infer_server::ModelInfo* model_info);
+  DECLARE_REFLEX_OBJECT_EX(simple_pipeline::Postprocessor, cnstream::VideoPostproc)
 };  // class Postprocessor
 
-IMPLEMENT_REFLEX_OBJECT_EX(simple_pipeline::Postprocessor, cnstream::Postproc);
+IMPLEMENT_REFLEX_OBJECT_EX(simple_pipeline::Postprocessor, cnstream::VideoPostproc);
 
 // Base class to do visualizion
 class VisualizerBase {
@@ -191,120 +193,255 @@ class SimplePipelineRunner : public cnstream::StreamMsgObserver, cnstream::IModu
   std::promise<void> done_;
 };  // class SimplePipelineRunner
 
-int Preprocessor::Execute(const std::vector<float*>& net_inputs,
-                          const std::shared_ptr<edk::ModelLoader>& model,
-                          const CNFrameInfoSptr& frame_info) {
-  LOGF_IF(SIMPLE_PIPELINE, net_inputs.size() != 1) << "model input number is not equal to 1";
-  auto input_shape = model->InputShape(0);
-  LOGF_IF(SIMPLE_PIPELINE, input_shape.C() != 3 && input_shape.C() != 4)
-      << "model input channel is not equal to 3 or 4";
-  auto frame = frame_info->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag);
+bool Preprocessor::Execute(infer_server::ModelIO* model_input,
+                           const infer_server::InferData& input_data,
+                           const infer_server::ModelInfo* model_info) {
+  // check model input number and shape
+  uint32_t input_num = model_info->InputNum();
+  if (input_num != 1) {
+    LOGE(SIMPLE_PIPELINE) << "Preprocessor::Execute: model input number not supported. It should be 1, but "
+                          << input_num;
+    return false;
+  }
+  infer_server::Shape input_shape;
+  input_shape = model_info->InputShape(0);
+  int c_idx = 3;
+  int w_idx = 2;
+  int h_idx = 1;
+  if (model_info->InputLayout(0).order == infer_server::DimOrder::NCHW) {
+    c_idx = 1;
+    w_idx = 3;
+    h_idx = 2;
+  }
+  if (input_shape[c_idx] != 3) {
+    LOGE(SIMPLE_PIPELINE) << "Preprocessor::Execute: model input shape not supported, `c` should be 3, but "
+                          << input_shape[c_idx];
+    return false;
+  }
+  // do preproc
+  const infer_server::video::VideoFrame& frame = input_data.GetLref<infer_server::video::VideoFrame>();
+
+  size_t src_w = frame.width;
+  size_t src_h = frame.height;
+  size_t src_stride = frame.stride[0];
+  uint32_t dst_w = input_shape[w_idx];
+  uint32_t dst_h = input_shape[h_idx];
+  uint8_t* img_data = new (std::nothrow) uint8_t[frame.GetTotalSize()];
+  if (!img_data) {
+    LOGE(SIMPLE_PIPELINE) << "Preprocessor::Execute: Failed to alloc memory, size: " << frame.GetTotalSize();
+    return false;
+  }
+  uint8_t* img_data_tmp = img_data;
+
+  for (auto plane_idx = 0u; plane_idx < frame.plane_num; ++plane_idx) {
+    memcpy(img_data_tmp, frame.plane[plane_idx].Data(), frame.GetPlaneSize(plane_idx));
+    img_data_tmp += frame.GetPlaneSize(plane_idx);
+  }
+
+  // convert color space from src to dst
+  cv::Mat dst_cvt_color_img;
+  if (!ConvertColorSpace(src_w, src_h, src_stride, frame.format, model_input_pixel_format_, img_data,
+                          &dst_cvt_color_img)) {
+    LOGW(SIMPLE_PIPELINE) << "Preprocessor::Execute: Unsupport pixel format. src: " << static_cast<int>(frame.format)
+                << " dst: " << static_cast<int>(model_input_pixel_format_);
+    delete[] img_data;
+    return false;
+  }
+
+  cv::Mat img = dst_cvt_color_img;
   // resize
-  cv::Mat resized_img = Resize(frame->ImageBGR(), cv::Size(input_shape.W(), input_shape.H()));
-  // normalize
-  cv::Mat float_mat;
-  resized_img.convertTo(float_mat, CV_32FC3);
-  cv::Mat mean_mat(float_mat.cols, float_mat.rows, CV_32FC3,
-    cv::Scalar(gmean_value[0], gmean_value[1], gmean_value[2]));
-  float_mat -= mean_mat;
-  cv::Mat std_mat(float_mat.cols, float_mat.rows, CV_32FC3, cv::Scalar(gstd[0], gstd[1], gstd[2]));
-  float_mat /= std_mat;
-  // convert color
-  std::vector<cv::Mat> split_mats;
-  cv::split(float_mat, split_mats);
-  if (gchn_order.size() == 4) {
-    split_mats.emplace_back(cv::Mat(float_mat.cols, float_mat.rows, CV_32FC1, cv::Scalar(0.0f)));
-  } else if (gchn_order.size() != 3) {
-    LOGF(SIMPLE_PIPELINE) << "Never be here.";
+  if (src_h != dst_h || src_w != dst_w) {
+    cv::Mat dst(dst_h, dst_w, CV_8UC3, cv::Scalar(128, 128, 128));
+    if (FLAGS_keep_aspect_ratio) {
+      const float scaling_factors = std::min(1.0 * dst_w / src_w, 1.0 * dst_h / src_h);
+      cv::Mat resized(src_h * scaling_factors, src_w * scaling_factors, CV_8UC3);
+      cv::resize(img, resized, cv::Size(resized.cols, resized.rows));
+      cv::Rect roi;
+      roi.x = (dst.cols - resized.cols) / 2;
+      roi.y = (dst.rows - resized.rows) / 2;
+      roi.width = resized.cols;
+      roi.height = resized.rows;
+      resized.copyTo(dst(roi));
+    } else {
+      cv::resize(img, dst, dst.size());
+    }
+
+    img = dst;
   }
-  std::vector<cv::Mat> ordered_mats;
-  for (size_t chn_idx = 0; chn_idx < gchn_order.size(); ++chn_idx) {
-    ordered_mats.emplace_back(std::move(split_mats[gchn_order[chn_idx]]));
-  }
-  cv::Mat dst_mat(float_mat.cols, float_mat.rows, gchn_order.size() == 4 ? CV_32FC4 : CV_32FC3, net_inputs[0]);
-  cv::merge(ordered_mats, dst_mat);
-  return 0;
+
+  // copy data to model_input buffer
+  cv::Mat dst(dst_h, dst_w, CV_32FC3, model_input->buffers[0].MutableData());
+  img.convertTo(dst, CV_32FC3);
+  dst /= 255.0;
+
+  delete[] img_data;
+  return true;
 }
 
-cv::Mat Preprocessor::Resize(cv::Mat img, const cv::Size& dst_size) {
-  cv::Mat dst(dst_size, CV_8UC3, cv::Scalar(128, 128, 128));
-  if (FLAGS_keep_aspect_ratio) {
-    float scaling_factors = std::min(1.0f * dst_size.width / img.cols, 1.0f * dst_size.height / img.rows);
-    cv::Mat resized_mat = cv::Mat(img.rows * scaling_factors, img.cols * scaling_factors, CV_8UC3);
-    cv::resize(img, resized_mat, resized_mat.size());
-    cv::Rect roi;
-    roi.x = (dst.cols - resized_mat.cols) / 2;
-    roi.y = (dst.rows - resized_mat.rows) / 2;
-    roi.width = resized_mat.cols;
-    roi.height = resized_mat.rows;
-    resized_mat.copyTo(dst(roi));
-  } else {
-    cv::resize(img, dst, dst.size());
+bool Preprocessor::ConvertColorSpace(size_t width, size_t height, size_t stride,
+                                     VideoPixelFmt src_fmt, VideoPixelFmt dst_fmt,
+                                     uint8_t* src_img_data, cv::Mat* dst_img) {
+  cv::Mat src_img;
+  cv::Mat dst_img_tmp;
+  bool cvt_ret = true;
+  switch (src_fmt) {
+    case VideoPixelFmt::NV12: {  /*src nv12*/
+      src_img = cv::Mat(height * 3 / 2, stride, CV_8UC1, src_img_data);
+      switch (dst_fmt) {
+        case VideoPixelFmt::RGB24: cv::cvtColor(src_img, dst_img_tmp, cv::COLOR_YUV2RGB_NV12); break;
+        case VideoPixelFmt::BGR24: cv::cvtColor(src_img, dst_img_tmp, cv::COLOR_YUV2BGR_NV12); break;
+        case VideoPixelFmt::RGBA:
+        case VideoPixelFmt::BGRA:
+        case VideoPixelFmt::ARGB:
+        case VideoPixelFmt::ABGR: cv::cvtColor(src_img, dst_img_tmp, cv::COLOR_YUV2BGRA_NV12); break;
+        default: cvt_ret = false; break;
+      }
+      break;
+    }
+    case VideoPixelFmt::NV21: {  /*src nv21*/
+      src_img = cv::Mat(height * 3 / 2, stride, CV_8UC1, src_img_data);
+      switch (dst_fmt) {
+        case VideoPixelFmt::RGB24: cv::cvtColor(src_img, dst_img_tmp, cv::COLOR_YUV2RGB_NV21); break;
+        case VideoPixelFmt::BGR24: cv::cvtColor(src_img, dst_img_tmp, cv::COLOR_YUV2BGR_NV21); break;
+        case VideoPixelFmt::RGBA:
+        case VideoPixelFmt::BGRA:
+        case VideoPixelFmt::ARGB:
+        case VideoPixelFmt::ABGR: cv::cvtColor(src_img, dst_img_tmp, cv::COLOR_YUV2BGRA_NV21); break;
+        default: cvt_ret = false; break;
+      }
+      break;
+    }
+    case VideoPixelFmt::RGB24: {  /*src rgb*/
+      src_img = cv::Mat(height, stride, CV_8UC3, src_img_data);
+      switch (dst_fmt) {
+        case VideoPixelFmt::RGB24: dst_img_tmp = src_img; break;
+        case VideoPixelFmt::BGR24: cv::cvtColor(src_img, dst_img_tmp, cv::COLOR_RGB2BGR); break;
+        case VideoPixelFmt::RGBA:
+        case VideoPixelFmt::BGRA:
+        case VideoPixelFmt::ARGB:
+        case VideoPixelFmt::ABGR: cv::cvtColor(src_img, dst_img_tmp, cv::COLOR_RGB2BGRA); break;
+        default: cvt_ret = false; break;
+      }
+      break;
+    }
+    case VideoPixelFmt::BGR24: {  /*src bgr*/
+      src_img = cv::Mat(height, stride, CV_8UC3, src_img_data);
+      switch (dst_fmt) {
+        case VideoPixelFmt::RGB24: cv::cvtColor(src_img, dst_img_tmp, cv::COLOR_BGR2RGB); break;
+        case VideoPixelFmt::BGR24: dst_img_tmp = src_img; break;
+        case VideoPixelFmt::RGBA:
+        case VideoPixelFmt::BGRA:
+        case VideoPixelFmt::ARGB:
+        case VideoPixelFmt::ABGR: cv::cvtColor(src_img, dst_img_tmp, cv::COLOR_BGR2BGRA); break;
+        default: cvt_ret = false; break;
+      }
+      break;
+    }
+    default: cvt_ret = false; break;
   }
-  return dst;
+  if (!cvt_ret) {
+    return false;
+  }
+  switch (dst_fmt) {
+    case VideoPixelFmt::RGBA: {
+      cv::Mat rgba(dst_img_tmp.size(), dst_img_tmp.type());
+      // bgra->rgba b:0->2 g:1->1 r:2->0 a:3->3
+      int from_to[] = {0, 2, 1, 1, 2, 0, 3, 3};
+      cv::mixChannels(&dst_img_tmp, 1, &rgba, 1, from_to, 4);
+      dst_img_tmp = rgba;
+      break;
+    }
+    case VideoPixelFmt::ARGB: {
+      cv::Mat argb(dst_img_tmp.size(), dst_img_tmp.type());
+      // bgra->argb b:0->3 g:1->2 r:2->1 a:3->0
+      int from_to[] = {0, 3, 1, 2, 2, 1, 3, 0};
+      cv::mixChannels(&dst_img_tmp, 1, &argb, 1, from_to, 4);
+      dst_img_tmp = argb;
+      break;
+    }
+    case VideoPixelFmt::ABGR: {
+      cv::Mat abgr(dst_img_tmp.size(), dst_img_tmp.type());
+      // bgra->abgr b:0->1 g:1->2 r:2->3 a:3->0
+      int from_to[] = {0, 1, 1, 2, 2, 3, 3, 0};
+      cv::mixChannels(&dst_img_tmp, 1, &abgr, 1, from_to, 4);
+      dst_img_tmp = abgr;
+      break;
+    }
+    default: break;
+  }
+  *dst_img = dst_img_tmp(cv::Rect(0, 0, width, height)).clone();
+  return true;
 }
 
-int Postprocessor::Execute(const std::vector<float*>& net_outputs,
-                           const std::shared_ptr<edk::ModelLoader>& model,
-                           const CNFrameInfoSptr& frame_info) {
-  LOGF_IF(SIMPLE_PIPELINE, net_outputs.size() != 1) << "Can not deal with this model, "
-    "output num : [" << net_outputs.size() << "].";
+bool Postprocessor::Execute(infer_server::InferData* output_data,
+                            const infer_server::ModelIO& model_output,
+                            const infer_server::ModelInfo* model_info) {
   if ("detector" == FLAGS_model_type) {
-    ExecuteDetect(net_outputs, model, frame_info);
+    return ExecuteDetect(output_data, model_output, model_info);
   } else if ("classifier" == FLAGS_model_type) {
-    ExecuteClassify(net_outputs, model, frame_info);
+    return ExecuteClassify(output_data, model_output, model_info);
   } else {
     LOGF(SIMPLE_PIPELINE) << "Never be here.";
   }
-  return 0;
+  return true;
 }
 
-int Postprocessor::ExecuteDetect(const std::vector<float*>& net_outputs,
-                                 const std::shared_ptr<edk::ModelLoader>& model,
-                                 const CNFrameInfoSptr& frame_info) {
-  auto frame = frame_info->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag);
-  const auto input_sp = model->InputShape(0);
-  const int img_w = frame->width;
-  const int img_h = frame->height;
-  const int model_input_w = static_cast<int>(input_sp.W());
-  const int model_input_h = static_cast<int>(input_sp.H());
-  const float* net_output = net_outputs[0];
-  const uint64_t data_count = model->OutputShape(0).DataCount();
-  const uint32_t box_num = static_cast<uint32_t>(net_output[0]);
-  const int bbox_offset = 64;  // offset for yolo and ssd
-  const int box_step = 7;  // nop, label, score, left, top, right, bottom. 7 values for an object.
-  if (box_num * 7 + bbox_offset > data_count) {
-    LOGE(SIMPLE_PIPELINE) << "Can not deal with this model, we get [" << box_num << "] detections, "
-      "but model output len is [" << data_count << "].";
-    return 0;
+bool Postprocessor::ExecuteDetect(infer_server::InferData* output_data,
+                                  const infer_server::ModelIO& model_output,
+                                  const infer_server::ModelInfo* model_info) {
+  LOGF_IF(SIMPLE_PIPELINE, model_info->InputNum() != 1)
+      << "Postprocessor::ExecuteDetect: model input number is not equal to 1";
+  LOGF_IF(SIMPLE_PIPELINE, model_info->OutputNum() != 1)
+      << "Postprocessor::ExecuteDetect: model output number is not equal to 1";
+  LOGF_IF(SIMPLE_PIPELINE, model_output.buffers.size() != 1)
+      << "Postprocessor::ExecuteDetect: model result size is not equal to 1";
+
+  cnstream::CNFrameInfoPtr frame = output_data->GetUserData<cnstream::CNFrameInfoPtr>();
+  cnstream::CNInferObjsPtr objs_holder = frame->collection.Get<cnstream::CNInferObjsPtr>(cnstream::kCNInferObjsTag);
+  cnstream::CNObjsVec &objs = objs_holder->objs_;
+
+  const auto input_sp = model_info->InputShape(0);
+  const int img_w = frame->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag)->width;
+  const int img_h = frame->collection.Get<cnstream::CNDataFramePtr>(cnstream::kCNDataFrameTag)->height;
+
+  int w_idx = 2;
+  int h_idx = 1;
+  if (model_info->InputLayout(0).order == infer_server::DimOrder::NCHW) {
+    w_idx = 3;
+    h_idx = 2;
   }
+  const int model_input_w = static_cast<int>(input_sp[w_idx]);
+  const int model_input_h = static_cast<int>(input_sp[h_idx]);
+
+  const float* net_output = reinterpret_cast<const float*>(model_output.buffers[0].Data());
+
+  // scaling factors
+  const float scaling_factors = std::min(1.0 * model_input_w / img_w, 1.0 * model_input_h / img_h);
 
   // scaled size
-  float scaling_factors = 1.0;
-  if (FLAGS_keep_aspect_ratio) scaling_factors = std::min(1.0 * model_input_w / img_w, 1.0 * model_input_h / img_h);
   const int scaled_w = scaling_factors * img_w;
   const int scaled_h = scaling_factors * img_h;
 
-  // bboxes
+  // bounding boxes
+  const int box_num = static_cast<int>(net_output[0]);
+  int box_step = 7;
   auto range_0_1 = [](float num) { return std::max(.0f, std::min(1.0f, num)); };
-  cnstream::CNInferObjsPtr objs_holder =
-    frame_info->collection.Get<cnstream::CNInferObjsPtr>(cnstream::kCNInferObjsTag);
-  cnstream::CNObjsVec &objs = objs_holder->objs_;  // stores detection objects here for other modules.
-  for (uint32_t box_idx = 0; box_idx < box_num; ++box_idx) {
-    float left = range_0_1(net_output[64 + box_idx * box_step + 3]);
-    float right = range_0_1(net_output[64 + box_idx * box_step + 5]);
-    float top = range_0_1(net_output[64 + box_idx * box_step + 4]);
-    float bottom = range_0_1(net_output[64 + box_idx * box_step + 6]);
+
+  for (int box_idx = 0; box_idx < box_num; ++box_idx) {
+    float left = net_output[64 + box_idx * box_step + 3];
+    float right = net_output[64 + box_idx * box_step + 5];
+    float top = net_output[64 + box_idx * box_step + 4];
+    float bottom = net_output[64 + box_idx * box_step + 6];
 
     // rectify
-    left = (left * model_input_w - (model_input_w - scaled_w) / 2) / scaled_w;
-    right = (right * model_input_w - (model_input_w - scaled_w) / 2) / scaled_w;
-    top = (top * model_input_h - (model_input_h - scaled_h) / 2) / scaled_h;
-    bottom = (bottom * model_input_h - (model_input_h - scaled_h) / 2) / scaled_h;
-    left = std::max(0.0f, left);
-    right = std::max(0.0f, right);
-    top = std::max(0.0f, top);
-    bottom = std::max(0.0f, bottom);
+    left = (left - (model_input_w - scaled_w) / 2) / scaled_w;
+    right = (right - (model_input_w - scaled_w) / 2) / scaled_w;
+    top = (top - (model_input_h - scaled_h) / 2) / scaled_h;
+    bottom = (bottom - (model_input_h - scaled_h) / 2) / scaled_h;
+    left = range_0_1(left);
+    right = range_0_1(right);
+    top = range_0_1(top);
+    bottom = range_0_1(bottom);
 
     auto obj = std::make_shared<cnstream::CNInferObject>();
     obj->id = std::to_string(static_cast<int>(net_output[64 + box_idx * box_step + 1]));
@@ -319,35 +456,43 @@ int Postprocessor::ExecuteDetect(const std::vector<float*>& net_outputs,
     std::lock_guard<std::mutex> objs_mutex(objs_holder->mutex_);
     objs.push_back(obj);
   }
-  return 0;
+
+  return true;
 }
 
-int Postprocessor::ExecuteClassify(const std::vector<float*>& net_outputs,
-                                   const std::shared_ptr<edk::ModelLoader>& model,
-                                   const CNFrameInfoSptr& frame_info) {
-  auto data = net_outputs[0];
-  auto len = model->OutputShape(0).DataCount();
-  auto pscore = data;
+bool Postprocessor::ExecuteClassify(infer_server::InferData* output_data,
+                                    const infer_server::ModelIO& model_output,
+                                    const infer_server::ModelInfo* model_info) {
+  LOGF_IF(SIMPLE_PIPELINE, model_info->InputNum() != 1)
+      << "Postprocessor::ExecuteClassify: model input number is not equal to 1";
+  LOGF_IF(SIMPLE_PIPELINE, model_info->OutputNum() != 1)
+      << "Postprocessor::ExecuteClassify: model output number is not equal to 1";
+  LOGF_IF(SIMPLE_PIPELINE, model_output.buffers.size() != 1)
+      << "Postprocessor::ExecuteClassify: model result size is not equal to 1";
+  const float* data = reinterpret_cast<const float*>(model_output.buffers[0].Data());
 
-  float mscore = 0;
+  auto len = model_info->OutputShape(0).DataCount();
+  auto score_ptr = data;
+
+  float max_score = 0;
   int label = 0;
   for (decltype(len) i = 0; i < len; ++i) {
-    auto score = *(pscore + i);
-    if (score > mscore) {
-      mscore = score;
+    auto score = *(score_ptr + i);
+    if (score > max_score) {
+      max_score = score;
       label = i;
     }
   }
 
   auto obj = std::make_shared<cnstream::CNInferObject>();
   obj->id = std::to_string(label);
-  obj->score = mscore;
+  obj->score = max_score;
 
-  cnstream::CNInferObjsPtr objs_holder =
-    frame_info->collection.Get<cnstream::CNInferObjsPtr>(cnstream::kCNInferObjsTag);
+  cnstream::CNFrameInfoPtr frame = output_data->GetUserData<cnstream::CNFrameInfoPtr>();
+  cnstream::CNInferObjsPtr objs_holder = frame->collection.Get<cnstream::CNInferObjsPtr>(cnstream::kCNInferObjsTag);
   std::lock_guard<std::mutex> objs_mutex(objs_holder->mutex_);
-  objs_holder->objs_.push_back(obj);  // stores detection objects here for other modules.
-  return 0;
+  objs_holder->objs_.push_back(obj);
+  return true;
 }
 
 inline
@@ -432,12 +577,11 @@ SimplePipelineRunner::SimplePipelineRunner(VisualizerBase* visualizer)
   cnstream::CNModuleConfig inferencer_config;
   inferencer_config.parallelism = 1;
   inferencer_config.name = "inferencer";
-  inferencer_config.className = "cnstream::Inferencer";
+  inferencer_config.className = "cnstream::Inferencer2";
   inferencer_config.maxInputQueueSize = 20;
   inferencer_config.next = {"osd"};
   inferencer_config.parameters = {
     std::make_pair("model_path", FLAGS_model_path),  // cambricon offline model path
-    std::make_pair("func_name", FLAGS_func_name),
     std::make_pair("preproc_name", "simple_pipeline::Preprocessor"),  // the image preprocessor
     std::make_pair("postproc_name", "simple_pipeline::Postprocessor"),  // the postprocessor for model
     std::make_pair("threshold", "0.5"),

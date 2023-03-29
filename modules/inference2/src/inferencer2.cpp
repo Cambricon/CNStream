@@ -26,7 +26,6 @@
 #include "device/mlu_context.h"
 #include "infer_handler.hpp"
 #include "infer_params.hpp"
-#include "postproc.hpp"
 
 namespace cnstream {
 

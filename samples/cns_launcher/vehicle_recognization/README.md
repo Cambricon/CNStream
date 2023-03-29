@@ -23,12 +23,12 @@ Detect objects in each frame of the input videos by Yolov3 network on MLU. And c
 ## Models
 
 - For MLU370:
-  - [Yolov3](http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model)
+  - [Yolov3](http://video.cambricon.com/models/magicmind/v1.1.0/yolov3_v1.1.0_4b_rgb_uint8.magicmind)
     - preprocessing: CNCV (Cambricon CV library) operator(s)
-    - postprocessing: [VideoPostprocYolov3MM](../../common/postprocess/video_postprocess_yolov3_mm.cpp)
-  - [ResNet50](http://video.cambricon.com/models/MLU370/resnet50_nhwc_tfu_0.8.2_uint8_int8_fp16.model)
+    - postprocessing: [VideoPostprocYolov3MM](../../common/video_postprocess/video_postprocess_yolov3_mm.cpp)
+  - [ResNet50](http://video.cambricon.com/models/magicmind/v1.1.0/resnet50_v1.1.0_4b_rgb_uint8.magicmind)
     - preprocessing: CNCV (Cambricon CV library) operator(s)
-    - postprocessing: [VideoPostprocClassification](../../common/postprocess/video_postprocess_classification.cpp)
+    - postprocessing: [VideoPostprocClassification](../../common/video_postprocess/video_postprocess_classification.cpp)
 
 ## How to run
 

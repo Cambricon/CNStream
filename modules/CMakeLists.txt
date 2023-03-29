@@ -37,7 +37,7 @@ set(CNSTREAM_TARGET_VERSION "${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}"
 # ---[ Options
 option(build_display         "build module display" ON)
 option(build_encode          "build module encode" ON)
-option(build_inference       "build module inference" ON)
+option(build_inference       "build module inference" OFF)
 option(build_inference2      "build module inference2" ON)
 option(build_osd             "build module osd" ON)
 option(build_rtsp_sink       "build module rtsp sink" ON)
@@ -61,7 +61,13 @@ set(CMAKE_MODULE_PATH ${CNSTREAM_ROOT_DIR}/cmake)
 # ---[ neuware
 find_package(Neuware)
 include_directories(${NEUWARE_INCLUDE_DIR})
-list(APPEND 3RDPARTY_LIBS ${CNRT_LIBS} ${CNCODEC_LIBS})
+list(APPEND 3RDPARTY_LIBS ${CNRT_LIBS})
+
+if (CNCODEC_LIBS)
+  add_definitions(-DENABLE_MLU200_CODEC)
+  list(APPEND 3RDPARTY_LIBS ${CNCODEC_LIBS})
+endif()
+
 if (CNCODECV3_LIBS)
   add_definitions(-DENABLE_MLU300_CODEC)
   list(APPEND 3RDPARTY_LIBS ${CNCODECV3_LIBS})
@@ -238,6 +244,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/util/include)
 file(GLOB srcs ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
+file(GLOB util_src ${CMAKE_CURRENT_SOURCE_DIR}/util/src/*.cpp)
+list(APPEND srcs ${util_src})
+
 foreach(module ${module_list})
   include_directories(${CMAKE_CURRENT_SOURCE_DIR}/${module}/include)
   file(GLOB_RECURSE module_src ${CMAKE_CURRENT_SOURCE_DIR}/${module}/*.cpp)
@@ -249,7 +258,7 @@ add_library(cnstream_va SHARED ${srcs})
 add_dependencies(cnstream_va ${DEPENDENCIES})
 set_target_properties(cnstream_va PROPERTIES LINK_FLAGS_RELEASE -s)
 
-install(TARGETS cnstream_va LIBRARY DESTINATION lib)
+install(TARGETS cnstream_va LIBRARY DESTINATION lib64)
 target_link_libraries(cnstream_va ${3RDPARTY_LIBS} rt dl pthread)
 set_target_properties(cnstream_va PROPERTIES VERSION ${CNSTREAM_TARGET_VERSION})
 

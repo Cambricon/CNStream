@@ -32,17 +32,6 @@ namespace cnstream {
     LOGF_IF(Scaler, CNRT_RET_SUCCESS != ret) << "Call [" << #__EXPRESSION__ << "] failed, error code: " << ret; \
   } while (0)
 
-#define CALL_CNRT_BY_CONTEXT(__EXPRESSION__, __DEV_ID__, __DDR_CHN__)          \
-  do {                                                                         \
-    int dev_id = (__DEV_ID__);                                                 \
-    cnrtDev_t dev;                                                             \
-    cnrtChannelType_t ddr_chn = static_cast<cnrtChannelType_t>((__DDR_CHN__)); \
-    SCALER_CNRT_CHECK(cnrtGetDeviceHandle(&dev, dev_id));                      \
-    SCALER_CNRT_CHECK(cnrtSetCurrentDevice(dev));                              \
-    if (ddr_chn >= 0) SCALER_CNRT_CHECK(cnrtSetCurrentChannel(ddr_chn));       \
-    SCALER_CNRT_CHECK(__EXPRESSION__);                                         \
-  } while (0)
-
 extern bool OpenCVProcess(const Scaler::Buffer *src, Scaler::Buffer *dst);
 extern bool LibYUVProcess(const Scaler::Buffer *src, Scaler::Buffer *dst);
 extern bool FFmpegProcess(const Scaler::Buffer *src, Scaler::Buffer *dst);

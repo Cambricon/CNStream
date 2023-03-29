@@ -32,7 +32,7 @@ include_directories(${NEUWARE_INCLUDE_DIR})
 
 # ---[ modules
 include_directories(${CNSTREAM_ROOT_DIR}/modules)
-include_directories(${CNSTREAM_ROOT_DIR}/modules/inference/include)
+include_directories(${CNSTREAM_ROOT_DIR}/modules/inference2/include)
 include_directories(${CNSTREAM_ROOT_DIR}/modules/util/include)
 include_directories(${CNSTREAM_ROOT_DIR}/modules/source/include)
 include(${CNSTREAM_ROOT_DIR}/cmake/have_cnstream_target.cmake)

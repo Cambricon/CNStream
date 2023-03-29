@@ -34,7 +34,7 @@
 #include "cns_openpose.hpp"
 #include "postproc.hpp"
 
-void RemapKeypoints(cns_openpose::Keypoints* keypoints, int src_w, int src_h, int dst_w, int dst_h) {
+static void RemapKeypoints(cns_openpose::Keypoints* keypoints, int src_w, int src_h, int dst_w, int dst_h) {
   float scaling_factor = std::min(1.0f * src_w / dst_w, 1.0f * src_h / dst_h);
   const int scaled_w = scaling_factor * dst_w;
   const int scaled_h = scaling_factor * dst_h;

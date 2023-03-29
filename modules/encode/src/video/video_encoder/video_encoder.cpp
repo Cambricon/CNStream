@@ -24,6 +24,7 @@
 #include <string>
 
 #include "cnstream_logging.hpp"
+#include "private/cnstream_cnrt_wrap.hpp"
 
 #include "video_encoder_base.hpp"
 #include "video_encoder_mlu200.hpp"
@@ -34,24 +35,11 @@ namespace cnstream {
 
 VideoEncoder::VideoEncoder(const Param &param) {
   if (param.mlu_device_id >= 0) {
-    std::string device_name;
-#if CNRT_MAJOR_VERSION < 5
-    cnrtDeviceInfo_t dev_info;
-    cnrtRet_t ret = cnrtGetDeviceInfo(&dev_info, param.mlu_device_id);
-    if (CNRT_RET_SUCCESS != ret) {
-      LOGE(VideoEncoder) << "VideoEncoder() cnrtGetDeviceInfo failed, ret=" << ret;
+    std::string device_name = cnrt::GetDeviceName(param.mlu_device_id);
+    if (device_name.empty()) {
+      LOGE(VideoEncoder) << "VideoEncoder() GetDeviceName failed";
       return;
     }
-    device_name = std::string(dev_info.device_name);
-#else
-    cnrtDeviceProp_t dev_prop;
-    cnrtRet_t ret = cnrtGetDeviceProperties(&dev_prop, param.mlu_device_id);
-    if (CNRT_RET_SUCCESS != ret) {
-      LOGE(VideoEncoder) << "VideoEncoder() cnrtGetDeviceProperties failed, ret=" << ret;
-      return;
-    }
-    device_name = std::string(dev_prop.name);
-#endif
     if (std::string::npos != device_name.find("MLU270") || std::string::npos != device_name.find("MLU220")) {
       encoder_ = new (std::nothrow) cnstream::video::VideoEncoderMlu200(param);
 #ifdef ENABLE_MLU300_CODEC

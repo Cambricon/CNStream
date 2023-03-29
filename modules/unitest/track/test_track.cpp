@@ -42,7 +42,7 @@ namespace cnstream {
 
 static std::string GetDSModelPath() {
   if (infer_server::Predictor::Backend() == "magicmind") {
-    return "../../data/models/feature_extract_nhwc.model";
+    return "../../data/models/feature_extract_v1.1.0_4b_rgb_fp32.magicmind";
   }
   edk::MluContext ctx;
   edk::CoreVersion core_ver = ctx.GetCoreVersion();
@@ -468,8 +468,7 @@ TEST(Tracker, ProcessFeatureMatchMLU3) {
   param["track_name"] = "FeatureMatch";
   bool use_magicmind = infer_server::Predictor::Backend() == "magicmind";
   if (use_magicmind) {
-    param["model_graph"] = GetExePath() + g_model_graph;
-    param["model_data"] = GetExePath() + g_model_data;
+    param["model_path"] = GetExePath() + GetDSModelPath();
   } else {
     param["model_path"] = GetExePath() + GetDSModelPath();
     param["func_name"] = gfunc_name;

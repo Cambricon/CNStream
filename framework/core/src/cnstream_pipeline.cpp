@@ -95,11 +95,14 @@ bool Pipeline::BuildPipeline(const CNGraphConfig& graph_config) {
     LOGE(CORE) << "Create modules failed.";
     return false;
   }
+
   // generate parant mask for all nodes and route mask for head nodes.
   GenerateModulesMask();
+
   // This call must after GenerateModulesMask called,
   profiler_.reset(new PipelineProfiler(graph_->GetConfig().profiler_config, GetName(), modules,
       GetSortedModuleNames()));
+
   // create connectors for all nodes beside head nodes.
   // This call must after GenerateModulesMask called,
   // then we can determine witch are the head nodes.
@@ -252,7 +255,6 @@ bool Pipeline::CreateModules(std::vector<std::shared_ptr<Module>>* modules) {
     modules->push_back(node_iter->data.module);
     all_modules_mask_ |= 1UL << node_iter->data.module->GetId();
   }
-
   return true;
 }
 

@@ -8,11 +8,14 @@
 #include <unordered_map>
 #include <vector>
 
+#ifdef WITH_INFERENCER2
 #include "pyvideopostproc.h"
+#endif
 
 namespace py = pybind11;
 
 bool TestPyVideoPostproc(const std::unordered_map<std::string, std::string> &params) {
+#ifdef WITH_INFERENCER2
   int device_id = 0;
   auto engine = std::make_shared<infer_server::InferServer>(device_id);
 #ifdef CNIS_USE_MAGICMIND
@@ -34,6 +37,9 @@ bool TestPyVideoPostproc(const std::unordered_map<std::string, std::string> &par
   }
 
   return pyvideopostproc.Execute(nullptr, model_output, model_info.get());;
+#else
+  return true;
+#endif
 }
 
 void VideoPostprocTestWrapper(py::module &m) {  // NOLINT

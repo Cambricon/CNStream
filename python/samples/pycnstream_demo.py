@@ -24,6 +24,8 @@ import threading
 import cv2
 
 sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../lib")
+sys.path.append(os.path.split(os.path.realpath(__file__))[0] + "/../../easydk/infer_server/python/lib")
+import cnis
 import cnstream
 import observer
 import utils
@@ -57,18 +59,29 @@ def receive_processed_frame(frame):
 def main():
     if not os.path.exists(cur_file_dir + "/output"):
         os.mkdir(cur_file_dir + "/output")
-    model_file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-         "../../data/models/yolov3_b4c4_argb_mlu270.cambricon")
+    core_ver = cnis.get_device_core_version(0)
+    if core_ver == cnis.CoreVersion.MLU270:
+        model_file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                                  "../../data/models/yolov3_b4c4_argb_mlu270.cambricon")
+        url_str = "http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon"
+        json_config = "python_demo_config.json"
+    elif core_ver == cnis.CoreVersion.MLU370:
+        model_file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                                  "../../data/models/yolov3_v1.1.0_4b_rgb_uint8.magicmind")
+        url_str = "http://video.cambricon.com/models/magicmind/v1.1.0/yolov3_v1.1.0_4b_rgb_uint8.magicmind"
+        json_config = "python_demo_config_mlu370.json"
+    else:
+        print('Unsupported platform')
+        exit(1)
     if not os.path.exists(model_file):
         os.makedirs(os.path.dirname(model_file),exist_ok=True)
         import urllib.request
-        url_str = "http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon"
         print('Downloading {} ...'.format(url_str))
         urllib.request.urlretrieve(url_str, model_file)
 
     # Build a pipeline
     pipeline = cnstream.Pipeline("my_pipeline")
-    pipeline.build_pipeline_by_json_file('python_demo_config.json')
+    pipeline.build_pipeline_by_json_file(json_config)
 
 
     # Set frame done callback

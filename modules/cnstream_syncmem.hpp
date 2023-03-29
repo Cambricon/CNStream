@@ -49,6 +49,7 @@
     LOGF_IF(FRAME, CNRT_RET_SUCCESS != ret) << "Call [" << #__EXPRESSION__ << "] failed, error code: " << ret; \
   } while (0)
 
+#if CNRT_MAJOR_VERSION < 5
 #define CALL_CNRT_BY_CONTEXT(__EXPRESSION__, __DEV_ID__, __DDR_CHN__)          \
   do {                                                                         \
     int dev_id = (__DEV_ID__);                                                 \
@@ -56,10 +57,16 @@
     cnrtChannelType_t ddr_chn = static_cast<cnrtChannelType_t>((__DDR_CHN__)); \
     CNS_CNRT_CHECK(cnrtGetDeviceHandle(&dev, dev_id));                         \
     CNS_CNRT_CHECK(cnrtSetCurrentDevice(dev));                                 \
-    if (ddr_chn >= 0)                                                          \
-      CNS_CNRT_CHECK(cnrtSetCurrentChannel(ddr_chn));                          \
+    if (ddr_chn >= 0) CNS_CNRT_CHECK(cnrtSetCurrentChannel(ddr_chn));          \
     CNS_CNRT_CHECK(__EXPRESSION__);                                            \
   } while (0)
+#else
+#define CALL_CNRT_BY_CONTEXT(__EXPRESSION__, __DEV_ID__, __DDR_CHN__)          \
+  do {                                                                         \
+    CNS_CNRT_CHECK(cnrtSetDevice(__DEV_ID__));                                 \
+    CNS_CNRT_CHECK(__EXPRESSION__);                                            \
+  } while (0)
+#endif
 
 namespace cnstream {
 

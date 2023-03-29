@@ -18,6 +18,7 @@
  * THE SOFTWARE.
  *************************************************************************/
 
+#ifdef ENABLE_MLU200_CODEC
 #include <cnrt.h>
 #include <cn_jpeg_dec.h>
 #include <cn_video_dec.h>
@@ -855,3 +856,4 @@ Decoder* CreateMlu2xxDecoder(const std::string& stream_id, IDecodeResult *cb) {
 }
 
 }  // namespace cnstream
+#endif

@@ -8,11 +8,14 @@
 #include <unordered_map>
 #include <vector>
 
+#ifdef WITH_INFERENCER2
 #include "pyvideopreproc.h"
+#endif
 
 namespace py = pybind11;
 
 bool TestPyVideoPreproc(const std::unordered_map<std::string, std::string> &params) {
+#ifdef WITH_INFERENCER2
   int device_id = 0;
   auto engine = std::make_shared<infer_server::InferServer>(device_id);
 #ifdef CNIS_USE_MAGICMIND
@@ -35,6 +38,9 @@ bool TestPyVideoPreproc(const std::unordered_map<std::string, std::string> &para
 
   infer_server::InferData input_data;
   return pyvideopreproc.Execute(&model_input, input_data, model_info.get());
+#else
+  return true;
+#endif
 }
 
 void VideoPreprocTestWrapper(py::module &m) {  // NOLINT

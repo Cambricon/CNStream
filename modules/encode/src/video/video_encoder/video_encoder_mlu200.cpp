@@ -32,12 +32,15 @@
 #include <map>
 #include <vector>
 
+#ifdef ENABLE_MLU200_CODEC
+
 #include "cnrt.h"
 #include "cn_codec_common.h"
 #include "cn_jpeg_enc.h"
 #include "cn_video_enc.h"
 
 #include "cnstream_logging.hpp"
+#include "private/cnstream_cnrt_wrap.hpp"
 
 #include "video_encoder_mlu200.hpp"
 
@@ -115,7 +118,7 @@ static inline int64_t CurrentTick() {
       std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-static i32_t EncoderEventCallback(cncodecCbEventType event, void *user_ctx, void *data) {
+static int32_t EncoderEventCallback(cncodecCbEventType event, void *user_ctx, void *data) {
   VideoEncoderMlu200 *encoder = reinterpret_cast<VideoEncoderMlu200 *>(user_ctx);
   return encoder->EventHandlerCallback(event, data);
 }
@@ -666,13 +669,7 @@ int VideoEncoderMlu200::SendFrame(const VideoFrame *frame, int timeout_ms) {
     timeout = std::max(timeout - (CurrentTick() - start), 0L);
 
     if (frame->data[0] != nullptr) {
-#if CNRT_MAJOR_VERSION < 5
-      cnrtDev_t dev;
-      cnrtGetDeviceHandle(&dev, param_.mlu_device_id);
-      cnrtSetCurrentDevice(dev);
-#else
-      cnrtSetDevice(param_.mlu_device_id);
-#endif
+      cnrt::BindDevice(param_.mlu_device_id);
       size_t copy_size;
       switch (param_.pixel_format) {
         case VideoPixelFormat::NV12:
@@ -857,7 +854,7 @@ i32_t VideoEncoderMlu200::EventHandlerCallback(int event, void *data) {
   return 0;
 }
 
-i32_t VideoEncoderMlu200::EventHandler(int event, void *data) {
+int32_t VideoEncoderMlu200::EventHandler(int event, void *data) {
   switch (event) {
     case CNCODEC_CB_EVENT_NEW_FRAME:
       ReceivePacket(data);
@@ -882,13 +879,7 @@ void VideoEncoderMlu200::ReceivePacket(void *data) {
     return;
   }
 
-#if CNRT_MAJOR_VERSION < 5
-  cnrtDev_t dev;
-  cnrtGetDeviceHandle(&dev, param_.mlu_device_id);
-  cnrtSetCurrentDevice(dev);
-#else
-  cnrtSetDevice(param_.mlu_device_id);
-#endif
+  cnrt::BindDevice(param_.mlu_device_id);
 
   VideoPacket packet;
   bool eos = false;
@@ -986,7 +977,7 @@ void VideoEncoderMlu200::ReceiveEOS() {
   if (event_callback_) event_callback_(cnstream::VideoEncoder::EVENT_EOS);
 }
 
-i32_t VideoEncoderMlu200::ErrorHandler(int event) {
+int32_t VideoEncoderMlu200::ErrorHandler(int event) {
   std::lock_guard<std::mutex> lk(cb_mtx_);
   switch (event) {
     case CNCODEC_CB_EVENT_SW_RESET:
@@ -1017,3 +1008,5 @@ i32_t VideoEncoderMlu200::ErrorHandler(int event) {
 }  // namespace video
 
 }  // namespace cnstream
+
+#endif

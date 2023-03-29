@@ -31,13 +31,13 @@
 #include "opencv2/imgcodecs/imgcodecs.hpp"
 #endif
 #include "device/mlu_context.h"
-#include "easyinfer/mlu_memory_op.h"
 #include "easyinfer/model_loader.h"
 
 #include "cnstream_frame_va.hpp"
 #include "inferencer.hpp"
 #include "postproc.hpp"
 #include "preproc.hpp"
+#include "private/cnstream_allocator.hpp"
 #include "util/cnstream_queue.hpp"
 #include "test_base.hpp"
 
@@ -121,18 +121,17 @@ TEST(Inferencer, Demo) {
   nbytes = (nbytes + boundary - 1) & ~(boundary - 1);  // align to 64kb
 
   // fake data vector
-  std::vector<void *> frame_data_vec;
-  edk::MluMemoryOp mem_op;
+  std::vector<std::shared_ptr<void>> frame_data_vec;
 
   // test nv12
   for (uint32_t i = 0; i < 32; i++) {
     // fake data
-    void *frame_data = nullptr;
-    frame_data = mem_op.AllocMlu(nbytes);
+    std::shared_ptr<void> frame_data = nullptr;
+    frame_data = cnMluMemAlloc(nbytes, g_dev_id);
     frame_data_vec.push_back(frame_data);
     void *planes[CN_MAX_PLANES] = {nullptr, nullptr};
-    planes[0] = frame_data;                                                                        // y plane
-    planes[1] = reinterpret_cast<void *>(reinterpret_cast<int64_t>(frame_data) + width * height);  // uv plane
+    planes[0] = frame_data.get();                                                                        // y plane
+    planes[1] = reinterpret_cast<void *>(reinterpret_cast<int64_t>(frame_data.get()) + width * height);  // uv plane
 
     auto data = cnstream::CNFrameInfo::Create(std::to_string(g_channel_id));
     std::shared_ptr<CNDataFrame> frame(new (std::nothrow) CNDataFrame());
@@ -163,11 +162,6 @@ TEST(Inferencer, Demo) {
   }
 
   ASSERT_NO_THROW(infer->Close());
-
-  for (auto it : frame_data_vec) {
-    mem_op.FreeMlu(it);
-    it = nullptr;
-  }
 }
 
 }  // namespace cnstream

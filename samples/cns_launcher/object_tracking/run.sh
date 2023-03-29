@@ -47,15 +47,16 @@ elif [[ ${1} == "mlu270" ]]; then
     LOCAL_PATH[1]=${MODELS_DIR}/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon
     REMOTE_PATH[1]=http://video.cambricon.com/models/MLU270/feature_extract_for_tracker_b4c4_argb_mlu270.cambricon
 elif [[ ${1} == "mlu370" ]]; then
+    MM_VER=v1.1.0
     if [[ ${3} == "yolov3" ]]; then
-        LOCAL_PATH[0]=${MODELS_DIR}/yolov3_nhwc.model
-        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU370/yolov3_nhwc_tfu_0.8.2_uint8_int8_fp16.model
+        LOCAL_PATH[0]=${MODELS_DIR}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
+        REMOTE_PATH[0]=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
     else
-        LOCAL_PATH[0]=${MODELS_DIR}/yolov5_nhwc.model
-        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU370/yolov5_nhwc_tfu_0.8.2_uint8_int8_fp16.model
+        LOCAL_PATH[0]=${MODELS_DIR}/yolov5m_${MM_VER}_4b_rgb_uint8.magicmind
+        REMOTE_PATH[0]=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov5m_${MM_VER}_4b_rgb_uint8.magicmind
     fi
-    LOCAL_PATH[1]=${MODELS_DIR}/feature_extract_nhwc.model
-    REMOTE_PATH[1]=http://video.cambricon.com/models/MLU370/feature_extract_nhwc_tfu_0.8.2_fp32_int8_fp16.model
+    LOCAL_PATH[1]=${MODELS_DIR}/feature_extract_${MM_VER}_4b_rgb_fp32.magicmind
+    REMOTE_PATH[1]=http://video.cambricon.com/models/magicmind/${MM_VER}/feature_extract_${MM_VER}_4b_rgb_fp32.magicmind
 else
     PrintUsages
     exit 1
