@@ -30,19 +30,19 @@ fi
 
 if [[ ${1} == "mlu220" ]]; then
     if [[ ${3} == "yolov3" ]]; then
-        LOCAL_PATH[0]=${MODELS_DIR}/yolov3_b4c4_argb_mlu220.cambricon
-        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU220/yolov3_b4c4_argb_mlu220.cambricon
+        MODEL_PATH=${MODELS_DIR}/yolov3_b4c4_argb_mlu220.cambricon
+        REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU220/yolov3_b4c4_argb_mlu220.cambricon
     else
-        LOCAL_PATH[0]=${MODELS_DIR}/yolov5_b4c4_rgb_mlu220.cambricon
-        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU220/yolov5/yolov5_b4c4_rgb_mlu220.cambricon
+        MODEL_PATH=${MODELS_DIR}/yolov5_b4c4_rgb_mlu220.cambricon
+        REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU220/yolov5/yolov5_b4c4_rgb_mlu220.cambricon
     fi
 elif [[ ${1} == "mlu270" ]]; then
     if [[ ${3} == "yolov3" ]]; then
-        LOCAL_PATH[0]=${MODELS_DIR}/yolov3_b4c4_argb_mlu270.cambricon
-        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon
+        MODEL_PATH=${MODELS_DIR}/yolov3_b4c4_argb_mlu270.cambricon
+        REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/yolov3_b4c4_argb_mlu270.cambricon
     else
-        LOCAL_PATH[0]=${MODELS_DIR}/yolov5_b4c4_rgb_mlu270.cambricon
-        REMOTE_PATH[0]=http://video.cambricon.com/models/MLU270/yolov5/yolov5_b4c4_rgb_mlu270.cambricon
+        MODEL_PATH=${MODELS_DIR}/yolov5_b4c4_rgb_mlu270.cambricon
+        REMOTE_MODEL_PATH=http://video.cambricon.com/models/MLU270/yolov5/yolov5_b4c4_rgb_mlu270.cambricon
     fi
 elif [[ ${1} == "mlu370" ]]; then
     MM_VER=v1.1.0
