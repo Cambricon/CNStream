@@ -12,7 +12,6 @@ Decode the input videos by MLU decoder.
 
 ## Supported Platform
 
-- MLU590
 - MLU370
 - CE3226
 

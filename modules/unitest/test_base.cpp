@@ -206,7 +206,7 @@ static std::string MMVersionForCe3226() {
 static std::string MMVersionForMlu370() {
   return "v0.13.0";
 }
-static std::string MMVersionForMlu590() {
+static std::string MMVersionForMluxxx() {
   return "v0.14.0";
 }
 
@@ -221,9 +221,9 @@ const std::unordered_map<std::string, std::pair<std::string, std::string>> g_mod
          "http://video.cambricon.com/models/magicmind/" + MMVersionForMlu370() +
          "/resnet50_v0.13.0_4b_rgb_uint8.magicmind"}
     },
-    {"resnet50_MLU590",
+    {"resnet50_MLUxxx",
         {"resnet50_v0.14.0_4b_rgb_uint8.magicmind",
-         "http://video.cambricon.com/models/magicmind/" + MMVersionForMlu590() +
+         "http://video.cambricon.com/models/magicmind/" + MMVersionForMluxxx() +
          "/resnet50_v0.14.0_4b_rgb_uint8.magicmind"}
     },
     {"feature_extract_CE3226",
@@ -236,9 +236,9 @@ const std::unordered_map<std::string, std::pair<std::string, std::string>> g_mod
          "http://video.cambricon.com/models/magicmind/" + MMVersionForMlu370() +
          "/feature_extract_v0.13.0_4b_rgb_uint8.magicmind"}
     },
-    {"feature_extract_MLU590",
+    {"feature_extract_MLUxxx",
         {"feature_extract_v0.14.0_4b_rgb_uint8.magicmind",
-         "http://video.cambricon.com/models/magicmind/" + MMVersionForMlu590() +
+         "http://video.cambricon.com/models/magicmind/" + MMVersionForMluxxx() +
          "/feature_extract_v0.14.0_4b_rgb_uint8.magicmind"}
     },
     {"yolov3_CE3226",
@@ -251,9 +251,9 @@ const std::unordered_map<std::string, std::pair<std::string, std::string>> g_mod
          "http://video.cambricon.com/models/magicmind/" + MMVersionForMlu370() +
          "/yolov3_v0.13.0_4b_rgb_uint8.magicmind"}
     },
-    {"yolov3_MLU590",
+    {"yolov3_MLUxxx",
         {"yolov3_v0.14.0_4b_rgb_uint8.magicmind",
-         "http://video.cambricon.com/models/magicmind/" + MMVersionForMlu590() +
+         "http://video.cambricon.com/models/magicmind/" + MMVersionForMluxxx() +
          "/yolov3_v0.14.0_4b_rgb_uint8.magicmind"}
     }
 };
@@ -264,7 +264,7 @@ std::string GetModelInfoStr(std::string model_name, std::string info_type) {
   std::string platform_name(platform_info.name);
   std::string model_key;
   if (platform_name.rfind("MLU5", 0) == 0) {
-    model_key = model_name + "_MLU590";
+    model_key = model_name + "_MLUxxx";
   } else {
     model_key = model_name + "_" + platform_name;
   }

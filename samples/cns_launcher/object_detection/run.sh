@@ -14,7 +14,7 @@ CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 source ${CURRENT_DIR}/../../env.sh
 
 PrintUsages(){
-    echo "Usages: run.sh [mlu370/mlu590/ce3226] [encode_jpeg/encode_video/rtsp/vout] [yolov3/yolov5]"
+    echo "Usages: run.sh [mlu370/ce3226] [encode_jpeg/encode_video/rtsp/vout] [yolov3/yolov5]"
 }
 
 ${SAMPLES_DIR}/generate_file_list.sh
@@ -46,16 +46,6 @@ elif [[ ${1} == "mlu370" ]]; then
     else
         MODEL_PATH=${MODELS_DIR}/yolov5m_${MM_VER}_4b_rgb_uint8.magicmind
         REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov5m_${MM_VER}_4b_rgb_uint8.magicmind
-    fi
-elif [[ ${1} == "mlu590" ]]; then
-    MM_VER=v0.14.0
-    if [[ ${3} == "yolov3" ]]; then
-        MODEL_PATH=${MODELS_DIR}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
-        REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/${MM_VER}/yolov3_${MM_VER}_4b_rgb_uint8.magicmind
-    else
-        echo "yolov5 on MLU590 is not supported yet"
-        PrintUsages
-        exit 1
     fi
 else
     PrintUsages

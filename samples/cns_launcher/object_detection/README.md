@@ -16,7 +16,6 @@
 
 ## Supported Platform
 
-- MLU590
 - MLU370
 - CE3226
 
@@ -34,7 +33,6 @@
 
 - Yolov3
   - model:
-    - For MLU590 platform, [model](http://video.cambricon.com/models/magicmind/v0.14.0/yolov3_v0.14.0_4b_rgb_uint8.magicmind)
     - For MLU370 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/yolov3_v0.13.0_4b_rgb_uint8.magicmind)
     - For CE3226 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/yolov3_v0.13.0_4b_rgb_uint8.magicmind)
   - preprocessing: [PreprocYolov3](../../common/preprocess/preprocess_yolov3.cpp)
@@ -68,7 +66,7 @@
 
 ```sh
 cd ${CNSTREAM_DIR}/samples/cns_launcher/object_detection
-# Usages: ./run.sh [mlu590/mlu370/ce3226] [encode_jpeg/encode_video/rtsp/vout] [yolov3/yolov5]
+# Usages: ./run.sh [mlu370/ce3226] [encode_jpeg/encode_video/rtsp/vout] [yolov3/yolov5]
 # For example, if the platform is mlu370, we choose Yolov5 as the object detection network, and the sinker is rtsp
 ./run.sh mlu370 rtsp yolov5
 ```
