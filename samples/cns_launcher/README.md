@@ -40,7 +40,6 @@ Decode the input videos by MLU decoder.
 
 **Supported Platform:**  
 
-- MLU590
 - MLU370
 - CE3226
 
@@ -63,7 +62,6 @@ Classify the input images by ResNet50 network on MLU.
 
 **Supported Platform:**  
 
-- MLU590
 - MLU370
 - CE3226
 
@@ -79,7 +77,7 @@ Classify the input images by ResNet50 network on MLU.
 
 ```sh
 cd ${CNSTREAM_DIR}/samples/cns_launcher/image_classification
-# Usages: ./run.sh [mlu590/mlu370/ce3226]
+# Usages: ./run.sh [mlu370/ce3226]
 # For example, if the platform is mlu370
 ./run.sh mlu370
 ```
@@ -90,7 +88,6 @@ cd ${CNSTREAM_DIR}/samples/cns_launcher/image_classification
 
 **Supported Platform:**  
 
-- MLU590
 - MLU370
 - CE3226
 
@@ -108,7 +105,7 @@ cd ${CNSTREAM_DIR}/samples/cns_launcher/image_classification
 
 ```sh
 cd ${CNSTREAM_DIR}/samples/cns_launcher/object_detection
-# Usages: ./run.sh [mlu590/mlu370/ce3226] [encode_jpeg/encode_video/rtsp/vout] [yolov3/yolov5]
+# Usages: ./run.sh [mlu370/ce3226] [encode_jpeg/encode_video/rtsp/vout] [yolov3/yolov5]
 # For example, if the platform is mlu370, we choose Yolov5 as the object detection network, and the sinker is rtsp
 ./run.sh mlu370 rtsp yolov5
 ```
