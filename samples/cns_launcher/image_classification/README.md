@@ -16,7 +16,6 @@ Classify the input images by ResNet50 network on MLU.
 
 ## Supported Platform
 
-- MLU590
 - MLU370
 - CE3226
 
@@ -32,7 +31,6 @@ Classify the input images by ResNet50 network on MLU.
 
 - ResNet50
   - model:
-    - For MLU590 platform, [model](http://video.cambricon.com/models/magicmind/v0.14.0/resnet50_v0.14.0_4b_rgb_uint8.magicmind)
     - For MLU370 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/resnet50_v0.13.0_4b_rgb_uint8.magicmind)
     - For CE3226 platform, [model](http://video.cambricon.com/models/magicmind/v0.13.0/resnet50_v0.13.0_4b_rgb_uint8.magicmind)
   - preprocessing: [PreprocClassification](../../common/preprocess/preprocess_classification.cpp)
@@ -42,7 +40,7 @@ Classify the input images by ResNet50 network on MLU.
 
 ```sh
 cd ${CNSTREAM_DIR}/samples/cns_launcher/image_classification
-# Usages: ./run.sh [mlu590/mlu370/ce3226]
+# Usages: ./run.sh [mlu370/ce3226]
 # For example, if the platform is mlu370
 ./run.sh mlu370
 ```

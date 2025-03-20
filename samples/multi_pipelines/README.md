@@ -36,7 +36,7 @@ For more details, please check [source code](multi_pipelines.cpp).
 
 ```shell
 cd ${CNSTREAM_DIR}/samples/multi_pipelines
-# Usages: run.sh [mlu370/mlu590] [encode_jpeg/encode_video/rtsp]
+# Usages: run.sh [mlu370] [encode_jpeg/encode_video/rtsp]
 # For example, if the platform is mlu370 and the sinker is rtsp
 ./run.sh mlu370 rtsp
 ```

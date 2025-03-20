@@ -10,7 +10,7 @@
 CURRENT_DIR=$(cd $(dirname ${BASH_SOURCE[0]});pwd)
 source ${CURRENT_DIR}/../env.sh
 PrintUsages(){
-    echo "Usages: run.sh [mlu370/mlu590] [encode_jpeg/encode_video/rtsp]"
+    echo "Usages: run.sh [mlu370] [encode_jpeg/encode_video/rtsp]"
 }
 
 if [ $# -ne 2 ]; then
@@ -21,9 +21,6 @@ fi
 if [[ ${1} == "mlu370" ]]; then
     MODEL_PATH=${MODELS_DIR}/yolov3_v0.13.0_4b_rgb_uint8.magicmind
     REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/v0.13.0/yolov3_v0.13.0_4b_rgb_uint8.magicmind
-elif [[ ${1} == "mlu590" ]]; then
-    MODEL_PATH=${MODELS_DIR}/yolov3_v0.14.0_4b_rgb_uint8.magicmind
-    REMOTE_MODEL_PATH=http://video.cambricon.com/models/magicmind/v0.14.0/yolov3_v0.14.0_4b_rgb_uint8.magicmind
 else
     PrintUsages
     exit 1
